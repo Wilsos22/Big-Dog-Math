@@ -181,13 +181,19 @@ function toolUrl(flow: LiveClassFlowSnapshot) {
   return `${tool.route}?${params.toString()}`;
 }
 
-function requestedSessionId() {
+// Which session should this stage show? A ?session= URL param is an explicit
+// pin (the Remote / /session open the projector that way). The stored teacher
+// session id is only a HINT: it can be days stale (the iPad's Write-on-screen
+// mirror and any no-param open used to pin to a dead id and wait forever), so
+// when it does not match an open live session the stage falls back to
+// auto-attaching instead of pinning.
+function requestedSessionId(): { id: string | null; pinned: boolean } {
   try {
-    return new URLSearchParams(window.location.search).get("session")?.trim()
-      || getStoredTeacherSessionId()
-      || null;
+    const fromUrl = new URLSearchParams(window.location.search).get("session")?.trim();
+    if (fromUrl) return { id: fromUrl, pinned: true };
+    return { id: getStoredTeacherSessionId(), pinned: false };
   } catch {
-    return null;
+    return { id: null, pinned: false };
   }
 }
 
@@ -291,15 +297,18 @@ export default function ClassroomStagePage() {
       if (checking) return;
       checking = true;
       try {
-        const endpoint = requested
-          ? `/api/teacher/session?liveSessionId=${encodeURIComponent(requested)}`
+        const endpoint = requested.pinned && requested.id
+          ? `/api/teacher/session?liveSessionId=${encodeURIComponent(requested.id)}`
           : "/api/teacher/session";
         const result = await teacherApiRequest<{ sessions: StageSession[] }>(endpoint)
           .catch(() => ({ sessions: [] }));
         const liveSessions = result.sessions.filter((candidate) => candidate.status === "open" && candidate.broadcast === LIVE_FLOW_MODE);
-        const selected = requested
-          ? liveSessions.find((candidate) => candidate.id === requested) ?? null
-          : liveSessions.length === 1 ? liveSessions[0] : null;
+        // Auto-attach when nothing (or only a stale hint) points at a session
+        // and exactly one live session is running - the common classroom case.
+        const hinted = requested.id ? liveSessions.find((candidate) => candidate.id === requested.id) ?? null : null;
+        const selected = requested.pinned
+          ? hinted
+          : hinted ?? (liveSessions.length === 1 ? liveSessions[0] : null);
         if (!stopped) {
           setSession(selected);
           setSessionMessage(selected
@@ -314,7 +323,7 @@ export default function ClassroomStagePage() {
       }
     };
     void load();
-    const interval = window.setInterval(load, requested ? 500 : 1000);
+    const interval = window.setInterval(load, requested.pinned ? 500 : 1000);
     return () => {
       stopped = true;
       window.clearInterval(interval);
