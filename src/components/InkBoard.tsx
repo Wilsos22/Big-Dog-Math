@@ -404,7 +404,7 @@ export default function InkBoard({
       layer.style.transform = v.s === 1 && v.x === 0 && v.y === 0 ? "" : `translate(${v.x}px, ${v.y}px) scale(${v.s})`;
     }
     const wrap = wrapRef.current;
-    if (wrap && paper === "dots" && !transparent) {
+    if (wrap && paper === "dots" && !transparent && !bgUrlRef.current) {
       wrap.style.backgroundSize = `${DOT_PITCH * v.s}px ${DOT_PITCH * v.s}px`;
       wrap.style.backgroundPosition = `${v.x}px ${v.y}px`;
     }
@@ -609,6 +609,9 @@ export default function InkBoard({
 
   const bgUrlRef = useRef<string | null>(null);
   useEffect(() => { bgUrlRef.current = bgUrl; }, [bgUrl]);
+  // Removing a background while zoomed must hand the dots back at the current
+  // view scale, not at 100%.
+  useEffect(() => { syncViewStyles(); }, [bgUrl, syncViewStyles]);
   const problemRef = useRef<string | null>(null);
   useEffect(() => { problemRef.current = problemText; }, [problemText]);
 
@@ -728,15 +731,21 @@ export default function InkBoard({
     const o = out.getContext("2d");
     if (!o) { if (zoomed) { viewRef.current = savedView; redrawAll(); } return null; }
     o.scale(scale, scale);
+    const img = bgImgRef.current;
+    const hasBg = Boolean(img && img.complete && img.naturalWidth > 0);
     if (paper === "dots") {
       o.fillStyle = PAPER_CREAM;
       o.fillRect(0, 0, W, H);
-      o.fillStyle = DOT_COLOR;
-      for (let y = DOT_PITCH / 2; y < H; y += DOT_PITCH) {
-        for (let x = DOT_PITCH / 2; x < W; x += DOT_PITCH) {
-          o.beginPath();
-          o.arc(x, y, 1.1, 0, Math.PI * 2);
-          o.fill();
+      // A background image (grid template) replaces the dotted paper in the
+      // export too - same no-competing-grids rule as the live board.
+      if (!hasBg) {
+        o.fillStyle = DOT_COLOR;
+        for (let y = DOT_PITCH / 2; y < H; y += DOT_PITCH) {
+          for (let x = DOT_PITCH / 2; x < W; x += DOT_PITCH) {
+            o.beginPath();
+            o.arc(x, y, 1.1, 0, Math.PI * 2);
+            o.fill();
+          }
         }
       }
     } else {
@@ -744,7 +753,6 @@ export default function InkBoard({
       o.fillRect(0, 0, W, H);
     }
 
-    const img = bgImgRef.current;
     if (img && img.complete && img.naturalWidth > 0) {
       const r = Math.min(W / img.naturalWidth, H / img.naturalHeight);
       const iw = img.naturalWidth * r, ih = img.naturalHeight * r;
@@ -1226,14 +1234,16 @@ export default function InkBoard({
       ref={wrapRef}
       style={{
         position: "absolute", inset: 0,
-        background: transparent ? "transparent" : paper === "dots" ? PAPER_CREAM : "#ffffff",
-        ...(paper === "dots" && !transparent
-          ? {
-              backgroundImage: `radial-gradient(circle, ${DOT_COLOR} 1.1px, transparent 1.5px)`,
-              backgroundSize: `${DOT_PITCH}px ${DOT_PITCH}px`,
-              backgroundPosition: "0px 0px",
-            }
-          : {}),
+        backgroundColor: transparent ? "transparent" : paper === "dots" ? PAPER_CREAM : "#ffffff",
+        // A background image (grid template, coordinate plane) replaces the
+        // dotted paper - two grids on one board compete. Longhand properties
+        // only: mixing the background shorthand with these makes React warn
+        // when the dots toggle off.
+        backgroundImage: paper === "dots" && !transparent && !bgUrl
+          ? `radial-gradient(circle, ${DOT_COLOR} 1.1px, transparent 1.5px)`
+          : "none",
+        backgroundSize: `${DOT_PITCH}px ${DOT_PITCH}px`,
+        backgroundPosition: "0px 0px",
         overflow: "hidden",
         pointerEvents: passThrough ? "none" : undefined,
         display: hidden ? "none" : undefined,
