@@ -1,29 +1,27 @@
-// Variable-width stroke geometry for the iPad ink engine.
+// Stroke geometry for the iPad ink engine.
 //
-// A stroke is rendered as ONE filled polygon whose width flows continuously
-// with (smoothed) Apple Pencil pressure and tapers at both ends - the thing
-// that separates "notes app" ink from "canvas lineTo" ink. Same idea as the
-// perfect-freehand algorithm, implemented small and dependency-free.
+// A stroke is rendered as ONE filled polygon with round caps. Width is
+// CONSTANT - Steele's call (2026-07-22) after writing real math on it:
+// pressure-driven thick/thin reads as calligraphy, but he is writing
+// equations, so a marker line is right. Pressure is still captured, smoothed,
+// and carried on the wire (every point has p), so pressure feel can return
+// later by changing radiusFor alone.
 //
 // Inputs are surface pixels; callers convert from the normalised 0..1 wire
-// format first. Pressure is expected pre-smoothed at the capture side (EMA in
-// InkBoard) so both the local surface and the board render identical shapes.
+// format first.
 
 export interface InkRenderPoint {
   x: number;
   y: number;
-  p: number; // 0..1, already smoothed
+  p: number; // 0..1, captured and carried but not currently rendered
 }
 
-// Width multiplier from pressure: a light touch is ~45% of the dial width, a
-// heavy press ~140%. Matches the previous engine's feel so nobody has to
-// relearn the S/M/L sizes.
-function radiusFor(baseWidth: number, p: number): number {
-  return Math.max(0.5, (baseWidth / 2) * (0.45 + 0.95 * p));
+function radiusFor(baseWidth: number, _p: number): number {
+  return Math.max(0.5, baseWidth / 2);
 }
 
-// End taper: the first/last few points shrink toward a point so strokes start
-// and finish like a real pen, not like a sausage.
+// End taper: the first/last few points shrink toward a point. OFF by default
+// since the constant-width change - marker lines end in round caps, not tips.
 const TAPER_POINTS = 5;
 function taperScale(i: number, count: number): number {
   const fromStart = (i + 1) / Math.min(TAPER_POINTS, count);
@@ -46,7 +44,7 @@ export function thinPoints(pts: InkRenderPoint[], minDist = 0.75): InkRenderPoin
 
 // Build the outline polygon: left edge out, right edge back, with round caps.
 // Returns a flat [x0,y0, x1,y1, ...] ring, or null for a dot (use fillDot).
-export function strokeOutline(raw: InkRenderPoint[], baseWidth: number, taper = true): number[] | null {
+export function strokeOutline(raw: InkRenderPoint[], baseWidth: number, taper = false): number[] | null {
   const pts = thinPoints(raw);
   if (pts.length < 2) return null;
 
