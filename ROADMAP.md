@@ -286,7 +286,21 @@ to complaining-teen, less Red Bull, shorter replies)
   (212=212 samples), and a second tab's display followed live pageflips and
   painted while backgrounded. Zoom is deliberately absent from the glass
   sheet (ink must stay aligned to the screen under it) and gestures still
-  need "Finger draws" OFF. COMPLETE FOR NOW (Steele, 7/22): "ill live with
+  need "Finger draws" OFF. FEEL-TEST ROUND (7/22, commit 627aedc, merge
+  0ab4595) from Steele's first real Pencil session: the pen is now a
+  CONSTANT-WIDTH marker with round caps (his verdict - he writes equations,
+  not calligraphy; pressure still captured on the wire, radiusFor is the
+  way back). His "Write on screen shows up nowhere but the iPad" reproduced
+  as NOT a code bug - glass ink verified end to end over real Supabase
+  Realtime for the first time (public bundle keys in a local worktree
+  env) - but as a STALE PROJECTOR TAB: display tabs never pick up new
+  builds. Fixed for good with DeployRefresh: display routes (/board,
+  /teacher/present, /live-flow, /warmup) poll the new public /api/build-id
+  and reload themselves when a deploy ships (never /ipad - the pen holds
+  authoritative ink). Handwriting-to-typed-equation was considered and
+  shelved per Steele ("if it'll be glitchy don't sweat it") - recognition
+  needs a vision-model round trip, wrong risk profile mid-lesson.
+  COMPLETE FOR NOW (Steele, 7/22): "ill live with
   the ipad strokes for a bit and see if anything that isnt there needs to
   be." No further ink phases are queued - real classroom use decides what
   comes next, and glass-sheet export was considered and declined (annotations
