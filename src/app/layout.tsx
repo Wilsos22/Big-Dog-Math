@@ -5,6 +5,7 @@ import "./globals.css";
 import ClassSync from "@/components/ClassSync";
 import AbbieStudentBubble from "@/components/AbbieStudentBubble";
 import AbbieStudentAsk from "@/components/AbbieStudentAsk";
+import DeployRefresh from "@/components/DeployRefresh";
 
 export const metadata: Metadata = {
   title: "Big Dog Math Classroom System",
@@ -24,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}<ClassSync /><AbbieStudentBubble /><AbbieStudentAsk /></body>
+      <body>{children}<ClassSync /><AbbieStudentBubble /><AbbieStudentAsk /><DeployRefresh /></body>
     </html>
   );
 }
