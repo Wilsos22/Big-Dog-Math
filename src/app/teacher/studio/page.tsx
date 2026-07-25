@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import LessonVisual from "@/components/LessonVisual";
 import { BANK_GROUPS, CLOSEOUT_DIRECTIONS, DEFAULT_STATES, classStateStepDefaults } from "@/lib/classStates";
-import { classroomStageTheme, discussionSupportsForLesson, usesDiscussionProtocol } from "@/lib/classroomPilot";
+import { classroomStageTheme, discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { DISCUSSION_ROUNDS } from "@/lib/discussionProtocol";
 import {
   lessonStoryImageMarkup,
@@ -28,6 +28,7 @@ import {
   publicSuccessCriterion,
 } from "@/lib/successCriterion";
 import { TeacherApiError, teacherApiRequest } from "@/lib/teacherApi";
+import { STUDIO_PREVIEW_MESSAGE, buildStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 
 interface PublishedLesson {
   id: string;
@@ -66,6 +67,7 @@ interface LessonStep {
   vocabulary: string;
   responseMode: string;
   workSpaceAvailable?: boolean;
+  slideOverlay?: string;
 }
 
 interface LessonStepRecord extends LessonStep {
@@ -91,6 +93,7 @@ interface StudioLesson {
   bigDogChallenge: string;
   dueAndTurnIn: string;
   helpPath: string;
+  anchorProblem?: string;
   steps: LessonStep[];
 }
 
@@ -132,6 +135,51 @@ interface AddMutationIntent {
 }
 
 const STATE_BY_ID = new Map(DEFAULT_STATES.map((state) => [state.id, state]));
+
+// Embeds a real classroom surface (/teacher/present or /teacher/pace) in
+// studio-preview mode and posts the current draft snapshot to it. The surface
+// renders at a fixed 1280x720 and is scaled to the card, so Studio shows the
+// live design rather than a hand-built copy that drifts.
+const STUDIO_FRAME_W = 1280;
+const STUDIO_FRAME_H = 720;
+function StudioSurfaceFrame({ src, snapshot, title }: { src: string; snapshot: object | null; title: string }) {
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const readyRef = useRef(false);
+  const [scale, setScale] = useState(0.28);
+  useEffect(() => {
+    const measure = () => { const w = boxRef.current?.clientWidth; if (w) setScale(w / STUDIO_FRAME_W); };
+    measure();
+    const retry = window.setInterval(measure, 400);
+    const stop = window.setTimeout(() => window.clearInterval(retry), 4000);
+    window.addEventListener("resize", measure);
+    return () => { window.clearInterval(retry); window.clearTimeout(stop); window.removeEventListener("resize", measure); };
+  }, []);
+  const post = useCallback(() => {
+    if (!readyRef.current || !snapshot) return;
+    frameRef.current?.contentWindow?.postMessage({ type: STUDIO_PREVIEW_MESSAGE, snapshot }, "*");
+  }, [snapshot]);
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== frameRef.current?.contentWindow) return;
+      if ((event.data as { type?: string })?.type === `${STUDIO_PREVIEW_MESSAGE}-ready`) { readyRef.current = true; post(); }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [post]);
+  useEffect(() => { post(); }, [post]);
+  return (
+    <div ref={boxRef} className="studio-frame-box" aria-label={title}>
+      <iframe
+        ref={frameRef}
+        className="studio-frame"
+        src={src}
+        title={title}
+        style={{ width: STUDIO_FRAME_W, height: STUDIO_FRAME_H, transform: `scale(${scale})` }}
+      />
+    </div>
+  );
+}
 const RESPONSE_MODES = [
   "",
   "None",
@@ -974,6 +1022,47 @@ export default function LessonScreenStudioPage() {
     "--studio-glow": theme.projectorGlow,
   } as CSSProperties;
   const selectedCriterion = publicSuccessCriterion(lesson?.selectedSuccessCriterion);
+
+  // The snapshot posted to the embedded real surfaces (present + pace),
+  // rebuilt whenever the draft or selection changes.
+  const previewSnapshot = useMemo(() => {
+    if (!lesson || !selectedStep || !draft) return null;
+    const index = lesson.steps.findIndex((step) => step.id === selectedStep.id);
+    const stateDef = STATE_BY_ID.get(selectedStep.stateId);
+    return buildStudioPreviewSnapshot({
+      stateId: selectedStep.stateId,
+      label: stepLabel(selectedStep),
+      semantic: inferClassroomStage(selectedStep.stateId, selectedStep.title),
+      color: stateDef?.color || theme.accent,
+      durationSeconds: Math.max(60, Math.round((draft.duration || 5) * 60)),
+      mainDisplay: mainBody,
+      paceDirections: paceBody,
+      studentAction: studentBody,
+      responseMode: draft.responseMode || "",
+      publicSurfaceMode: draft.publicSurfaceMode,
+      notionStepId: selectedStep.id,
+      slideOverlay: selectedStep.slideOverlay || undefined,
+      discussionStems: stems,
+      vocabulary,
+      totalSteps: lesson.steps.length,
+      currentIndex: index < 0 ? 0 : index,
+      lesson: {
+        id: lesson.id || null,
+        code: lesson.lessonCode || "",
+        title: lesson.title || "",
+        learningIntention: lesson.learningIntention || "",
+        successCriteria: lesson.successCriteria || "",
+        selectedSuccessCriterion: selectedCriterion,
+        anchorProblem: lesson.anchorProblem,
+        requiredPaperWork: lesson.requiredPaperWork,
+        requiredDigitalWork: lesson.requiredDigitalWork,
+        dueAndTurnIn: lesson.dueAndTurnIn,
+        helpPath: lesson.helpPath,
+        optionalSupport: lesson.optionalSupport,
+        bigDogChallenge: lesson.bigDogChallenge,
+      },
+    });
+  }, [lesson, selectedStep, draft, theme.accent, mainBody, paceBody, studentBody, stems, vocabulary, selectedCriterion]);
   const studentIndependentSupports = liveIndependentSupportItems(selectedStep?.stateId, lesson);
   const statusLabel = connectionState === "offline"
     ? "Offline - draft safe"
@@ -1152,6 +1241,8 @@ export default function LessonScreenStudioPage() {
         .studio-private-banner { display:flex; align-items:center; justify-content:center; min-height:31px; margin-bottom:13px; border:1px solid #d8cfbf; border-radius:8px; background:#f5efe3; color:#655e53; font-size:0.72rem; font-weight:750; }
         .studio-preview-label { margin:0 0 7px 2px; color:#655e53; font-size:0.63rem; font-weight:850; letter-spacing:0.12em; text-transform:uppercase; }
         .studio-screen { position:relative; overflow:hidden; border-radius:12px; }
+        .studio-frame-box { position:relative; width:100%; aspect-ratio:16 / 9; overflow:hidden; border:1px solid #e3d9c2; border-radius:12px; background:#F3F0E7; box-shadow:0 9px 22px rgba(45,31,20,0.11); }
+        .studio-frame { position:absolute; top:0; left:0; border:0; transform-origin:top left; background:#F3F0E7; }
         .studio-main-screen, .studio-pace-screen { border:1px solid var(--studio-line-dark); background:radial-gradient(circle at 50% 48%,var(--studio-glow),transparent 55%),var(--studio-base); color:white; box-shadow:0 9px 22px rgba(45,31,20,0.13); }
         .studio-main-screen { min-height:315px; display:grid; place-items:center; padding:42px clamp(28px,5vw,72px); text-align:center; }
         .studio-main-top { position:absolute; inset:0 0 auto; height:46px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--studio-line-dark); background:color-mix(in srgb,var(--studio-panel) 94%,transparent); padding:0 14px; }
@@ -1398,92 +1489,12 @@ export default function LessonScreenStudioPage() {
           ) : (
             <>
               <p className="studio-preview-label">Main projector - public</p>
-              <section className="studio-screen studio-main-screen" aria-label="Main projector preview">
-                <div className="studio-main-top">
-                  <span className="studio-phase">{stepLabel(selectedStep)}</span>
-                  <span className="studio-screen-time">{previewTimer}</span>
-                </div>
-                {showLessonVisual ? (
-                  <LessonVisual visual={showLessonVisual} variant="studio" accent={theme.accent} />
-                ) : isReaderSpinner || isIpadKidSpinner ? (
-                  publicSpinnerPreview()
-                ) : isLearningCheck ? (
-                  <div className="studio-target">
-                    {lesson.learningIntention && <div className="studio-target-intention">{lesson.learningIntention}</div>}
-                    <div className="studio-target-criterion">{selectedCriterion}</div>
-                  </div>
-                ) : galleryWalkConfig ? (
-                  <div className="studio-routine-grid">
-                    <article className="studio-routine-card feature">
-                      <p>Gallery Walk</p>
-                      <strong>{galleryWalkConfig.stationCount} stations</strong>
-                      <span>{galleryWalkConfig.rotationMinutes} minutes at each station</span>
-                    </article>
-                    <article className="studio-routine-card">
-                      <p>Notice</p>
-                      <span>{galleryWalkConfig.observationPrompt}</span>
-                    </article>
-                    <article className="studio-routine-card">
-                      <p>Record</p>
-                      <span>{galleryWalkConfig.recordPrompt}</span>
-                    </article>
-                    <article className="studio-routine-card">
-                      <p>Move</p>
-                      <span>{galleryWalkConfig.movementDirections}</span>
-                    </article>
-                  </div>
-                ) : smallGroupConfig ? (
-                  <div className="studio-routine-grid small-group">
-                    <article className="studio-routine-card feature">
-                      <p>Small Group Rotations</p>
-                      <strong>{smallGroupConfig.rotationMinutes} minute rotations</strong>
-                    </article>
-                    <article className="studio-routine-card task">
-                      <p>Group task</p>
-                      <span>{smallGroupConfig.publicTask}</span>
-                    </article>
-                  </div>
-                ) : isIndependent && paperSections.length > 0 ? (
-                  <div className="studio-paper-grid">
-                    {paperSections.map((section) => (
-                      <article className="studio-paper-item" key={section.label}>
-                        <p className="studio-paper-label">{section.label}</p>
-                        <p className="studio-paper-body">{section.body}</p>
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <div>
-                    {isDiscussion && <p className="studio-round">{previewDiscussionRound.label}</p>}
-                    <div className="studio-main-copy">{mainBody}</div>
-                  </div>
-                )}
-              </section>
+              <StudioSurfaceFrame src="/teacher/present?studioPreview=1" snapshot={previewSnapshot} title="Main projector preview" />
 
               <div className="studio-lower">
                 <div>
                   <p className="studio-preview-label">Pace + Support - public</p>
-                  <section className="studio-screen studio-pace-screen" aria-label="Pace and Support preview">
-                    {publicSurfacesLinked && (isReaderSpinner || isIpadKidSpinner)
-                      ? publicSpinnerPreview(true)
-                      : isLearningCheck
-                        ? (
-                          <>
-                            <h2 className="studio-pace-direction">Anonymous Fist-to-Five bars after reveal</h2>
-                            <div className="studio-pace-bars" aria-label="Anonymous result-bar preview">
-                              {[24, 38, 52, 76, 92, 64].map((height, value) => (
-                                <span className="studio-pace-bar" key={value}><i style={{ height: `${height}%` }} />{value}</span>
-                              ))}
-                            </div>
-                          </>
-                        )
-                        : <h2 className="studio-pace-direction">{paceBody}</h2>}
-                    <div className="studio-pace-time">{previewTimer}</div>
-                    {isDiscussion && stems[0] && <div className="studio-support-line">{stems[0]}</div>}
-                    {isDiscussion && vocabulary.length > 0 && (
-                      <div className="studio-vocab">{vocabulary.map((word) => <span key={word}>{word}</span>)}</div>
-                    )}
-                  </section>
+                  <StudioSurfaceFrame src="/teacher/pace?studioPreview=1" snapshot={previewSnapshot} title="Pace and Support preview" />
                 </div>
 
                 <div>

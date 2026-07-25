@@ -173,6 +173,16 @@ surfaces) ·
 five weekday themes and four 20-second screens: Notion-fed learning intention,
 success criteria, weekly topics with the current day highlighted, and the bell
 schedule) ·
+**Screen Studio previews are the live surfaces** (7/22 - Steele's catch: the
+Studio Main and Pace previews were still the old dark projector design
+because they were hand-built copies that drifted from the Warm Notebook
+redesign. They now EMBED the real /teacher/present and /teacher/pace pages
+in scaled iframes, fed the draft over postMessage (new studioPreview mode on
+both surfaces + src/lib/studioPreviewFlow.ts builds the snapshot from the
+draft), so the previews are the live surfaces and can never drift again -
+staged hook, scene sweeps, state label, slide overlays, area-model figure,
+all appear as the room sees them. Student + Remote previews still hand-built,
+to embed later) ·
 **Lesson Screen Studio** (7/15 — one private editing surface for every lesson
 state with synchronized Main, Pace + Support, Student Chromebook, and iPad
 Remote previews; guarded Notion saves with revision conflicts; no active-session
