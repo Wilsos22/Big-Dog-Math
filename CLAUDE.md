@@ -137,6 +137,15 @@ Notion property (percent-based element JSON via `src/lib/slideOverlay.ts`; rich_
 through every flow builder and `SlideOverlayLayer` renders it on `/teacher/present` above the auto
 slide (below ink on board states). A step with an empty property renders exactly as before.
 
+Screen Studio previews are the REAL surfaces, not copies: `/teacher/studio` embeds
+`/teacher/present?studioPreview=1` and `/teacher/pace?studioPreview=1` in scaled iframes and posts
+the draft as a `LiveClassFlowSnapshot` (built by `src/lib/studioPreviewFlow.ts`) over
+`postMessage`. The surfaces detect `?studioPreview=1`, skip the session fetch, and adopt the posted
+snapshot as a synthetic session so every downstream render is unchanged. This is why redesigning a
+surface never needs a matching Studio change again - do NOT rebuild hand-copied studio previews.
+(The Student and Remote studio previews are still hand-built; embed them the same way when they
+drift.)
+
 Adding a tool: also add a lowercase entry to `TOOL_ROUTES` in `src/app/lesson/page.tsx` or the Notion
 `Tool:` name renders as a dead pill. SiteNav link sets are hardcoded arrays - add nav entries manually.
 
