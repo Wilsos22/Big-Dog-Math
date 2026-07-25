@@ -67,6 +67,10 @@ export default function IpadPage() {
   const [scratchUndoSignal, setScratchUndoSignal] = useState(0);
   const [history, setHistory] = useState<{ undo: boolean; redo: boolean }>({ undo: false, redo: false });
   const [toast, setToast] = useState<string | null>(null);
+  // The tool palette floats translucently over the writing surface and can be
+  // put away entirely - the board owns the whole screen (Steele, 7/22).
+  const [toolsOpen, setToolsOpen] = useState(true);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [scratchOpen, setScratchOpen] = useState(false);
   const [scratchClear, setScratchClear] = useState(0);
@@ -142,8 +146,17 @@ export default function IpadPage() {
     try {
       const r = new URLSearchParams(window.location.search).get("room");
       if (r) setRoom(r.trim());
+      if (localStorage.getItem("bdm-ipad-tools-open") === "0") setToolsOpen(false);
     } catch { /* ignore */ }
   }, []);
+
+  function toggleTools() {
+    setToolsOpen((v) => {
+      const next = !v;
+      try { localStorage.setItem("bdm-ipad-tools-open", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  }
 
   // Keep the iPad awake through a whole lesson; re-acquire when the tab
   // returns to the foreground (Safari releases the lock in the background).
@@ -226,133 +239,145 @@ export default function IpadPage() {
   return (
     <main className="ip-page">
       <style>{`
-        .ip-page { position:fixed; inset:0; display:flex; flex-direction:column; background:var(--bdb-ground); font-family:var(--bdb-font); }
-        .ip-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 14px; background:var(--bdb-card); border-bottom:1px solid var(--bdb-line); }
+        .ip-page { position:fixed; inset:0; background:var(--bdb-ground); font-family:var(--bdb-font); }
+        .ip-stage { position:absolute; inset:0; }
+        .ip-handle { position:fixed; top:10px; left:10px; z-index:30; display:inline-flex; align-items:center; gap:8px; min-height:40px; padding:0 15px; border-radius:999px; border:1px solid rgba(32,30,26,0.14); background:rgba(255,255,255,0.72); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); font:inherit; font-weight:800; font-size:0.85rem; color:var(--bdb-ink); cursor:pointer; touch-action:manipulation; box-shadow:0 8px 22px rgba(40,32,20,0.14); }
+        .ip-dot { width:8px; height:8px; border-radius:50%; background:#c78b24; }
+        .ip-dot.connected { background:#2f9e6f; }
+        .ip-dot.disconnected { background:#d05f3c; }
+        .ip-palette { position:fixed; top:58px; left:10px; z-index:29; width:min(620px, calc(100vw - 20px)); display:flex; flex-direction:column; gap:8px; padding:12px; border-radius:16px; border:1px solid rgba(32,30,26,0.10); background:rgba(255,255,255,0.80); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); box-shadow:0 18px 44px rgba(40,32,20,0.18); }
+        .ip-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
         .ip-group { display:flex; align-items:center; gap:6px; }
-        .ip-room { font-weight:800; color:var(--bdb-ink); font-size:0.92rem; margin-right:2px; }
         .ip-sub { color:var(--bdb-ink-faint); font-size:0.72rem; font-weight:700; }
-        .ip-status { display:inline-flex; align-items:center; gap:6px; border-radius:999px; background:#eef2f0; color:#756d62; padding:6px 9px; font-size:0.7rem; font-weight:850; }
-        .ip-status::before { content:""; width:7px; height:7px; border-radius:50%; background:#c78b24; }
-        .ip-status.connected { background:#e8f5ed; color:#255e41; }
-        .ip-status.connected::before { background:#2f9e6f; }
-        .ip-status.disconnected { background:#fff0e8; color:#8b3f24; }
-        .ip-status.disconnected::before { background:#d05f3c; }
-        .ip-seg { display:inline-flex; border:2px solid var(--bdb-line); border-radius:12px; overflow:hidden; background:var(--bdb-card); }
-        .ip-seg button { font:inherit; font-weight:800; font-size:0.86rem; min-height:42px; padding:0 14px; border:none; background:transparent; color:var(--bdb-ink-soft); cursor:pointer; touch-action:manipulation; }
+        .ip-seg { display:inline-flex; border:2px solid rgba(32,30,26,0.14); border-radius:11px; overflow:hidden; background:rgba(255,255,255,0.85); }
+        .ip-seg button { font:inherit; font-weight:800; font-size:0.82rem; min-height:38px; padding:0 12px; border:none; background:transparent; color:var(--bdb-ink-soft); cursor:pointer; touch-action:manipulation; }
         .ip-seg button.on { background:var(--bdb-ink); color:#fff; }
-        .ip-sw { width:30px; height:30px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--bdb-line); cursor:pointer; padding:0; }
+        .ip-sw { width:27px; height:27px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px rgba(32,30,26,0.2); cursor:pointer; padding:0; }
         .ip-sw.on { box-shadow:0 0 0 3px var(--bdb-ink); }
-        .ip-btn { min-height:42px; padding:0 14px; border-radius:10px; border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink); font-weight:700; font-size:0.9rem; cursor:pointer; touch-action:manipulation; }
+        .ip-btn { min-height:38px; padding:0 12px; border-radius:9px; border:1px solid rgba(32,30,26,0.14); background:rgba(255,255,255,0.85); color:var(--bdb-ink); font-weight:700; font-size:0.82rem; cursor:pointer; touch-action:manipulation; }
         .ip-btn.on { background:var(--bdb-ink); color:#fff; border-color:var(--bdb-ink); }
-        .ip-btn.warn { color:var(--bdb-coral); border-color:color-mix(in srgb, var(--bdb-coral) 40%, var(--bdb-line)); }
-        .ip-divider { width:1px; align-self:stretch; background:var(--bdb-line); margin:2px 4px; }
-        .ip-problem { display:flex; gap:10px; align-items:center; padding:8px 14px; background:var(--bdb-card); border-bottom:1px solid var(--bdb-line); }
-        .ip-problem-in { flex:1; resize:vertical; min-height:42px; border:1px solid var(--bdb-line); border-radius:10px; padding:10px 12px; font-family:var(--bdb-font); font-size:0.95rem; color:var(--bdb-ink); }
-        .ip-templates { display:flex; gap:8px; flex-wrap:wrap; padding:8px 14px; background:var(--bdb-card); border-bottom:1px solid var(--bdb-line); }
-        .ip-stage { position:relative; flex:1; }
+        .ip-btn.warn { color:var(--bdb-coral); border-color:color-mix(in srgb, var(--bdb-coral) 40%, rgba(32,30,26,0.14)); }
+        .ip-divider { width:1px; align-self:stretch; background:rgba(32,30,26,0.12); margin:2px 4px; }
+        .ip-problem-in { flex:1; resize:vertical; min-height:42px; border:1px solid rgba(32,30,26,0.16); border-radius:10px; padding:9px 11px; font-family:var(--bdb-font); font-size:0.9rem; color:var(--bdb-ink); background:rgba(255,255,255,0.9); }
         .ip-screen-stage { position:absolute; inset:0; display:grid; place-items:center; background:#26221c; }
         .ip-screen-box { position:relative; width:100%; max-height:100%; }
         .ip-screen-frame { position:absolute; inset:0; width:100%; height:100%; border:0; pointer-events:none; background:#fff; }
         .ip-screen-note { position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:6; background:rgba(32,30,26,0.78); color:#fff; font-size:0.72rem; font-weight:800; padding:5px 12px; border-radius:999px; pointer-events:none; }
         .ip-scratch { position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; background:#fff; }
-        .ip-scratch-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; background:var(--bdb-card); border-bottom:1px solid var(--bdb-line); }
+        .ip-scratch-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; padding-left:64px; background:var(--bdb-card); border-bottom:1px solid var(--bdb-line); }
         .ip-scratch-title { font-weight:800; color:var(--bdb-ink); }
         .ip-scratch-stage { position:relative; flex:1; }
         .ip-spacer { flex:1; }
       `}</style>
 
-      <div className="ip-bar">
-        <span className="ip-room">iPad</span>
-        <span className="ip-sub">room {room}</span>
-        <span className={`ip-status ${boardStatus}`} role="status">
-          {boardStatus === "connected" ? "Connected" : boardStatus === "disconnected" ? "Reconnecting" : "Connecting"}
-        </span>
-        <div className="ip-seg" role="group" aria-label="Writing surface">
-          <button className={onBoard ? "on" : ""} onClick={() => switchSurface("board")}>Board</button>
-          <button className={!onBoard ? "on" : ""} onClick={() => switchSurface("screen")}>Write on screen</button>
-        </div>
-        {onBoard && (
-          <div className="ip-group" role="group" aria-label="Pages">
-            {pages.map((_, i) => (
-              <button key={i} className={`ip-btn${i === activePage ? " on" : ""}`} onClick={() => flipTo(i)}>{i + 1}</button>
-            ))}
-            {pages.length < MAX_PAGES && (
-              <button className="ip-btn" aria-label="Add page" onClick={addPage}>+</button>
+      <button className="ip-handle" onClick={toggleTools} aria-expanded={toolsOpen}>
+        <span className={`ip-dot ${boardStatus}`} aria-hidden="true" />
+        {toolsOpen ? "Hide tools" : "Tools"}
+      </button>
+
+      {toolsOpen && (
+        <div className="ip-palette" role="toolbar" aria-label="Writing tools">
+          <div className="ip-row">
+            <div className="ip-seg" role="group" aria-label="Writing surface">
+              <button className={onBoard ? "on" : ""} onClick={() => switchSurface("board")}>Board</button>
+              <button className={!onBoard ? "on" : ""} onClick={() => switchSurface("screen")}>Write on screen</button>
+            </div>
+            {onBoard && (
+              <div className="ip-group" role="group" aria-label="Pages">
+                {pages.map((_, i) => (
+                  <button key={i} className={`ip-btn${i === activePage ? " on" : ""}`} onClick={() => flipTo(i)}>{i + 1}</button>
+                ))}
+                {pages.length < MAX_PAGES && (
+                  <button className="ip-btn" aria-label="Add page" onClick={addPage}>+</button>
+                )}
+              </div>
             )}
+            <span className="ip-spacer" />
+            {room !== "main" && <span className="ip-sub">room {room}</span>}
           </div>
-        )}
-        <span className="ip-divider" />
 
-        <div className="ip-group" role="group" aria-label="Colors">
-          {COLORS.map((c) => (
-            <button
-              key={c}
-              className={`ip-sw${tool !== "erase" && tool !== "pixel" && tool !== "laser" && color === c ? " on" : ""}`}
-              style={{ background: c }}
-              aria-label={`Color ${c}`}
-              onClick={() => { setColor(c); if (tool === "erase" || tool === "pixel" || tool === "laser") setTool("pen"); }}
-            />
-          ))}
-        </div>
-        <span className="ip-divider" />
+          <div className="ip-row">
+            <div className="ip-group" role="group" aria-label="Colors">
+              {COLORS.map((c) => (
+                <button
+                  key={c}
+                  className={`ip-sw${tool !== "erase" && tool !== "pixel" && tool !== "laser" && color === c ? " on" : ""}`}
+                  style={{ background: c }}
+                  aria-label={`Color ${c}`}
+                  onClick={() => { setColor(c); if (tool === "erase" || tool === "pixel" || tool === "laser") setTool("pen"); }}
+                />
+              ))}
+            </div>
+            <div className="ip-group" role="group" aria-label="Width">
+              {WIDTHS.map((w) => (
+                <button key={w.px} className={`ip-btn${penWidth === w.px ? " on" : ""}`} onClick={() => setPenWidth(w.px)}>{w.label}</button>
+              ))}
+            </div>
+          </div>
 
-        <button className={`ip-btn${tool === "pen" ? " on" : ""}`} onClick={() => setTool("pen")}>Pen</button>
-        <button className={`ip-btn${tool === "hl" ? " on" : ""}`} onClick={() => setTool("hl")}>Highlight</button>
-        <button className={`ip-btn${tool === "laser" ? " on" : ""}`} onClick={() => setTool("laser")}>Laser</button>
-        <button className={`ip-btn${tool === "erase" ? " on" : ""}`} onClick={() => setTool("erase")}>Eraser</button>
-        <button className={`ip-btn${tool === "pixel" ? " on" : ""}`} onClick={() => setTool("pixel")}>Pixel</button>
-        <span className="ip-divider" />
-        <button className="ip-btn" disabled={!history.undo} style={!history.undo ? { opacity: 0.4 } : undefined} onClick={() => { if (onBoard) bumpPage("undo"); else setUndoSignal((n) => n + 1); }}>Undo</button>
-        <button className="ip-btn" disabled={!history.redo} style={!history.redo ? { opacity: 0.4 } : undefined} onClick={() => { if (onBoard) bumpPage("redo"); else setRedoSignal((n) => n + 1); }}>Redo</button>
+          <div className="ip-row">
+            <button className={`ip-btn${tool === "pen" ? " on" : ""}`} onClick={() => setTool("pen")}>Pen</button>
+            <button className={`ip-btn${tool === "hl" ? " on" : ""}`} onClick={() => setTool("hl")}>Highlight</button>
+            <button className={`ip-btn${tool === "laser" ? " on" : ""}`} onClick={() => setTool("laser")}>Laser</button>
+            <button className={`ip-btn${tool === "erase" ? " on" : ""}`} onClick={() => setTool("erase")}>Eraser</button>
+            <button className={`ip-btn${tool === "pixel" ? " on" : ""}`} onClick={() => setTool("pixel")}>Pixel</button>
+          </div>
 
-        <div className="ip-group" role="group" aria-label="Width">
-          {WIDTHS.map((w) => (
-            <button key={w.px} className={`ip-btn${penWidth === w.px ? " on" : ""}`} onClick={() => setPenWidth(w.px)}>{w.label}</button>
-          ))}
-        </div>
-        <span className="ip-divider" />
+          <div className="ip-row">
+            <button className="ip-btn" disabled={!history.undo} style={!history.undo ? { opacity: 0.4 } : undefined} onClick={() => { if (onBoard) bumpPage("undo"); else setUndoSignal((n) => n + 1); }}>Undo</button>
+            <button className="ip-btn" disabled={!history.redo} style={!history.redo ? { opacity: 0.4 } : undefined} onClick={() => { if (onBoard) bumpPage("redo"); else setRedoSignal((n) => n + 1); }}>Redo</button>
+            <span className="ip-divider" />
+            {onBoard ? (
+              <>
+                <button className="ip-btn warn" onClick={() => bumpPage("clear")}>Clear</button>
+                <button className={`ip-btn${scratchOpen ? " on" : ""}`} onClick={toggleScratch}>Scratch</button>
+              </>
+            ) : (
+              <button className="ip-btn warn" onClick={() => setScreenClearSignal((n) => n + 1)}>Clear ink</button>
+            )}
+            <span className="ip-spacer" />
+            <button className={`ip-btn${moreOpen ? " on" : ""}`} onClick={() => setMoreOpen((v) => !v)}>More</button>
+          </div>
 
-        {onBoard && (
-          <>
-            <button className={`ip-btn${showProblem ? " on" : ""}`} onClick={() => setShowProblem((v) => !v)}>Problem</button>
-            <button className={`ip-btn${showTemplates ? " on" : ""}`} onClick={() => setShowTemplates((v) => !v)}>Templates</button>
-            <button className="ip-btn" onClick={() => fileRef.current?.click()}>Background</button>
-            {page.bg && <button className="ip-btn warn" onClick={() => patchPage(activePage, { bg: null })}>Remove bg</button>}
-            <button className={`ip-btn${scratchOpen ? " on" : ""}`} onClick={toggleScratch}>Scratch</button>
-            <button className="ip-btn warn" onClick={() => bumpPage("clear")}>Clear</button>
-          </>
-        )}
-        {!onBoard && (
-          <button className="ip-btn warn" onClick={() => setScreenClearSignal((n) => n + 1)}>Clear ink</button>
-        )}
+          {moreOpen && (
+            <div className="ip-row">
+              {onBoard && (
+                <>
+                  <button className={`ip-btn${showProblem ? " on" : ""}`} onClick={() => setShowProblem((v) => !v)}>Problem</button>
+                  <button className={`ip-btn${showTemplates ? " on" : ""}`} onClick={() => setShowTemplates((v) => !v)}>Templates</button>
+                  <button className="ip-btn" onClick={() => fileRef.current?.click()}>Background</button>
+                  {page.bg && <button className="ip-btn warn" onClick={() => patchPage(activePage, { bg: null })}>Remove bg</button>}
+                  <button className="ip-btn" onClick={() => bumpPage("exportSig")}>Export</button>
+                </>
+              )}
+              <button className={`ip-btn${fingerDraws ? " on" : ""}`} onClick={() => setFingerDraws((v) => !v)}>Finger draws</button>
+              <button className="ip-btn" onClick={toggleFullscreen}>Full screen</button>
+            </div>
+          )}
 
-        <span className="ip-spacer" />
-        <button className={`ip-btn${fingerDraws ? " on" : ""}`} onClick={() => setFingerDraws((v) => !v)}>Finger draws</button>
-        {onBoard && <button className="ip-btn" onClick={() => bumpPage("exportSig")}>Export</button>}
-        <button className="ip-btn" onClick={toggleFullscreen}>Full screen</button>
-        <input ref={fileRef} type="file" accept="image/*" onChange={onPickFile} style={{ display: "none" }} />
-      </div>
+          {onBoard && showProblem && (
+            <div className="ip-row">
+              <textarea
+                className="ip-problem-in"
+                placeholder="One problem per line - they show on the board with space to solve."
+                value={page.problem ?? ""}
+                onChange={(e) => patchPage(activePage, { problem: e.target.value ? e.target.value : null })}
+                rows={2}
+              />
+              <button className="ip-btn warn" onClick={() => patchPage(activePage, { problem: null })}>Clear problem</button>
+            </div>
+          )}
 
-      {onBoard && showProblem && (
-        <div className="ip-problem">
-          <textarea
-            className="ip-problem-in"
-            placeholder="One problem per line - they show on the board with space to solve."
-            value={page.problem ?? ""}
-            onChange={(e) => patchPage(activePage, { problem: e.target.value ? e.target.value : null })}
-            rows={2}
-          />
-          <button className="ip-btn warn" onClick={() => patchPage(activePage, { problem: null })}>Clear problem</button>
+          {onBoard && showTemplates && (
+            <div className="ip-row">
+              {BOARD_TEMPLATES.map((t) => (
+                <button key={t.id} className="ip-btn" onClick={() => { patchPage(activePage, { bg: t.build() }); setShowTemplates(false); }}>{t.label}</button>
+              ))}
+            </div>
+          )}
         </div>
       )}
-
-      {onBoard && showTemplates && (
-        <div className="ip-templates">
-          {BOARD_TEMPLATES.map((t) => (
-            <button key={t.id} className="ip-btn" onClick={() => { patchPage(activePage, { bg: t.build() }); setShowTemplates(false); }}>{t.label}</button>
-          ))}
-        </div>
-      )}
+      <input ref={fileRef} type="file" accept="image/*" onChange={onPickFile} style={{ display: "none" }} />
 
       <div className="ip-stage">
         {/* Every page stays mounted (hidden pages park at 1x1 canvases) so
