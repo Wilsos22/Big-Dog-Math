@@ -29,7 +29,10 @@ bars and live misconception grouping).
   Steele is deliberately living with it as-is to let real classroom use surface any gaps, and
   declined glass-sheet export. Do NOT queue or propose new ink features without his word - the
   standing priority is reliability, and the open loop is his Pencil feel test (tuning constants in
-  InkBoard.tsx/inkGeometry.ts are the dials).
+  InkBoard.tsx/inkGeometry.ts are the dials). Feel verdict 2026-07-22: the pen is a CONSTANT-WIDTH
+  marker (radiusFor ignores pressure, taper off) - he writes equations, not calligraphy. Pressure
+  is still captured and carried on the wire, so do not remove it; restoring feel is a radiusFor
+  change only. Do not "fix" the flat line back to pressure ink.
 
 ## Hard rules (non-negotiable)
 
@@ -365,6 +368,13 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   you change algorithm behavior.
 - Deploy: edit -> commit (explicit paths) -> Steele pushes -> Vercel builds `main`. Env-var changes need
   a redeploy to take effect. `vercel.json` has one cron: `/api/roster/sync` at 13:00 UTC daily.
+- Classroom DISPLAY tabs stay open across deploys and never pick up new builds on their own - that
+  is how "the wall is missing the feature" happens (cost a live confusion 2026-07-22: the
+  projector's present tab predated the glass sheet entirely). `DeployRefresh` (root layout) polls
+  the public `/api/build-id` on display routes (/board, /teacher/present, /live-flow, /warmup) and
+  reloads them when a new deploy ships. NEVER add /ipad to its DISPLAY_ROUTES - the pen surface
+  holds the authoritative ink state and an auto-reload would wipe the room's boards. Displays are
+  safe to reload; ink resyncs via hello/state on mount.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like
@@ -405,7 +415,12 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   page logic runs untouched). Caveat: the pane's loader sometimes fails SW-controlled NAVIGATIONS
   outright ("This page couldn't load" while curl serves the route in milliseconds) - if that hits,
   unregister the SW, verify what you can through `?preview=` params plus `getAnimations()`, and
-  treat the SW technique as page-load-dependent, not guaranteed.
+  treat the SW technique as page-load-dependent, not guaranteed. To test SUPABASE-TRANSPORT
+  behavior locally (realtime ink sync, anon auth), copy the PUBLIC `NEXT_PUBLIC_SUPABASE_URL` +
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` out of the deployed bundle (curl a chunk from bigdogmath.com -
+  they are the same values every student browser receives) into the worktree's gitignored
+  `.env.local`; without them `getSupabase()` is null and the BroadcastChannel fallback silently
+  masks transport differences - ink realtime broadcast was first proven live this way 2026-07-22.
 - Student digital responses: Response Mode on a Lesson Step drives the Chromebook input.
   "Multiple Choice + Explain" (added 2026-07-21) shows tappable choices plus a required written
   explanation; the choice stays in `poll_answers.answer` (tallies, correctness, and City Routes
