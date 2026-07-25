@@ -270,6 +270,8 @@ export interface LiveClassFlowSnapshot {
     dueAndTurnIn?: string;
     helpPath?: string;
     anchorProblem?: string;
+    agenda?: string;
+    reminders?: string;
   } | null;
   sequence?: {
     currentIndex: number;

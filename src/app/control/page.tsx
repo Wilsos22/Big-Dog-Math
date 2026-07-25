@@ -465,6 +465,8 @@ type TodayLesson = {
   dueAndTurnIn?: string;
   helpPath?: string;
   anchorProblem?: string;
+  agenda?: string;
+  reminders?: string;
   warmUpLink?: string;
   exitTicketLink?: string;
   steps?: TodayLessonStep[];
@@ -487,6 +489,8 @@ type ActiveLessonContext = {
   dueAndTurnIn: string;
   helpPath: string;
   anchorProblem: string;
+  agenda: string;
+  reminders: string;
 };
 
 const LESSON_TOOL_ALIASES: Record<string, string> = {
@@ -1057,6 +1061,8 @@ export default function ControlPage() {
         bigDogChallenge: flow.lesson.bigDogChallenge || "",
         dueAndTurnIn: flow.lesson.dueAndTurnIn || "",
         anchorProblem: flow.lesson.anchorProblem || "",
+        agenda: flow.lesson.agenda || "",
+        reminders: flow.lesson.reminders || "",
         helpPath: flow.lesson.helpPath || "",
       });
     } else setActiveLessonContext(null);
@@ -1635,6 +1641,8 @@ export default function ControlPage() {
           dueAndTurnIn: activeLessonContext.dueAndTurnIn,
           helpPath: activeLessonContext.helpPath,
           anchorProblem: activeLessonContext.anchorProblem,
+          agenda: activeLessonContext.agenda,
+          reminders: activeLessonContext.reminders,
         }
       : null;
     const sequence = activeState
@@ -1961,6 +1969,8 @@ export default function ControlPage() {
       dueAndTurnIn: lesson.dueAndTurnIn || "",
       helpPath: lesson.helpPath || "",
       anchorProblem: lesson.anchorProblem || "",
+      agenda: lesson.agenda || "",
+      reminders: lesson.reminders || "",
     });
     persistLineup(newLineup);
     const first = newLineup[0];
@@ -2450,6 +2460,8 @@ export default function ControlPage() {
           bigDogChallenge: publishedFlow.lesson.bigDogChallenge || "",
           dueAndTurnIn: publishedFlow.lesson.dueAndTurnIn || "",
           anchorProblem: publishedFlow.lesson.anchorProblem || "",
+          agenda: publishedFlow.lesson.agenda || "",
+          reminders: publishedFlow.lesson.reminders || "",
           helpPath: publishedFlow.lesson.helpPath || "",
         });
       } else setActiveLessonContext(null);

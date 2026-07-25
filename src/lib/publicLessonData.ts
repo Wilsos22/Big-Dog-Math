@@ -19,6 +19,7 @@ const PUBLIC_TODAY_LESSON_FIELDS = [
   "moduleTopic",
   "standard",
   "agenda",
+  "reminders",
   "supplies",
   "tools",
   "suppliesConfigured",
