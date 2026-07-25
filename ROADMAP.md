@@ -286,7 +286,10 @@ to complaining-teen, less Red Bull, shorter replies)
   (212=212 samples), and a second tab's display followed live pageflips and
   painted while backgrounded. Zoom is deliberately absent from the glass
   sheet (ink must stay aligned to the screen under it) and gestures still
-  need "Finger draws" OFF. UI ROUND (7/22, commit e3e71e0, merge a715596):
+  need "Finger draws" OFF. Templates no longer fight the paper (7/22, merge
+  8e67878): a set background image - coordinate plane, any grid template -
+  suppresses the dotted ground on the live board and in the export; removing
+  it hands the dots back at the current zoom. UI ROUND (7/22, commit e3e71e0, merge a715596):
   the iPad toolbar became a translucent FLOATING PALETTE over a full-bleed
   writing surface - a small Tools pill (with the connection dot) is all that
   stays when hidden, and the palette organizes into rows (surface + pages,
