@@ -82,23 +82,24 @@ export function OverlayElementView({ element, stageHeight }: { element: SlideOve
   };
   if (element.type === "rect" || element.type === "circle") {
     const thickness = element.thickness ?? 4;
-    // Highlighter glass: a translucent tint the paper shows through, a crisp
-    // colored border, and a float shadow. `fill` deepens the tint to a solid
-    // marker wash rather than a flat opaque block, so it always reads as a
-    // highlight over the slide, never a sticker covering it.
+    // Highlighter glass: a translucent tint of the chosen color that the slide
+    // shows through, a neutral dark outline (never colored), and a float
+    // shadow so it lifts off the paper. `fill` deepens the wash from a light
+    // highlight to a stronger marker wash, never an opaque block. Rectangles
+    // keep square corners; circles stay round.
     const interior = element.fill
-      ? `color-mix(in srgb, ${color} 42%, transparent)`
-      : `color-mix(in srgb, ${color} 15%, transparent)`;
+      ? `color-mix(in srgb, ${color} 22%, transparent)`
+      : `color-mix(in srgb, ${color} 9%, transparent)`;
     return (
       <span
         style={{
           ...box,
           display: "block",
-          border: `${thickness}px solid ${color}`,
+          border: `${thickness}px solid #2b2b2b`,
           background: interior,
-          borderRadius: element.type === "circle" ? "50%" : 16,
+          borderRadius: element.type === "circle" ? "50%" : 0,
           boxSizing: "border-box",
-          boxShadow: "0 10px 26px -10px rgba(40,32,20,0.45), inset 0 1px 0 rgba(255,255,255,0.35)",
+          boxShadow: "0 10px 26px -10px rgba(40,32,20,0.45), inset 0 1px 0 rgba(255,255,255,0.30)",
           backdropFilter: "saturate(1.05)",
         }}
         aria-hidden="true"

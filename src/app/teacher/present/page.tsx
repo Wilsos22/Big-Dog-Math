@@ -607,12 +607,24 @@ export default function ClassroomStagePage() {
         .stage-directions-inner { width:min(100%,1500px); display:grid; gap:22px; justify-items:center; }
         .stage-main-prompt { margin:0; max-width:92%; color:var(--head); text-align:center; white-space:pre-wrap; font-size:clamp(3.1rem,6.3vw,6.9rem); line-height:1.08; font-weight:800; letter-spacing:-0.02em; text-wrap:balance; }
         .stage-action-chip { border-radius:999px; background:var(--acc); color:#fff; padding:9px 20px; font-size:clamp(0.72rem,1.1vw,0.9rem); font-weight:800; letter-spacing:0.1em; text-transform:uppercase; }
+        /* Permanent state marker: flat italic sans (Verdana family), pinned
+           top-left, wiping in left-to-right on every state change. It reads as
+           chrome that stays put lesson to lesson, distinct from the lesson's
+           own directions in the system font. */
+        .stage-statelabel { position:absolute; z-index:6; top:clamp(10px,1.6vw,20px); left:clamp(16px,2.4vw,32px); margin:0;
+          font-family:Verdana,Geneva,Tahoma,"DejaVu Sans",sans-serif; font-style:italic; font-weight:700;
+          font-size:clamp(1rem,2.1vw,1.9rem); letter-spacing:-0.01em; color:var(--acc-deep);
+          animation:stateWipe 640ms var(--stage-ease) both; }
+        .stage-statelabel-art { position:absolute; z-index:6; top:clamp(10px,1.6vw,20px); left:clamp(16px,2.4vw,32px);
+          height:clamp(30px,4vw,58px); width:auto; animation:stateWipe 640ms var(--stage-ease) both; }
+        @keyframes stateWipe { from { opacity:0; clip-path:inset(0 100% 0 0); } to { opacity:1; clip-path:inset(0 0 0 0); } }
+        @media (prefers-reduced-motion:reduce) { .stage-statelabel, .stage-statelabel-art { animation:none; } }
         .stage-slide-title { display:grid; justify-items:center; gap:11px; }
         .stage-slide-title h2 { margin:0; color:var(--head); text-align:center; font-size:clamp(2.1rem,4.4vw,4.4rem); line-height:1; font-weight:800; letter-spacing:-0.025em; }
         .stage-slide-rule { width:clamp(56px,6vw,96px); height:6px; border-radius:999px; background:var(--acc); }
         .stage-main-prompt.with-title { color:var(--ink); font-size:clamp(1.5rem,3vw,3rem); line-height:1.22; font-weight:700; letter-spacing:-0.01em; }
         .stage-area-figure { width:min(100%,620px); }
-        .stage-board-scene { position:absolute; inset:0; display:grid; grid-template-rows:auto minmax(0,1fr); }
+        .stage-board-scene { position:absolute; inset:0; }
         .stage-band { display:flex; align-items:center; gap:14px; border-bottom:1px solid var(--hair); background:rgba(243,240,231,0.92); padding:10px 28px; }
         .stage-band-rule { width:34px; height:6px; flex:none; border-radius:999px; background:var(--acc); }
         .stage-band h2 { margin:0; overflow:hidden; color:var(--head); text-overflow:ellipsis; white-space:nowrap; font-size:clamp(1.15rem,2.1vw,1.9rem); font-weight:800; letter-spacing:-0.01em; }
@@ -944,17 +956,6 @@ export default function ClassroomStagePage() {
             <iframe className="stage-tool" src={liveToolUrl} title={flow.tool?.label || "Lesson tool"} />
           ) : presentation?.mode === "board" ? (
             <div className="stage-board-scene">
-              {slideTitle ? (
-                <div className="stage-band">
-                  <span className="stage-band-rule" aria-hidden="true" />
-                  {titleArtUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img className="stage-band-art" src={titleArtUrl} alt={slideTitle} />
-                  ) : (
-                    <h2>{slideTitle}</h2>
-                  )}
-                </div>
-              ) : null}
               <div className="stage-board-wrap">
                 {slideOverlayData ? <SlideOverlayLayer overlay={slideOverlayData} /> : null}
                 <InkBoard room={session.id} interactive problem={stripSlideTitlePrefix(presentation.body, slideTitle, state?.label)} />
@@ -969,17 +970,6 @@ export default function ClassroomStagePage() {
             lessonVisual.kind === "area-model" ? (
               <div className="stage-directions">
                 <div className="stage-directions-inner">
-                  {slideTitle ? (
-                    <div className="stage-slide-title">
-                      {titleArtUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img className="stage-slide-title-art" src={titleArtUrl} alt={slideTitle} />
-                      ) : (
-                        <h2>{slideTitle}</h2>
-                      )}
-                      <span className="stage-slide-rule" aria-hidden="true" />
-                    </div>
-                  ) : null}
                   {strippedBody ? <p className="stage-main-prompt with-title">{strippedBody}</p> : null}
                   <div className="stage-area-figure">
                     <LessonVisual visual={lessonVisual} variant="projector" accent={accent} />
@@ -1050,17 +1040,6 @@ export default function ClassroomStagePage() {
             <div className="stage-directions">
               <div className="stage-directions-inner">
                 {showLessonTargets && lesson?.learningIntention ? <p className="stage-learning">{lesson.learningIntention}</p> : null}
-                {slideTitle && slideTitle !== slideBody.trim() ? (
-                  <div className="stage-slide-title">
-                    {titleArtUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img className="stage-slide-title-art" src={titleArtUrl} alt={slideTitle} />
-                    ) : (
-                      <h2>{slideTitle}</h2>
-                    )}
-                    <span className="stage-slide-rule" aria-hidden="true" />
-                  </div>
-                ) : null}
                 {equationChain ? (
                   <div className="stage-eq-chain" aria-label="Equation steps">
                     <p className="stage-eq-head">{equationTokens(equationChain.head)}</p>
@@ -1072,7 +1051,7 @@ export default function ClassroomStagePage() {
                     ))}
                   </div>
                 ) : (
-                  <h2 className={`stage-main-prompt${slideTitle && slideTitle !== slideBody.trim() ? " with-title" : ""}`}>{strippedBody || slideBody}</h2>
+                  <h2 className="stage-main-prompt">{strippedBody || slideBody}</h2>
                 )}
               </div>
             </div>
@@ -1080,6 +1059,14 @@ export default function ClassroomStagePage() {
           )}
           {slideOverlayData && !interlude && presentation?.mode !== "board" ? (
             <SlideOverlayLayer overlay={slideOverlayData} />
+          ) : null}
+          {session && flow && state && !interlude && slideTitle ? (
+            titleArtUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="stage-statelabel-art" src={titleArtUrl} alt={slideTitle} key={`lbl:${sceneKey}`} />
+            ) : (
+              <p className="stage-statelabel" key={`lbl:${sceneKey}`}>{slideTitle}</p>
+            )
           ) : null}
           </div>
           {showBoardPanel && session ? (
