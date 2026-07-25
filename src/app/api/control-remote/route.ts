@@ -214,6 +214,8 @@ function lessonSnapshotFromNotion(lesson: LessonData): NonNullable<LiveClassFlow
     dueAndTurnIn: lesson.dueAndTurnIn,
     helpPath: lesson.helpPath,
     anchorProblem: lesson.anchorProblem,
+    agenda: lesson.agenda,
+    reminders: lesson.reminders,
   };
 }
 

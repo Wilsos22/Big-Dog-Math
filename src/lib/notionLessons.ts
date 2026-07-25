@@ -75,6 +75,7 @@ export interface LessonData {
   standard: string;    // first CCSS code found on the page (e.g. "6.G.A.1"); "" if none
   // Optional agenda fields — add these columns in Notion to fill them; empty if absent.
   agenda: string;        // text, one activity per line
+  reminders: string;     // text, one reminder/upcoming date per line (manual)
   supplies: string;      // text list, or checked Supply: ... checkbox properties
   tools: string;         // text list, or checked Tool: ... checkbox properties
   suppliesConfigured: boolean;
@@ -521,6 +522,7 @@ async function mapPage(
     moduleTopic: extractFirstText(p, ["Module Topic", "Module topic", "Unit Topic", "Topic Name", "Lesson Topic"]),
     standard: extractAnyCcss(p),
     agenda: extractText(p["Agenda"]),
+    reminders: extractText(p["Reminders"]),
     supplies: uniq([...splitList(supplyText), ...checkedSupplies]).join("\n"),
     tools: uniq([...splitList(toolText), ...checkedTools]).join("\n"),
     suppliesConfigured: Boolean(supplyText.trim()) || hasSupplyCheckboxes,

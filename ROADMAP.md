@@ -124,6 +124,17 @@ live-flow sequence steps through every builder and renders on the main
 projector above the auto slide - and below the teacher's ink on board
 states - so auto and hand-made coexist; a step with no overlay renders
 exactly as before. Teacher home gained the Slide extras card) ·
+**Bookend screens + single state marker** (7/22 - three Steele asks. (1) The
+Main projector's state name is now ONE marker: a big outlined accent pill
+top-left that pops in to announce the state (was showing the state name three
+times - topbar chip, topbar title, italic label); the topbar carries only
+lesson title/code + timer now. (2) Exit state is a closing board - success
+criterion large plus a Don't-forget card of manual reminders/upcoming dates
+from a new Notion Reminders field, each sliding in - since students do the
+Google Form exit on Chromebooks. (3) The Pace + Support screen runs today's
+agenda as an animated numbered rundown during warm-up (existing Agenda
+field), so the class sees the plan while Main holds the hook. Exit ticket
+stays a Google Form; native exit wiring left in place) ·
 **Main projector: universal state headers + equation-chain layout** (7/22 -
 round two: slide titles are now the UNIVERSAL state words (I Do / We Do /
 You Do, Launch, Review, Exit Ticket - identical lesson to lesson so students

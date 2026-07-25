@@ -383,6 +383,13 @@ export default function ClassroomStagePage() {
   // learning intention instead of its own question.
   const isLearningCheck = state?.id === "learning-check";
   const isTransition = Boolean(state?.id?.startsWith("transition"));
+  const isExitState = state?.id === "exit" || theme.id === "exit";
+  // Manual reminders / upcoming dates (Notion "Reminders" field, one per line).
+  const reminderItems = (lesson?.reminders || "")
+    .split(/\n|;/).map((line) => line.replace(/^[-*]\s*/, "").trim()).filter(Boolean).slice(0, 5);
+  // Agenda lines for the warm-up rundown (Notion "Agenda" field).
+  const agendaItems = (lesson?.agenda || "")
+    .split("\n").map((line) => line.replace(/^[-*]\s*/, "").trim()).filter(Boolean).slice(0, 12);
   // Ad-hoc "Transition now": the interlude overlay trumps every other view
   // while the room moves; the paused state returns when it clears.
   const interlude = flow?.interlude || null;
@@ -620,18 +627,37 @@ export default function ClassroomStagePage() {
         .stage-directions-inner { width:min(100%,1500px); display:grid; gap:22px; justify-items:center; }
         .stage-main-prompt { margin:0; max-width:92%; color:var(--head); text-align:center; white-space:pre-wrap; font-size:clamp(3.1rem,6.3vw,6.9rem); line-height:1.08; font-weight:800; letter-spacing:-0.02em; text-wrap:balance; }
         .stage-action-chip { border-radius:999px; background:var(--acc); color:#fff; padding:9px 20px; font-size:clamp(0.72rem,1.1vw,0.9rem); font-weight:800; letter-spacing:0.1em; text-transform:uppercase; }
-        /* Permanent state marker: flat italic sans (Verdana family), pinned
-           top-left, wiping in left-to-right on every state change. It reads as
-           chrome that stays put lesson to lesson, distinct from the lesson's
-           own directions in the system font. */
-        .stage-statelabel { position:absolute; z-index:6; top:clamp(10px,1.6vw,20px); left:clamp(16px,2.4vw,32px); margin:0;
-          font-family:Verdana,Geneva,Tahoma,"DejaVu Sans",sans-serif; font-style:italic; font-weight:700;
-          font-size:clamp(1rem,2.1vw,1.9rem); letter-spacing:-0.01em; color:var(--acc-deep);
-          animation:stateWipe 640ms var(--stage-ease) both; }
-        .stage-statelabel-art { position:absolute; z-index:6; top:clamp(10px,1.6vw,20px); left:clamp(16px,2.4vw,32px);
-          height:clamp(30px,4vw,58px); width:auto; animation:stateWipe 640ms var(--stage-ease) both; }
-        @keyframes stateWipe { from { opacity:0; clip-path:inset(0 100% 0 0); } to { opacity:1; clip-path:inset(0 0 0 0); } }
+        /* The one state marker: a big outlined accent pill pinned top-left,
+           the same "orange bar" from the topbar but enlarged. It pops in to
+           announce where the class is, then holds while the problem shows.
+           It is the ONLY place the state name appears. */
+        .stage-statelabel { position:absolute; z-index:6; top:clamp(12px,1.8vw,24px); left:clamp(16px,2.4vw,34px); margin:0;
+          display:inline-flex; align-items:center; box-sizing:border-box;
+          border:3px solid var(--acc); border-radius:999px;
+          background:color-mix(in srgb, var(--acc) 9%, transparent);
+          padding:clamp(6px,0.9vw,12px) clamp(16px,2.2vw,30px);
+          color:var(--acc-deep); font-family:var(--bdb-font); font-weight:900;
+          font-size:clamp(1.25rem,2.7vw,2.5rem); line-height:1; letter-spacing:0.04em; text-transform:uppercase;
+          animation:statePop 680ms cubic-bezier(0.34,1.4,0.5,1) both; }
+        .stage-statelabel-art { position:absolute; z-index:6; top:clamp(12px,1.8vw,24px); left:clamp(16px,2.4vw,34px);
+          height:clamp(36px,5vw,74px); width:auto; animation:statePop 680ms cubic-bezier(0.34,1.4,0.5,1) both; }
+        @keyframes statePop { 0% { opacity:0; transform:scale(0.62); } 60% { opacity:1; transform:scale(1.06); } 100% { opacity:1; transform:scale(1); } }
         @media (prefers-reduced-motion:reduce) { .stage-statelabel, .stage-statelabel-art { animation:none; } }
+        /* Exit closing board: success criterion + manual reminders. */
+        .stage-closing { position:absolute; inset:0; display:grid; grid-template-columns:minmax(0,1.5fr) minmax(280px,0.9fr); align-items:center; gap:clamp(24px,4vw,64px); padding:clamp(40px,6vw,96px) clamp(30px,5vw,84px); }
+        .stage-closing.no-reminders, .stage-closing:only-child { grid-template-columns:1fr; }
+        .stage-closing-main { display:grid; gap:clamp(10px,1.6vw,20px); align-content:center; }
+        .stage-closing-kicker { margin:0; color:var(--acc-deep); font-size:clamp(0.82rem,1.4vw,1.1rem); font-weight:900; letter-spacing:0.15em; text-transform:uppercase; }
+        .stage-closing-criterion { margin:0; max-width:22ch; color:var(--head); font-size:clamp(2.2rem,4.8vw,4.8rem); line-height:1.06; font-weight:800; letter-spacing:-0.025em; text-wrap:balance; }
+        .stage-closing-directions { margin:0; color:var(--soft); font-size:clamp(1rem,1.9vw,1.5rem); font-weight:700; }
+        .stage-closing-reminders { align-self:center; border:1px solid var(--hair); border-left:6px solid var(--acc); border-radius:18px; background:var(--card); padding:clamp(18px,2.4vw,30px); box-shadow:0 12px 32px rgba(40,32,20,0.10); }
+        .stage-closing-remind-label { margin:0 0 12px; color:var(--acc-deep); font-size:clamp(0.78rem,1.3vw,1rem); font-weight:900; letter-spacing:0.13em; text-transform:uppercase; }
+        .stage-closing-reminders ul { margin:0; padding:0; list-style:none; display:grid; gap:11px; }
+        .stage-closing-reminders li { position:relative; padding-left:26px; color:var(--ink); font-size:clamp(1.05rem,1.9vw,1.6rem); font-weight:750; line-height:1.28; animation:closeRise 500ms var(--stage-ease) both; }
+        .stage-closing-reminders li::before { content:""; position:absolute; left:2px; top:0.55em; width:10px; height:10px; border-radius:3px; background:var(--acc); }
+        @keyframes closeRise { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:none; } }
+        @media (max-width:900px) { .stage-closing { grid-template-columns:1fr; } }
+        @media (prefers-reduced-motion:reduce) { .stage-closing-reminders li { animation:none; } }
         .stage-slide-title { display:grid; justify-items:center; gap:11px; }
         .stage-slide-title h2 { margin:0; color:var(--head); text-align:center; font-size:clamp(2.1rem,4.4vw,4.4rem); line-height:1; font-weight:800; letter-spacing:-0.025em; }
         .stage-slide-rule { width:clamp(56px,6vw,96px); height:6px; border-radius:999px; background:var(--acc); }
@@ -803,10 +829,13 @@ export default function ClassroomStagePage() {
       <section className="stage-frame">
         <div className="stage-topbar">
           <span className="stage-dot" aria-hidden="true" />
-          <span className="stage-chip">{interlude ? `Transition - ${interlude.label}` : transitionPreview ? `Transition - ${transitionPreview.vibe}` : previewSample ? previewSample.label : state?.label || "Big Dog Math"}</span>
+          {/* The state name lives in the big animated marker on the stage
+              (below); the topbar carries only the lesson context so the state
+              word is not repeated three times. */}
           <div className="stage-topbar-copy">
-            <h1 className="stage-title">{previewSample ? "Preview" : presentation?.title || state?.label || "Waiting for the lesson"}</h1>
-            {lesson?.title ? <p className="stage-lesson">{lesson.title}{lesson.code ? ` · ${lesson.code}` : ""}</p> : null}
+            {lesson?.title
+              ? <p className="stage-lesson">{lesson.title}{lesson.code ? ` · ${lesson.code}` : ""}</p>
+              : <p className="stage-lesson">{previewSample ? "Preview" : "Big Dog Math"}</p>}
           </div>
           <span className="stage-textbtns" aria-label="Text size">
             <button className="stage-textbtn" type="button" onClick={() => adjustTextScale(-0.25)} disabled={textScale <= 1} aria-label="Smaller text">A-</button>
@@ -1033,6 +1062,27 @@ export default function ClassroomStagePage() {
                   </article>
                 ))}
               </div>
+            </section>
+          ) : isExitState ? (
+            // Closing board: students answer the exit ticket on Chromebooks,
+            // so the projector holds today's success criterion and any manual
+            // reminders/upcoming dates instead of an empty directions line.
+            <section className="stage-closing" aria-label="Exit ticket closing board">
+              <div className="stage-closing-main">
+                <p className="stage-closing-kicker">Today you learned to</p>
+                <h2 className="stage-closing-criterion">{selectedCriterion || lesson?.learningIntention || slideBody}</h2>
+                <p className="stage-closing-directions">{slideBody || "Finish your exit ticket on your Chromebook."}</p>
+              </div>
+              {reminderItems.length ? (
+                <aside className="stage-closing-reminders" aria-label="Reminders">
+                  <p className="stage-closing-remind-label">Don&apos;t forget</p>
+                  <ul>
+                    {reminderItems.map((item, index) => (
+                      <li key={item} style={{ animationDelay: `${0.15 + index * 0.14}s` }}>{item}</li>
+                    ))}
+                  </ul>
+                </aside>
+              ) : null}
             </section>
           ) : (
             anchorMode ? (

@@ -238,6 +238,11 @@ export default function PaceSupportPage() {
   // timer pill carries the time.
   const anchorText = flow?.lesson?.anchorProblem?.trim() || "";
   const anchorPose = Boolean(connected && anchorText && state?.id === "warmup");
+  // During warm-up the support screen runs today's agenda so the class can
+  // see the plan animate in while the Main projector holds the hook.
+  const agendaItems = (flow?.lesson?.agenda || "")
+    .split("\n").map((line) => line.replace(/^[-*]\s*/, "").trim()).filter(Boolean).slice(0, 10);
+  const warmupAgenda = Boolean(connected && state?.id === "warmup" && agendaItems.length);
 
 
   // Mirror of the Main projector's scene keying: every state change re-enters
@@ -275,6 +280,13 @@ export default function PaceSupportPage() {
         .pw-chip, .pw-dot { transition:background-color 420ms ease; }
         .pw-timer::before { transition:background-color 420ms ease; }
         .pw-hook-inner { display:grid; gap:20px; justify-items:center; }
+        .pw-agenda { position:absolute; inset:0; display:grid; align-content:center; gap:clamp(10px,1.6vw,20px); padding:clamp(30px,5vw,84px); }
+        .pw-agenda-kicker { margin:0; color:var(--acc-deep); font-size:clamp(0.82rem,1.4vw,1.1rem); font-weight:900; letter-spacing:0.15em; text-transform:uppercase; }
+        .pw-agenda-list { margin:0; padding:0; list-style:none; display:grid; gap:clamp(9px,1.3vw,16px); }
+        .pw-agenda-list li { display:flex; align-items:center; gap:clamp(12px,1.6vw,20px); color:var(--ink); font-size:clamp(1.1rem,2.2vw,1.9rem); font-weight:750; line-height:1.2; animation:agendaSlide 520ms var(--stage-ease) both; }
+        .pw-agenda-n { flex:none; display:grid; place-items:center; width:clamp(30px,3.4vw,48px); height:clamp(30px,3.4vw,48px); border-radius:12px; background:var(--acc); color:#fff; font-size:clamp(0.9rem,1.5vw,1.3rem); font-weight:900; }
+        @keyframes agendaSlide { from { opacity:0; transform:translateX(-22px); } to { opacity:1; transform:none; } }
+        @media (prefers-reduced-motion:reduce) { .pw-agenda-list li { animation:none; } }
         .pw-interlude-clock { color:var(--acc-deep); font-size:clamp(3.4rem,9vw,7rem); line-height:0.9; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-0.04em; }
         .pw-hook-kicker { margin:0; color:var(--acc-deep); font-size:clamp(0.78rem,1.3vw,1rem); font-weight:900; letter-spacing:0.16em; text-transform:uppercase;
           animation:pwHookRise 560ms 180ms var(--stage-ease) both; }
@@ -418,6 +430,18 @@ export default function PaceSupportPage() {
               <p className="pw-hook-direction">{interlude.directions}</p>
               <span className="pw-interlude-clock">{formatTime(interludeSeconds)}</span>
             </div>
+          </div>
+        ) : warmupAgenda ? (
+          <div className="pw-agenda" aria-label="Today's agenda">
+            <p className="pw-agenda-kicker">Today&apos;s plan</p>
+            <ol className="pw-agenda-list">
+              {agendaItems.map((item, index) => (
+                <li key={item} style={{ animationDelay: `${0.2 + index * 0.28}s` }}>
+                  <span className="pw-agenda-n">{index + 1}</span>
+                  <span className="pw-agenda-text">{item}</span>
+                </li>
+              ))}
+            </ol>
           </div>
         ) : anchorPose ? (
           <div className="pw-center">
