@@ -286,7 +286,19 @@ to complaining-teen, less Red Bull, shorter replies)
   (212=212 samples), and a second tab's display followed live pageflips and
   painted while backgrounded. Zoom is deliberately absent from the glass
   sheet (ink must stay aligned to the screen under it) and gestures still
-  need "Finger draws" OFF. FEEL-TEST ROUND (7/22, commit 627aedc, merge
+  need "Finger draws" OFF. UI ROUND (7/22, commit e3e71e0, merge a715596):
+  the iPad toolbar became a translucent FLOATING PALETTE over a full-bleed
+  writing surface - a small Tools pill (with the connection dot) is all that
+  stays when hidden, and the palette organizes into rows (surface + pages,
+  colors + widths, tools, actions) with rare controls behind More; open
+  state persists per device. Same round fixed "Write on screen goes back to
+  waiting for the lesson": /teacher/present resolved its session from the
+  URL param OR the device's STORED teacher session id, and a stale stored
+  id pinned the iPad's mirror (and any no-param projector open) to a dead
+  session forever - the stored id is now only a hint that falls back to
+  auto-attaching to the single live session (verified via SW-mocked session
+  API: stale id + one live session renders the live state where it used to
+  wait). FEEL-TEST ROUND (7/22, commit 627aedc, merge
   0ab4595) from Steele's first real Pencil session: the pen is now a
   CONSTANT-WIDTH marker with round caps (his verdict - he writes equations,
   not calligraphy; pressure still captured on the wire, radiusFor is the
