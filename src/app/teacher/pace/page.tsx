@@ -9,6 +9,7 @@ import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { teacherApiRequest } from "@/lib/teacherApi";
 import { LIVE_FLOW_MODE, getStoredTeacherSessionId, liveTimerSeconds, type LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
+import { studioPreviewSession, useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 
 // ?preview=<stage id> renders the shell with sample content and no session.
 const PREVIEW_SAMPLES: Record<string, { label: string; action: string; steps: string[]; anchor?: string }> = {
@@ -76,6 +77,16 @@ export default function PaceSupportPage() {
   // Room-tunable text size, persisted per device (same control as present).
   const [textScale, setTextScale] = useState(1);
 
+  // Studio preview: render from the snapshot Screen Studio posts, not a
+  // live session, so the Pace preview is the real surface.
+  const { active: isStudioPreviewMode, snapshot: studioPreviewSnapshot } = useStudioPreviewSnapshot();
+  useEffect(() => {
+    if (!isStudioPreviewMode) return;
+    setLoading(false);
+    setSession(studioPreviewSnapshot ? (studioPreviewSession(studioPreviewSnapshot) as PaceSession) : null);
+    setSessionMessage(studioPreviewSnapshot ? "Studio preview." : "Waiting for the Studio draft.");
+  }, [isStudioPreviewMode, studioPreviewSnapshot]);
+
   useEffect(() => {
     setPreviewStage(previewStageParam());
     try {
@@ -93,6 +104,7 @@ export default function PaceSupportPage() {
   };
 
   useEffect(() => {
+    if (isStudioPreviewMode) return;
     let stopped = false;
     let checking = false;
     const requested = requestedSessionId();

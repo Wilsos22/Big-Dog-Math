@@ -21,6 +21,7 @@ import {
   type TeacherRemoteCommand,
 } from "@/lib/liveClassFlow";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
+import { studioPreviewSession, useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { parseSlideOverlay } from "@/lib/slideOverlay";
 
 interface StageSession {
@@ -272,6 +273,17 @@ export default function ClassroomStagePage() {
   // projector and it sticks.
   const [textScale, setTextScale] = useState(1);
 
+  // Studio preview: this projector, embedded in Screen Studio, renders from a
+  // snapshot the parent posts instead of a live session, so Studio shows the
+  // real surface rather than a hand-built copy.
+  const { active: isStudioPreviewMode, snapshot: studioPreviewSnapshot } = useStudioPreviewSnapshot();
+  useEffect(() => {
+    if (!isStudioPreviewMode) return;
+    setLoading(false);
+    setSession(studioPreviewSnapshot ? (studioPreviewSession(studioPreviewSnapshot) as StageSession) : null);
+    setSessionMessage(studioPreviewSnapshot ? "Studio preview." : "Waiting for the Studio draft.");
+  }, [isStudioPreviewMode, studioPreviewSnapshot]);
+
   useEffect(() => {
     setPreviewStage(previewStageParam());
     setInkOverlay(inkOverlayParams());
@@ -290,6 +302,7 @@ export default function ClassroomStagePage() {
   };
 
   useEffect(() => {
+    if (isStudioPreviewMode) return;
     let stopped = false;
     let checking = false;
     const requested = requestedSessionId();
