@@ -47,7 +47,7 @@ function newElement(type: SlideOverlayElementType): SlideOverlayElement {
     return { id, type, x: 34, y: 50, x2: 66, y2: 50, color: "#201e1a", thickness: 5 };
   }
   if (type === "rect" || type === "circle") {
-    return { id, type, x: 38, y: 36, w: 24, h: type === "circle" ? 28 : 22, color: "#50a3a4", thickness: 5, fill: false };
+    return { id, type, x: 38, y: 36, w: 24, h: type === "circle" ? 28 : 22, color: "#4d8df6", thickness: 5, fill: true };
   }
   if (type === "image") {
     return { id, type, x: 34, y: 30, w: 32, h: 36, url: "" };
@@ -432,7 +432,7 @@ export default function SlideExtrasPage() {
                         checked={Boolean(selected.fill)}
                         onChange={(event) => updateSelected({ fill: event.target.checked })}
                       />
-                      Filled
+                      Deeper wash
                     </label>
                   )}
                   <button className="sx-del" onClick={removeSelected}>Delete element</button>

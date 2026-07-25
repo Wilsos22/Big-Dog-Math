@@ -101,6 +101,12 @@ before the digit lands. New Back button re-enters the previous step from its
 first frame for rewatching, and Auto-lead now runs the full choreography on
 EVERY problem - it only ran on problem 1, which is why it was hard to
 follow) ·
+**Slide extras: highlighter-glass shapes** (7/22 - Steele's polish: overlay
+rectangles and circles now render as translucent color washes the slide
+shows through (color-mix tint, crisp colored border, soft float shadow so
+they lift off the dotted paper), instead of flat outlines or opaque blocks.
+The fill toggle became Deeper wash (42% vs 15% tint); new shapes default to
+a light-blue wash. Lines, arrows, and images gained the same float shadow) ·
 **Slide extras editor (Canva-lite overlays)** (7/22 - Steele's ask, built on
 his green light: /teacher/slides is a drag-and-drop decoration editor over
 the auto-generated slides. Pick a published lesson and step, place text,

@@ -50,7 +50,10 @@ export function OverlayElementView({ element, stageHeight }: { element: SlideOve
     const y2 = element.y2 ?? element.y;
     const markerId = `slide-arrow-${element.id}`;
     return (
-      <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }} aria-hidden="true">
+      <svg
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}
+        aria-hidden="true"
+      >
         {element.type === "arrow" ? (
           <defs>
             <marker id={markerId} markerWidth="7" markerHeight="7" refX="4.6" refY="2.6" orient="auto" markerUnits="strokeWidth">
@@ -62,6 +65,8 @@ export function OverlayElementView({ element, stageHeight }: { element: SlideOve
           x1={`${element.x}%`} y1={`${element.y}%`} x2={`${x2}%`} y2={`${y2}%`}
           stroke={color} strokeWidth={thickness} strokeLinecap="round"
           markerEnd={element.type === "arrow" ? `url(#${markerId})` : undefined}
+          // Soft drop shadow so the stroke floats above the dotted paper.
+          style={{ filter: "drop-shadow(0 2px 4px rgba(40,32,20,0.28))" }}
         />
       </svg>
     );
@@ -77,15 +82,24 @@ export function OverlayElementView({ element, stageHeight }: { element: SlideOve
   };
   if (element.type === "rect" || element.type === "circle") {
     const thickness = element.thickness ?? 4;
+    // Highlighter glass: a translucent tint the paper shows through, a crisp
+    // colored border, and a float shadow. `fill` deepens the tint to a solid
+    // marker wash rather than a flat opaque block, so it always reads as a
+    // highlight over the slide, never a sticker covering it.
+    const interior = element.fill
+      ? `color-mix(in srgb, ${color} 42%, transparent)`
+      : `color-mix(in srgb, ${color} 15%, transparent)`;
     return (
       <span
         style={{
           ...box,
           display: "block",
           border: `${thickness}px solid ${color}`,
-          background: element.fill ? color : "transparent",
-          borderRadius: element.type === "circle" ? "50%" : 14,
+          background: interior,
+          borderRadius: element.type === "circle" ? "50%" : 16,
           boxSizing: "border-box",
+          boxShadow: "0 10px 26px -10px rgba(40,32,20,0.45), inset 0 1px 0 rgba(255,255,255,0.35)",
+          backdropFilter: "saturate(1.05)",
         }}
         aria-hidden="true"
       />
@@ -95,7 +109,11 @@ export function OverlayElementView({ element, stageHeight }: { element: SlideOve
     if (!element.url) return null;
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={element.url} alt="" style={{ ...box, objectFit: "contain" }} />
+      <img
+        src={element.url}
+        alt=""
+        style={{ ...box, objectFit: "contain", borderRadius: 12, boxShadow: "0 10px 26px -10px rgba(40,32,20,0.42)" }}
+      />
     );
   }
   const fontSize = Math.max(10, ((element.size ?? 6) / 100) * stageHeight);
