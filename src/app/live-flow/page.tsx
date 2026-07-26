@@ -10,7 +10,11 @@ import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
 import { classroomStageTheme } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
-import { publicSuccessCriterion } from "@/lib/successCriterion";
+import {
+  publicSuccessCriterion,
+  selectedSuccessCriterion,
+  SUCCESS_CRITERION_SETUP_PLACEHOLDER,
+} from "@/lib/successCriterion";
 import {
   LIVE_FLOW_MODE,
   MAX_LIVE_STATE_SECONDS,
@@ -129,6 +133,34 @@ export default function LiveFlowPage() {
   const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
   const [pollSaveState, setPollSaveState] = useState<PollSaveState>("idle");
   const loadedDraftKeyRef = useRef<string | null>(null);
+  // Student self-signal ("I'm stuck" / "say that again" / "I've got this").
+  // Probed once: the chips stay hidden until the student-signals migration
+  // has been run, so the control never renders somewhere it cannot deliver.
+  const [signalsEnabled, setSignalsEnabled] = useState(false);
+  const [mySignal, setMySignal] = useState<string | null>(null);
+  const [signalBusy, setSignalBusy] = useState(false);
+  const signalStepRef = useRef<number>(-1);
+
+  useEffect(() => {
+    let stopped = false;
+    // A short retry ladder: the availability answer can lag right at page
+    // load, and a student surface that quietly never shows the chips is
+    // indistinguishable from the feature not existing.
+    void (async () => {
+      for (let attempt = 0; attempt < 3 && !stopped; attempt += 1) {
+        try {
+          const response = await fetch("/api/student/signal", { cache: "no-store" });
+          const result = await response.json().catch(() => ({})) as { enabled?: boolean };
+          if (result.enabled) {
+            if (!stopped) setSignalsEnabled(true);
+            return;
+          }
+        } catch { /* fall through to retry */ }
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    })();
+    return () => { stopped = true; };
+  }, []);
 
   useEffect(() => {
     const sessionId = getStoredStudentSessionId();
@@ -407,14 +439,45 @@ export default function LiveFlowPage() {
   const progressIndex = flow?.sequence?.currentIndex ?? -1;
   const progressTotal = flow?.sequence?.totalSteps ?? 0;
   const progressNext = flow?.sequence?.nextLabel || "";
-  const progressTarget = publicSuccessCriterion(flow?.lesson?.selectedSuccessCriterion)
+  // selectedSuccessCriterion, not publicSuccessCriterion: the public variant
+  // falls back to the teacher setup placeholder, which must never show on a
+  // student screen as "the target". (successCriteria can carry the same
+  // placeholder through the snapshot, so filter it there too.)
+  const rawProgressTarget = selectedSuccessCriterion(flow?.lesson?.selectedSuccessCriterion)
     || flow?.lesson?.successCriteria || "";
+  const progressTarget = rawProgressTarget === SUCCESS_CRITERION_SETUP_PLACEHOLDER ? "" : rawProgressTarget;
   // Visual mirror of the audio cues (a deaf or headphone-wearing student gets
   // no chime): the shell edge glows inside 30 seconds, the timer itself goes
   // red and announces inside 10.
   const timerTicking = Boolean(showTimer && timer && (timer.running || (phase?.timed && typeof phase.secondsLeft === "number")));
   const timeWarning = timerTicking && activeTimerSeconds <= 30 && activeTimerSeconds > 0;
   const timeCritical = timerTicking && activeTimerSeconds <= 10 && activeTimerSeconds > 0;
+  // A new lesson step clears the local signal highlight - "stuck" on the last
+  // step is not "stuck" on this one. The server row keeps its step tag and the
+  // teacher view scopes to the current step on its own.
+  useEffect(() => {
+    if (signalStepRef.current !== progressIndex) {
+      signalStepRef.current = progressIndex;
+      setMySignal(null);
+    }
+  }, [progressIndex]);
+
+  async function sendSignal(signal: "stuck" | "again" | "got-it") {
+    if (!liveSessionId || signalBusy) return;
+    setSignalBusy(true);
+    const previous = mySignal;
+    setMySignal(signal);
+    try {
+      await studentApiRequest("/api/student/signal", {
+        method: "POST",
+        body: JSON.stringify({ sessionId: liveSessionId, signal, stepIndex: progressIndex }),
+      });
+    } catch {
+      setMySignal(previous);
+    } finally {
+      setSignalBusy(false);
+    }
+  }
   const pollSubmitted = activePoll ? submittedPollIds.includes(activePoll.id) : false;
   const pollSaveLabel = connectionState === "reconnecting"
     ? "Reconnecting"
@@ -512,6 +575,15 @@ export default function LiveFlowPage() {
         .lf-timer.low .lf-time { color:#b91c1c; font-weight:900; }
         .lf-time-left { color:#b91c1c; font-size:0.72rem; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; }
         @media (max-width:640px) { .lf-time-left { display:none; } }
+        /* Student self-signals: persistent, low-stakes, bottom of the screen. */
+        .lf-signals { position:absolute; z-index:5; left:50%; bottom:14px; transform:translateX(-50%); display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; max-width:calc(100% - 24px); }
+        .lf-signal { min-height:44px; padding:8px 18px; border-radius:999px; border:1.5px solid var(--bdb-line); background:rgba(255,255,255,0.92); color:var(--bdb-ink); font:inherit; font-size:0.92rem; font-weight:800; cursor:pointer; box-shadow:var(--bdb-shadow-sm); }
+        .lf-signal:hover:not(:disabled) { border-color:var(--bdb-ink-soft); }
+        .lf-signal.stuck.on { background:var(--bdb-coral-deep); border-color:var(--bdb-coral-deep); color:#fff; }
+        .lf-signal.again.on { background:var(--bdb-ink); border-color:var(--bdb-ink); color:#fff; }
+        .lf-signal.gotit.on { background:var(--bdb-green-deep); border-color:var(--bdb-green-deep); color:#fff; }
+        .lf-signal:disabled { opacity:0.7; }
+        .lf-signal-note { flex-basis:100%; text-align:center; color:var(--bdb-ink-soft); font-size:0.78rem; font-weight:700; }
         @keyframes lfEdgePulse { 0%, 100% { box-shadow:inset 0 0 0 4px color-mix(in srgb, var(--lf-accent) 60%, transparent); } 50% { box-shadow:inset 0 0 0 4px color-mix(in srgb, var(--lf-accent) 18%, transparent); } }
         @keyframes lfTimerLow { 0%, 100% { box-shadow:0 0 0 0 rgba(239,68,68,0.45); } 50% { box-shadow:0 0 0 7px rgba(239,68,68,0); } }
         @media (prefers-reduced-motion:reduce) { .lf-shell.warn30, .lf-timer.low { animation:none; } }
@@ -842,6 +914,38 @@ export default function LiveFlowPage() {
             </>
           )}
         </div>
+        {signalsEnabled && hasStudentSession && flow?.state ? (
+          <div className="lf-signals" aria-label="Tell your teacher how it is going">
+            <button
+              type="button"
+              className={`lf-signal stuck${mySignal === "stuck" ? " on" : ""}`}
+              aria-pressed={mySignal === "stuck"}
+              disabled={signalBusy}
+              onClick={() => void sendSignal("stuck")}
+            >
+              I&apos;m stuck
+            </button>
+            <button
+              type="button"
+              className={`lf-signal again${mySignal === "again" ? " on" : ""}`}
+              aria-pressed={mySignal === "again"}
+              disabled={signalBusy}
+              onClick={() => void sendSignal("again")}
+            >
+              Say that again
+            </button>
+            <button
+              type="button"
+              className={`lf-signal gotit${mySignal === "got-it" ? " on" : ""}`}
+              aria-pressed={mySignal === "got-it"}
+              disabled={signalBusy}
+              onClick={() => void sendSignal("got-it")}
+            >
+              I&apos;ve got this
+            </button>
+            {mySignal ? <span className="lf-signal-note" role="status">Only your teacher sees this.</span> : null}
+          </div>
+        ) : null}
       </section>
     </main>
   );

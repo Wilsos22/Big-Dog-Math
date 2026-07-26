@@ -25,6 +25,7 @@ import {
 
 interface Period { id: string; name: string; }
 interface Join { id: string; student_id: string | null; display_name: string | null; joined_at: string; }
+interface StudentSignal { student_id: string | null; display_name: string | null; signal: "stuck" | "again" | "got-it"; step_index: number | null; updated_at: string; }
 interface Answer { id: string; display_name: string | null; answer: string | null; }
 interface RosterStudent {
   id: string;
@@ -100,6 +101,8 @@ export default function SessionPage() {
   const [periodId, setPeriodId] = useState("");
   const [session, setSession] = useState<{ id: string; code: string; periodName: string; periodId: string } | null>(null);
   const [joins, setJoins] = useState<Join[]>([]);
+  // null = signals unavailable (migration not run) - the strip stays hidden.
+  const [studentSignals, setStudentSignals] = useState<StudentSignal[] | null>(null);
   const [rosterStudents, setRosterStudents] = useState<RosterStudent[]>([]);
   const [rosterCount, setRosterCount] = useState(0);
   const [admissionRequests, setAdmissionRequests] = useState<AdmissionRequest[]>([]);
@@ -230,6 +233,16 @@ export default function SessionPage() {
     const result = await teacherApiRequest<{ joins: Join[]; admissionRequests?: AdmissionRequest[] }>(`/api/teacher/session?sessionId=${encodeURIComponent(sessionId)}`);
     setJoins(result.joins);
     setAdmissionRequests(result.admissionRequests || []);
+    // Student self-signals ride the same 3-second heartbeat. Quietly absent
+    // until the student-signals migration has been run.
+    try {
+      const signalResult = await teacherApiRequest<{ enabled: boolean; signals: StudentSignal[] }>(
+        `/api/live/signals?sessionId=${encodeURIComponent(sessionId)}`,
+      );
+      setStudentSignals(signalResult.enabled ? signalResult.signals : null);
+    } catch {
+      setStudentSignals(null);
+    }
   }, []);
 
   useEffect(() => {
@@ -569,6 +582,11 @@ export default function SessionPage() {
         .se-remote-link { display:block; margin-top:10px; color:#5a5346; font-size:0.86rem; font-weight:800; text-decoration:underline; }
         .se-remote-link:hover { color:#14b8a6; }
         .se-count { font-size:1rem; font-weight:800; color:#5a5346; margin-bottom:10px; }
+        .se-signals { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 12px; margin-top:10px; padding:9px 12px; border:1px solid var(--bdb-line); border-left:5px solid var(--bdb-coral-deep); border-radius:10px; background:#fff; font-size:0.86rem; font-weight:800; }
+        .se-signal-count.stuck { color:var(--bdb-coral-deep); }
+        .se-signal-count.again { color:var(--bdb-ink); }
+        .se-signal-count.gotit { color:var(--bdb-green-deep); }
+        .se-signal-names { flex-basis:100%; color:var(--bdb-ink-soft); font-weight:700; font-size:0.82rem; }
         .se-joins { display:flex; flex-wrap:wrap; gap:8px; }
         .se-chip { background:#e7f8f3; border:1px solid #b9ebdf; color:#0f766e; border-radius:999px; padding:9px 16px; font-weight:800; animation:sePop 0.3s ease; }
         .se-admissions { display:grid; gap:10px; }
@@ -792,6 +810,28 @@ export default function SessionPage() {
               <div className="se-count">Joined: {joins.length}{rosterCount ? ` of ${rosterCount}` : ""}</div>
               {joins.length === 0 ? <span className="se-empty">Waiting for students to join…</span>
                 : <div className="se-joins">{joins.map((j) => <span className="se-chip" key={j.id}>{j.display_name || "Student"}</span>)}</div>}
+              {studentSignals ? (() => {
+                // Scope to the current lesson step when one is running - a
+                // "stuck" from three steps ago is not a stuck right now.
+                const currentStep = liveFlow?.sequence?.currentIndex ?? null;
+                const current = currentStep === null
+                  ? studentSignals
+                  : studentSignals.filter((s) => s.step_index === currentStep);
+                const stuck = current.filter((s) => s.signal === "stuck");
+                const again = current.filter((s) => s.signal === "again");
+                const gotIt = current.filter((s) => s.signal === "got-it");
+                if (!current.length) return null;
+                return (
+                  <div className="se-signals" role="status" aria-label="Student self-signals">
+                    <span className="se-signal-count stuck">Stuck: {stuck.length}</span>
+                    <span className="se-signal-count again">Say again: {again.length}</span>
+                    <span className="se-signal-count gotit">Got it: {gotIt.length}</span>
+                    {stuck.length ? (
+                      <span className="se-signal-names">{stuck.map((s) => s.display_name || "Student").join(", ")}</span>
+                    ) : null}
+                  </div>
+                );
+              })() : null}
             </div>
 
             <div className="se-card">
