@@ -750,7 +750,7 @@ export default function ClassroomStagePage() {
         .stage-resource-link { padding-top:clamp(34px,6vw,88px); }
         .stage-resource-link a { display:flex; min-height:72px; align-items:center; justify-content:center; border-radius:14px; background:var(--acc); color:#fff; padding:0 30px; text-decoration:none; font-size:1.25rem; font-weight:800; box-shadow:0 4px 16px rgba(40,32,20,0.14); }
         .stage-lesson-visual { position:absolute; inset:0; display:grid; place-items:center; padding:clamp(30px,5vw,72px); }
-        .stage-poll { align-content:center; justify-items:center; gap:26px; padding-top:120px; }
+        .stage-poll { align-content:safe center; justify-items:center; gap:26px; padding-top:120px; overflow-y:auto; }
         .stage-question { margin:0; max-width:24ch; color:var(--head); font-size:clamp(2.2rem,5.4vw,5.4rem); line-height:1.05; font-weight:800; letter-spacing:-0.02em; }
         .stage-response-count { margin:0; color:var(--soft); font-size:clamp(1rem,2.2vw,1.5rem); font-weight:800; }
         .stage-learning { margin:0; max-width:62ch; color:var(--soft); font-size:clamp(1rem,1.8vw,1.35rem); line-height:1.35; font-weight:700; }

@@ -158,7 +158,10 @@ Adding a tool: also add a lowercase entry to `TOOL_ROUTES` in `src/app/lesson/pa
 Same trap on the live-session side: listing a route in `LiveToolRoute` (`src/lib/liveClassFlow.ts`)
 only lets the teacher PUBLISH a task to it. The tool component must also call
 `useLiveToolConfig("/route")` and render `<LiveToolBanner tool={...} />`, or the published directions
-are silently dropped and students see nothing. All 18 tool routes are wired as of 2026-07-20 - a NEW
+are silently dropped and students see nothing. All 19 tool routes are wired as of 2026-07-26
+(/divisibility joined the union that day, end to end: ASSIGNED_TOOL_ROUTES so Notion "Tool:
+Divisibility Rules" resolves, ClassSync target, tool-divisibility bank state, control map, and the
+banner on DivisibilityRules) - a NEW
 route is the case to watch, so wire the component in the same change that extends `LiveToolRoute`.
 Where a route's `LiveToolConfig` arm carries a typed payload (`/number-line-plus`, `/percent-bar`,
 `/equation-builder`, `/order-of-operations`, `/algebra-tiles`, plus two teacher-set sequence arms:
@@ -171,7 +174,7 @@ sequence tools also take the same string as a `?set=` URL param, resume progress
 localStorage, and treat an empty set as free play. The remaining arms are `Record<string, never>`,
 where the prompt is all there is - do not invent config behavior for them.
 
-Counting those arms, `LiveToolRoute` has 21, not 18: `/challenge`, `/exit-ticket` and `/checkpoint`
+Counting those arms, `LiveToolRoute` has 22, not 19: `/challenge`, `/exit-ticket` and `/checkpoint`
 ride the same union so `/control` can publish them, but they deliberately do NOT call
 `useLiveToolConfig` - do not "fix" them by wiring the banner. Each has its own launch path
 (`launchChallenge`, `launchExitTicket`, `launchCheckpoint`) writing the real content to `challenges` /

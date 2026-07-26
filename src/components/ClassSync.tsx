@@ -31,6 +31,7 @@ const CLASS_MODE_TARGETS = new Set([
   "/equation-builder",
   "/order-of-operations",
   "/fraction-bars",
+  "/divisibility",
   "/algebra-tiles",
   "/challenge",
   "/area-model",

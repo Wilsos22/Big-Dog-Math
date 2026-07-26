@@ -578,9 +578,12 @@ export default function StudentLanding() {
                 </p>
               )}
               <div className="st-warmup-tools">
-                {warmupHref && !identityReady && !helpRequestCode && (
+                {!identityReady && !helpRequestCode && (
+                  // Always reachable before verification - on a no-form day
+                  // the admission request is the ONLY way into the class, so
+                  // it must not hide behind the warm-up link existing.
                   <button className="st-link-btn" type="button" onClick={requestTeacherHelp} disabled={requestingHelp}>
-                    {requestingHelp ? "Requesting help" : "Warm-up not connecting? Ask for help"}
+                    {requestingHelp ? "Requesting help" : warmupHref ? "Warm-up not connecting? Ask for help" : "Can't join? Ask for help"}
                   </button>
                 )}
                 <button className="st-link-btn" type="button" onClick={() => resetPendingSession()}>

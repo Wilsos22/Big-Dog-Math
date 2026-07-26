@@ -467,7 +467,10 @@ export default function PaceSupportPage() {
               successCriterion={publicSuccessCriterion(flow.lesson?.selectedSuccessCriterion)}
             />
           </div>
-        ) : isLearningCheck && poll ? (
+        ) : poll && poll.kind === "fist-to-five" ? (
+          // Gate on the poll's ACTUAL kind, not the state: readiness questions
+          // share the learning-check theme, and this block was rendering a
+          // fist-to-five histogram for multiple-choice polls that never ran one.
           <div className="pw-center">
             <div className="pw-check">
               <p className="pw-check-title">Fist to five</p>

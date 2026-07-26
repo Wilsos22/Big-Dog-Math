@@ -11,6 +11,24 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**Period 2 shakedown fixes** (7/26 - Steele ran a real session and joined
+incognito; four findings, four fixes. (1) The Pace screen showed a
+Fist-to-Five histogram during a multiple-choice readiness check - the block
+keyed on the learning-check THEME, which readiness questions share; it now
+gates on the poll's actual kind. (2) Long choice lists clipped on the student
+screen and the Main results panel - both centered overflowing grids that cut
+off top and bottom; align-content safe center plus scrolling fixes both.
+(3) /divisibility was never wired as a live tool, so the D1 lesson could not
+send students to the tool built for it - now in ASSIGNED_TOOL_ROUTES (Notion
+"Tool: Divisibility Rules" resolves), LiveToolRoute, ClassSync targets, the
+control bank (tool-divisibility) and map, with the LiveToolBanner on the
+component (route count 19 wired / 22 arms). (4) An unverified device had no
+path to save answers and no way to ask: the landing's admission-request
+button no longer hides when no form exists, and /live-flow surfaces "your
+teacher needs to let you in" with an inline Ask-for-help + help code the
+moment an answer fails on the missing join. All four verified in the pane
+with a mocked student API; teacher admit completes the join server-side via
+the existing admission RPC) ·
 **Tool evidence breaks City Routes ties** (7/26 - Steele's pick from the
 critique list: the routing sat on two multiple-choice items while the Area
 Tool logged a constructed response. recommendRoute now takes the session's
