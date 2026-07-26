@@ -258,6 +258,19 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   outbound call must pass counts/archetypes, never names or student work.
 - Two distinct "assignment" concepts: `assignments` (manipulative) vs `practice_assignments` (targeted
   practice) - do not conflate.
+- Mock data for practice runs (added 2026-07-25, after the end-of-year wipe): `supabase/mock-classroom-seed.sql`
+  creates the fictional `BDM Mock Class` (period code MOCK, 11 invented students on the reserved
+  `mock.bigdogmath.example` domain) plus i-Ready Fall baselines and six warm-up days of `responses`
+  tuned to fill the mastery bars and form four misconception clusters - run it, then Recompute on
+  `/teacher/mastery`. `supabase/mock-live-session-seed.sql` (run second) stands up an OPEN live-flow
+  session (join code MOCKLV, live_flow type-checked against `LiveClassFlowSnapshot` v2) with the roster
+  joined and readiness answers set so City Routes shows a full three-route spread on `/teacher/remote`.
+  Both idempotent and scoped to the mock period; wipe lines at each file's bottom. KEY DISTINCTION that
+  shaped the split: City Routes (park routes) computes from the CURRENT session's `poll_answers` +
+  `session_joins`, NOT the `responses` warm-up history - so it only populates inside a live session,
+  while `/teacher/mastery` and `/teacher/rightnow` (`/api/live/groups`) replay `responses`. Seeding
+  `responses` alone can never make City Routes light up. Any new mock roster MUST stay fully fictional
+  (see the July 2026 real-names-in-a-public-repo incident) and have Steele eyeball the names first.
 
 ## Notion + warm-up pipeline
 
