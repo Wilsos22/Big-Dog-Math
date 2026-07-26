@@ -10,6 +10,31 @@ import { studentSafeLiveFlow } from "@/lib/liveFlowPrivacy";
 export const dynamic = "force-dynamic";
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+type Db = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
+
+// The minimal class projection any code-holding device may read: exactly what
+// transitional mode serves, which is exactly what the public /live-flow room
+// display shows. studentSafeLiveFlow keeps answers and teacher notes out.
+async function publicProjection(db: Db, sessionId: string) {
+  const { data: session, error } = await db
+    .from("sessions")
+    .select("id,period_id,status,broadcast,live_flow,abbie")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (error) throw new StudentIdentityError("The class session could not be loaded.", 500, "session_lookup_failed");
+  if (!session) throw new StudentIdentityError("This class session is not open.", 404, "session_not_found");
+  return Response.json(
+    {
+      session: {
+        ...session,
+        live_flow: studentSafeLiveFlow(session.live_flow as LiveClassFlowSnapshot | null),
+      },
+      poll: null,
+    },
+    { headers: { "cache-control": "no-store" } },
+  );
+}
+
 export async function GET(request: Request) {
   try {
     const sessionId = new URL(request.url).searchParams.get("sessionId") || "";
@@ -43,7 +68,19 @@ export async function GET(request: Request) {
       );
     }
 
-    const student = await requireVerifiedStudent(request);
+    // READ relaxation (2026-07-26, "screens push with me"): a device whose
+    // identity or join is not verified yet still receives the same MINIMAL
+    // public projection transitional mode serves - the studentSafeLiveFlow
+    // snapshot is the projector-public class screen (/live-flow is a public
+    // room surface), so a code-entered-but-unverified Chromebook can follow
+    // the lesson when the teacher advances. Every WRITE (poll answers,
+    // signals, tool evidence) still requires the verified join.
+    let student: Awaited<ReturnType<typeof requireVerifiedStudent>>;
+    try {
+      student = await requireVerifiedStudent(request);
+    } catch {
+      return await publicProjection(db, sessionId);
+    }
 
     const { data: join, error: joinError } = await db
       .from("session_joins")
@@ -52,7 +89,7 @@ export async function GET(request: Request) {
       .eq("student_id", student.id)
       .maybeSingle();
     if (joinError) throw new StudentIdentityError("Your class join could not be checked.", 500, "join_lookup_failed");
-    if (!join) throw new StudentIdentityError("Join this class before loading its lesson.", 403, "session_join_required");
+    if (!join) return await publicProjection(db, sessionId);
 
     const { data: session, error: sessionError } = await db
       .from("sessions")

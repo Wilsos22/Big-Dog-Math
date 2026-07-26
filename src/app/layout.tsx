@@ -3,6 +3,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ClassSync from "@/components/ClassSync";
+import WarmupJoinSync from "@/components/WarmupJoinSync";
 import AbbieStudentBubble from "@/components/AbbieStudentBubble";
 import AbbieStudentAsk from "@/components/AbbieStudentAsk";
 import DeployRefresh from "@/components/DeployRefresh";
@@ -25,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}<ClassSync /><AbbieStudentBubble /><AbbieStudentAsk /><DeployRefresh /></body>
+      <body>{children}<ClassSync /><WarmupJoinSync /><AbbieStudentBubble /><AbbieStudentAsk /><DeployRefresh /></body>
     </html>
   );
 }

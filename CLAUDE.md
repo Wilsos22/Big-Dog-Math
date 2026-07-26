@@ -334,13 +334,23 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   `bdm_complete_warmup_identity` verifies against, so the receipt chain is unchanged. The teacher's
   `/session` page finds and inherits that open session. A teacher-assigned lesson always wins once
   loaded (the landing page polls and swaps forms without refresh). `sessions.join_code` uniqueness
-  is now a partial index over OPEN sessions only, so codes are reusable across days. Once the
-  student opens the form (tracked per warm-up token in `sessionStorage['bdm-warmup-opened']`) or
-  their response verifies, the landing swaps to a home-base view: lesson card plus /lesson,
-  /practice, /explore links that stay LOCKED until verification. That lock is load-bearing - the
-  warmup-status -> join polling that writes the verified student session lives only in
-  `src/app/page.tsx`, so the origin tab must stay on `/` until `identityReady`; navigating
-  students elsewhere first strands them outside the live-flow join and receipt chain.
+  is now a partial index over OPEN sessions only, so codes are reusable across days. REDESIGNED
+  2026-07-26 (Steele's call): after the code is accepted the landing is the HOME BASE, full stop -
+  lesson card, warm-up card, and /lesson, /practice, /explore links that are NEVER locked. No
+  gate view, no "keep this page open". The warm-up card shows Open today's warm-up when a form
+  exists (tracked per token in `sessionStorage['bdm-warmup-opened']`, softening to Reopen) and a
+  calm "No warm-up loaded yet" when none does. Three mechanisms replaced the old load-bearing
+  lock: (1) code entry stores a PROVISIONAL student session (`saveProvisionalStudentSession` in
+  liveClassFlow - sessionId with empty studentId) so ClassSync follows the class immediately,
+  meaning the teacher advancing past warm-up pushes EVERY device that typed the code, verified
+  or not; (2) the warmup-status -> join verification polling moved to the global
+  `WarmupJoinSync` (root layout) keyed on `sessionStorage['bdm-pending-class-code']`, so it
+  survives navigation anywhere in the tab and upgrades the provisional session to the verified
+  identity wherever the student is (the landing only listens for the ready event); (3)
+  `/api/student/session-state` READS relaxed in secure mode - an unverified device gets the same
+  minimal `studentSafeLiveFlow` projection transitional mode serves (it is the projector-public
+  class screen), while every WRITE (poll answers, signals, tool evidence) still requires the
+  verified join.
 
 ## Proficiency spine
 
