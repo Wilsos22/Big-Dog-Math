@@ -274,7 +274,28 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   Anthropic API with their misconception; it now sends `studentCount` only (2026-07-22). Any new
   outbound call must pass counts/archetypes, never names or student work.
 - Two distinct "assignment" concepts: `assignments` (manipulative) vs `practice_assignments` (targeted
-  practice) - do not conflate.
+  practice) - do not conflate. `practice_assignments` is the ONLY assignable homework that exists:
+  created at `/teacher/assignments` (a `challengeSkills` key + level 1-3 + round count + one period or
+  all), discoverable by students only on `/explore` or a hand-pasted `/assignment/<id>` link, and it
+  works from home with no live session. `assignments` / `assignment_problems` / `problems` have full RLS
+  policies in `student-data-security.sql` but ZERO application code - schema without a UI, so assigning
+  a manipulative is not a capability yet.
+  TRAP (verified 2026-07-26): assignment attempts write ONLY to `practice_assignment_attempts` and
+  NEVER to `responses`, so they move no mastery bar, no per-standard stage gate, and no archetype
+  grouping - nothing on `/teacher/mastery` or `/teacher/rightnow` sees them. `formative.sql`'s header
+  comment ("each attempt is logged exactly like a game attempt so it feeds the same mastery read") and
+  its `skill` column comment ("for easy mastery rollups") both describe intent that was never wired.
+  Do not repeat them as fact. `recompute.ts` reads only `iready_scores`, `responses`, and
+  `checkpoint_results`, and coerces source to `'warmup' | 'tool'`. Same shape on the tool side:
+  `reportToolResult` fires only when the device has JOINED a live session, and only 7 tools emit at all
+  (equation-builder, gems, combine-like-terms, balance-beam, area-model, distributive-area,
+  area-explorer) - so at-home tool practice records nothing either.
+- `src/lib/challengeSkills.ts` (15 skills as of 2026-07-26) is the shared problem bank for `/challenge`
+  AND `practice_assignments`; adding one entry there is all a new drill needs, no UI change. `emoji` is
+  optional (new skills omit it per rule 1). `standardId` carries the dotted-letter CCSS as seeded in
+  `standards`; `Problem.misses` maps a wrong choice to a canonical `misconceptions` label so drill
+  evidence can feed grouping once attempts reach `responses`. Tags are exact-match and foreign-keyed -
+  a new tag needs a `misconceptions` row (a migration) before it will ever cluster.
 - Student signals (the "I'm stuck" tap): fully live as of 2026-07-26 - Steele ran BOTH
   `supabase/student-signals.sql` (chips on /live-flow, counts on /session + /teacher/remote)
   and `supabase/student-signal-controls.sql` (per-student mute + the sessions.signals_off
