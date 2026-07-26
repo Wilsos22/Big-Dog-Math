@@ -25,6 +25,7 @@ import {
 
 interface Period { id: string; name: string; }
 interface Join { id: string; student_id: string | null; display_name: string | null; joined_at: string; }
+interface StudentSignal { student_id: string | null; display_name: string | null; signal: "stuck" | "again" | "got-it"; step_index: number | null; updated_at: string; }
 interface Answer { id: string; display_name: string | null; answer: string | null; }
 interface RosterStudent {
   id: string;
@@ -100,6 +101,8 @@ export default function SessionPage() {
   const [periodId, setPeriodId] = useState("");
   const [session, setSession] = useState<{ id: string; code: string; periodName: string; periodId: string } | null>(null);
   const [joins, setJoins] = useState<Join[]>([]);
+  // null = signals unavailable (migration not run) - the strip stays hidden.
+  const [studentSignals, setStudentSignals] = useState<StudentSignal[] | null>(null);
   const [rosterStudents, setRosterStudents] = useState<RosterStudent[]>([]);
   const [rosterCount, setRosterCount] = useState(0);
   const [admissionRequests, setAdmissionRequests] = useState<AdmissionRequest[]>([]);
@@ -112,8 +115,18 @@ export default function SessionPage() {
   // End is a two-tap confirm (window.confirm blocked the page for seconds and
   // reads badly on the iPad), and after ending, any OTHER open session is
   // adopted and announced instead of silently reappearing on the next visit.
-  const [endArmed, setEndArmed] = useState(false);
-  const endArmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Armed state carries a visible countdown: the arm silently expiring read
+  // as a dead button (outside critique - a hesitation and the second tap did
+  // nothing with no explanation).
+  const [endArmedLeft, setEndArmedLeft] = useState(0);
+  const endArmed = endArmedLeft > 0;
+  const endArmTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const disarmEnd = useCallback(() => {
+    if (endArmTimer.current) clearInterval(endArmTimer.current);
+    endArmTimer.current = null;
+    setEndArmedLeft(0);
+  }, []);
+  useEffect(() => () => { if (endArmTimer.current) clearInterval(endArmTimer.current); }, []);
   const [openCount, setOpenCount] = useState(0);
   const [endNotice, setEndNotice] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -220,6 +233,16 @@ export default function SessionPage() {
     const result = await teacherApiRequest<{ joins: Join[]; admissionRequests?: AdmissionRequest[] }>(`/api/teacher/session?sessionId=${encodeURIComponent(sessionId)}`);
     setJoins(result.joins);
     setAdmissionRequests(result.admissionRequests || []);
+    // Student self-signals ride the same 3-second heartbeat. Quietly absent
+    // until the student-signals migration has been run.
+    try {
+      const signalResult = await teacherApiRequest<{ enabled: boolean; signals: StudentSignal[] }>(
+        `/api/live/signals?sessionId=${encodeURIComponent(sessionId)}`,
+      );
+      setStudentSignals(signalResult.enabled ? signalResult.signals : null);
+    } catch {
+      setStudentSignals(null);
+    }
   }, []);
 
   useEffect(() => {
@@ -288,13 +311,17 @@ export default function SessionPage() {
     // Two-tap confirm instead of window.confirm: the dialog blocked the page
     // (a 3-second click in the field) and is clumsy on the iPad.
     if (!endArmed) {
-      setEndArmed(true);
-      if (endArmTimer.current) clearTimeout(endArmTimer.current);
-      endArmTimer.current = setTimeout(() => setEndArmed(false), 4000);
+      disarmEnd();
+      setEndArmedLeft(4);
+      endArmTimer.current = setInterval(() => {
+        setEndArmedLeft((left) => {
+          if (left <= 1 && endArmTimer.current) { clearInterval(endArmTimer.current); endArmTimer.current = null; }
+          return Math.max(0, left - 1);
+        });
+      }, 1000);
       return;
     }
-    setEndArmed(false);
-    if (endArmTimer.current) clearTimeout(endArmTimer.current);
+    disarmEnd();
     setEnding(true);
     setError(null);
     setEndNotice(null);
@@ -555,6 +582,11 @@ export default function SessionPage() {
         .se-remote-link { display:block; margin-top:10px; color:#5a5346; font-size:0.86rem; font-weight:800; text-decoration:underline; }
         .se-remote-link:hover { color:#14b8a6; }
         .se-count { font-size:1rem; font-weight:800; color:#5a5346; margin-bottom:10px; }
+        .se-signals { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 12px; margin-top:10px; padding:9px 12px; border:1px solid var(--bdb-line); border-left:5px solid var(--bdb-coral-deep); border-radius:10px; background:#fff; font-size:0.86rem; font-weight:800; }
+        .se-signal-count.stuck { color:var(--bdb-coral-deep); }
+        .se-signal-count.again { color:var(--bdb-ink); }
+        .se-signal-count.gotit { color:var(--bdb-green-deep); }
+        .se-signal-names { flex-basis:100%; color:var(--bdb-ink-soft); font-weight:700; font-size:0.82rem; }
         .se-joins { display:flex; flex-wrap:wrap; gap:8px; }
         .se-chip { background:#e7f8f3; border:1px solid #b9ebdf; color:#0f766e; border-radius:999px; padding:9px 16px; font-weight:800; animation:sePop 0.3s ease; }
         .se-admissions { display:grid; gap:10px; }
@@ -568,7 +600,8 @@ export default function SessionPage() {
         .se-warn { background:#fff7e6; border:1px solid #ffe2a8; color:#92660a; border-radius:14px; padding:16px 18px; font-weight:700; line-height:1.6; }
         .se-err { background:#fdecea; border:1px solid #f5c6c0; color:#b91c1c; border-radius:12px; padding:12px 16px; font-weight:700; }
         .se-notice { background:#e7f8f3; border:1px solid #b9ebdf; color:#0f766e; border-radius:12px; padding:12px 16px; font-weight:700; }
-        .se-end.armed { background:#ef4444; color:#fff; border-color:#ef4444; }
+        .se-end.armed { background:#ef4444; color:#fff; border-color:#ef4444; position:relative; overflow:hidden; }
+        .se-end-fuse { position:absolute; left:0; bottom:0; height:4px; background:rgba(255,255,255,0.85); transition:width 1s linear; }
         .se-open-warn { margin:10px 0 0; color:#92660a; font-size:0.88rem; font-weight:800; }
         .se-link-inline { border:0; background:transparent; color:#b91c1c; font:inherit; font-weight:900; text-decoration:underline; cursor:pointer; padding:0; }
         .se-link-inline:disabled { opacity:0.5; cursor:default; }
@@ -638,6 +671,15 @@ export default function SessionPage() {
                     <span className="se-flow-meta">
                       Step {liveFlow.sequence.currentIndex + 1} of {liveFlow.sequence.totalSteps}
                       {liveFlow.timer ? ` · ${Math.floor(liveTimerSeconds(liveFlow.timer) / 60)}:${String(liveTimerSeconds(liveFlow.timer) % 60).padStart(2, "0")}` : ""}
+                      {(() => {
+                        // Pace: time left in the plan and the finish clock at planned pace.
+                        const steps = liveFlow.sequence?.steps;
+                        if (!steps?.length) return "";
+                        const remaining = liveTimerSeconds(liveFlow.timer)
+                          + steps.slice(liveFlow.sequence.currentIndex + 1).reduce((sum, step) => sum + (step.durationSeconds || 0), 0);
+                        const finish = new Date(Date.now() + remaining * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                        return ` · ${Math.max(1, Math.round(remaining / 60))} min of plan left, finish about ${finish}`;
+                      })()}
                     </span>
                   </div>
                   <div className="se-flow-keys">
@@ -648,7 +690,7 @@ export default function SessionPage() {
                       {flowBusy === "toggle-timer" ? "Sending" : liveFlow.timer?.running ? "Pause" : "Resume"}
                     </button>
                     <button className="se-flow-key primary" onClick={() => sendFlowAction("next")} disabled={Boolean(flowBusy)}>
-                      {flowBusy === "next" ? "Sending" : "Next state"}
+                      {flowBusy === "next" ? "Sending" : liveFlow.poll?.stage === "responding" ? "Show results" : "Next state"}
                     </button>
                   </div>
                   <div className="se-flow-keys se-flow-transitions">
@@ -679,7 +721,8 @@ export default function SessionPage() {
               <div className="se-code-actions">
                 <a className="se-host-link" href="/control">Open Live class host</a>
                 <button className={`se-end${endArmed ? " armed" : ""}`} onClick={end} disabled={ending}>
-                  {ending ? "Ending session" : endArmed ? "Tap again to end" : "End session"}
+                  {ending ? "Ending session" : endArmed ? `Tap again to end (${endArmedLeft})` : "End session"}
+                  {endArmed ? <span className="se-end-fuse" style={{ width: `${(endArmedLeft / 4) * 100}%` }} aria-hidden="true" /> : null}
                 </button>
               </div>
               {openCount > 1 && (
@@ -767,6 +810,28 @@ export default function SessionPage() {
               <div className="se-count">Joined: {joins.length}{rosterCount ? ` of ${rosterCount}` : ""}</div>
               {joins.length === 0 ? <span className="se-empty">Waiting for students to join…</span>
                 : <div className="se-joins">{joins.map((j) => <span className="se-chip" key={j.id}>{j.display_name || "Student"}</span>)}</div>}
+              {studentSignals ? (() => {
+                // Scope to the current lesson step when one is running - a
+                // "stuck" from three steps ago is not a stuck right now.
+                const currentStep = liveFlow?.sequence?.currentIndex ?? null;
+                const current = currentStep === null
+                  ? studentSignals
+                  : studentSignals.filter((s) => s.step_index === currentStep);
+                const stuck = current.filter((s) => s.signal === "stuck");
+                const again = current.filter((s) => s.signal === "again");
+                const gotIt = current.filter((s) => s.signal === "got-it");
+                if (!current.length) return null;
+                return (
+                  <div className="se-signals" role="status" aria-label="Student self-signals">
+                    <span className="se-signal-count stuck">Stuck: {stuck.length}</span>
+                    <span className="se-signal-count again">Say again: {again.length}</span>
+                    <span className="se-signal-count gotit">Got it: {gotIt.length}</span>
+                    {stuck.length ? (
+                      <span className="se-signal-names">{stuck.map((s) => s.display_name || "Student").join(", ")}</span>
+                    ) : null}
+                  </div>
+                );
+              })() : null}
             </div>
 
             <div className="se-card">

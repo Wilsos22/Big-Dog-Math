@@ -446,15 +446,19 @@ export default function StudentLanding() {
         .st-hello-sub { margin:0 0 clamp(14px,2.4vw,20px); color:var(--bdb-ink-soft); font-weight:500; font-size:clamp(0.94rem,1.8vw,1.04rem); text-align:center; }
 
         .st-cards { width:100%; max-width:${pendingCode ? "680px" : "440px"}; display:grid; gap:16px; }
+        /* Grid items may not exceed the track: the code input's intrinsic
+           width (~284px) otherwise pushes the card past narrow viewports and
+           the whole page scrolls sideways on phones. */
+        .st-cards > * { min-width:0; }
         .st-join { border:1px solid #E3D9C2; border-radius:var(--bdb-r-lg); background:#fff; padding:22px 22px 24px;
           box-shadow:0 2px 10px rgba(40,32,20,0.06); }
         .st-join-h { margin:0 0 4px; font-size:1.25rem; font-weight:800; letter-spacing:-0.015em; color:#2E4A54; }
         .st-join-sub { margin:0 0 14px; font-size:0.92rem; font-weight:500; color:var(--bdb-ink-soft); }
         .st-codebox { display:flex; gap:8px; }
-        .st-code-in { flex:1; min-width:0; border:2px solid var(--bdb-teal); border-radius:12px; padding:14px 16px;
+        .st-code-in { flex:1; width:0; min-width:0; border:2px solid var(--bdb-teal); border-radius:12px; padding:14px 16px;
           font-size:1.3rem; font-weight:800; letter-spacing:0.18em; text-transform:uppercase; color:#0f5e5f; background:#fff; }
         .st-code-in:focus { outline:none; box-shadow:0 0 0 4px color-mix(in srgb, var(--bdb-teal) 22%, transparent); }
-        .st-code-btn { background:var(--bdb-teal); color:#fff; border:none; border-radius:12px; padding:0 22px; font-weight:800; font-size:1.05rem; cursor:pointer; }
+        .st-code-btn { background:var(--bdb-teal-deep); color:#fff; border:none; border-radius:12px; padding:0 22px; font-weight:800; font-size:1.05rem; cursor:pointer; }
         .st-code-btn:hover { filter:brightness(1.04); }
         .st-joinerr { color:var(--bdb-coral); font-weight:600; font-size:0.9rem; margin-top:10px; }
         .st-warmup { display:grid; gap:10px; text-align:left; }
@@ -514,7 +518,7 @@ export default function StudentLanding() {
         .st-explore b { color:var(--bdb-ink); font-weight:700; }
 
         .st-foot { margin-top:auto; padding-top:26px; }
-        .st-teacher { color:var(--bdb-ink-faint); font-size:0.78rem; font-weight:600; text-decoration:none; }
+        .st-teacher { display:inline-flex; align-items:center; min-height:44px; padding:0 10px; color:var(--bdb-ink-soft); font-size:0.78rem; font-weight:600; text-decoration:none; }
       `}</style>
 
       <div className="st-banner">

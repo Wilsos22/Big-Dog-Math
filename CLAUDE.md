@@ -217,6 +217,14 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   auth, not wired into any page. Do not confuse it with the real gate.
 - Student "session" is unauthenticated trust: `localStorage['bdm-student-session'] = {sessionId,
   studentId, name}` written client-side. Never rely on it for authorization.
+- `studentSafeLiveFlow` (`src/lib/liveFlowPrivacy.ts`) is the student privacy boundary: it passes a
+  MINIMAL public sequence (currentIndex, totalSteps, nextLabel, nextDirections, advanceMode - the
+  student progress strip needs position) but NEVER `sequence.steps`, because steps carry correct
+  answers and teacher notes. Related trap: `publicSuccessCriterion()` falls back to the teacher
+  setup placeholder ("Choose one I can statement in Notion.") - fine on teacher/projector
+  surfaces, WRONG on student screens; student-facing code uses `selectedSuccessCriterion()` and
+  filters `SUCCESS_CRITERION_SETUP_PLACEHOLDER` (the snapshot's `successCriteria` can carry the
+  placeholder too).
 - Class-mode following is `ClassSync` in the root layout: every student device polls
   `/api/student/session-state` every 3s and navigates by `sessions.broadcast` ("free" releases,
   an explicit route sends, "live-flow" follows the lesson state - students are deliberately HELD
@@ -264,6 +272,11 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   outbound call must pass counts/archetypes, never names or student work.
 - Two distinct "assignment" concepts: `assignments` (manipulative) vs `practice_assignments` (targeted
   practice) - do not conflate.
+- `supabase/student-signals.sql` (the "I'm stuck" tap) is STAGED, NOT YET RUN as of 2026-07-26 -
+  Steele runs it when ready. The feature ships dark by design: the student chips on /live-flow and
+  the counts strip on /session both probe their API and stay hidden while the table is missing, so
+  the code deploying ahead of the migration renders nothing half-working. Do not "fix" the hidden
+  chips by removing the probe.
 - Mock data for practice runs (added 2026-07-25, after the end-of-year wipe): `supabase/mock-classroom-seed.sql`
   creates the fictional `BDM Mock Class` (period code MOCK, 11 invented students on the reserved
   `mock.bigdogmath.example` domain) plus i-Ready Fall baselines and six warm-up days of `responses`
@@ -365,10 +378,16 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   builder, teacher-login, teacher/mastery, teacher/rightnow, teacher/checkpoint-upload) - treat as
   legacy, do not spread it.
 - Palette: CSS variables `--bdb-*` in `src/app/globals.css` `:root`. Canonical tokens: ground (page)
-  `#faf6ee`, ground-2 `#f3ecdd`, card `#ffffff`, ink `#201e1a`, ink-soft `#6f675c`, ink-faint `#a59c8d`,
+  `#faf6ee`, ground-2 `#f3ecdd`, card `#ffffff`, ink `#201e1a`, ink-soft `#6f675c`, ink-faint `#7a7061`
+  (darkened 2026-07-26 from `#a59c8d`, which read at 2.5:1 as text - keep it AA),
   line `#ece4d4`, amber `#fcaf38`, teal `#50a3a4`, brown `#674a40`, coral `#f95335`, green `#2f9e6f`.
   Prefer `var(--bdb-ground)`; a legacy hardcoded cream `#fbf7ef` exists on the older pages - do not
-  introduce a third.
+  introduce a third. CONTRAST RULE (2026-07-26 accessibility pass): white text FAILS AA on teal
+  (2.95:1), coral (3.32:1), and green (3.36:1) - filled controls under white text use the deep
+  companions `--bdb-teal-deep #3c7d7e`, `--bdb-coral-deep #c93818`, `--bdb-green-deep #1f7a52`
+  (also used when teal/coral serve AS text on cream). The bright originals stay for decorative
+  fills, borders, and large graphics. GEMS tiles keep the bright fills with INK labels instead
+  (ink passes on coral/amber/teal; only the purple S tile keeps white).
 - Pages self-style with a per-page inline `<style>` block using a unique class prefix (`.ls-` lesson,
   `.cx-` control, `.rs-` roster, `.se-` session, `.bx-` builder) reading `var(--bdb-*)`. Follow that
   pattern; there is no shared CSS module beyond `globals.css`.

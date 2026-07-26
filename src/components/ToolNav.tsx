@@ -24,14 +24,15 @@ export default function ToolNav({ title }: { title?: string }) {
           border-bottom:1px solid var(--bdb-line);
           font-family:var(--bdb-font);
         }
-        .tn-brand { display:inline-flex; align-items:center; gap:8px; text-decoration:none; flex:none; }
+        .tn-brand { display:inline-flex; align-items:center; gap:8px; min-height:44px; text-decoration:none; flex:none; }
         .tn-logo { width:28px; height:28px; display:block; object-fit:contain; flex:none; }
         .tn-title { font-weight:700; font-size:0.92rem; color:var(--bdb-ink); letter-spacing:-0.01em; }
         .tn-sep { width:1px; height:18px; background:var(--bdb-line); flex:none; }
         .tn-links { display:flex; gap:4px; flex-wrap:wrap; }
         .tn-link {
           text-decoration:none; color:var(--bdb-ink-soft); font-weight:600; font-size:0.82rem;
-          padding:6px 12px; border-radius:999px; border:1px solid transparent;
+          padding:6px 12px; min-height:44px; display:inline-flex; align-items:center;
+          border-radius:999px; border:1px solid transparent;
           transition:background 120ms, color 120ms;
         }
         .tn-link:hover { background:color-mix(in srgb, var(--bdb-amber) 16%, transparent); color:var(--bdb-ink); }

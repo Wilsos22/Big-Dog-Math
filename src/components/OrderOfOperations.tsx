@@ -314,15 +314,22 @@ export default function OrderOfOperations() {
         .oo-stepcopy { color:var(--bdb-ink); font-size:clamp(1.05rem,2.5vw,1.35rem); font-weight:900; line-height:1.25; }
 
         .oo-grid { flex:1; display:grid; grid-template-columns:auto 1fr; gap:clamp(14px,2.5vw,30px) clamp(14px,3vw,34px); align-content:center; }
-        .oo-tile { width:clamp(64px,9vw,108px); height:clamp(64px,9vw,108px); border-radius:20px; display:grid; place-items:center; position:relative;
+        .oo-tile { width:clamp(72px,9vw,108px); height:clamp(72px,9vw,108px); border-radius:20px; display:grid; place-items:center; position:relative;
+          padding-bottom:16px; box-sizing:border-box;
           background:var(--bdb-card); border:2px solid var(--bdb-line); transition:all 200ms ease; }
         .oo-tile .L { font-size:clamp(1.9rem,4.5vw,3rem); font-weight:800; color:var(--bdb-ink-faint); line-height:1; }
-        .oo-tile .S { position:absolute; bottom:7px; font-size:0.56rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--bdb-ink-faint); text-align:center; width:92%; }
+        .oo-tile .S { position:absolute; bottom:5px; font-size:0.62rem; font-weight:700; letter-spacing:0.02em; line-height:1.12; text-transform:uppercase; color:var(--bdb-ink-faint); text-align:center; width:94%; }
         .oo-tile.active { background:var(--c); border-color:var(--c); box-shadow:0 12px 30px -10px var(--c); transform:scale(1.04); }
-        .oo-tile.active .L, .oo-tile.active .S { color:#fff; }
+        /* Ink labels on the bright fills (coral, amber, teal all carry ink at
+           4.9:1+); white fails AA on them. Purple is the one dark fill, so the
+           S tile keeps white labels instead. */
+        .oo-tile.active .L, .oo-tile.active .S { color:var(--bdb-ink); }
         .oo-tile.done { background:var(--c); border-color:var(--c); }
-        .oo-tile.done .L, .oo-tile.done .S { color:#fff; }
-        .oo-tile.done .L::after { content:" ✓"; font-size:0.5em; }
+        .oo-tile.done .L, .oo-tile.done .S { color:var(--bdb-ink); }
+        .oo-tile.cat-S.active .L, .oo-tile.cat-S.active .S,
+        .oo-tile.cat-S.done .L, .oo-tile.cat-S.done .S { color:#fff; }
+        /* GEMS ritual: a finished step gets crossed out, not badged. */
+        .oo-tile.done .L { text-decoration:line-through; text-decoration-thickness:3px; }
         .oo-tile.skipped { background:var(--bdb-ground-2); border-color:var(--bdb-line); opacity:0.55; }
         .oo-tile.skipped .L { text-decoration:line-through; }
 
@@ -332,7 +339,7 @@ export default function OrderOfOperations() {
         @keyframes ooDrop { from{opacity:0; transform:translateY(-14px);} to{opacity:1; transform:none;} }
         .oo-tok { font-weight:800; color:var(--bdb-ink); }
         .oo-paren { color:#9a3412; }
-        .oo-op, .oo-pow { font-weight:800; color:var(--bdb-ink-soft); background:var(--bdb-card); border:1px solid var(--bdb-line); border-radius:12px; padding:2px 12px; cursor:default; }
+        .oo-op, .oo-pow { font-weight:800; color:var(--bdb-ink-soft); background:var(--bdb-card); border:1px solid var(--bdb-line); border-radius:12px; padding:2px 12px; min-width:44px; min-height:44px; box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; cursor:default; }
         .oo-pow sup { font-size:0.55em; }
         .oo-op.live, .oo-pow.live { color:var(--bdb-ink); cursor:pointer; border-color:color-mix(in srgb,var(--c,#674a40) 50%,var(--bdb-line)); }
         .oo-op.live:hover, .oo-pow.live:hover { background:color-mix(in srgb,var(--c,#674a40) 16%,white); border-color:var(--c,#674a40); transform:translateY(-1px); }
@@ -349,7 +356,7 @@ export default function OrderOfOperations() {
         .oo-gate-q { font-size:clamp(1.2rem,3vw,1.7rem); font-weight:700; color:var(--bdb-ink); }
         .oo-yesno { display:flex; gap:14px; }
         .oo-yn { font-size:1.15rem; font-weight:700; border:none; border-radius:14px; padding:14px 40px; cursor:pointer; color:#fff; }
-        .oo-yn.yes { background:var(--bdb-green); }
+        .oo-yn.yes { background:var(--bdb-green-deep); }
         .oo-yn.no { background:var(--bdb-ink-soft); }
         .oo-yn:hover { filter:brightness(1.06); transform:translateY(-1px); }
         .oo-fb { font-size:1rem; font-weight:600; color:var(--bdb-ink-soft); min-height:1.3em; }
@@ -403,7 +410,7 @@ export default function OrderOfOperations() {
             const interactive = i === level && st === "working" && !pending && !solvedValue;
             return (
               <div className={`oo-row ${isActive ? "is-active" : "is-other"}`} key={lv.cat} style={{ display: "contents" }}>
-                <div className={`oo-tile ${tileClass}`} style={{ ["--c" as string]: lv.color }}>
+                <div className={`oo-tile ${tileClass} cat-${lv.cat}`} style={{ ["--c" as string]: lv.color }}>
                   <span className="L">{lv.cat}</span>
                   <span className="S">{lv.sub}</span>
                 </div>

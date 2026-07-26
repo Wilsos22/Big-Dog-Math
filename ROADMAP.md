@@ -11,6 +11,23 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**Outside critique response, rounds 1-3** (7/26 - a hired end-to-end critique
+(design-references/critiques/bigdogmath-critiques.pdf) drove three shipped
+batches. Round 1, accessibility: AA contrast on all eight scanned student
+pages (ink-faint darkened; teal/coral/green-deep companion tokens under white
+text; GEMS tiles keep bright fills with ink labels + crossed-out done steps),
+44px tap targets across ToolNav/Fraction Bars/GEMS/Area Model, home-page
+phone overflow fixed (join input intrinsic width), GEMS badge overflow fixed,
+emoji stripped from touched files. Round 2: student progress strip on
+/live-flow (Step X of Y, what's next, persistent Target criterion - privacy
+filter passes position but never steps), visible time warnings (edge glow at
+30s, red timer at 10s - the audio cues' visual mirror), pace readout on
+/control + /session ("Plan left: N min, finish about H:MM"), one name per
+action (Next state everywhere), End-session arm countdown, weekly-display
+weekend roll-forward. Round 3: the "I'm stuck / Say that again / I've got
+this" student self-signal chips feeding live counts on /session -
+student-signals.sql STAGED, not run; feature hides itself until Steele runs
+it. Pedagogy critiques and bigger IA items are decision items, not code) ·
 **Warm-up culture screen: the steps of learning** (7/25 - Steele's ask: the
 Main projector's empty warm-up real estate now carries a big animated "steps
 of learning" list - 1 Confusion, 2 Try something, 3 Get it wrong, 4 Try again,

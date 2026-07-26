@@ -38,7 +38,10 @@ function shiftDate(isoDate: string, offset: number): string {
 
 function weekStartFor(isoDate: string): string {
   const weekday = new Date(`${isoDate}T12:00:00Z`).getUTCDay();
-  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+  // Weekends look AHEAD to the coming week. Pointing back at the week that
+  // just ended left the projector reading a stale Friday date in front of
+  // the room (outside critique, July 2026).
+  const mondayOffset = weekday === 0 ? 1 : weekday === 6 ? 2 : 1 - weekday;
   return shiftDate(isoDate, mondayOffset);
 }
 
