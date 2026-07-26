@@ -83,6 +83,7 @@ export type LiveToolRoute =
   | "/equation-builder"
   | "/balance-beam"
   | "/distributive-area"
+  | "/divisibility"
   | "/area-explorer"
   | "/order-of-operations"
   | "/fraction-bars"
@@ -105,6 +106,7 @@ export type LiveToolConfig =
       route:
         | "/whiteboard"
         | "/balance-beam"
+        | "/divisibility"
         | "/area-explorer"
         | "/fraction-bars"
         | "/area-model"

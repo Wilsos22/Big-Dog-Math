@@ -22,6 +22,7 @@
 // always the mathematical crossing d * d > N, never "the board ran out".
 
 import { ReactNode, useMemo, useState } from "react";
+import { LiveToolBanner, useLiveToolConfig } from "./useLiveToolConfig";
 
 const C_GREEN = "#2f9e6f";
 const C_CORAL = "#f95335";
@@ -104,6 +105,10 @@ function evidence(N: number, d: number, prior: Record<number, boolean>): Ev {
 }
 
 export default function DivisibilityRules() {
+  // Live-session directions: without this, a teacher publishing this tool
+  // through /control or a lesson step would have their prompt silently
+  // dropped (the LiveToolRoute wiring contract).
+  const liveTool = useLiveToolConfig("/divisibility");
   const [numIdx, setNumIdx] = useState(0);
   const [results, setResults] = useState<{ d: number; isFactor: boolean }[]>([]);
   const [sel, setSel] = useState<number | null>(null);   // first factor of the pair being picked
@@ -331,6 +336,8 @@ export default function DivisibilityRules() {
           .dv-aprod { animation:none !important; opacity:0 !important; }
         }
       `}</style>
+
+      <LiveToolBanner tool={liveTool} />
 
       <div className="dv-top">
         {NUMBERS.map((n, i) => (

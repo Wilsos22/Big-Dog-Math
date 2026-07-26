@@ -205,6 +205,8 @@ const ASSIGNED_TOOL_ROUTES: Record<string, string> = {
   multiplicationfluency: "/multiplication-fluency",
   balancebeam: "/balance-beam",
   distributivearea: "/distributive-area",
+  divisibility: "/divisibility",
+  divisibilityrules: "/divisibility",
 };
 
 export function liveAssignedToolRoute(toolName: string | undefined): string | null {

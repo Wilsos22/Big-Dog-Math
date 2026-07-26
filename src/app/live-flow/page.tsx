@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
 import CityRouteCard from "@/components/CityRouteCard";
 import { getSupabase } from "@/lib/supabase";
-import { SECURE_STUDENT_DATA, studentApiRequest } from "@/lib/studentApi";
+import { SECURE_STUDENT_DATA, StudentApiError, studentApiRequest } from "@/lib/studentApi";
 import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
 import { classroomStageTheme } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
@@ -142,6 +142,28 @@ export default function LiveFlowPage() {
   const [signalBusy, setSignalBusy] = useState(false);
   const [signalCooldown, setSignalCooldown] = useState(false);
   const signalStepRef = useRef<number>(-1);
+  // Answer writes require the verified join. When one fails because this
+  // device never verified (a skipped warm-up, a no-form day), surface the
+  // admission request RIGHT HERE instead of stranding the student with a
+  // failed submit and no path forward.
+  const [joinHelpNeeded, setJoinHelpNeeded] = useState(false);
+  const [joinHelpCode, setJoinHelpCode] = useState<string | null>(null);
+  const [joinHelpBusy, setJoinHelpBusy] = useState(false);
+
+  async function requestAdmissionHelp() {
+    const stored = getStoredStudentSession();
+    const code = stored?.syncKey || "";
+    if (!code || joinHelpBusy) return;
+    setJoinHelpBusy(true);
+    try {
+      const result = await studentApiRequest<{ request: { requestCode: string } }>(
+        "/api/student/admission-request",
+        { method: "POST", body: JSON.stringify({ code }) },
+      );
+      setJoinHelpCode(result.request.requestCode);
+    } catch { /* the button stays for another try */ }
+    finally { setJoinHelpBusy(false); }
+  }
   const signalProbeStep = flow?.sequence?.currentIndex ?? -1;
 
   useEffect(() => {
@@ -384,7 +406,12 @@ export default function LiveFlowPage() {
       setPollAnswer("");
       setPollSaveState("submitted");
     } catch (error) {
-      setPollSubmitError(error instanceof Error ? error.message : "Your answer could not be saved. Try again.");
+      if (error instanceof StudentApiError && error.code === "session_join_required") {
+        setJoinHelpNeeded(true);
+        setPollSubmitError("Your answer could not be saved because your teacher has not let you in yet.");
+      } else {
+        setPollSubmitError(error instanceof Error ? error.message : "Your answer could not be saved. Try again.");
+      }
       setPollSaveState("error");
     }
   }
@@ -602,7 +629,7 @@ export default function LiveFlowPage() {
         .lf-sync { margin-left:auto; display:inline-flex; align-items:center; gap:7px; min-height:24px; border:1px solid var(--lf-hair); border-radius:999px; background:#fff; color:var(--lf-head); padding:0 11px; font-size:0.66rem; font-weight:800; }
         .lf-sync::before { content:""; width:7px; height:7px; border-radius:50%; background:#2f9e6f; }
         .lf-who { color:var(--bdb-ink-soft); font-size:0.75rem; font-weight:800; }
-        .lf-body { min-height:0; overflow:auto; display:grid; align-content:center; justify-items:center; gap:clamp(13px,2vw,22px); padding:clamp(18px,3.2vw,34px); }
+        .lf-body { min-height:0; overflow:auto; display:grid; align-content:safe center; justify-items:center; gap:clamp(13px,2vw,22px); padding:clamp(18px,3.2vw,34px); }
         .lf-spinner-shell { position:relative; width:min(100%,960px); height:min(72vh,620px); overflow:hidden; border:1px solid var(--bdb-line); border-radius:16px; background:#fff; box-shadow:var(--bdb-shadow); }
         .lf-spinner-shell .classroom-spinner { background:radial-gradient(circle at 50% 42%,color-mix(in srgb,var(--lf-accent) 12%,transparent),transparent 58%),var(--bdb-ground); }
         .lf-spinner-shell .classroom-spinner-card { border-color:var(--bdb-line); border-top-color:var(--lf-accent); background:#fff; box-shadow:var(--bdb-shadow-sm); }
@@ -634,6 +661,11 @@ export default function LiveFlowPage() {
         .lf-poll { width:min(100%,760px); display:grid; gap:18px; justify-items:center; }
         .lf-poll-question { margin:0; max-width:34ch; color:var(--lf-head); font-size:clamp(1.45rem,3.4vw,2.6rem); font-weight:800; line-height:1.18; }
         .lf-poll-help { margin:0; color:var(--bdb-ink-soft); font-size:clamp(1rem,2.2vw,1.3rem); font-weight:700; }
+        .lf-join-help { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:10px; border:1px solid color-mix(in srgb, var(--bdb-amber) 58%, white); border-radius:12px; background:color-mix(in srgb, var(--bdb-amber) 14%, #fff); padding:10px 16px; }
+        .lf-join-help-copy { margin:0; color:var(--bdb-ink); font-size:0.95rem; font-weight:700; }
+        .lf-join-help-copy strong { letter-spacing:0.1em; }
+        .lf-join-help-btn { min-height:44px; padding:8px 18px; border-radius:999px; border:1.5px solid var(--bdb-ink); background:var(--bdb-ink); color:#fff; font:inherit; font-size:0.92rem; font-weight:800; cursor:pointer; }
+        .lf-join-help-btn:disabled { opacity:0.7; }
         .lf-poll-choices { width:min(100%,620px); display:grid; gap:10px; }
         .lf-poll-choice, .lf-poll-send { width:100%; min-height:62px; border:2px solid var(--bdb-line); border-radius:10px; background:#fff; color:var(--bdb-ink); padding:14px 18px; font:inherit; font-size:clamp(1rem,2.4vw,1.3rem); font-weight:900; cursor:pointer; box-shadow:var(--bdb-shadow-sm); }
         .lf-poll-choice:hover, .lf-poll-choice:focus-visible, .lf-poll-send:hover, .lf-poll-send:focus-visible { border-color:var(--lf-accent); outline:none; }
@@ -810,6 +842,20 @@ export default function LiveFlowPage() {
             {activePoll ? activePoll.stage === "responding" ? (
               <section className="lf-poll">
                 <h1 className="lf-poll-question">{activePoll.question}</h1>
+                {joinHelpNeeded ? (
+                  <div className="lf-join-help" role="status">
+                    {joinHelpCode ? (
+                      <p className="lf-join-help-copy">Tell your teacher this help code: <strong>{joinHelpCode}</strong>. Answer again once you are let in.</p>
+                    ) : (
+                      <>
+                        <p className="lf-join-help-copy">Your teacher needs to let you in before answers save.</p>
+                        <button className="lf-join-help-btn" type="button" disabled={joinHelpBusy} onClick={() => void requestAdmissionHelp()}>
+                          {joinHelpBusy ? "Requesting" : "Ask for help"}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : null}
                 {activePoll.kind === "fist-to-five" ? (
                   <>
                     <p className="lf-poll-help">Choose the number that best shows where you are right now.</p>

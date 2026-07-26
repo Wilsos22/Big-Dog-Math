@@ -136,6 +136,7 @@ const TOOL_STATE_INFO = {
   "tool-algebra-tiles": { route: "/algebra-tiles", label: "Algebra Tiles" },
   "tool-area-model": { route: "/area-model", label: "Box Method" },
   "tool-distributive-area": { route: "/distributive-area", label: "Distributive Area Method" },
+  "tool-divisibility": { route: "/divisibility", label: "Divisibility Rules" },
   "tool-area-explorer": { route: "/area-explorer", label: "Area Explorer" },
   "tool-combine": { route: "/combine-like-terms", label: "Combine Like Terms" },
   "tool-ladder": { route: "/ladder-method", label: "Ladder Method" },
@@ -343,6 +344,8 @@ function buildLiveToolConfig(stateId: ToolStateId, values: ToolSetupValues): Liv
     case "tool-distributive-area":
       // Empty set is meaningful: students pick their own numbers.
       return { ...base, route: "/distributive-area", config: { set: normalizeDistributiveSet(values.distributiveSet) } };
+    case "tool-divisibility":
+      return { ...base, route: "/divisibility", config: {} };
     case "tool-area-explorer":
       return { ...base, route: "/area-explorer", config: {} };
     case "tool-combine":
@@ -512,6 +515,8 @@ const LESSON_TOOL_ALIASES: Record<string, string> = {
   areaexplorer: "tool-area-explorer",
   areaofshapes: "tool-area-explorer",
   shapes: "tool-area-explorer",
+  divisibility: "tool-divisibility",
+  divisibilityrules: "tool-divisibility",
   combineliketerms: "tool-combine",
   combiningliketerms: "tool-combine",
   liketerms: "tool-combine",
