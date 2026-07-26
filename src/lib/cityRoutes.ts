@@ -125,7 +125,17 @@ export interface ReadinessEvidence {
   correct: (boolean | null)[];
   // Private Fist-to-Five rating 0-5, or null if not submitted.
   fist: number | null;
+  // Average manipulative-tool evidence score for THIS session (the 0-5
+  // aggregate rows the tools write), or null when the student produced no
+  // tool work. The constructed response the critique said we were sitting on.
+  toolScore?: number | null;
 }
+
+// Tool-evidence thresholds on the 0-5 scale: strong corroborates readiness
+// (80%+), weak corroborates struggle (below 50%). Between the two the tool
+// evidence stays silent.
+export const TOOL_STRONG = 4;
+export const TOOL_WEAK = 2.5;
 
 export interface CityRouteRecommendation {
   studentKey: string;
@@ -139,6 +149,10 @@ export interface CityRouteRecommendation {
   correctCount: number;
   answeredCount: number;
   questionCount: number;
+  // How this session's tool work influenced the result, if it did - shown on
+  // the teacher panel so a moved route is never a mystery.
+  toolInfluence: "raised" | "lowered" | "cleared-flag" | null;
+  toolScore: number | null;
 }
 
 // The locked route rule from the lesson pages: all correct = independent,
@@ -146,10 +160,21 @@ export interface CityRouteRecommendation {
 // An unanswered question counts against correctness (it is not evidence of
 // readiness), but a student with NO answers is "needs assignment" rather
 // than silently routed to the teacher table.
+//
+// Tool-evidence tie-breaker (Steele, 2026-07-26): the session's constructed
+// tool work resolves BOUNDARY cases only, one step at a time, and never
+// overrides a clean two-answer signal - mixed answers raise to independent
+// on strong tool work or lower to teacher on weak; none-correct raises to
+// partner (never independent) on strong; all-correct never lowers; and
+// strong tool work clears the low-confidence flag instead of a teacher
+// check. No tool work means exactly the old behavior.
 export function recommendRoute(evidence: ReadinessEvidence): CityRouteRecommendation {
   const questionCount = evidence.correct.length;
   const answeredCount = evidence.correct.filter((c) => c !== null).length;
   const correctCount = evidence.correct.filter((c) => c === true).length;
+  const toolScore = typeof evidence.toolScore === "number" && Number.isFinite(evidence.toolScore)
+    ? evidence.toolScore
+    : null;
 
   if (!questionCount || !answeredCount) {
     return {
@@ -161,21 +186,48 @@ export function recommendRoute(evidence: ReadinessEvidence): CityRouteRecommenda
       correctCount: 0,
       answeredCount,
       questionCount,
+      toolInfluence: null,
+      toolScore,
     };
   }
 
-  const route: CityRouteId =
+  const baseRoute: CityRouteId =
     correctCount === questionCount ? "independent" : correctCount === 0 ? "teacher" : "partner";
+
+  let route = baseRoute;
+  let toolInfluence: CityRouteRecommendation["toolInfluence"] = null;
+  if (toolScore !== null) {
+    if (baseRoute === "partner" && toolScore >= TOOL_STRONG) {
+      route = "independent";
+      toolInfluence = "raised";
+    } else if (baseRoute === "partner" && toolScore < TOOL_WEAK) {
+      route = "teacher";
+      toolInfluence = "lowered";
+    } else if (baseRoute === "teacher" && toolScore >= TOOL_STRONG) {
+      route = "partner";
+      toolInfluence = "raised";
+    }
+  }
+
+  // The flag belongs to the clean all-correct-but-shaky-fist case; strong
+  // tool work is the corroboration that resolves it without a teacher stop.
+  let lowConfidence = baseRoute === "independent" && evidence.fist !== null && evidence.fist <= 2;
+  if (lowConfidence && toolScore !== null && toolScore >= TOOL_STRONG) {
+    lowConfidence = false;
+    toolInfluence = toolInfluence ?? "cleared-flag";
+  }
 
   return {
     studentKey: evidence.studentKey,
     name: evidence.name,
     route,
     needsAssignment: false,
-    lowConfidence: route === "independent" && evidence.fist !== null && evidence.fist <= 2,
+    lowConfidence,
     correctCount,
     answeredCount,
     questionCount,
+    toolInfluence,
+    toolScore,
   };
 }
 

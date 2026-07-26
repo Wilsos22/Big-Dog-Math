@@ -291,9 +291,13 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   joined and readiness answers set so City Routes shows a full three-route spread on `/teacher/remote`.
   Both idempotent and scoped to the mock period; wipe lines at each file's bottom. KEY DISTINCTION that
   shaped the split: City Routes (park routes) computes from the CURRENT session's `poll_answers` +
-  `session_joins`, NOT the `responses` warm-up history - so it only populates inside a live session,
-  while `/teacher/mastery` and `/teacher/rightnow` (`/api/live/groups`) replay `responses`. Seeding
-  `responses` alone can never make City Routes light up. Any new mock roster MUST stay fully fictional
+  `session_joins` - plus, since 2026-07-26, the session's OWN `source='tool'` aggregate `responses`
+  as a boundary tie-breaker in `recommendRoute` (mixed answers move one step on strong >=4 / weak
+  <2.5 tool averages, none-correct can rise to partner but never independent, strong work clears
+  the low-confidence flag; no tool work means the old behavior exactly) - but NEVER the `responses`
+  warm-up history, so it only populates inside a live session, while `/teacher/mastery` and
+  `/teacher/rightnow` (`/api/live/groups`) replay `responses`. Seeding warm-up `responses` alone
+  can never make City Routes light up (roster and readiness still come from joins + polls). Any new mock roster MUST stay fully fictional
   (see the July 2026 real-names-in-a-public-repo incident) and have Steele eyeball the names first.
 
 ## Notion + warm-up pipeline
