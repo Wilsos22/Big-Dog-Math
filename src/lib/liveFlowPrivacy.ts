@@ -36,6 +36,18 @@ export function studentSafeLiveFlow(
     ...publicFlow,
     lesson: publicLiveLessonSnapshot(flow.lesson),
     presentation,
-    sequence: null,
+    // Students see where the lesson IS - position, total, and the name of
+    // what's next (the progress strip: position is regulation for an
+    // 11-year-old). The steps array itself stays teacher-only: steps carry
+    // correct answers and private notes.
+    sequence: flow.sequence
+      ? {
+          currentIndex: flow.sequence.currentIndex,
+          totalSteps: flow.sequence.totalSteps,
+          nextLabel: flow.sequence.nextLabel,
+          nextDirections: flow.sequence.nextDirections,
+          advanceMode: flow.sequence.advanceMode,
+        }
+      : null,
   };
 }

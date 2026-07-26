@@ -2648,6 +2648,15 @@ export default function ControlPage() {
   const hasNext = currentIndex + 1 < lineup.length;
   const nextState = hasNext ? bank.find((s) => s.id === lineup[currentIndex + 1].stateId) : undefined;
   const nextLabel = hasNext ? lineup[currentIndex + 1]?.title || nextState?.label : undefined;
+  // Pace readout: what's left in the plan and the wall-clock finish if every
+  // remaining state runs its planned length - the minute-30 "am I going to
+  // make it" answer the panel never gave (outside critique).
+  const paceSecondsLeft = currentIndex >= 0
+    ? secondsLeft + lineup.slice(currentIndex + 1).reduce((sum, item) => sum + minutesForLineupItem(item, bank) * 60, 0)
+    : 0;
+  const paceFinishClock = currentIndex >= 0
+    ? new Date(Date.now() + paceSecondsLeft * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : null;
   const liveFlowConnected = teacherSession?.status === "open" && teacherSession.broadcast === LIVE_FLOW_MODE;
   const liveFlowStatus = !supabase
     ? "Live sync unavailable"
@@ -2727,6 +2736,8 @@ export default function ControlPage() {
         .cx-progress { width:min(82vw,760px); height:16px; border-radius:999px; background:#241f15; overflow:hidden; border:1px solid #34301f; }
         .cx-progress-fill { height:100%; border-radius:999px; transition:width 1s linear, background 300ms ease; }
         .cx-upnext { font-size:0.82rem; font-weight:800; color:#7c7363; text-transform:uppercase; letter-spacing:0.07em; }
+        .cx-pace { margin-top:4px; font-size:0.82rem; font-weight:700; color:#a89f8c; }
+        .cx-pace strong { color:#e8e2d4; }
         .cx-upnext strong { color:#b3aa98; }
 
         .cx-actions { display:flex; flex-wrap:wrap; gap:9px; justify-content:center; align-items:center; }
@@ -3266,7 +3277,7 @@ export default function ControlPage() {
                   {running ? "Pause" : activeLessonCriterionValidationMessage ? "Fix success criterion" : autoAdvance ? "Resume" : "Start lesson"}
                 </button>
                 <button className="cx-btn" onClick={previous} disabled={currentIndex <= 0}>Back</button>
-                <button className="cx-btn next" onClick={() => { void next(); }} disabled={controlPoll?.stage !== "responding" && currentIndex + 1 >= lineup.length}>{controlPoll?.stage === "responding" ? "Show results" : "Advance"}</button>
+                <button className="cx-btn next" onClick={() => { void next(); }} disabled={controlPoll?.stage !== "responding" && currentIndex + 1 >= lineup.length}>{controlPoll?.stage === "responding" ? "Show results" : "Next state"}</button>
                 <button className="cx-btn" onClick={stopSequence}>Stop pacing</button>
                 <span className="cx-actions-sep" />
                 <button className="cx-btn" onClick={reset}>Reset state</button>
@@ -3283,6 +3294,12 @@ export default function ControlPage() {
               {hasNext
                 ? <div className="cx-upnext">Up next: <strong>{nextLabel}</strong></div>
                 : <div className="cx-upnext">Last step of the lesson</div>}
+              {paceFinishClock ? (
+                <div className="cx-pace">
+                  Plan left: <strong>{Math.max(1, Math.round(paceSecondsLeft / 60))} min</strong>
+                  {" · "}finish about <strong>{paceFinishClock}</strong> at planned pace
+                </div>
+              ) : null}
             </>
           ) : (
             <div style={{ display: "grid", justifyItems: "center", gap: 14 }}>

@@ -112,8 +112,18 @@ export default function SessionPage() {
   // End is a two-tap confirm (window.confirm blocked the page for seconds and
   // reads badly on the iPad), and after ending, any OTHER open session is
   // adopted and announced instead of silently reappearing on the next visit.
-  const [endArmed, setEndArmed] = useState(false);
-  const endArmTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Armed state carries a visible countdown: the arm silently expiring read
+  // as a dead button (outside critique - a hesitation and the second tap did
+  // nothing with no explanation).
+  const [endArmedLeft, setEndArmedLeft] = useState(0);
+  const endArmed = endArmedLeft > 0;
+  const endArmTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const disarmEnd = useCallback(() => {
+    if (endArmTimer.current) clearInterval(endArmTimer.current);
+    endArmTimer.current = null;
+    setEndArmedLeft(0);
+  }, []);
+  useEffect(() => () => { if (endArmTimer.current) clearInterval(endArmTimer.current); }, []);
   const [openCount, setOpenCount] = useState(0);
   const [endNotice, setEndNotice] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -288,13 +298,17 @@ export default function SessionPage() {
     // Two-tap confirm instead of window.confirm: the dialog blocked the page
     // (a 3-second click in the field) and is clumsy on the iPad.
     if (!endArmed) {
-      setEndArmed(true);
-      if (endArmTimer.current) clearTimeout(endArmTimer.current);
-      endArmTimer.current = setTimeout(() => setEndArmed(false), 4000);
+      disarmEnd();
+      setEndArmedLeft(4);
+      endArmTimer.current = setInterval(() => {
+        setEndArmedLeft((left) => {
+          if (left <= 1 && endArmTimer.current) { clearInterval(endArmTimer.current); endArmTimer.current = null; }
+          return Math.max(0, left - 1);
+        });
+      }, 1000);
       return;
     }
-    setEndArmed(false);
-    if (endArmTimer.current) clearTimeout(endArmTimer.current);
+    disarmEnd();
     setEnding(true);
     setError(null);
     setEndNotice(null);
@@ -568,7 +582,8 @@ export default function SessionPage() {
         .se-warn { background:#fff7e6; border:1px solid #ffe2a8; color:#92660a; border-radius:14px; padding:16px 18px; font-weight:700; line-height:1.6; }
         .se-err { background:#fdecea; border:1px solid #f5c6c0; color:#b91c1c; border-radius:12px; padding:12px 16px; font-weight:700; }
         .se-notice { background:#e7f8f3; border:1px solid #b9ebdf; color:#0f766e; border-radius:12px; padding:12px 16px; font-weight:700; }
-        .se-end.armed { background:#ef4444; color:#fff; border-color:#ef4444; }
+        .se-end.armed { background:#ef4444; color:#fff; border-color:#ef4444; position:relative; overflow:hidden; }
+        .se-end-fuse { position:absolute; left:0; bottom:0; height:4px; background:rgba(255,255,255,0.85); transition:width 1s linear; }
         .se-open-warn { margin:10px 0 0; color:#92660a; font-size:0.88rem; font-weight:800; }
         .se-link-inline { border:0; background:transparent; color:#b91c1c; font:inherit; font-weight:900; text-decoration:underline; cursor:pointer; padding:0; }
         .se-link-inline:disabled { opacity:0.5; cursor:default; }
@@ -638,6 +653,15 @@ export default function SessionPage() {
                     <span className="se-flow-meta">
                       Step {liveFlow.sequence.currentIndex + 1} of {liveFlow.sequence.totalSteps}
                       {liveFlow.timer ? ` · ${Math.floor(liveTimerSeconds(liveFlow.timer) / 60)}:${String(liveTimerSeconds(liveFlow.timer) % 60).padStart(2, "0")}` : ""}
+                      {(() => {
+                        // Pace: time left in the plan and the finish clock at planned pace.
+                        const steps = liveFlow.sequence?.steps;
+                        if (!steps?.length) return "";
+                        const remaining = liveTimerSeconds(liveFlow.timer)
+                          + steps.slice(liveFlow.sequence.currentIndex + 1).reduce((sum, step) => sum + (step.durationSeconds || 0), 0);
+                        const finish = new Date(Date.now() + remaining * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                        return ` · ${Math.max(1, Math.round(remaining / 60))} min of plan left, finish about ${finish}`;
+                      })()}
                     </span>
                   </div>
                   <div className="se-flow-keys">
@@ -648,7 +672,7 @@ export default function SessionPage() {
                       {flowBusy === "toggle-timer" ? "Sending" : liveFlow.timer?.running ? "Pause" : "Resume"}
                     </button>
                     <button className="se-flow-key primary" onClick={() => sendFlowAction("next")} disabled={Boolean(flowBusy)}>
-                      {flowBusy === "next" ? "Sending" : "Next state"}
+                      {flowBusy === "next" ? "Sending" : liveFlow.poll?.stage === "responding" ? "Show results" : "Next state"}
                     </button>
                   </div>
                   <div className="se-flow-keys se-flow-transitions">
@@ -679,7 +703,8 @@ export default function SessionPage() {
               <div className="se-code-actions">
                 <a className="se-host-link" href="/control">Open Live class host</a>
                 <button className={`se-end${endArmed ? " armed" : ""}`} onClick={end} disabled={ending}>
-                  {ending ? "Ending session" : endArmed ? "Tap again to end" : "End session"}
+                  {ending ? "Ending session" : endArmed ? `Tap again to end (${endArmedLeft})` : "End session"}
+                  {endArmed ? <span className="se-end-fuse" style={{ width: `${(endArmedLeft / 4) * 100}%` }} aria-hidden="true" /> : null}
                 </button>
               </div>
               {openCount > 1 && (

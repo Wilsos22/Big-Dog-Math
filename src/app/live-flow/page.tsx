@@ -402,6 +402,19 @@ export default function LiveFlowPage() {
   const activeTimerSeconds = phase?.timed && typeof phase.secondsLeft === "number"
     ? phase.secondsLeft
     : liveTimerSeconds(timer);
+  // Progress strip: position, what's next, and today's target - so the screen
+  // changing reads as "we're in part 3 of 4", not "an adult moved my screen".
+  const progressIndex = flow?.sequence?.currentIndex ?? -1;
+  const progressTotal = flow?.sequence?.totalSteps ?? 0;
+  const progressNext = flow?.sequence?.nextLabel || "";
+  const progressTarget = publicSuccessCriterion(flow?.lesson?.selectedSuccessCriterion)
+    || flow?.lesson?.successCriteria || "";
+  // Visual mirror of the audio cues (a deaf or headphone-wearing student gets
+  // no chime): the shell edge glows inside 30 seconds, the timer itself goes
+  // red and announces inside 10.
+  const timerTicking = Boolean(showTimer && timer && (timer.running || (phase?.timed && typeof phase.secondsLeft === "number")));
+  const timeWarning = timerTicking && activeTimerSeconds <= 30 && activeTimerSeconds > 0;
+  const timeCritical = timerTicking && activeTimerSeconds <= 10 && activeTimerSeconds > 0;
   const pollSubmitted = activePoll ? submittedPollIds.includes(activePoll.id) : false;
   const pollSaveLabel = connectionState === "reconnecting"
     ? "Reconnecting"
@@ -486,8 +499,22 @@ export default function LiveFlowPage() {
           color:var(--bdb-ink); font-family:var(--bdb-font); }
         .lf-exit { min-height:34px; border:1px solid var(--bdb-line); border-radius:9px; background:#fff; color:var(--bdb-ink-soft); padding:0 11px; font:inherit; font-size:0.66rem; font-weight:900; letter-spacing:0.06em; text-transform:uppercase; cursor:pointer; }
         .lf-exit:hover, .lf-exit:focus-visible { border-color:var(--lf-accent); outline:none; }
-        .lf-shell { position:relative; z-index:1; width:100%; height:100%; text-align:center; display:grid; grid-template-rows:52px minmax(0,1fr); }
-        .lf-topbar { width:100%; box-sizing:border-box; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(120,110,90,0.18); background:rgba(243,240,231,0.88); padding:0 18px; }
+        .lf-shell { position:relative; z-index:1; width:100%; height:100%; text-align:center; display:grid; grid-template-rows:auto minmax(0,1fr); }
+        .lf-chrome { width:100%; }
+        .lf-topbar { width:100%; box-sizing:border-box; min-height:52px; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(120,110,90,0.18); background:rgba(243,240,231,0.88); padding:0 18px; }
+        .lf-progress { width:100%; box-sizing:border-box; display:flex; flex-wrap:wrap; align-items:center; gap:4px 16px; padding:6px 18px; border-bottom:1px solid rgba(120,110,90,0.14); background:rgba(255,255,255,0.6); font-size:0.82rem; font-weight:700; color:var(--bdb-ink-soft); text-align:left; }
+        .lf-progress-pos { color:var(--bdb-ink); font-weight:900; white-space:nowrap; }
+        .lf-progress-next { white-space:nowrap; }
+        .lf-progress-target { margin-left:auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:58%; }
+        .lf-shell.warn30 { box-shadow:inset 0 0 0 4px color-mix(in srgb, var(--lf-accent) 60%, transparent); animation:lfEdgePulse 2s ease-in-out infinite; }
+        .lf-timer.low { border-color:#ef4444; animation:lfTimerLow 1s ease-in-out infinite; }
+        .lf-timer.low::before { background:#ef4444; }
+        .lf-timer.low .lf-time { color:#b91c1c; font-weight:900; }
+        .lf-time-left { color:#b91c1c; font-size:0.72rem; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; }
+        @media (max-width:640px) { .lf-time-left { display:none; } }
+        @keyframes lfEdgePulse { 0%, 100% { box-shadow:inset 0 0 0 4px color-mix(in srgb, var(--lf-accent) 60%, transparent); } 50% { box-shadow:inset 0 0 0 4px color-mix(in srgb, var(--lf-accent) 18%, transparent); } }
+        @keyframes lfTimerLow { 0%, 100% { box-shadow:0 0 0 0 rgba(239,68,68,0.45); } 50% { box-shadow:0 0 0 7px rgba(239,68,68,0); } }
+        @media (prefers-reduced-motion:reduce) { .lf-shell.warn30, .lf-timer.low { animation:none; } }
         .lf-mark { display:none; }
         .lf-phase-dot { width:11px; height:11px; flex:none; border-radius:3px; background:var(--lf-accent); }
         .lf-phase { margin:0; flex:none; border-radius:6px; background:var(--lf-accent); color:#fff; padding:4px 10px; font-size:0.64rem; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; }
@@ -575,20 +602,32 @@ export default function LiveFlowPage() {
 
       {connectionState === "reconnecting" && hasStudentSession ? <div className="lf-connection" role="status">Reconnecting. Your draft is safe.</div> : null}
 
-      <section className="lf-shell" aria-live="polite">
+      <section className={`lf-shell${timeWarning ? " warn30" : ""}`} aria-live="polite">
+        <div className="lf-chrome">
         <header className="lf-topbar">
           <span className="lf-mark" aria-hidden="true">÷</span>
           <span className="lf-phase-dot" aria-hidden="true" />
           <p className="lf-phase">{flow?.state?.label || "Today"}</p>
           <span className="lf-sync">{!hasStudentSession ? "Not joined" : connectionState === "connected" ? "Synced" : "Connecting"}</span>
           {showTimer && timer ? (
-            <div className="lf-timer" aria-label="Current lesson timer">
+            <div className={`lf-timer${timeCritical ? " low" : ""}`} aria-label="Current lesson timer" role={timeCritical ? "status" : undefined}>
               <div className="lf-time">{formatTime(activeTimerSeconds)}</div>
+              {timeCritical ? <span className="lf-time-left">left</span> : null}
             </div>
           ) : null}
           <span className="lf-who">{studentName}</span>
           <button className="lf-exit" type="button" onClick={exitLiveFlow}>Leave class</button>
         </header>
+        {progressTotal > 0 || progressTarget ? (
+          <div className="lf-progress" aria-label="Where the lesson is">
+            {progressTotal > 0 ? (
+              <span className="lf-progress-pos">Step {progressIndex + 1} of {progressTotal}</span>
+            ) : null}
+            {progressNext ? <span className="lf-progress-next">Next: {progressNext}</span> : null}
+            {progressTarget ? <span className="lf-progress-target">Target: {progressTarget}</span> : null}
+          </div>
+        ) : null}
+        </div>
         <div className="lf-body">
           {loading ? (
             <p className="lf-loading">Connecting to class…</p>
