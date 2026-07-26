@@ -12,6 +12,7 @@ import { SECURE_STUDENT_DATA, studentApiRequest } from "@/lib/studentApi";
 import {
   LIVE_FLOW_MODE,
   LIVE_FLOW_ROUTE,
+  STUDENT_SESSION_READY_EVENT_NAME,
   getStoredStudentSessionId,
   getStoredTeacherSessionId,
   hasClassModeExitMarker,
@@ -55,7 +56,7 @@ type StudentSessionState = {
   } | null;
 };
 
-export const STUDENT_SESSION_READY_EVENT = "bdm-student-session-ready";
+export const STUDENT_SESSION_READY_EVENT = STUDENT_SESSION_READY_EVENT_NAME;
 
 function isTeacherRoute(pathname: string) {
   return TEACHER_ROUTE_PREFIXES.some((route) => pathname === route || pathname.startsWith(`${route}/`));

@@ -11,6 +11,21 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**Home base always + screens push past warm-up** (7/26 - Steele's two asks.
+(1) Advancing past warm-up now pushes EVERY student screen, verified or not:
+code entry stores a provisional session (empty studentId) so ClassSync
+follows immediately, and secure-mode session-state READS relaxed to the
+projector-public studentSafeLiveFlow projection for unverified devices
+(writes still require the verified join). Fixes the critique's invisible
+unverified student. (2) The landing after code entry is the HOME BASE, full
+stop - no gate view, no locked links, no "keep this page open": the old lock
+existed because verification polling lived only on the landing; it now runs
+globally (WarmupJoinSync in the root layout) and completes wherever the
+student is, upgrading the provisional session in place. The warm-up card
+opens the form when one exists and says "No warm-up loaded yet - that is
+fine" when none does. Verified end to end with a stateful mock API: code
+entry -> unlocked home base -> held during warm-up -> pushed to /live-flow on
+advance while unverified -> verified in place on another page) ·
 **Outside critique response, rounds 1-3** (7/26 - a hired end-to-end critique
 (design-references/critiques/bigdogmath-critiques.pdf) drove three shipped
 batches. Round 1, accessibility: AA contrast on all eight scanned student

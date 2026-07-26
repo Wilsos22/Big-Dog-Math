@@ -363,6 +363,50 @@ export function getStoredStudentSessionId(): string | null {
   return getStoredStudentSession()?.sessionId ?? null;
 }
 
+// Fired whenever a student session lands in storage so ClassSync ticks
+// immediately instead of waiting out its interval. (ClassSync re-exports this
+// name for existing importers.)
+export const STUDENT_SESSION_READY_EVENT_NAME = "bdm-student-session-ready";
+
+/**
+ * Persist a verified student join. One writer for the whole app: the landing
+ * page and the global WarmupJoinSync both complete joins through this, so the
+ * receipt chain behaves identically wherever the verification finishes.
+ */
+export function saveVerifiedStudentJoin(session: StoredStudentSession): void {
+  clearClassModeExitMarker();
+  try {
+    localStorage.setItem("bdm-student-name", session.name);
+    localStorage.setItem(STUDENT_SESSION_KEY, JSON.stringify(session));
+    if (session.syncKey) sessionStorage.setItem("bdm-pending-class-code", session.syncKey);
+  } catch { /* storage unavailable - the polling surfaces will retry */ }
+  markStudentTab();
+  try { window.dispatchEvent(new Event(STUDENT_SESSION_READY_EVENT_NAME)); } catch { /* ignore */ }
+}
+
+/**
+ * Store a PROVISIONAL student session the moment a class code is accepted -
+ * before the warm-up verifies. studentId stays empty until the verified join
+ * replaces it. This is what lets ClassSync move the screen with the class
+ * even for a student who never finished (or opened) the warm-up: the teacher
+ * advancing past warm-up pushes every device that typed the code.
+ */
+export function saveProvisionalStudentSession(sessionId: string, name: string, syncKey: string): void {
+  const existing = getStoredStudentSession();
+  // Never downgrade a verified session for the same live session.
+  if (existing && existing.sessionId === sessionId && existing.studentId) return;
+  try {
+    localStorage.setItem(STUDENT_SESSION_KEY, JSON.stringify({
+      sessionId,
+      studentId: "",
+      name: name || "Student",
+      syncKey,
+    } satisfies StoredStudentSession));
+  } catch { /* ignore */ }
+  markStudentTab();
+  try { window.dispatchEvent(new Event(STUDENT_SESSION_READY_EVENT_NAME)); } catch { /* ignore */ }
+}
+
 export function clearStoredStudentSession(sessionId?: string): void {
   try {
     if (sessionId) {

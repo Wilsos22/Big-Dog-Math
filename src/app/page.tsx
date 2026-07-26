@@ -10,8 +10,9 @@ import { getSupabase } from "@/lib/supabase";
 import {
   clearClassModeExitMarker,
   clearStoredStudentSession,
+  getStoredStudentSession,
   markStudentTab,
-  type StoredStudentSession,
+  saveProvisionalStudentSession,
 } from "@/lib/liveClassFlow";
 import {
   ensureAnonymousStudentSession,
@@ -28,11 +29,9 @@ type WarmupSessionLesson = { code: string; title: string };
 const REQUIRE_GOOGLE_AUTH = process.env.NEXT_PUBLIC_REQUIRE_STUDENT_GOOGLE_AUTH === "true";
 const WARMUP_IDENTITY = process.env.NEXT_PUBLIC_WARMUP_IDENTITY_ENABLED === "true";
 
-// Once the warm-up form is open in its own tab, this tab turns into the
-// student home base: lesson info plus these destinations. They stay locked
-// until the warm-up response connects, because leaving this page before the
-// receipt lands would stop the verification polling that links the student
-// to the live session.
+// The home-base destinations. Never locked: warm-up verification runs
+// globally (WarmupJoinSync in the root layout), so navigating away no longer
+// strands the receipt chain the way it did when the polling lived only here.
 const HOME_LINKS = [
   { href: "/lesson", title: "Today's lesson", desc: "The plan, goals, and what you need" },
   { href: "/practice", title: "Challenge games", desc: "Pick a game and beat your score" },
@@ -72,12 +71,21 @@ export default function StudentLanding() {
             const link = await fetchWarmupLink(pending);
             setCode(pending);
             setPendingCode(pending);
-            setIdentityReady(false);
             setWarmupToken(link.warmupToken);
             setSessionLesson(link.lesson);
             if (!link.open) {
               resetPendingSession("That session ended. Enter the new class code.");
               return;
+            }
+            // A reloaded tab keeps its verified state; an unverified one gets
+            // (or keeps) the provisional session so the screen still follows.
+            const stored = getStoredStudentSession();
+            if (stored?.studentId && stored.sessionId === link.sessionId) {
+              setIdentityReady(true);
+            } else {
+              setIdentityReady(false);
+              const storedName = (localStorage.getItem("bdm-student-name") || "").trim();
+              saveProvisionalStudentSession(link.sessionId, storedName, pending);
             }
             setWarmupHref(link.href);
           }
@@ -121,6 +129,7 @@ export default function StudentLanding() {
 
   async function fetchWarmupLink(classCode: string): Promise<{
     open: boolean;
+    sessionId: string;
     href: string | null;
     warmupToken: string;
     lesson: WarmupSessionLesson | null;
@@ -144,6 +153,7 @@ export default function StudentLanding() {
     const link = data.warmUpLink || null;
     return {
       open: true,
+      sessionId: data.sessionId,
       href: link ? personalizeWarmupLink(link, data.warmupToken) : null,
       warmupToken: data.warmupToken,
       lesson: data.lesson || null,
@@ -212,7 +222,12 @@ export default function StudentLanding() {
           return;
         }
         if (warmupToken && warmupToken !== result.warmupToken) {
+          // The teacher replaced the assigned form: verification restarts, but
+          // the screen keeps FOLLOWING via a provisional session instead of
+          // being dropped from class mode entirely.
+          const storedName = (localStorage.getItem("bdm-student-name") || "").trim();
           clearStoredStudentSession();
+          saveProvisionalStudentSession(result.sessionId, storedName, pendingCode);
           setIdentityReady(false);
           setHelpRequestCode(null);
         }
@@ -278,53 +293,18 @@ export default function StudentLanding() {
     } catch { /* ignore */ }
   }
 
-  function saveVerifiedJoin(result: { session: StoredStudentSession }) {
-    clearClassModeExitMarker();
-    localStorage.setItem("bdm-student-name", result.session.name);
-    localStorage.setItem("bdm-student-session", JSON.stringify(result.session));
-    if (result.session.syncKey) sessionStorage.setItem("bdm-pending-class-code", result.session.syncKey);
-    setIdentityReady(true);
-    markStudentTab();
-    window.dispatchEvent(new Event(STUDENT_SESSION_READY_EVENT));
-  }
-
+  // Verification itself now runs globally (WarmupJoinSync in the root layout),
+  // so it survives the student navigating anywhere. This page only LISTENS:
+  // when the join completes - here or on any other page in this tab - the
+  // ready event flips the connected copy.
   useEffect(() => {
-    if (!SECURE_STUDENT_DATA || !pendingCode || identityReady) return;
-    let stopped = false;
-    let checking = false;
-    const check = async () => {
-      if (checking || stopped) return;
-      checking = true;
-      try {
-        const status = await studentApiRequest<{ sessionId: string; complete: boolean }>(
-          "/api/student/warmup-status",
-          { method: "POST", body: JSON.stringify({ code: pendingCode }) },
-        );
-        if (!status.complete) return;
-        const result = await studentApiRequest<{ session: StoredStudentSession }>(
-          "/api/student/join",
-          { method: "POST", body: JSON.stringify({ code: pendingCode }) },
-        );
-        if (!stopped && result.session.sessionId === status.sessionId) saveVerifiedJoin(result);
-      } catch (error) {
-        const waitingForForm = error instanceof StudentApiError
-          && (error.code === "warmup_verification_required" || error.code === "warmup_not_complete");
-        if (!waitingForForm && error instanceof StudentApiError && error.code === "session_not_open") {
-          resetPendingSession("That session ended. Enter the new class code.");
-        } else if (!waitingForForm) {
-          setJoinErr(error instanceof Error ? error.message : "Warm-up verification could not be checked.");
-        }
-      } finally {
-        checking = false;
-      }
+    const onReady = () => {
+      const stored = getStoredStudentSession();
+      if (stored?.studentId) setIdentityReady(true);
     };
-    void check();
-    const interval = window.setInterval(check, 3000);
-    window.addEventListener("focus", check);
-    return () => { stopped = true; window.clearInterval(interval); window.removeEventListener("focus", check); };
-    // saveVerifiedJoin only writes the verified session to stable browser storage.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identityReady, pendingCode]);
+    window.addEventListener(STUDENT_SESSION_READY_EVENT, onReady);
+    return () => window.removeEventListener(STUDENT_SESSION_READY_EVENT, onReady);
+  }, []);
 
   async function requestTeacherHelp() {
     if (!pendingCode || requestingHelp) return;
@@ -367,7 +347,6 @@ export default function StudentLanding() {
         }
         await ensureAnonymousStudentSession();
         const link = await fetchWarmupLink(c);
-        clearStoredStudentSession();
         sessionStorage.setItem("bdm-pending-class-code", c);
         setCode(c);
         setPendingCode(c);
@@ -379,6 +358,10 @@ export default function StudentLanding() {
           resetPendingSession("That session ended. Enter the new class code.");
           return;
         }
+        // Provisional session: the screen follows the class from the moment
+        // the code is accepted, even before the warm-up verifies. The global
+        // WarmupJoinSync upgrades it to the verified identity.
+        saveProvisionalStudentSession(link.sessionId, name, c);
         setWarmupHref(link.href);
       } catch (error) {
         sessionStorage.removeItem("bdm-pending-class-code");
@@ -422,12 +405,9 @@ export default function StudentLanding() {
 
   const moduleNumber = sessionLesson?.code.match(/^M(\d+)/i)?.[1] || "";
   const topicNumber = sessionLesson?.code.match(/\.T(\d+)/i)?.[1] || "";
-  // Home-base view: the warm-up is underway in another tab (or already
-  // connected), so this tab shows lesson info and the games instead of the
-  // big warm-up button.
-  const showHome = Boolean(
-    pendingCode && (identityReady || (warmupToken && warmupOpenedFor === warmupToken && warmupHref)),
-  );
+  // Once opened for the current token, the warm-up button softens to
+  // "Reopen" and the status line watches for the submission.
+  const warmupOpened = Boolean(warmupToken && warmupOpenedFor === warmupToken);
 
   return (
     <main className="st-page">
@@ -484,8 +464,6 @@ export default function StudentLanding() {
         .st-home-card b { color:var(--bdb-ink); font-weight:800; font-size:0.95rem; }
         .st-home-card span { color:var(--bdb-ink-soft); font-size:0.8rem; font-weight:600; line-height:1.35; }
         a.st-home-card:hover { border-color:var(--bdb-teal); }
-        .st-home-locked { opacity:0.55; }
-        .st-home-note { margin:0; color:var(--bdb-ink-faint); font-size:0.8rem; font-weight:700; }
         .st-warmup-tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
         .st-link-btn { border:0; background:transparent; color:var(--bdb-ink-soft); padding:4px 0; font:inherit;
           font-size:0.82rem; font-weight:750; text-decoration:underline; cursor:pointer; }
@@ -528,9 +506,7 @@ export default function StudentLanding() {
       <h1 className="st-hello">{name ? `Hey ${name}!` : "Welcome!"}</h1>
       <p className="st-hello-sub">
         {pendingCode
-          ? showHome
-            ? "This is your home base while class gets ready."
-            : "Your class code is accepted. Start the warm-up, then return here."
+          ? "This is your home base. Start with the warm-up when it opens."
           : "Enter your class code to start today's lesson."}
       </p>
 
@@ -558,59 +534,43 @@ export default function StudentLanding() {
                 </div>
               </section>
               <p className="st-warmup-label">Warm-up</p>
-              {showHome ? (
+              {warmupHref ? (
                 <>
-                  <h2 className="st-join-h">{identityReady ? "Warm-up connected" : "Warm-up open in your other tab"}</h2>
+                  <h2 className="st-join-h">{identityReady ? "Warm-up connected" : warmupOpened ? "Warm-up open in your other tab" : "Start today's warm-up"}</h2>
                   <p className="st-warmup-copy">
                     {identityReady
                       ? "Nice work. Read the lesson or play a challenge while class gets ready."
-                      : "Finish all five questions there and press Submit. Big Dog connects your response on its own, so keep this page open."}
+                      : warmupOpened
+                        ? "Finish all five questions there and press Submit. Big Dog connects your response on its own."
+                        : "Complete all five Google Form questions, then come back here."}
                   </p>
-                  <div className="st-home-grid">
-                    {HOME_LINKS.map((link) => identityReady ? (
-                      <a key={link.href} className="st-home-card" href={link.href}>
-                        <b>{link.title}</b>
-                        <span>{link.desc}</span>
-                      </a>
-                    ) : (
-                      <span key={link.href} className="st-home-card st-home-locked" aria-disabled="true">
-                        <b>{link.title}</b>
-                        <span>{link.desc}</span>
-                      </span>
-                    ))}
-                  </div>
-                  {!identityReady && <p className="st-home-note">These unlock when your warm-up connects.</p>}
+                  <a
+                    className={warmupOpened || identityReady ? "st-link-btn" : "st-explore st-warmup-action"}
+                    href={warmupHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={markWarmupOpened}
+                  >
+                    {warmupOpened || identityReady ? "Reopen the warm-up" : "Open today's warm-up"}
+                  </a>
                 </>
               ) : (
                 <>
-                  <h2 className="st-join-h">{warmupHref ? "Start today's warm-up" : "Waiting for your teacher"}</h2>
-                  <p className="st-warmup-copy">
-                    {warmupHref
-                      ? "Complete all five Google Form questions. This homepage stays open underneath so you can come right back."
-                      : "Your teacher is selecting the lesson. The assigned warm-up will appear here when it is ready."}
-                  </p>
-                  {warmupHref ? (
-                    <a
-                      className="st-explore st-warmup-action"
-                      href={warmupHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={markWarmupOpened}
-                    >
-                      Open today's warm-up
-                    </a>
-                  ) : (
-                    <p className="st-warmup-wait">Keep this page open. The assigned warm-up will appear automatically.</p>
-                  )}
+                  <h2 className="st-join-h">No warm-up loaded yet</h2>
+                  <p className="st-warmup-copy">That is fine - it appears here on its own the moment your teacher connects one.</p>
                 </>
               )}
-              <p className="st-warmup-wait" role="status" aria-live="polite">
-                {identityReady
-                  ? "Warm-up connected. Choose a challenge while class gets ready."
-                  : showHome
-                    ? "Watching for your warm-up submission."
-                    : "After you submit, return here. Big Dog will connect your response automatically."}
-              </p>
+              {warmupHref && !identityReady && warmupOpened ? (
+                <p className="st-warmup-wait" role="status" aria-live="polite">Watching for your warm-up submission.</p>
+              ) : null}
+              <div className="st-home-grid">
+                {HOME_LINKS.map((link) => (
+                  <a key={link.href} className="st-home-card" href={link.href}>
+                    <b>{link.title}</b>
+                    <span>{link.desc}</span>
+                  </a>
+                ))}
+              </div>
               {joinErr && <div className="st-joinerr" role="alert">{joinErr}</div>}
               {helpRequestCode && (
                 <p className="st-help-code" role="status">
@@ -618,12 +578,7 @@ export default function StudentLanding() {
                 </p>
               )}
               <div className="st-warmup-tools">
-                {showHome && warmupHref && (
-                  <a className="st-link-btn" href={warmupHref} target="_blank" rel="noopener noreferrer">
-                    Reopen the warm-up
-                  </a>
-                )}
-                {!identityReady && !helpRequestCode && (
+                {warmupHref && !identityReady && !helpRequestCode && (
                   <button className="st-link-btn" type="button" onClick={requestTeacherHelp} disabled={requestingHelp}>
                     {requestingHelp ? "Requesting help" : "Warm-up not connecting? Ask for help"}
                   </button>
