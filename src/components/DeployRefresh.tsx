@@ -16,7 +16,9 @@ const POLL_MS = 4 * 60 * 1000;
 
 export default function DeployRefresh() {
   const pathname = usePathname();
-  const active = DISPLAY_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+  // usePathname() is typed string | null (it is null during some prerender
+  // passes), so guard before calling startsWith or typecheck fails.
+  const active = !!pathname && DISPLAY_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
 
   useEffect(() => {
     if (!active) return;
