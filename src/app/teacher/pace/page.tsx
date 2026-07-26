@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
-import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
+import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
 import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
@@ -362,7 +362,7 @@ export default function PaceSupportPage() {
 
       <header className="pw-top">
         <span className="pw-dot" aria-hidden="true" />
-        <span className="pw-chip">{interlude ? `Transition - ${interlude.label}` : previewSample ? previewSample.label : state?.label || "Big Dog Math"}</span>
+        <span className="pw-chip">{interlude ? `Transition - ${interlude.label}` : previewSample ? previewSample.label : universalStateTitle(state?.id, state?.label) || "Big Dog Math"}</span>
         <h1 className="pw-title">{previewSample ? "Preview" : flow?.presentation?.title || state?.label || "Waiting for the lesson"}</h1>
         {flow?.lesson?.title ? <p className="pw-lesson">{flow.lesson.title}</p> : null}
         <span className="pw-textbtns" aria-label="Text size">

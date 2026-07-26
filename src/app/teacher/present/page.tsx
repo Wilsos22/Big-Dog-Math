@@ -6,7 +6,7 @@ import InkBoard from "@/components/InkBoard";
 import LessonVisual from "@/components/LessonVisual";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
 import SlideOverlayLayer from "@/components/SlideOverlayLayer";
-import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
+import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
 import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { resolveLessonVisual } from "@/lib/lessonVisuals";
@@ -50,22 +50,10 @@ function formatTime(totalSeconds: number) {
 // lesson (Steele, 7/22), so students recognize the phase at a glance. The
 // step's specific name stays in the topbar. Hand-made title graphics drop
 // into public/state-titles/<slug>.png and replace the typographic title.
-const UNIVERSAL_STATE_TITLES: Record<string, string> = {
-  "i-do": "I Do",
-  "we-do": "We Do",
-  independent: "You Do",
-  abstract: "You Do",
-  launch: "Launch",
-  review: "Review",
-  warmup: "Warm-Up",
-  question: "Question",
-  exit: "Exit Ticket",
-  closeout: "Closeout",
-};
-
-function universalStateTitle(stateId: string | undefined, stateLabel: string | undefined): string {
-  return UNIVERSAL_STATE_TITLES[(stateId || "").trim()] || (stateLabel || "").trim();
-}
+// The universal-word map lives in src/lib/classStates.ts (shared with the
+// Pace + Support chip) so the two projectors can never disagree on a phase
+// name, and unmapped states fall back to the generic bank label instead of
+// leaking the lesson-specific step title into the marker.
 
 function stateTitleSlug(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");

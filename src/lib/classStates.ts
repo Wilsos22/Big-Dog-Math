@@ -16,6 +16,48 @@ export interface ClassState {
 
 export const CLOSEOUT_DIRECTIONS = "Put away your supplies, clean your area, and reset the room.";
 
+// The UNIVERSAL state words for the projector state marker - identical lesson
+// to lesson so students learn the phases, per Steele's universal-headers
+// decision (7/22, reaffirmed 7/26 when custom step titles leaked into the
+// marker). The CRA trio carries the gradual-release words: concrete is the
+// teacher build (I Do), representational the shared build (We Do), abstract
+// and independent the student's own work (You Do).
+export const UNIVERSAL_STATE_TITLES: Record<string, string> = {
+  "i-do": "I Do",
+  "we-do": "We Do",
+  "you-do": "You Do",
+  concrete: "I Do",
+  representational: "We Do",
+  abstract: "You Do",
+  independent: "You Do",
+  launch: "Launch",
+  review: "Review",
+  warmup: "Warm-Up",
+  question: "Question",
+  poll: "Question",
+  "learning-check": "Learning Check",
+  "learning-target-readers": "Learning Targets",
+  discussion: "Discussion",
+  partner: "Partner Work",
+  "small-group": "Small Groups",
+  "gallery-walk": "Gallery Walk",
+  exit: "Exit Ticket",
+  closeout: "Closeout",
+};
+
+/**
+ * The state marker text for projector surfaces. Never the lesson-specific
+ * step title: unmapped states fall back to the state bank's GENERIC label
+ * (stable lesson to lesson), and only then to the given label.
+ */
+export function universalStateTitle(stateId?: string | null, fallbackLabel?: string | null): string {
+  const id = (stateId || "").trim();
+  const mapped = UNIVERSAL_STATE_TITLES[id];
+  if (mapped) return mapped;
+  const bank = DEFAULT_STATES.find((state) => state.id === id)?.label;
+  return bank || (fallbackLabel || "").trim();
+}
+
 export const DEFAULT_STATES: ClassState[] = [
   { id: "warmup", label: "Warm-Up", minutes: 5, color: "#35785a", desc: "Open the assigned warm-up. Complete all five questions on your own.", paceAction: "Start today's warm-up.", studentAction: "Open the warm-up and begin." },
   { id: "review", label: "Review", minutes: 4, color: "#35785a", desc: "Review the answers and the problems the class missed most often.", paceAction: "Let's check the answers together.", studentAction: "Look up and check your thinking." },

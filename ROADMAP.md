@@ -11,6 +11,17 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**Universal state words everywhere on the markers** (7/26 - Steele's catch
+from the Studio: the Main pill and Pace chip showed the lesson-specific step
+title ("7. Divisibility Proves the Factor Arch") whenever the state id was
+not in the universal map. universalStateTitle now lives in
+src/lib/classStates.ts shared by both projectors: the map covers the CRA trio
+as gradual-release words (concrete = I Do, representational = We Do,
+abstract/independent = You Do) plus Learning Check, Discussion, Partner Work,
+Small Groups, Gallery Walk and the rest, and unmapped states fall back to the
+state bank's GENERIC label - never the step title. The step's specific name
+stays in the directions/topbar where it belongs. Side effect: the
+public/state-titles art lookup now applies to CRA states too) ·
 **Home base always + screens push past warm-up** (7/26 - Steele's two asks.
 (1) Advancing past warm-up now pushes EVERY student screen, verified or not:
 code entry stores a provisional session (empty studentId) so ClassSync
