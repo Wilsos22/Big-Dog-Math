@@ -108,6 +108,32 @@ async function loadState(db: Db, sessionId: string) {
     roster.set(studentKeyOf(j.student_id, j.display_name), j.display_name || "Student");
   }
 
+  // This session's constructed tool work: the 0-5 aggregate rows the
+  // manipulatives write (source 'tool', standard_id null). Averaged per
+  // student across tools, it is the routing tie-breaker - the evidence the
+  // critique pointed out was collected and then ignored.
+  const { data: toolRows } = await db
+    .from("responses")
+    .select("student_id,score")
+    .eq("session_id", sessionId)
+    .eq("source", "tool")
+    .is("standard_id", null)
+    .not("score", "is", null);
+  const toolTotals = new Map<string, { sum: number; count: number }>();
+  for (const row of (toolRows || []) as Array<{ student_id: string | null; score: number | string }>) {
+    if (!row.student_id) continue;
+    const score = Number(row.score);
+    if (!Number.isFinite(score)) continue;
+    const tally = toolTotals.get(row.student_id) || { sum: 0, count: 0 };
+    tally.sum += score;
+    tally.count += 1;
+    toolTotals.set(row.student_id, tally);
+  }
+  const toolScoreOf = (studentKey: string): number | null => {
+    const tally = toolTotals.get(studentKey);
+    return tally && tally.count ? tally.sum / tally.count : null;
+  };
+
   const evidence: ReadinessEvidence[] = [...roster.entries()].map(([studentKey, name]) => {
     const correct = questionSteps.map((step, i) => {
       const pollId = questionPollIds[i];
@@ -119,7 +145,7 @@ async function loadState(db: Db, sessionId: string) {
     const fistRaw = fistPollId ? latestAnswer.get(`${fistPollId}|${studentKey}`) : undefined;
     const fistParsed = fistRaw !== undefined ? Number.parseInt(fistRaw, 10) : Number.NaN;
     const fist = Number.isInteger(fistParsed) && fistParsed >= 0 && fistParsed <= 5 ? fistParsed : null;
-    return { studentKey, name, correct, fist };
+    return { studentKey, name, correct, fist, toolScore: toolScoreOf(studentKey) };
   });
 
   const recommendations = new Map<string, CityRouteRecommendation>(
@@ -158,6 +184,8 @@ async function loadState(db: Db, sessionId: string) {
         assignedRoute: assigned?.route || null,
         assignedCity: assigned?.city || null,
         source: assigned?.source || null,
+        toolScore: rec.toolScore,
+        toolInfluence: rec.toolInfluence,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));

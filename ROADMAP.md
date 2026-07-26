@@ -11,6 +11,18 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**Tool evidence breaks City Routes ties** (7/26 - Steele's pick from the
+critique list: the routing sat on two multiple-choice items while the Area
+Tool logged a constructed response. recommendRoute now takes the session's
+own tool-work average (the 0-5 aggregate rows the manipulatives already
+write) as a conservative tie-breaker: mixed readiness answers raise to
+independent on strong work (>=4/5) or lower to teacher on weak (<2.5),
+none-correct rises to partner but never independent, all-correct never
+lowers, and strong work clears the all-correct-but-fist-2 low-confidence
+flag. No tool work = the locked rule exactly. The Remote panel shows a T
+score chip and a "Tool work raised/lowered/confirmed" tag so a moved route
+is never a mystery, and the teacher override still beats everything.
+Verified by an executed 15-case matrix against the compiled pure engine) ·
 **Universal state words everywhere on the markers** (7/26 - Steele's catch
 from the Studio: the Main pill and Pace chip showed the lesson-specific step
 title ("7. Divisibility Proves the Factor Arch") whenever the state id was

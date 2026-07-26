@@ -20,7 +20,17 @@ interface PanelStudent {
   assignedRoute: CityRouteId | null;
   assignedCity: string | null;
   source: string | null;
+  // Session tool-work average (0-5) and whether it moved this student's
+  // route - a moved route is never a mystery on the panel.
+  toolScore?: number | null;
+  toolInfluence?: "raised" | "lowered" | "cleared-flag" | null;
 }
+
+const TOOL_INFLUENCE_LABEL: Record<string, string> = {
+  raised: "Tool work raised",
+  lowered: "Tool work lowered",
+  "cleared-flag": "Tool work confirmed",
+};
 
 interface PanelRun {
   id: string;
@@ -146,6 +156,7 @@ export default function CityRoutesPanel({ sessionId }: { sessionId: string }) {
         .crp-dot.none { background:#eceae4; color:#a59c8d; }
         .crp-fist { font-size:0.62rem; font-weight:900; color:#6f675c; min-width:24px; text-align:center; }
         .crp-flag { flex:none; font-size:0.56rem; font-weight:900; letter-spacing:0.05em; text-transform:uppercase; color:#8a6414; border:1px solid #e3c98a; background:#fdf4dd; border-radius:6px; padding:2px 6px; }
+        .crp-flag.tool { color:#2e6465; border-color:#9ec8c8; background:#e9f4f3; }
         .crp-routes { flex:none; display:flex; gap:3px; }
         .crp-route-btn { font:inherit; font-size:0.6rem; font-weight:900; min-height:32px; padding:0 9px; border-radius:7px; border:1px solid #d0cabc; background:#fff; color:#6f675c; cursor:pointer; }
         .crp-route-btn.on { background:#28241e; border-color:#28241e; color:#fff; }
@@ -233,8 +244,18 @@ export default function CityRoutesPanel({ sessionId }: { sessionId: string }) {
                     </span>
                   ))}
                   <span className="crp-fist">{s.fist !== null ? `F${s.fist}` : "F-"}</span>
+                  {typeof s.toolScore === "number" ? (
+                    <span className="crp-fist" title="Average tool-work score this session, 0 to 5">
+                      T{Math.round(s.toolScore * 10) / 10}
+                    </span>
+                  ) : null}
                 </span>
                 {s.lowConfidence ? <span className="crp-flag">Check</span> : null}
+                {s.toolInfluence ? (
+                  <span className="crp-flag tool" title="This session's manipulative work moved or confirmed the route">
+                    {TOOL_INFLUENCE_LABEL[s.toolInfluence]}
+                  </span>
+                ) : null}
                 <span className="crp-routes">
                   {CITY_ROUTE_IDS.map((route) => (
                     <button
