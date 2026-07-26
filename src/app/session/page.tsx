@@ -102,7 +102,9 @@ export default function SessionPage() {
   const [session, setSession] = useState<{ id: string; code: string; periodName: string; periodId: string } | null>(null);
   const [joins, setJoins] = useState<Join[]>([]);
   // null = signals unavailable (migration not run) - the strip stays hidden.
-  const [studentSignals, setStudentSignals] = useState<StudentSignal[] | null>(null);
+  // controls stays false until student-signal-controls.sql has been run.
+  const [signalState, setSignalState] = useState<{ controls: boolean; signalsOff: boolean; signals: StudentSignal[] } | null>(null);
+  const [signalActionBusy, setSignalActionBusy] = useState(false);
   const [rosterStudents, setRosterStudents] = useState<RosterStudent[]>([]);
   const [rosterCount, setRosterCount] = useState(0);
   const [admissionRequests, setAdmissionRequests] = useState<AdmissionRequest[]>([]);
@@ -236,14 +238,26 @@ export default function SessionPage() {
     // Student self-signals ride the same 3-second heartbeat. Quietly absent
     // until the student-signals migration has been run.
     try {
-      const signalResult = await teacherApiRequest<{ enabled: boolean; signals: StudentSignal[] }>(
+      const signalResult = await teacherApiRequest<{ enabled: boolean; controls: boolean; signalsOff: boolean; signals: StudentSignal[] }>(
         `/api/live/signals?sessionId=${encodeURIComponent(sessionId)}`,
       );
-      setStudentSignals(signalResult.enabled ? signalResult.signals : null);
+      setSignalState(signalResult.enabled
+        ? { controls: signalResult.controls, signalsOff: signalResult.signalsOff, signals: signalResult.signals }
+        : null);
     } catch {
-      setStudentSignals(null);
+      setSignalState(null);
     }
   }, []);
+
+  const signalAction = useCallback(async (action: string, studentId?: string) => {
+    if (!session || signalActionBusy) return;
+    setSignalActionBusy(true);
+    try {
+      await teacherPost("/api/live/signals", { sessionId: session.id, action, studentId });
+      await pollJoins(session.id);
+    } catch { /* the strip simply keeps its previous state */ }
+    finally { setSignalActionBusy(false); }
+  }, [session, signalActionBusy, pollJoins]);
 
   useEffect(() => {
     if (!session) return;
@@ -586,7 +600,13 @@ export default function SessionPage() {
         .se-signal-count.stuck { color:var(--bdb-coral-deep); }
         .se-signal-count.again { color:var(--bdb-ink); }
         .se-signal-count.gotit { color:var(--bdb-green-deep); }
-        .se-signal-names { flex-basis:100%; color:var(--bdb-ink-soft); font-weight:700; font-size:0.82rem; }
+        .se-signal-names { flex-basis:100%; display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; color:var(--bdb-ink-soft); font-weight:700; font-size:0.82rem; }
+        .se-signal-name { display:inline-flex; align-items:center; gap:5px; }
+        .se-signal-mute { border:1px solid var(--bdb-line); border-radius:999px; background:#fff; color:var(--bdb-ink-soft); font:inherit; font-size:0.7rem; font-weight:800; padding:2px 9px; min-height:24px; cursor:pointer; }
+        .se-signal-mute:hover:not(:disabled) { border-color:var(--bdb-coral-deep); color:var(--bdb-coral-deep); }
+        .se-signal-toggle { margin-left:auto; border:1px solid var(--bdb-line); border-radius:999px; background:#fff; color:var(--bdb-ink-soft); font:inherit; font-size:0.76rem; font-weight:800; padding:5px 13px; min-height:32px; cursor:pointer; }
+        .se-signal-toggle:hover:not(:disabled) { border-color:var(--bdb-ink); color:var(--bdb-ink); }
+        .se-signals.off { border-left-color:var(--bdb-line); color:var(--bdb-ink-soft); }
         .se-joins { display:flex; flex-wrap:wrap; gap:8px; }
         .se-chip { background:#e7f8f3; border:1px solid #b9ebdf; color:#0f766e; border-radius:999px; padding:9px 16px; font-weight:800; animation:sePop 0.3s ease; }
         .se-admissions { display:grid; gap:10px; }
@@ -810,25 +830,59 @@ export default function SessionPage() {
               <div className="se-count">Joined: {joins.length}{rosterCount ? ` of ${rosterCount}` : ""}</div>
               {joins.length === 0 ? <span className="se-empty">Waiting for students to join…</span>
                 : <div className="se-joins">{joins.map((j) => <span className="se-chip" key={j.id}>{j.display_name || "Student"}</span>)}</div>}
-              {studentSignals ? (() => {
+              {signalState ? (() => {
+                if (signalState.signalsOff) {
+                  return (
+                    <div className="se-signals off" role="status" aria-label="Student self-signals">
+                      <span className="se-signal-count">Signals are off for this class.</span>
+                      <button className="se-signal-toggle" disabled={signalActionBusy} onClick={() => void signalAction("signals-on")}>Turn signals on</button>
+                    </div>
+                  );
+                }
                 // Scope to the current lesson step when one is running - a
                 // "stuck" from three steps ago is not a stuck right now.
                 const currentStep = liveFlow?.sequence?.currentIndex ?? null;
                 const current = currentStep === null
-                  ? studentSignals
-                  : studentSignals.filter((s) => s.step_index === currentStep);
+                  ? signalState.signals
+                  : signalState.signals.filter((s) => s.step_index === currentStep);
                 const stuck = current.filter((s) => s.signal === "stuck");
                 const again = current.filter((s) => s.signal === "again");
                 const gotIt = current.filter((s) => s.signal === "got-it");
-                if (!current.length) return null;
+                if (!current.length && !signalState.controls) return null;
+                const nameRow = (label: string, list: StudentSignal[]) => (
+                  list.length ? (
+                    <span className="se-signal-names">
+                      {label}{" "}
+                      {list.map((s) => (
+                        <span className="se-signal-name" key={`${s.student_id || s.display_name}`}>
+                          {s.display_name || "Student"}
+                          {signalState.controls && s.student_id ? (
+                            <button
+                              className="se-signal-mute"
+                              title="Hide this student's signals for the rest of the session"
+                              disabled={signalActionBusy}
+                              onClick={() => void signalAction("mute", s.student_id || undefined)}
+                            >
+                              Mute
+                            </button>
+                          ) : null}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null
+                );
                 return (
                   <div className="se-signals" role="status" aria-label="Student self-signals">
                     <span className="se-signal-count stuck">Stuck: {stuck.length}</span>
                     <span className="se-signal-count again">Say again: {again.length}</span>
                     <span className="se-signal-count gotit">Got it: {gotIt.length}</span>
-                    {stuck.length ? (
-                      <span className="se-signal-names">{stuck.map((s) => s.display_name || "Student").join(", ")}</span>
+                    {signalState.controls ? (
+                      <button className="se-signal-toggle" disabled={signalActionBusy} onClick={() => void signalAction("signals-off")} title="Hides the signal chips for every student at the next step change">
+                        Turn signals off
+                      </button>
                     ) : null}
+                    {nameRow("Stuck:", stuck)}
+                    {nameRow("Say again:", again)}
                   </div>
                 );
               })() : null}
