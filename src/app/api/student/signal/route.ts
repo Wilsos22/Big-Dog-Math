@@ -4,8 +4,13 @@
 // during so the teacher view can scope to the current step.
 //
 // GET  /api/student/signal?sessionId=...  -> { enabled } probe: the student
-//   chips stay hidden until supabase/student-signals.sql has been run.
+//   chips stay hidden until supabase/student-signals.sql has been run, and
+//   for sessions where the teacher flipped signals off (the student surface
+//   re-probes on every lesson-step change, so the switch bites at the next
+//   advance).
 // POST /api/student/signal { sessionId, signal, stepIndex } -> { ok }
+//   A 10-second server-side cooldown per student absorbs chip-mashing: the
+//   write is simply refused (429) until the last one is 10 seconds old.
 //
 // Auth matches every /api/student/* route: requireVerifiedStudent covers the
 // secure rollout and the transitional claimed-id mode in one call.
@@ -20,14 +25,33 @@ export const dynamic = "force-dynamic";
 
 const SIGNALS = ["stuck", "again", "got-it"] as const;
 type Signal = (typeof SIGNALS)[number];
+const COOLDOWN_MS = 10_000;
 
-export async function GET() {
+type Db = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
+
+// True when the teacher flipped signals off for this session. Tolerates the
+// signals_off column not existing yet (student-signal-controls.sql staged).
+async function sessionSignalsOff(db: Db, sessionId: string): Promise<boolean> {
+  const { data, error } = await db
+    .from("sessions")
+    .select("signals_off")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (error) return false;
+  return Boolean((data as { signals_off?: boolean } | null)?.signals_off);
+}
+
+export async function GET(request: Request) {
   const db = getSupabaseAdmin();
   if (!db) return Response.json({ enabled: false }, { headers: { "cache-control": "no-store" } });
   // Probe: any error (most likely "table missing" before the migration runs)
   // reports disabled, and the student surface hides the chips entirely.
   const { error } = await db.from("student_signals").select("id", { head: true, count: "exact" }).limit(1);
-  return Response.json({ enabled: !error }, { headers: { "cache-control": "no-store" } });
+  if (error) return Response.json({ enabled: false }, { headers: { "cache-control": "no-store" } });
+
+  const sessionId = new URL(request.url).searchParams.get("sessionId") || "";
+  const off = sessionId ? await sessionSignalsOff(db, sessionId) : false;
+  return Response.json({ enabled: !off }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function POST(request: Request) {
@@ -57,6 +81,9 @@ export async function POST(request: Request) {
     if (!session || session.status !== "open" || session.period_id !== student.periodId) {
       throw new StudentIdentityError("This session is not open for your class.", 403, "signal_wrong_class");
     }
+    if (await sessionSignalsOff(db, session.id)) {
+      throw new StudentIdentityError("Signals are turned off for this session.", 409, "signals_off");
+    }
 
     const { count: joined, error: joinError } = await db
       .from("session_joins")
@@ -66,6 +93,19 @@ export async function POST(request: Request) {
     if (joinError) throw new StudentIdentityError("Your class join could not be checked.", 500, "join_lookup_failed");
     if (!joined) throw new StudentIdentityError("Join the class before sending a signal.", 403, "session_join_required");
 
+    // Cooldown: refuse writes until the student's last signal is 10s old.
+    const { data: existing } = await db
+      .from("student_signals")
+      .select("updated_at")
+      .eq("session_id", session.id)
+      .eq("student_id", student.id)
+      .maybeSingle();
+    if (existing?.updated_at && Date.now() - Date.parse(existing.updated_at) < COOLDOWN_MS) {
+      throw new StudentIdentityError("Give it a few seconds before signaling again.", 429, "signal_cooldown");
+    }
+
+    // Upsert touches only these columns - a teacher mute (muted flag from
+    // student-signal-controls.sql) survives the student's own writes.
     const { error: writeError } = await db.from("student_signals").upsert(
       {
         session_id: session.id,

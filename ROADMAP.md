@@ -26,8 +26,14 @@ filter passes position but never steps), visible time warnings (edge glow at
 action (Next state everywhere), End-session arm countdown, weekly-display
 weekend roll-forward. Round 3: the "I'm stuck / Say that again / I've got
 this" student self-signal chips feeding live counts on /session -
-student-signals.sql STAGED, not run; feature hides itself until Steele runs
-it. Pedagogy critiques and bigger IA items are decision items, not code) ·
+student-signals.sql RUN by Steele 7/26, chips live. Same day, his click-only
+decision hardened the layer: a 10s server cooldown on signal writes, counts +
+stuck/again names now ALSO on the iPad Remote (the in-hand surface), and
+teacher controls - per-student mute (no feedback to the student) and a
+session-wide signals on/off switch - staged in student-signal-controls.sql,
+hiding themselves until he runs it. No free-text input by design: the fixed
+chips ARE the spam filter. Pedagogy critiques and bigger IA items remain
+decision items, not code) ·
 **Warm-up culture screen: the steps of learning** (7/25 - Steele's ask: the
 Main projector's empty warm-up real estate now carries a big animated "steps
 of learning" list - 1 Confusion, 2 Try something, 3 Get it wrong, 4 Try again,

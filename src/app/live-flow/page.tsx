@@ -134,12 +134,15 @@ export default function LiveFlowPage() {
   const [pollSaveState, setPollSaveState] = useState<PollSaveState>("idle");
   const loadedDraftKeyRef = useRef<string | null>(null);
   // Student self-signal ("I'm stuck" / "say that again" / "I've got this").
-  // Probed once: the chips stay hidden until the student-signals migration
-  // has been run, so the control never renders somewhere it cannot deliver.
+  // Probed per lesson step: the chips stay hidden until the student-signals
+  // migration has been run, and hide again when the teacher flips the
+  // session's signals off (the switch bites at the next step advance).
   const [signalsEnabled, setSignalsEnabled] = useState(false);
   const [mySignal, setMySignal] = useState<string | null>(null);
   const [signalBusy, setSignalBusy] = useState(false);
+  const [signalCooldown, setSignalCooldown] = useState(false);
   const signalStepRef = useRef<number>(-1);
+  const signalProbeStep = flow?.sequence?.currentIndex ?? -1;
 
   useEffect(() => {
     let stopped = false;
@@ -149,18 +152,20 @@ export default function LiveFlowPage() {
     void (async () => {
       for (let attempt = 0; attempt < 3 && !stopped; attempt += 1) {
         try {
-          const response = await fetch("/api/student/signal", { cache: "no-store" });
+          const sessionId = getStoredStudentSessionId() || "";
+          const response = await fetch(
+            `/api/student/signal?sessionId=${encodeURIComponent(sessionId)}`,
+            { cache: "no-store" },
+          );
           const result = await response.json().catch(() => ({})) as { enabled?: boolean };
-          if (result.enabled) {
-            if (!stopped) setSignalsEnabled(true);
-            return;
-          }
+          if (!stopped) setSignalsEnabled(Boolean(result.enabled));
+          if (result.enabled !== undefined) return;
         } catch { /* fall through to retry */ }
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
     })();
     return () => { stopped = true; };
-  }, []);
+  }, [signalProbeStep]);
 
   useEffect(() => {
     const sessionId = getStoredStudentSessionId();
@@ -463,7 +468,7 @@ export default function LiveFlowPage() {
   }, [progressIndex]);
 
   async function sendSignal(signal: "stuck" | "again" | "got-it") {
-    if (!liveSessionId || signalBusy) return;
+    if (!liveSessionId || signalBusy || signalCooldown) return;
     setSignalBusy(true);
     const previous = mySignal;
     setMySignal(signal);
@@ -472,6 +477,10 @@ export default function LiveFlowPage() {
         method: "POST",
         body: JSON.stringify({ sessionId: liveSessionId, signal, stepIndex: progressIndex }),
       });
+      // Client-side mirror of the server's 10-second cooldown, so mashing a
+      // chip mostly never reaches the 429.
+      setSignalCooldown(true);
+      window.setTimeout(() => setSignalCooldown(false), 10_000);
     } catch {
       setMySignal(previous);
     } finally {
@@ -920,7 +929,7 @@ export default function LiveFlowPage() {
               type="button"
               className={`lf-signal stuck${mySignal === "stuck" ? " on" : ""}`}
               aria-pressed={mySignal === "stuck"}
-              disabled={signalBusy}
+              disabled={signalBusy || signalCooldown}
               onClick={() => void sendSignal("stuck")}
             >
               I&apos;m stuck
@@ -929,7 +938,7 @@ export default function LiveFlowPage() {
               type="button"
               className={`lf-signal again${mySignal === "again" ? " on" : ""}`}
               aria-pressed={mySignal === "again"}
-              disabled={signalBusy}
+              disabled={signalBusy || signalCooldown}
               onClick={() => void sendSignal("again")}
             >
               Say that again
@@ -938,7 +947,7 @@ export default function LiveFlowPage() {
               type="button"
               className={`lf-signal gotit${mySignal === "got-it" ? " on" : ""}`}
               aria-pressed={mySignal === "got-it"}
-              disabled={signalBusy}
+              disabled={signalBusy || signalCooldown}
               onClick={() => void sendSignal("got-it")}
             >
               I&apos;ve got this

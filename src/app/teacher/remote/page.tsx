@@ -288,6 +288,15 @@ export default function TeacherRemotePage() {
   const [session, setSession] = useState<RemoteSession | null>(null);
   const [status, setStatus] = useState("Choose the class session this Remote should control.");
   const [busy, setBusy] = useState<TeacherRemoteAction | null>(null);
+  // Student self-signals ("I'm stuck") - the Remote is the surface in hand
+  // while teaching, so the live counts belong here too. null until the
+  // student-signals migration has been run.
+  const [signalState, setSignalState] = useState<{
+    controls: boolean;
+    signalsOff: boolean;
+    signals: Array<{ student_id: string | null; display_name: string | null; signal: string; step_index: number | null }>;
+  } | null>(null);
+  const [signalBusy, setSignalBusy] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<{
     nonce: string;
     label: string;
@@ -629,6 +638,40 @@ export default function TeacherRemotePage() {
     setBoardPanelOpen(Boolean(session?.liveFlow?.presentation?.boardOpen));
   }, [session?.liveFlow?.presentation?.boardOpen]);
 
+  const signalSessionId = session?.id ?? null;
+  useEffect(() => {
+    if (!signalSessionId) { setSignalState(null); return; }
+    let stopped = false;
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/live/signals?sessionId=${encodeURIComponent(signalSessionId)}`, { cache: "no-store" });
+        const data = await response.json().catch(() => ({})) as { enabled?: boolean; controls?: boolean; signalsOff?: boolean; signals?: Array<{ student_id: string | null; display_name: string | null; signal: string; step_index: number | null }> };
+        if (stopped) return;
+        setSignalState(response.ok && data.enabled
+          ? { controls: Boolean(data.controls), signalsOff: Boolean(data.signalsOff), signals: data.signals || [] }
+          : null);
+      } catch {
+        if (!stopped) setSignalState(null);
+      }
+    };
+    void load();
+    const interval = window.setInterval(load, 3000);
+    return () => { stopped = true; window.clearInterval(interval); };
+  }, [signalSessionId]);
+
+  const sendSignalAction = useCallback(async (action: string, studentId?: string) => {
+    if (!signalSessionId || signalBusy) return;
+    setSignalBusy(true);
+    try {
+      await fetch("/api/live/signals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: signalSessionId, action, studentId }),
+      });
+    } catch { /* next poll restores truth */ }
+    finally { setSignalBusy(false); }
+  }, [signalSessionId, signalBusy]);
+
   const flow = session?.liveFlow ?? null;
   const timer = flow?.timer ?? null;
   const timerSeconds = liveTimerSeconds(timer);
@@ -844,6 +887,14 @@ export default function TeacherRemotePage() {
         .remote-connection strong { font-size:0.68rem; font-weight:900; line-height:1.1; }
         .remote-connection span { color:currentColor; opacity:0.72; font-size:0.57rem; font-weight:800; line-height:1.1; }
         .remote-status { flex:none; min-height:30px; margin:0; border-bottom:1px solid rgba(255,255,255,0.08); border-left:4px solid var(--remote-accent); background:#26211A; color:#B8AE99; padding:6px 14px; font-size:0.7rem; line-height:1.25; font-weight:780; }
+        .remote-signals { flex:none; display:flex; flex-wrap:wrap; align-items:center; gap:5px 12px; margin:0; border-bottom:1px solid rgba(255,255,255,0.08); border-left:4px solid #E4694A; background:#26211A; color:#E8E2D4; padding:7px 14px; font-size:0.74rem; font-weight:800; }
+        .remote-signals.off { border-left-color:rgba(255,255,255,0.18); color:#B8AE99; }
+        .remote-signal-count.stuck { color:#F0876B; }
+        .remote-signal-count.gotit { color:#7FC7A0; }
+        .remote-signal-name { display:inline-flex; align-items:center; gap:5px; color:#D9D2C2; font-weight:750; }
+        .remote-signal-btn { border:1px solid rgba(255,255,255,0.22); border-radius:999px; background:transparent; color:#B8AE99; font:inherit; font-size:0.66rem; font-weight:800; padding:2px 10px; min-height:26px; cursor:pointer; }
+        .remote-signal-btn:hover:not(:disabled) { border-color:#E4694A; color:#F0876B; }
+        .remote-signal-btn.off-btn { margin-left:auto; }
         .remote-workspace { flex:1; min-height:0; display:grid; grid-template-columns:314px minmax(0,1fr); }
         .remote-mirrors { min-height:0; display:grid; grid-template-rows:auto repeat(3,minmax(0,1fr)); gap:12px; overflow:hidden; border-right:1px solid rgba(255,255,255,0.08); background:#1C1812; padding:16px; }
         .mirror-rail-label { margin:0; color:#8C8069; font-size:0.62rem; font-weight:900; letter-spacing:0.12em; text-transform:uppercase; }
@@ -1012,6 +1063,42 @@ export default function TeacherRemotePage() {
         </header>
 
         {showCommandStatus ? <p className="remote-status" role="status">{status}</p> : null}
+        {session && signalState ? (() => {
+          if (signalState.signalsOff) {
+            return (
+              <div className="remote-signals off" role="status">
+                <span>Signals off</span>
+                <button className="remote-signal-btn" disabled={signalBusy} onClick={() => void sendSignalAction("signals-on")}>Turn on</button>
+              </div>
+            );
+          }
+          const currentStep = session.liveFlow?.sequence?.currentIndex ?? null;
+          const current = currentStep === null
+            ? signalState.signals
+            : signalState.signals.filter((s) => s.step_index === currentStep);
+          const stuck = current.filter((s) => s.signal === "stuck");
+          const again = current.filter((s) => s.signal === "again");
+          const gotIt = current.filter((s) => s.signal === "got-it");
+          if (!current.length) return null;
+          return (
+            <div className="remote-signals" role="status" aria-label="Student self-signals">
+              <span className="remote-signal-count stuck">Stuck {stuck.length}</span>
+              <span className="remote-signal-count">Again {again.length}</span>
+              <span className="remote-signal-count gotit">Got it {gotIt.length}</span>
+              {[...stuck, ...again].map((s) => (
+                <span className="remote-signal-name" key={`${s.student_id || s.display_name}:${s.signal}`}>
+                  {s.display_name || "Student"}
+                  {signalState.controls && s.student_id ? (
+                    <button className="remote-signal-btn" disabled={signalBusy} title="Hide this student's signals this session" onClick={() => void sendSignalAction("mute", s.student_id || undefined)}>Mute</button>
+                  ) : null}
+                </span>
+              ))}
+              {signalState.controls ? (
+                <button className="remote-signal-btn off-btn" disabled={signalBusy} title="Hides the chips for every student at the next step change" onClick={() => void sendSignalAction("signals-off")}>Signals off</button>
+              ) : null}
+            </div>
+          );
+        })() : null}
 
         {!session ? (
           <section className="deck-section" aria-labelledby="session-picker-title">
