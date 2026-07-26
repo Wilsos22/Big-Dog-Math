@@ -261,7 +261,7 @@ export default function AreaModelTrainer() {
         .am-actions { display:flex; gap:10px; flex-wrap:wrap; }
         .am-btn, .am-home { min-height:44px; border:2px solid var(--bdb-line); border-radius:8px; background:#fff; color:var(--bdb-ink); padding:9px 14px; font-size:0.9rem; font-weight:900; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
         .am-btn:hover, .am-home:hover { border-color:var(--bdb-coral); }
-        .am-btn.primary { border-color:var(--bdb-coral); background:var(--bdb-coral); color:#fff; }
+        .am-btn.primary { border-color:var(--bdb-coral-deep); background:var(--bdb-coral-deep); color:#fff; }
 
         .am-main { display:grid; grid-template-columns:minmax(290px, 360px) minmax(0, 1fr); gap:18px; padding:18px; align-items:start; }
         .am-panel { border:2px solid var(--bdb-line); border-radius:10px; background:#fff; padding:18px; box-shadow:0 12px 26px rgba(32,36,45,0.08); }
@@ -304,10 +304,10 @@ export default function AreaModelTrainer() {
         .am-fill { position:absolute; inset:0; z-index:0; border-radius:0; background:color-mix(in srgb, var(--box-color) 62%, transparent); transform-origin:left center; transform:scaleX(0); pointer-events:none; }
         .am-box.correct .am-fill { animation:amSwipe 520ms cubic-bezier(.2,.7,.2,1) forwards; }
         @keyframes amSwipe { from { transform:scaleX(0); } to { transform:scaleX(1); } }
-        .am-mul-label { color:var(--bdb-ink-soft); font-size:0.82rem; font-weight:800; text-align:center; }
+        .am-mul-label { color:var(--bdb-line); font-size:0.82rem; font-weight:800; text-align:center; }
         .am-answer { font-size:clamp(1.5rem,3.2vw,2.1rem); font-weight:900; color:var(--bdb-ink); line-height:1; animation:amPop 360ms ease 130ms both; }
         @keyframes amPop { from { opacity:0; transform:scale(.55); } to { opacity:1; transform:scale(1); } }
-        .am-box-input { width:min(136px, 100%); border:2px solid var(--bdb-line); border-radius:3px; background:#fff; padding:10px; color:var(--bdb-ink); font-size:1.28rem; font-weight:950; text-align:center; }
+        .am-box-input { width:min(136px, 100%); min-width:44px; border:2px solid var(--bdb-line); border-radius:3px; background:#fff; padding:10px; color:var(--bdb-ink); font-size:1.28rem; font-weight:950; text-align:center; }
         .am-process { display:grid; gap:12px; border:2px solid var(--bdb-line); border-radius:4px; background:#fff; padding:14px; width:min(100%, 760px); }
         .am-process-title { margin:0; color:var(--bdb-ink-soft); font-size:0.78rem; font-weight:950; letter-spacing:0.1em; text-transform:uppercase; }
         .am-process.ready { border-color:var(--bdb-coral); box-shadow:0 0 0 4px color-mix(in srgb, var(--bdb-coral) 12%, transparent); }

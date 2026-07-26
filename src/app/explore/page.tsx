@@ -30,7 +30,7 @@ export default function ExplorePage() {
         .ex-root { min-height:100vh; background:var(--bdb-ground); color:var(--bdb-ink); font-family:var(--bdb-font); }
         .ex-top { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
           padding:14px clamp(16px,4vw,28px); border-bottom:1px solid var(--bdb-line); }
-        .ex-brand { display:inline-flex; align-items:center; gap:9px; text-decoration:none; }
+        .ex-brand { display:inline-flex; align-items:center; gap:9px; min-height:44px; text-decoration:none; }
         .ex-logo { width:30px; height:30px; display:block; object-fit:contain; flex:none; }
         .ex-brand-name { font-weight:800; color:var(--bdb-ink); letter-spacing:-0.01em; }
         .ex-back { color:var(--bdb-ink-soft); font-weight:600; font-size:0.9rem; text-decoration:none;
@@ -43,20 +43,21 @@ export default function ExplorePage() {
         .ex-h2 { margin:26px 0 12px; font-size:0.82rem; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:var(--bdb-ink-faint); }
 
         .ex-lesson { display:flex; align-items:center; gap:16px; text-decoration:none; border:none; border-radius:var(--bdb-r-lg);
-          background:var(--bdb-coral); color:#fff; padding:20px 22px; box-shadow:0 16px 30px -18px rgba(249,83,53,0.7); }
+          background:var(--bdb-coral-deep); color:#fff; padding:20px 22px; box-shadow:0 16px 30px -18px rgba(249,83,53,0.7); }
         .ex-lesson:hover { filter:brightness(1.03); }
         .ex-lesson-ico { width:52px; height:52px; flex:none; border-radius:13px; background:rgba(255,255,255,0.22);
           display:grid; place-items:center; }
         .ex-lesson-ico svg { width:28px; height:28px; }
         .ex-lesson-label { display:block; font-size:1.2rem; font-weight:800; letter-spacing:-0.01em; }
-        .ex-lesson-desc { display:block; font-size:0.9rem; font-weight:500; color:rgba(255,255,255,0.92); margin-top:2px; }
+        .ex-lesson-desc { display:block; font-size:0.9rem; font-weight:500; color:#fff; margin-top:2px; }
         .ex-lesson-go { margin-left:auto; font-size:1.6rem; font-weight:800; }
 
         .ex-games { display:flex; align-items:center; gap:16px; text-decoration:none; border:none; border-radius:var(--bdb-r-lg);
-          background:var(--bdb-teal); color:#fff; padding:18px 22px; margin-top:14px; box-shadow:0 16px 30px -18px rgba(80,163,164,0.7); }
+          background:var(--bdb-teal-deep); color:#fff; padding:18px 22px; margin-top:14px; box-shadow:0 16px 30px -18px rgba(80,163,164,0.7); }
         .ex-games:hover { filter:brightness(1.03); }
         .ex-games-ico { width:52px; height:52px; flex:none; border-radius:13px; background:rgba(255,255,255,0.22);
-          display:grid; place-items:center; font-size:1.7rem; }
+          display:grid; place-items:center; }
+        .ex-games-ico svg { width:24px; height:24px; display:block; }
 
         .ex-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:14px; }
         .ex-card { display:flex; align-items:center; gap:14px; text-decoration:none; background:var(--bdb-card);
@@ -93,7 +94,11 @@ export default function ExplorePage() {
         </a>
 
         <a className="ex-games" href="/practice">
-          <span className="ex-games-ico">🎮</span>
+          <span className="ex-games-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor" />
+            </svg>
+          </span>
           <span>
             <span className="ex-lesson-label">Practice Games</span>
             <span className="ex-lesson-desc">Beat your score — GEMS, integers, percents & more</span>

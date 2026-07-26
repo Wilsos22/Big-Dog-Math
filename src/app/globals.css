@@ -28,13 +28,20 @@
   --bdb-card: #ffffff;        /* white rounded cards */
   --bdb-ink: #201e1a;         /* primary ink */
   --bdb-ink-soft: #6f675c;    /* secondary text */
-  --bdb-ink-faint: #a59c8d;   /* tertiary / field labels */
+  --bdb-ink-faint: #7a7061;   /* tertiary / field labels (AA 4.5:1 on cream and white) */
   --bdb-line: #ece4d4;        /* hairline borders on cream */
   --bdb-amber: #fcaf38;       /* brand highlight */
   --bdb-teal: #50a3a4;        /* accent / math meaning */
   --bdb-brown: #674a40;       /* accent / ink-warm */
   --bdb-coral: #f95335;       /* action / alert */
   --bdb-green: #2f9e6f;       /* ready / positive status */
+  /* AA-contrast companions: same hue family, dark enough for white text on
+     top of them (or for use AS text on cream/white). Use these for buttons,
+     filled bands, and accent-colored words; keep the brighter originals for
+     decorative fills, borders, and large graphics. */
+  --bdb-teal-deep: #3c7d7e;
+  --bdb-coral-deep: #c93818;
+  --bdb-green-deep: #1f7a52;
   /* soft warm elevation */
   --bdb-shadow-sm: 0 1px 2px rgba(32, 30, 26, 0.05), 0 1px 1px rgba(32, 30, 26, 0.04);
   --bdb-shadow: 0 10px 24px -16px rgba(103, 74, 64, 0.45), 0 2px 6px rgba(32, 30, 26, 0.05);
@@ -211,8 +218,9 @@ a {
 .small-button.primary,
 .big-button.primary,
 .tool-button.primary {
-  border-color: var(--primary);
-  background: var(--primary);
+  /* primary-dark, not primary: white label text needs 4.5:1 (teal is 2.95:1) */
+  border-color: var(--primary-dark);
+  background: var(--primary-dark);
   color: white;
 }
 

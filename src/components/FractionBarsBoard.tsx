@@ -284,7 +284,7 @@ export function FractionBarsBoard() {
         .fb-modeseg button.on { background:var(--bdb-ink); color:#fff; }
         .fb-prompt { text-align:center; font-size:clamp(1.1rem,3.2vw,1.5rem); font-weight:800; margin:2px 0 4px; min-height:30px; }
         .fb-sub { text-align:center; color:var(--bdb-ink-soft); font-size:0.92rem; margin:0 0 12px; min-height:18px; }
-        .fb-tbtn { font:inherit; font-weight:700; font-size:0.82rem; padding:6px 13px; border-radius:999px; border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
+        .fb-tbtn { font:inherit; font-weight:700; font-size:0.82rem; padding:6px 16px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
         .fb-tbtn.on { background:var(--bdb-ink); color:#fff; border-color:var(--bdb-ink); }
         .fb-tbtn:disabled { opacity:0.42; cursor:not-allowed; }
         .fb-stage { width:min(620px,100%); margin:0 auto; display:grid; gap:14px; }
@@ -299,7 +299,7 @@ export function FractionBarsBoard() {
         .fb-goal { position:absolute; top:-8px; bottom:-8px; width:3px; background:var(--bdb-coral); }
         .fb-bar { display:flex; gap:8px; justify-content:center; align-items:center; margin-top:14px; flex-wrap:wrap; }
         .fb-probs { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:10px; }
-        .fb-btn { font:inherit; font-weight:700; font-size:0.9rem; padding:9px 16px; border-radius:11px; border:1px solid var(--bdb-line); background:var(--bdb-ink); color:#fff; cursor:pointer; }
+        .fb-btn { font:inherit; font-weight:700; font-size:0.9rem; padding:9px 16px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; border-radius:11px; border:1px solid var(--bdb-line); background:var(--bdb-ink); color:#fff; cursor:pointer; }
         .fb-btn.ghost { background:var(--bdb-card); color:var(--bdb-ink); }
         .fb-btn:disabled { opacity:0.42; cursor:not-allowed; }
         .fb-in { width:84px; font:inherit; font-size:1.2rem; font-weight:900; text-align:center; padding:7px; border:3px solid var(--bdb-ink); border-radius:0; background:#fff; color:var(--bdb-ink); }

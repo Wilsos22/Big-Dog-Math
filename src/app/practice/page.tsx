@@ -166,8 +166,8 @@ export default function PracticePage() {
 
           <div className="pr-fld">Mode</div>
           <div className="pr-pills">
-            <button className={`pr-pill${timed ? " on" : ""}`} onClick={() => setTimed(true)}>⏱️ Timed (90s)</button>
-            <button className={`pr-pill${!timed ? " on" : ""}`} onClick={() => setTimed(false)}>♾️ Practice (no timer)</button>
+            <button className={`pr-pill${timed ? " on" : ""}`} onClick={() => setTimed(true)}>Timed (90s)</button>
+            <button className={`pr-pill${!timed ? " on" : ""}`} onClick={() => setTimed(false)}>Practice (no timer)</button>
           </div>
 
           <button className="pr-start" onClick={startGame}>Start →</button>
@@ -181,7 +181,7 @@ export default function PracticePage() {
               <span className="pr-pts">{score}</span>
               <span className="pr-pts-lbl">points</span>
             </div>
-            {streak >= 2 && <div className="pr-streak">🔥 {streak} streak</div>}
+            {streak >= 2 && <div className="pr-streak">{streak} in a row</div>}
             {timed
               ? <div className="pr-clock" data-low={secondsLeft <= 10}>{secondsLeft}s</div>
               : <button className="pr-done-btn" onClick={() => setView("done")}>Done</button>}
@@ -195,7 +195,7 @@ export default function PracticePage() {
 
             {feedback ? (
               <div className={`pr-fb ${feedback.correct ? "ok" : "no"}`}>
-                {feedback.correct ? `✓ +${feedback.points}` : `✗  ${problem.answer}`}
+                {feedback.correct ? `+${feedback.points}` : `Answer: ${problem.answer}`}
               </div>
             ) : problem.answerType === "number" ? (
               <>
@@ -226,7 +226,10 @@ export default function PracticePage() {
       {view === "done" && (
         <div className="pr-wrap pr-center">
           <div className="pr-card">
-            <div className="pr-emoji">{accuracy >= 80 ? "🏆" : "🎉"}</div>
+            <div className="pr-emoji" aria-hidden="true">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/big-dog-mark.png" alt="" />
+            </div>
             <h1 className="pr-h1" style={{ marginTop: 8 }}>Nice work!</h1>
             <div className="pr-stats">
               <div><b>{score}</b><span>points</span></div>
@@ -251,7 +254,7 @@ const styles = `
     display:flex; flex-direction:column; }
   .pr-top { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
     padding:14px clamp(16px,4vw,28px); border-bottom:1px solid var(--bdb-line); }
-  .pr-brand { display:inline-flex; align-items:center; gap:9px; text-decoration:none; }
+  .pr-brand { display:inline-flex; align-items:center; gap:9px; min-height:44px; text-decoration:none; }
   .pr-logo { width:30px; height:30px; display:block; object-fit:contain; flex:none; }
   .pr-brand-name { font-weight:800; color:var(--bdb-ink); letter-spacing:-0.01em; }
   .pr-back { color:var(--bdb-ink-soft); font-weight:600; font-size:0.9rem; text-decoration:none;
@@ -281,7 +284,7 @@ const styles = `
   .pr-pill:hover { border-color:var(--bdb-teal); }
   .pr-pill.on { background:var(--bdb-ink); border-color:var(--bdb-ink); color:#fff; }
 
-  .pr-start { margin-top:24px; background:var(--bdb-teal); color:#fff; border:none; border-radius:var(--bdb-r);
+  .pr-start { margin-top:24px; background:var(--bdb-teal-deep); color:#fff; border:none; border-radius:var(--bdb-r);
     padding:15px 28px; font-weight:900; font-size:1.05rem; cursor:pointer; }
   .pr-start:hover { filter:brightness(1.04); }
   .pr-secondary { background:var(--bdb-card); color:var(--bdb-ink); border:1px solid var(--bdb-line);
@@ -293,7 +296,7 @@ const styles = `
   .pr-hud-l { display:flex; align-items:baseline; gap:6px; }
   .pr-pts { font-size:1.7rem; font-weight:900; color:var(--bdb-ink); }
   .pr-pts-lbl { font-size:0.78rem; font-weight:700; color:var(--bdb-ink-faint); text-transform:uppercase; letter-spacing:0.08em; }
-  .pr-streak { font-size:0.85rem; font-weight:800; color:var(--bdb-coral); }
+  .pr-streak { font-size:0.85rem; font-weight:800; color:var(--bdb-coral-deep); }
   .pr-clock { font-size:1.2rem; font-weight:900; color:var(--bdb-ink-soft); min-width:48px; text-align:right; }
   .pr-clock[data-low="true"] { color:var(--bdb-coral); animation:prPulse 1s infinite; }
   @keyframes prPulse { 0%,100%{opacity:1;} 50%{opacity:0.45;} }
@@ -331,7 +334,8 @@ const styles = `
 
   .pr-card { background:var(--bdb-card); border:1px solid var(--bdb-line); border-radius:var(--bdb-r-lg);
     box-shadow:var(--bdb-shadow); padding:30px 26px; max-width:440px; width:100%; text-align:center; }
-  .pr-emoji { font-size:3rem; line-height:1; }
+  .pr-emoji { line-height:1; }
+  .pr-emoji img { width:56px; height:56px; object-fit:contain; }
   .pr-stats { display:flex; justify-content:center; flex-wrap:wrap; gap:20px; margin:16px 0 8px; }
   .pr-stats div { display:flex; flex-direction:column; }
   .pr-stats b { font-size:1.7rem; font-weight:900; color:var(--bdb-ink); }

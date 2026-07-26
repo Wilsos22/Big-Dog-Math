@@ -237,14 +237,14 @@ export default function LessonPage() {
         .ls-wrap { max-width:1120px; margin:0 auto; padding:10px clamp(16px,3vw,32px) 60px; }
         .ls-hero { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:18px; align-items:stretch; margin-top:4px; }
         .ls-hero-main { background:var(--bdb-card); border:1px solid var(--bdb-line); border-radius:var(--bdb-r); padding:clamp(22px,4vw,36px); box-shadow:var(--bdb-shadow-sm); }
-        .ls-kicker { color:var(--bdb-coral); font-size:0.78rem; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:14px; }
+        .ls-kicker { color:var(--bdb-coral-deep); font-size:0.78rem; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:14px; }
         .ls-title { max-width:780px; margin:0; color:var(--bdb-ink); font-size:clamp(2.2rem,5.7vw,4.3rem); font-weight:800; letter-spacing:0; line-height:0.98; }
         .ls-sub { max-width:64ch; margin:16px 0 0; color:var(--bdb-ink-soft); font-size:clamp(1.02rem,2.2vw,1.25rem); font-weight:550; line-height:1.48; }
-        .ls-hey { margin:0 0 12px; color:var(--bdb-teal); font-size:clamp(1.05rem,2vw,1.35rem); font-weight:800; }
+        .ls-hey { margin:0 0 12px; color:var(--bdb-teal-deep); font-size:clamp(1.05rem,2vw,1.35rem); font-weight:800; }
         .ls-meta { display:grid; gap:12px; }
         .ls-meta-card { background:var(--bdb-ink); color:#fff; border-radius:var(--bdb-r); padding:20px; min-height:132px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:var(--bdb-shadow); }
-        .ls-meta-card.topic { background:var(--bdb-teal); }
-        .ls-meta-label { color:rgba(255,255,255,0.72); font-size:0.75rem; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; }
+        .ls-meta-card.topic { background:var(--bdb-teal-deep); }
+        .ls-meta-label { color:#fff; font-size:0.75rem; font-weight:800; letter-spacing:0.09em; text-transform:uppercase; }
         .ls-meta-value { font-size:clamp(1.28rem,2.6vw,1.65rem); font-weight:800; line-height:1.1; }
         .ls-module { color:rgba(255,255,255,0.78); font-size:0.9rem; font-weight:750; margin-top:8px; }
         .ls-actions { display:grid; grid-template-columns:1fr; gap:12px; margin-top:18px; }
