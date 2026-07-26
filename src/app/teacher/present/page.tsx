@@ -259,6 +259,37 @@ function structuredWorkSections(
   return sections.filter((section) => section.body.trim());
 }
 
+// The steps of learning, shown big on the Main projector during the warm-up
+// state (when no anchor puzzle is posed): confusion is step one, not failure.
+// This is the culture screen while students work the warm-up on Chromebooks -
+// EDIT THIS LIST to set your classroom's framing. Keep each label short so it
+// reads across the room; no emoji. They animate in one at a time.
+const LEARNING_STEPS: string[] = [
+  "Confusion",
+  "Try something",
+  "Get it wrong",
+  "Try again",
+  "Now you've got it",
+];
+
+function WarmupLearningSteps({ direction }: { direction?: string }) {
+  const footer = (direction || "").trim();
+  return (
+    <section className="stage-mottos" aria-label="The steps of learning">
+      <p className="stage-motto-kicker">The steps of learning</p>
+      <ol className="stage-steps">
+        {LEARNING_STEPS.map((label, index) => (
+          <li className="stage-step" key={label} style={{ animationDelay: `${0.2 + index * 0.22}s` }}>
+            <span className="stage-step-num">{index + 1}</span>
+            <span className="stage-step-label">{label}</span>
+          </li>
+        ))}
+      </ol>
+      {footer ? <p className="stage-motto-footer">{footer}</p> : null}
+    </section>
+  );
+}
+
 export default function ClassroomStagePage() {
   const [session, setSession] = useState<StageSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -699,6 +730,17 @@ export default function ClassroomStagePage() {
         @keyframes hookRise { from { opacity:0; transform:translateY(22px); } to { opacity:1; transform:none; } }
         @keyframes hookRule { from { transform:scaleX(0); } to { transform:scaleX(1); } }
         @keyframes hookBreathe { 0%, 100% { opacity:1; } 50% { opacity:0.55; } }
+        /* Warm-up culture screen: the steps of learning, big, in the empty
+           board real estate while students work the warm-up. Confusion is #1. */
+        .stage-mottos { position:absolute; inset:0; display:grid; align-content:center; justify-items:center; gap:clamp(18px,2.8vw,40px); padding:clamp(40px,7vw,120px); text-align:center; }
+        .stage-motto-kicker { margin:0; color:var(--acc-deep); font-size:clamp(0.82rem,1.4vw,1.12rem); font-weight:900; letter-spacing:0.18em; text-transform:uppercase; animation:hookRise 560ms 120ms var(--stage-ease) both; }
+        .stage-motto-footer { margin:0; color:var(--soft); font-size:clamp(1rem,1.9vw,1.5rem); font-weight:700; }
+        .stage-steps { margin:0; padding:0; list-style:none; display:grid; gap:clamp(10px,1.9vw,24px); text-align:left; }
+        .stage-step { display:flex; align-items:baseline; gap:clamp(16px,2.4vw,38px); animation:stepRise 560ms var(--stage-ease) both; }
+        .stage-step-num { flex:none; min-width:1.5em; color:var(--acc); font-size:clamp(2.4rem,5.2vw,5.4rem); font-weight:900; line-height:0.9; letter-spacing:-0.03em; font-variant-numeric:tabular-nums; }
+        .stage-step-label { color:var(--head); font-size:clamp(2.2rem,4.9vw,5rem); font-weight:800; line-height:1.02; letter-spacing:-0.02em; }
+        @keyframes stepRise { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:none; } }
+        @media (prefers-reduced-motion:reduce) { .stage-motto-kicker, .stage-step { animation:none !important; } }
         /* Transition buffer: time is the hero. Vibe word, movement directions,
            a huge countdown, a draining bar timed to the music, and up next. */
         .stage-transition { position:absolute; inset:0; display:grid; align-content:center; justify-items:center; gap:clamp(8px,1.6vw,18px); padding:clamp(30px,5vw,80px); text-align:center; }
@@ -1108,6 +1150,10 @@ export default function ClassroomStagePage() {
                   {anchorMode === "payoff" && slideBody ? <p className="stage-anchor-note">{slideBody}</p> : null}
                 </div>
               </div>
+            ) : state?.id === "warmup" ? (
+              // Warm-up culture screen: fill the empty board with the steps of
+              // learning (confusion is #1) while students work on Chromebooks.
+              <WarmupLearningSteps direction={strippedBody || slideBody} />
             ) : (
             <div className="stage-directions">
               <div className="stage-directions-inner">

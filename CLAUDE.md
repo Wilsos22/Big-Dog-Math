@@ -146,6 +146,12 @@ surface never needs a matching Studio change again - do NOT rebuild hand-copied 
 (The Student and Remote studio previews are still hand-built; embed them the same way when they
 drift.)
 
+Main projector warm-up screen: when the warm-up state has no anchor "Puzzle of the day" posed, the
+Main (`/teacher/present`) fills its empty real estate with a big animated "steps of learning"
+culture list (`WarmupLearningSteps` in `src/app/teacher/present/page.tsx`; edit the `LEARNING_STEPS`
+constant to change the words). It is deliberately state-scoped to `warmup` and yields to the anchor
+puzzle when one is set - so the warm-up Main is never blank, and this is expected, not a stray view.
+
 Adding a tool: also add a lowercase entry to `TOOL_ROUTES` in `src/app/lesson/page.tsx` or the Notion
 `Tool:` name renders as a dead pill. SiteNav link sets are hardcoded arrays - add nav entries manually.
 
