@@ -28,6 +28,15 @@ import { parseFactorTreeSet, serializeFactorTreeSet } from "@/lib/factorTreeSet"
 type Mode = "ladder" | "trees";
 type LadderPhase = "divide" | "gcf" | "lcm" | "done";
 type TreePhase = "grow" | "collect" | "collapse" | "done" | "wrap";
+// The coach line changes voice with the moment: neutral guidance, a win, or
+// a try-again - three different colors so a 6th grader reads the TONE before
+// the words.
+type NoteKind = "info" | "win" | "try";
+
+// First-time users get numbered column heads and a pulsing "start here"
+// beacon; finishing either mode once graduates the device to the clean
+// layout. In-class guided first tries, independent after.
+const GUIDED_DONE_KEY = "bdm-lm-guided-done-v1";
 
 const LADDER_PROBLEMS: [number, number][] = [
   [24, 36], [28, 42], [36, 90], [40, 60], [45, 75], [48, 64],
@@ -154,7 +163,16 @@ function MultiplyOut({ factors, tone, onDone, doneText }: {
 export default function LadderMethodTool() {
   const liveTool = useLiveToolConfig("/ladder-method");
   const [mode, setMode] = useState<Mode>("ladder");
-  const [feedback, setFeedback] = useState(START_MSG);
+  const [note, setNote] = useState<{ text: string; kind: NoteKind }>({ text: START_MSG, kind: "info" });
+  const setFeedback = useCallback((text: string, kind: NoteKind = "info") => setNote({ text, kind }), []);
+  const [guided, setGuided] = useState(false);
+  useEffect(() => {
+    try { setGuided(window.localStorage.getItem(GUIDED_DONE_KEY) !== "1"); } catch { /* stay clean */ }
+  }, []);
+  const graduate = useCallback(() => {
+    setGuided(false);
+    try { window.localStorage.setItem(GUIDED_DONE_KEY, "1"); } catch { /* next visit re-guides */ }
+  }, []);
 
   // ladder state (unchanged from the morning's ship)
   const [problem, setProblem] = useState<[number, number]>(() => LADDER_PROBLEMS[0]);
@@ -225,11 +243,11 @@ export default function LadderMethodTool() {
   function submitDivisor(event: FormEvent) {
     event.preventDefault();
     const d = Number(divisorDraft);
-    if (!d || d < 2) { setFeedback("Enter a whole number 2 or greater."); return; }
+    if (!d || d < 2) { setFeedback("Enter a whole number 2 or greater.", "try"); return; }
     const [l, r] = bottom;
     if (l % d !== 0 || r % d !== 0) {
       const lr = l % d, rr = r % d;
-      setFeedback(`${d} doesn't divide both - ${l} ÷ ${d} ${lr ? `leaves ${lr}` : "is whole"}, ${r} ÷ ${d} ${rr ? `leaves ${rr}` : "is whole"}. A rule has to light up for BOTH numbers.`);
+      setFeedback(`${d} doesn't divide both - ${l} ÷ ${d} ${lr ? `leaves ${lr}` : "is whole"}, ${r} ÷ ${d} ${rr ? `leaves ${rr}` : "is whole"}. A rule has to light up for BOTH numbers.`, "try");
       return;
     }
     const nl = l / d, nr = r / d;
@@ -239,7 +257,7 @@ export default function LadderMethodTool() {
       setPhase("gcf");
       setFeedback(next.length === 1
         ? `${nl} and ${nr} share nothing bigger than 1, so the ladder is done after one rung.`
-        : `${nl} and ${nr} share nothing bigger than 1 - the ladder is closed. Multiply the side factors for the GCF.`);
+        : `${nl} and ${nr} share nothing bigger than 1 - the ladder is closed. Multiply the side factors for the GCF.`, "win");
     } else {
       setFeedback(`${l} ÷ ${d} = ${nl} and ${r} ÷ ${d} = ${nr}. They still share a factor - a rule on the left is still lit.`);
     }
@@ -331,16 +349,16 @@ export default function LadderMethodTool() {
     const v = selNode.v;
     const a = Number(fA), b = Number(fB);
     const nudge = () => setNudgeTick((t) => t + 1);
-    if (!a || !b) { setFeedback("Type BOTH factors - two numbers that multiply to " + v + "."); nudge(); return; }
+    if (!a || !b) { setFeedback("Type BOTH factors - two numbers that multiply to " + v + ".", "try"); nudge(); return; }
     if (a < 2 || b < 2) {
-      setFeedback("Use factors that are both 2 or bigger - 1 x anything doesn't break it apart.");
+      setFeedback("Use factors that are both 2 or bigger - 1 x anything doesn't break it apart.", "try");
       nudge(); return;
     }
     if (a * b !== v) {
       const hint = smallestLit != null
         ? ` Not sure? Try ${smallestLit} - ${RULE_HINT[smallestLit]}.`
         : " No rule lights up for this one - it needs a bigger prime, like 11 or 13.";
-      setFeedback(`${a} x ${b} = ${a * b}, not ${v}.${hint}`);
+      setFeedback(`${a} x ${b} = ${a * b}, not ${v}.${hint}`, "try");
       nudge(); return;
     }
     const kids: [TNode, TNode] = [{ id: nextId(), v: a }, { id: nextId(), v: b }];
@@ -402,7 +420,7 @@ export default function LadderMethodTool() {
       .sort((p, q) => p.v - q.v);
     setLine(sorted.map((l) => l.v));
     setTreePhase("collect");
-    setFeedback("Every prime is confirmed. Watch them line up.");
+    setFeedback("Every prime is confirmed. Watch them line up.", "win");
     let finished = false;
     const finish = () => {
       if (finished) return;
@@ -410,7 +428,8 @@ export default function LadderMethodTool() {
       setLineLanded(true);
       if (sorted.length <= 1) {
         setTreePhase("done");
-        setFeedback(`${N} is prime - it IS its own factorization.`);
+        graduate();
+        setFeedback(`${N} is prime - it IS its own factorization.`, "win");
       } else {
         setTreePhase("collapse");
         setFeedback("Now multiply the line back together, two at a time.");
@@ -487,7 +506,8 @@ export default function LadderMethodTool() {
       setLine(nextLine);
       if (nextLine.length === 1) {
         setTreePhase("done");
-        setFeedback(`${N} - rebuilt from its primes. That is the prime factorization.`);
+        graduate();
+        setFeedback(`${N} - rebuilt from its primes. That is the prime factorization.`, "win");
       } else {
         setFeedback(`${expected} takes their place. Keep going - ${expected} x ${nextLine[1]} next.`);
       }
@@ -497,7 +517,7 @@ export default function LadderMethodTool() {
   function nextTreeProblem() {
     if (seqIdx + 1 >= seq.length) {
       setTreePhase("wrap");
-      setFeedback("Sequence complete.");
+      setFeedback("Sequence complete.", "win");
       return;
     }
     loadTreeProblem(seq, seqSig, seqIdx + 1);
@@ -564,9 +584,11 @@ export default function LadderMethodTool() {
         .lm-seg { display:inline-flex; border:2px solid var(--bdb-line); border-radius:22px; overflow:hidden; background:var(--bdb-card); }
         .lm-seg button { font:inherit; font-weight:800; font-size:0.86rem; min-height:44px; padding:0 18px; border:none; background:transparent; color:var(--bdb-ink-soft); cursor:pointer; }
         .lm-seg button.on { background:var(--bdb-ink); color:#fff; }
-        .lm-pill { font:inherit; font-weight:800; font-size:0.92rem; min-height:40px; padding:0 15px; border-radius:999px; border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
+        .lm-pill { font:inherit; font-weight:800; font-size:0.85rem; min-height:40px; padding:0 13px; border-radius:999px; border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
         .lm-pill.on { background:var(--bdb-ink); color:#fff; border-color:var(--bdb-ink); }
-        .lm-feedback { text-align:center; min-height:44px; margin:0 auto 12px; max-width:760px; border:1px solid var(--bdb-line); border-radius:12px; background:var(--bdb-card); color:var(--bdb-ink-soft); font-weight:650; line-height:1.35; padding:10px 16px; }
+        .lm-feedback { text-align:center; min-height:46px; margin:0 auto 12px; max-width:780px; border:1px solid var(--bdb-line); border-radius:12px; background:var(--bdb-card); color:var(--bdb-ink-soft); font-weight:680; font-size:1.02rem; line-height:1.35; padding:11px 16px; transition:background .2s, border-color .2s, color .2s; }
+        .lm-feedback.win { background:color-mix(in srgb, var(--bdb-green) 10%, var(--bdb-card)); border-color:color-mix(in srgb, var(--bdb-green) 45%, var(--bdb-line)); color:var(--bdb-green-deep); }
+        .lm-feedback.try { background:color-mix(in srgb, var(--bdb-coral) 8%, var(--bdb-card)); border-color:color-mix(in srgb, var(--bdb-coral) 40%, var(--bdb-line)); color:var(--bdb-coral-deep); }
         .lm-seqbar { display:flex; align-items:center; justify-content:center; gap:10px; margin:0 0 10px; }
         .lm-seqbar .cnt { font-weight:800; font-size:0.82rem; color:var(--bdb-ink-soft); }
         .lm-dots { display:flex; gap:5px; }
@@ -577,7 +599,8 @@ export default function LadderMethodTool() {
         .lm-cols { display:grid; grid-template-columns:minmax(270px,1fr) minmax(320px,1.4fr) minmax(230px,0.9fr); gap:clamp(12px,2vw,26px); align-items:start; }
         /* Factor Trees: the rules own the left third, the tree owns the rest */
         .lm-cols.treeseq { grid-template-columns:minmax(280px,1fr) minmax(0,2fr); }
-        .lm-head { font-size:0.72rem; font-weight:800; letter-spacing:0.07em; text-transform:uppercase; color:var(--bdb-ink-faint); margin-bottom:10px; }
+        .lm-head { display:flex; align-items:center; gap:7px; font-size:0.72rem; font-weight:800; letter-spacing:0.07em; text-transform:uppercase; color:var(--bdb-ink-faint); margin-bottom:10px; }
+        .lm-step { display:inline-grid; place-items:center; width:22px; height:22px; border-radius:999px; background:var(--bdb-ink); color:#fff; font-size:0.78rem; font-weight:900; letter-spacing:0; }
 
         /* LEFT - the rule rail */
         .lm-row { display:flex; align-items:center; gap:12px; min-height:60px; padding:6px 12px; border-bottom:1px solid var(--bdb-line); opacity:0.45; transition:opacity .25s, background .25s, box-shadow .25s; width:100%; text-align:left; background:transparent; border-top:none; border-left:none; border-right:none; font:inherit; cursor:pointer; }
@@ -590,13 +613,13 @@ export default function LadderMethodTool() {
         .lm-row.hit .lm-d { color:var(--bdb-green); }
         .lm-rt { font-size:0.92rem; font-weight:600; line-height:1.3; color:var(--bdb-ink-soft); }
         .lm-row.hit .lm-rt { color:var(--bdb-ink); font-weight:700; }
-        .lm-works { margin-left:auto; font-weight:900; font-size:0.72rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--bdb-green); white-space:nowrap; }
+        .lm-works { margin-left:auto; font-weight:900; font-size:0.72rem; letter-spacing:0.06em; text-transform:uppercase; color:var(--bdb-green-deep); white-space:nowrap; }
         .lm-prime-dot { font-size:0.62rem; font-weight:900; letter-spacing:0.08em; text-transform:uppercase; color:var(--bdb-ink-faint); border:1px solid var(--bdb-line); border-radius:999px; padding:2px 7px; margin-left:6px; }
         .lm-railnote { padding:10px 12px; margin-top:2px; border:2px dashed color-mix(in srgb, var(--bdb-amber) 60%, var(--bdb-line)); background:color-mix(in srgb, var(--bdb-amber) 10%, transparent); font-size:0.85rem; font-weight:700; line-height:1.35; color:var(--bdb-ink); }
 
         /* CENTER - ladder (unchanged) */
         .lm-stack { display:grid; gap:4px; }
-        .lm-lrow, .lm-band, .lm-entry { display:grid; grid-template-columns:96px 1fr 1fr; gap:10px; align-items:center; }
+        .lm-lrow, .lm-band, .lm-entry { display:grid; grid-template-columns:126px 1fr 1fr; gap:10px; align-items:center; }
         .lm-lrow { animation:lmPop 240ms ease; }
         @keyframes lmPop { from { opacity:0; transform:translateY(-8px) scale(.96); } to { opacity:1; transform:none; } }
         .lm-num { min-height:64px; border:2px solid var(--bdb-ink); border-radius:12px; background:var(--bdb-card); display:grid; place-items:center; font-weight:800; font-variant-numeric:tabular-nums; font-size:clamp(1.7rem,5vw,2.6rem); box-shadow:0 4px 0 var(--bdb-ink); }
@@ -606,16 +629,19 @@ export default function LadderMethodTool() {
         .lm-divisor { min-height:48px; border:2px solid var(--bdb-amber); border-radius:12px; background:color-mix(in srgb, var(--bdb-amber) 18%, var(--bdb-card)); color:var(--bdb-brown); font-weight:800; font-size:clamp(1.2rem,3vw,1.7rem); display:inline-flex; align-items:center; gap:4px; padding:4px 12px; font-variant-numeric:tabular-nums; }
         .lm-dx { color:var(--bdb-ink-faint); font-weight:800; }
         .lm-arrow { display:grid; place-items:center; color:var(--bdb-ink-faint); font-size:1.3rem; font-weight:800; }
-        .lm-inwrap { display:inline-flex; align-items:center; gap:6px; border:2px dashed var(--bdb-amber); border-radius:12px; background:var(--bdb-card); padding:4px 10px; }
-        .lm-inwrap input { width:58px; min-height:42px; border:none; outline:none; background:transparent; font-family:inherit; font-weight:800; text-align:center; font-size:clamp(1.3rem,4vw,1.8rem); color:var(--bdb-ink); font-variant-numeric:tabular-nums; }
-        .lm-go { grid-column:2 / span 2; min-height:50px; border:none; border-radius:12px; background:var(--bdb-coral); color:#fff; font-family:inherit; font-weight:800; font-size:1rem; cursor:pointer; }
+        .lm-inwrap { display:inline-flex; align-items:center; gap:6px; border:3px dashed var(--bdb-amber); border-radius:12px; background:var(--bdb-card); padding:5px 12px; }
+        .lm-inwrap input { width:76px; min-height:48px; border:none; outline:none; background:transparent; font-family:inherit; font-weight:800; text-align:center; font-size:clamp(1.4rem,4vw,1.9rem); color:var(--bdb-ink); font-variant-numeric:tabular-nums; }
+        .lm-inwrap:focus-within { border-style:solid; }
+        .beacon { animation:lmBeacon 1.5s ease-in-out infinite; }
+        @keyframes lmBeacon { 50% { box-shadow:0 0 0 7px color-mix(in srgb, var(--bdb-amber) 45%, transparent); } }
+        .lm-go { grid-column:2 / span 2; min-height:54px; border:none; border-radius:12px; background:var(--bdb-coral-deep); color:#fff; font-family:inherit; font-weight:800; font-size:1.05rem; cursor:pointer; }
         .lm-go:hover { filter:brightness(1.05); }
 
         .lm-card { border:1px solid var(--bdb-line); border-radius:14px; background:var(--bdb-card); padding:clamp(12px,2.5vw,18px); display:grid; gap:10px; margin-top:14px; animation:lmPop 240ms ease; }
         .lm-h { margin:0; font-size:0.98rem; font-weight:800; color:var(--bdb-ink); }
         .lm-h .tag { font-size:0.68rem; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; padding:3px 9px; border-radius:999px; margin-left:8px; vertical-align:middle; }
         .tag.gcf { background:color-mix(in srgb, var(--bdb-amber) 22%, transparent); color:var(--bdb-brown); }
-        .tag.lcm { background:color-mix(in srgb, var(--bdb-teal) 20%, transparent); color:var(--bdb-teal); }
+        .tag.lcm { background:color-mix(in srgb, var(--bdb-teal) 20%, transparent); color:var(--bdb-teal-deep); }
         .lm-sub { color:var(--bdb-ink-faint); font-size:0.85rem; font-weight:650; line-height:1.35; margin:0; }
 
         .lm-multiply { display:grid; gap:8px; }
@@ -628,13 +654,13 @@ export default function LadderMethodTool() {
         .lm-chip.hole { border-style:dashed; color:var(--bdb-ink-faint); }
         .lm-x { color:var(--bdb-ink-faint); font-weight:800; }
         .lm-total { font-size:1.5rem; font-weight:900; }
-        .lm-total.amber { color:var(--bdb-brown); } .lm-total.teal { color:var(--bdb-teal); } .lm-total.green { color:var(--bdb-green); }
+        .lm-total.amber { color:var(--bdb-brown); } .lm-total.teal { color:var(--bdb-teal-deep); } .lm-total.green { color:var(--bdb-green-deep); }
         .lm-mform { display:flex; flex-wrap:wrap; gap:10px; align-items:center; font-weight:800; font-size:1.1rem; }
         .lm-mform input { width:88px; min-height:46px; border:2px solid var(--bdb-line); border-radius:10px; background:var(--bdb-ground); text-align:center; font-family:inherit; font-weight:800; font-size:1.2rem; color:var(--bdb-ink); font-variant-numeric:tabular-nums; }
         .lm-mform input:focus { outline:none; border-color:var(--bdb-teal); }
         .lm-mform button { min-height:46px; padding:0 16px; border:none; border-radius:10px; background:var(--bdb-ink); color:#fff; font-family:inherit; font-weight:800; cursor:pointer; }
-        .lm-mhint { color:var(--bdb-coral); font-weight:750; font-size:0.92rem; }
-        .lm-doneline { font-weight:800; font-size:1.05rem; color:var(--bdb-green); }
+        .lm-mhint { color:var(--bdb-coral-deep); font-weight:750; font-size:0.92rem; }
+        .lm-doneline { font-weight:800; font-size:1.05rem; color:var(--bdb-green-deep); }
 
         /* CENTER - the factor tree */
         .ft-panel { border:1px solid var(--bdb-line); border-radius:14px; background:var(--bdb-card); padding:16px 10px 0; display:grid; gap:12px; justify-items:center; }
@@ -646,7 +672,7 @@ export default function LadderMethodTool() {
         .ft-node.opened { opacity:0.55; border-color:var(--bdb-ink-faint); box-shadow:none; }
         .ft-node.flash { cursor:pointer; border-color:var(--bdb-amber); animation:ftFlash 1.05s ease-in-out infinite; }
         @keyframes ftFlash { 50% { box-shadow:0 0 0 6px color-mix(in srgb, var(--bdb-amber) 42%, transparent); transform:scale(1.07); } }
-        .ft-node.prime { border-color:var(--bdb-green); color:var(--bdb-green); border-radius:999px; background:color-mix(in srgb, var(--bdb-green) 10%, var(--bdb-card)); }
+        .ft-node.prime { border-color:var(--bdb-green); color:var(--bdb-green-deep); border-radius:999px; background:color-mix(in srgb, var(--bdb-green) 10%, var(--bdb-card)); }
         .ft-node.lifted { opacity:0.28; }
         .ft-badge { position:absolute; top:-8px; right:-8px; width:19px; height:19px; border-radius:999px; background:var(--bdb-green); display:grid; place-items:center; }
         .ft-ring { position:absolute; inset:-8px; width:calc(100% + 16px); height:calc(100% + 16px); pointer-events:none; overflow:visible; }
@@ -663,7 +689,7 @@ export default function LadderMethodTool() {
         /* the landing line at the bottom of the panel */
         .ft-line { position:relative; width:calc(100% + 20px); margin:6px -10px 0; border-top:3px solid var(--bdb-ink); background:color-mix(in srgb, var(--bdb-ground) 55%, var(--bdb-card)); border-radius:0 0 13px 13px; min-height:72px; display:flex; gap:9px; align-items:center; justify-content:center; padding:12px 14px 14px; flex-wrap:wrap; }
         .ft-line-label { position:absolute; top:-12px; left:12px; font-size:0.66rem; font-weight:900; letter-spacing:0.09em; text-transform:uppercase; color:var(--bdb-ink-faint); background:var(--bdb-card); padding:0 8px; border-radius:999px; border:1px solid var(--bdb-line); }
-        .ft-lc { min-width:44px; padding:6px 12px; border-radius:999px; border:2px solid var(--bdb-green); background:color-mix(in srgb, var(--bdb-green) 12%, var(--bdb-card)); color:var(--bdb-green); font-weight:900; font-size:1.2rem; text-align:center; font-variant-numeric:tabular-nums; transition:transform .28s ease, opacity .28s ease; }
+        .ft-lc { min-width:44px; padding:6px 12px; border-radius:999px; border:2px solid var(--bdb-green); background:color-mix(in srgb, var(--bdb-green) 12%, var(--bdb-card)); color:var(--bdb-green-deep); font-weight:900; font-size:1.2rem; text-align:center; font-variant-numeric:tabular-nums; transition:transform .28s ease, opacity .28s ease; }
         .ft-lc.pending { opacity:0; }
         .ft-lc.hot { border-color:var(--bdb-amber); background:color-mix(in srgb, var(--bdb-amber) 18%, var(--bdb-card)); color:var(--bdb-brown); animation:ftHot 1s ease-in-out infinite; }
         @keyframes ftHot { 50% { box-shadow:0 0 0 5px color-mix(in srgb, var(--bdb-amber) 38%, transparent); } }
@@ -672,21 +698,23 @@ export default function LadderMethodTool() {
         .ft-lc.final { border-color:var(--bdb-ink); background:var(--bdb-ink); color:#fff; font-size:1.5rem; animation:ftBorn .4s cubic-bezier(.3,.8,.35,1); }
         @keyframes ftBorn { 0% { transform:scale(.5); opacity:0; } 60% { transform:scale(1.15); } 100% { transform:none; opacity:1; } }
         .ft-empty { color:var(--bdb-ink-faint); font-size:0.85rem; font-weight:650; }
-        .ft-fly { position:fixed; z-index:60; display:grid; place-items:center; border:2px solid var(--bdb-green); background:color-mix(in srgb, var(--bdb-green) 14%, #fff); color:var(--bdb-green); font-family:var(--bdb-font); font-weight:900; font-size:1.1rem; border-radius:999px; pointer-events:none; }
+        .ft-fly { position:fixed; z-index:60; display:grid; place-items:center; border:2px solid var(--bdb-green); background:color-mix(in srgb, var(--bdb-green) 14%, #fff); color:var(--bdb-green-deep); font-family:var(--bdb-font); font-weight:900; font-size:1.1rem; border-radius:999px; pointer-events:none; }
         .ft-pop { position:absolute; bottom:calc(100% + 10px); transform:translateX(-50%); background:var(--bdb-card); border:2px solid var(--bdb-ink); border-radius:12px; padding:8px 12px; display:flex; gap:8px; align-items:center; font-weight:900; font-size:1.15rem; box-shadow:0 6px 0 color-mix(in srgb, var(--bdb-ink) 25%, transparent); animation:ftPopIn .26s cubic-bezier(.3,.8,.35,1) both; z-index:5; white-space:nowrap; }
         @keyframes ftPopIn { from { transform:translateX(-50%) translateY(10px) scale(.7); opacity:0; } to { transform:translateX(-50%) translateY(0) scale(1); opacity:1; } }
         .ft-pop input { width:76px; min-height:44px; border:2px solid var(--bdb-line); border-radius:9px; background:var(--bdb-ground); text-align:center; font-family:inherit; font-weight:900; font-size:1.15rem; color:var(--bdb-ink); }
         .ft-pop input:focus { outline:none; border-color:var(--bdb-amber); }
         .ft-pop button { min-height:44px; padding:0 14px; border:none; border-radius:9px; background:var(--bdb-ink); color:#fff; font-family:inherit; font-weight:800; cursor:pointer; }
-        .ft-pop .hint { position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%); color:var(--bdb-coral); font-size:0.82rem; font-weight:750; white-space:nowrap; }
+        .ft-pop .hint { position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%); color:var(--bdb-coral-deep); font-size:0.82rem; font-weight:750; white-space:nowrap; }
 
-        .lm-splitform { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center; font-weight:800; font-size:1.1rem; margin-top:12px; }
-        .lm-splitform input { width:70px; min-height:46px; border:2px dashed var(--bdb-amber); border-radius:10px; background:var(--bdb-card); text-align:center; font-family:inherit; font-weight:800; font-size:1.2rem; color:var(--bdb-ink); }
+        .lm-splitform { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center; font-weight:800; font-size:1.15rem; margin:2px 0 4px; }
+        .lm-splitlead { min-width:50px; padding:5px 12px; border-radius:12px; border:2px solid var(--bdb-amber); background:color-mix(in srgb, var(--bdb-amber) 16%, var(--bdb-card)); text-align:center; font-weight:900; font-variant-numeric:tabular-nums; }
+        .lm-splitform input { width:72px; min-height:48px; border:2px dashed var(--bdb-amber); border-radius:10px; background:var(--bdb-card); text-align:center; font-family:inherit; font-weight:800; font-size:1.25rem; color:var(--bdb-ink); }
         .lm-splitform input:focus { outline:none; border-style:solid; }
-        .lm-splitform button { min-height:46px; padding:0 18px; border:none; border-radius:10px; background:var(--bdb-coral); color:#fff; font-family:inherit; font-weight:800; cursor:pointer; }
+        .lm-splitform button { min-height:48px; padding:0 18px; border:none; border-radius:10px; background:var(--bdb-coral-deep); color:#fff; font-family:inherit; font-weight:800; cursor:pointer; }
 
         /* RIGHT - ladder results */
-        .lm-fam { border:2px solid var(--bdb-line); background:var(--bdb-card); border-radius:14px; padding:12px; display:grid; gap:10px; min-height:120px; }
+        .lm-fam { border:2px solid var(--bdb-line); background:var(--bdb-card); border-radius:14px; padding:12px; display:grid; gap:10px; min-height:120px; transition:opacity .3s; }
+        .lm-fam.quiet { opacity:0.55; }
         .lm-fam-empty { color:var(--bdb-ink-faint); font-size:0.9rem; line-height:1.5; margin:0; }
         .lm-pulled { display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-weight:800; }
         .lm-result { border-radius:12px; padding:12px; display:grid; place-items:center; gap:2px; animation:lmPop 260ms ease; }
@@ -699,11 +727,16 @@ export default function LadderMethodTool() {
 
         .lm-actions { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:16px; }
         .lm-btn { min-height:46px; padding:0 20px; border:1px solid var(--bdb-line); border-radius:999px; background:var(--bdb-card); color:var(--bdb-ink); font-family:inherit; font-weight:700; cursor:pointer; }
-        .lm-btn.primary { background:var(--bdb-teal); border-color:var(--bdb-teal); color:#fff; }
+        .lm-btn.primary { background:var(--bdb-teal-deep); border-color:var(--bdb-teal-deep); color:#fff; }
         .lm-btn:hover { filter:brightness(1.03); }
 
         @media (max-width: 940px) {
           .lm-cols, .lm-cols.treeseq { grid-template-columns:1fr; }
+          /* Stacked screens lead with the WORK - the rule rail is reference,
+             so it moves below the workspace instead of pushing it offscreen. */
+          .lm-cols > :nth-child(1) { order:2; }
+          .lm-cols > :nth-child(2) { order:1; }
+          .lm-cols > :nth-child(3) { order:3; }
           .lm-fam { min-height:0; }
         }
         @media (prefers-reduced-motion: reduce) {
@@ -723,9 +756,6 @@ export default function LadderMethodTool() {
           <button className={mode === "ladder" ? "on" : ""} onClick={() => switchMode("ladder")}>Ladder - GCF and LCM</button>
           <button className={mode === "trees" ? "on" : ""} onClick={() => switchMode("trees")}>Factor Trees</button>
         </div>
-        {mode === "ladder" && LADDER_PROBLEMS.slice(0, 6).map(([a, b]) => (
-          <button key={`${a}-${b}`} className={`lm-pill ${problem[0] === a && problem[1] === b ? "on" : ""}`} onClick={() => resetLadder([a, b])}>{a} and {b}</button>
-        ))}
       </div>
 
       {treesActive && treePhase !== "wrap" && (
@@ -737,7 +767,7 @@ export default function LadderMethodTool() {
         </div>
       )}
 
-      <div className="lm-feedback" role="status">{feedback}</div>
+      <div className={`lm-feedback${note.kind !== "info" ? ` ${note.kind}` : ""}`} role="status">{note.text}</div>
 
       {treesActive && treePhase === "wrap" ? (
         <div className="lm-card" style={{ maxWidth: 520, margin: "0 auto" }}>
@@ -752,7 +782,10 @@ export default function LadderMethodTool() {
       <div className={`lm-cols ${treesActive ? "treeseq" : ""}`.trim()}>
         {/* LEFT: the rule rail */}
         <div>
-          <div className="lm-head">Division guidance</div>
+          <div className="lm-head">
+            {guided && <span className="lm-step" aria-hidden>1</span>}
+            {guided ? "Check which rules light up" : "Division guidance"}
+          </div>
           {RULES.map(([d, text]) => {
             const hit = litRules.includes(d);
             return (
@@ -782,7 +815,12 @@ export default function LadderMethodTool() {
 
         {/* CENTER: the workspace */}
         <div>
-          <div className="lm-head">{mode === "ladder" ? "The ladder" : "The factor tree"}</div>
+          <div className="lm-head">
+            {guided && <span className="lm-step" aria-hidden>2</span>}
+            {mode === "ladder"
+              ? (guided ? "Type a divisor and run the ladder" : "The ladder")
+              : (guided ? "Split, then tap the primes" : "The factor tree")}
+          </div>
 
           {mode === "ladder" && (
             <>
@@ -811,7 +849,7 @@ export default function LadderMethodTool() {
                 {phase === "divide" && (
                   <form className="lm-entry" onSubmit={submitDivisor}>
                     <div className="lm-side">
-                      <span className="lm-inwrap">
+                      <span className={`lm-inwrap${guided && steps.length === 0 ? " beacon" : ""}`}>
                         <span className="lm-dx">÷</span>
                         <input inputMode="numeric" value={divisorDraft}
                           onChange={(e) => setDivisorDraft(e.target.value.replace(/\D/g, ""))}
@@ -853,7 +891,7 @@ export default function LadderMethodTool() {
                     factors={[gcf, bottom[0], bottom[1]]}
                     tone="teal"
                     doneText={`LCM = ${gcf * bottom[0] * bottom[1]}`}
-                    onDone={() => { setPhase("done"); setFeedback(`GCF ${gcf}, LCM ${gcf * bottom[0] * bottom[1]}. The ladder gave you both.`); }}
+                    onDone={() => { setPhase("done"); graduate(); setFeedback(`GCF ${gcf}, LCM ${gcf * bottom[0] * bottom[1]}. The ladder gave you both.`, "win"); }}
                   />
                 </div>
               )}
@@ -864,6 +902,24 @@ export default function LadderMethodTool() {
             <>
               <div className="ft-panel">
                 {renderNode(tree)}
+
+                {/* The split form lives right under the tree, tethered to the
+                    amber-ringed node it is asking about - not floating below
+                    the panel where the eye has to hunt for it. */}
+                {treePhase === "grow" && selNode && (
+                  <form className="lm-splitform" onSubmit={submitPair}>
+                    <span className="lm-splitlead">{selNode.v}</span>
+                    <span className="lm-x">=</span>
+                    <input className={guided && !tree.kids ? "beacon" : undefined} inputMode="numeric" value={fA}
+                      onChange={(e) => setFA(e.target.value.replace(/\D/g, ""))}
+                      aria-label="first factor" autoFocus />
+                    <span className="lm-x">x</span>
+                    <input inputMode="numeric" value={fB}
+                      onChange={(e) => setFB(e.target.value.replace(/\D/g, ""))}
+                      aria-label="second factor" />
+                    <button type="submit">Split</button>
+                  </form>
+                )}
 
                 {/* the landing line - primes lift out of the tree and drop here */}
                 <div className="ft-line" ref={lineRef}>
@@ -899,20 +955,6 @@ export default function LadderMethodTool() {
                 </div>
               </div>
 
-              {treePhase === "grow" && selNode && (
-                <form className="lm-splitform" onSubmit={submitPair}>
-                  <span>{selNode.v} =</span>
-                  <input inputMode="numeric" value={fA}
-                    onChange={(e) => setFA(e.target.value.replace(/\D/g, ""))}
-                    aria-label="first factor" autoFocus />
-                  <span className="lm-x">x</span>
-                  <input inputMode="numeric" value={fB}
-                    onChange={(e) => setFB(e.target.value.replace(/\D/g, ""))}
-                    aria-label="second factor" />
-                  <button type="submit">Split</button>
-                </form>
-              )}
-
               {treePhase === "done" && (
                 <div className="lm-actions">
                   <button className="lm-btn primary" onClick={nextTreeProblem}>
@@ -928,8 +970,11 @@ export default function LadderMethodTool() {
         {/* RIGHT: ladder results only - trees give the width to the tree */}
         {mode === "ladder" && (
           <div>
-            <div className="lm-head">What you have earned</div>
-            <div className="lm-fam">
+            <div className="lm-head">
+              {guided && <span className="lm-step" aria-hidden>3</span>}
+              What you have earned
+            </div>
+            <div className={`lm-fam${phase === "divide" && !ladderDivisorList ? " quiet" : ""}`}>
               {ladderDivisorList ? (
                 <div className="lm-pulled" aria-label="divisors pulled out so far">
                   {divisors.map((d, i) => (
@@ -945,8 +990,10 @@ export default function LadderMethodTool() {
               {phase === "divide" && ladderDivisorList && (
                 <p className="lm-fam-empty">Bottom of the ladder: {bottom[0]} and {bottom[1]}. Keep dividing until they share nothing.</p>
               )}
-              <div className={`lm-result gcf ${phase === "divide" ? "wait" : ""}`.trim()}>
-                <b>{phase === "divide" ? "?" : gcf}</b>
+              {/* Reveal only what the student has EARNED - the GCF stays a
+                  question mark until they multiply the chain out themselves. */}
+              <div className={`lm-result gcf ${gcfDone ? "" : "wait"}`.trim()}>
+                <b>{gcfDone ? gcf : "?"}</b>
                 <span>GCF</span>
               </div>
               <div className={`lm-result lcm ${phase === "done" ? "" : "wait"}`.trim()}>
@@ -962,7 +1009,10 @@ export default function LadderMethodTool() {
       {mode === "ladder" && (
         <div className="lm-actions">
           <button className="lm-btn" onClick={() => resetLadder(problem)}>Start over</button>
-          <button className="lm-btn" onClick={() => resetLadder(pickLadder(problem))}>New numbers</button>
+          <button className="lm-btn primary" onClick={() => resetLadder(pickLadder(problem))}>New numbers</button>
+          {LADDER_PROBLEMS.slice(0, 6).map(([a, b]) => (
+            <button key={`${a}-${b}`} className={`lm-pill ${problem[0] === a && problem[1] === b ? "on" : ""}`} onClick={() => resetLadder([a, b])}>{a} and {b}</button>
+          ))}
         </div>
       )}
     </main>
