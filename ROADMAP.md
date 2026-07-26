@@ -30,10 +30,10 @@ student-signals.sql RUN by Steele 7/26, chips live. Same day, his click-only
 decision hardened the layer: a 10s server cooldown on signal writes, counts +
 stuck/again names now ALSO on the iPad Remote (the in-hand surface), and
 teacher controls - per-student mute (no feedback to the student) and a
-session-wide signals on/off switch - staged in student-signal-controls.sql,
-hiding themselves until he runs it. No free-text input by design: the fixed
-chips ARE the spam filter. Pedagogy critiques and bigger IA items remain
-decision items, not code) ·
+session-wide signals on/off switch - via student-signal-controls.sql, which
+Steele ran the same day, so the whole signal layer is live. No free-text
+input by design: the fixed chips ARE the spam filter. Pedagogy critiques and
+bigger IA items remain decision items, not code) ·
 **Warm-up culture screen: the steps of learning** (7/25 - Steele's ask: the
 Main projector's empty warm-up real estate now carries a big animated "steps
 of learning" list - 1 Confusion, 2 Try something, 3 Get it wrong, 4 Try again,

@@ -272,16 +272,16 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   outbound call must pass counts/archetypes, never names or student work.
 - Two distinct "assignment" concepts: `assignments` (manipulative) vs `practice_assignments` (targeted
   practice) - do not conflate.
-- Student signals (the "I'm stuck" tap): `supabase/student-signals.sql` was RUN by Steele on
-  2026-07-26 - the chips on /live-flow and the counts on /session + /teacher/remote are live.
-  `supabase/student-signal-controls.sql` (per-student mute + sessions.signals_off switch) is
-  STAGED, NOT YET RUN - the mute buttons and on/off toggle hide themselves until it runs. The
-  ships-dark probe pattern is deliberate on both layers: student chips probe
-  `/api/student/signal?sessionId=` per lesson step (so the off switch bites at the next advance),
-  teacher surfaces read `enabled`/`controls` from `/api/live/signals`. Do not "fix" hidden
-  chips/buttons by removing the probes. Design is click-only BY DECISION (Steele, 2026-07-26):
-  no free-text student input - fixed chips are the spam filter; plus a 10s server cooldown on
-  writes, signals never render on public surfaces, and mute gives the student no feedback.
+- Student signals (the "I'm stuck" tap): fully live as of 2026-07-26 - Steele ran BOTH
+  `supabase/student-signals.sql` (chips on /live-flow, counts on /session + /teacher/remote)
+  and `supabase/student-signal-controls.sql` (per-student mute + the sessions.signals_off
+  switch). The ships-dark probe pattern remains load-bearing for future environments: student
+  chips probe `/api/student/signal?sessionId=` per lesson step (so the off switch bites at the
+  next advance), teacher surfaces read `enabled`/`controls` from `/api/live/signals` - do not
+  "fix" hidden chips/buttons by removing the probes. Design is click-only BY DECISION (Steele,
+  2026-07-26): no free-text student input - fixed chips are the spam filter; plus a 10s server
+  cooldown on writes, signals never render on public surfaces, and mute gives the student no
+  feedback (their chip keeps working, it just goes nowhere).
 - Mock data for practice runs (added 2026-07-25, after the end-of-year wipe): `supabase/mock-classroom-seed.sql`
   creates the fictional `BDM Mock Class` (period code MOCK, 11 invented students on the reserved
   `mock.bigdogmath.example` domain) plus i-Ready Fall baselines and six warm-up days of `responses`
