@@ -195,12 +195,15 @@ export default function LadderMethodTool() {
   const [fA, setFA] = useState("");
   const [fB, setFB] = useState("");
   const [nudgeTick, setNudgeTick] = useState(0);
-  const [line, setLine] = useState<number[]>([]);
+  // The collapse is the upside-down triangle (Steele's spec): every row is
+  // ONE computation - the left pair becomes its product and everything else
+  // drops straight down - so the whole history stays visible on screen, the
+  // way it would look written out on paper. rows[0] is the primes line.
+  const [triRows, setTriRows] = useState<number[][]>([]);
   const [lineLanded, setLineLanded] = useState(false);
   const [collapseDraft, setCollapseDraft] = useState("");
   const [collapseHint, setCollapseHint] = useState<string | null>(null);
-  const [merging, setMerging] = useState(false);
-  const [popLeft, setPopLeft] = useState<number | null>(null);
+  const [popPos, setPopPos] = useState<{ left: number; top: number } | null>(null);
   const reducedRef = useRef(false);
 
   const leafRefs = useRef(new Map<number, HTMLButtonElement>());
@@ -273,8 +276,8 @@ export default function LadderMethodTool() {
     setConfirmed(new Set()); setJustChecked(null);
     setSel(isPrime(root.v) ? null : root.id);
     setFA(""); setFB(""); setNudgeTick(0);
-    setLine([]); setLineLanded(false);
-    setCollapseDraft(""); setCollapseHint(null); setMerging(false);
+    setTriRows([]); setLineLanded(false);
+    setCollapseDraft(""); setCollapseHint(null);
     leafRefs.current.clear();
     setFeedback(isPrime(root.v)
       ? `${numbers[idx]} is flashing - tap it if it is prime.`
@@ -418,7 +421,7 @@ export default function LadderMethodTool() {
     const sorted = collectLeaves(tree)
       .filter((l) => confirmedSet.has(l.id))
       .sort((p, q) => p.v - q.v);
-    setLine(sorted.map((l) => l.v));
+    setTriRows([sorted.map((l) => l.v)]);
     setTreePhase("collect");
     setFeedback("Every prime is confirmed. Watch them line up.", "win");
     let finished = false;
@@ -474,44 +477,48 @@ export default function LadderMethodTool() {
     });
   }
 
-  // Keep the collapse pop-out centered under the pair it is asking about.
+  // Keep the collapse pop-out centered under the PAIR being multiplied - the
+  // first two chips of the bottom (active) row of the triangle.
   useLayoutEffect(() => {
-    if (treePhase !== "collapse" || !lineLanded) { setPopLeft(null); return; }
+    if (treePhase !== "collapse" || !lineLanded) { setPopPos(null); return; }
     const measure = () => {
       const box = lineRef.current?.getBoundingClientRect();
       const c0 = lineChipRefs.current[0]?.getBoundingClientRect();
       const c1 = lineChipRefs.current[1]?.getBoundingClientRect();
-      if (!box || !c0 || !c1) { setPopLeft(null); return; }
-      setPopLeft((c0.left + c1.right) / 2 - box.left);
+      if (!box || !c0 || !c1) { setPopPos(null); return; }
+      setPopPos({
+        left: (c0.left + c1.right) / 2 - box.left,
+        top: Math.max(c0.bottom, c1.bottom) - box.top + 10,
+      });
     };
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [treePhase, lineLanded, line]);
+  }, [treePhase, lineLanded, triRows]);
 
   function submitCollapse(event: FormEvent) {
     event.preventDefault();
-    if (merging || line.length < 2) return;
-    const [x, y] = line;
+    const active = triRows[triRows.length - 1] ?? [];
+    if (active.length < 2) return;
+    const [x, y] = active;
     const expected = x * y;
     if (Number(collapseDraft) !== expected) {
       setCollapseHint(`Not yet - ${x} x ${y} = ${expected}.`);
       return;
     }
-    setCollapseHint(null); setCollapseDraft(""); setMerging(true);
-    window.setTimeout(() => {
-      setMerging(false);
-      const rest = line.slice(2);
-      const nextLine = [expected, ...rest];
-      setLine(nextLine);
-      if (nextLine.length === 1) {
-        setTreePhase("done");
-        graduate();
-        setFeedback(`${N} - rebuilt from its primes. That is the prime factorization.`, "win");
-      } else {
-        setFeedback(`${expected} takes their place. Keep going - ${expected} x ${nextLine[1]} next.`);
-      }
-    }, reducedRef.current ? 0 : 300);
+    setCollapseHint(null); setCollapseDraft("");
+    // One computation per row: the product leads the new row and every other
+    // factor drops straight down. The old row stays on screen - that IS the
+    // written-out work.
+    const nextRow = [expected, ...active.slice(2)];
+    setTriRows((rs) => [...rs, nextRow]);
+    if (nextRow.length === 1) {
+      setTreePhase("done");
+      graduate();
+      setFeedback(`${N} - rebuilt from its primes. The whole triangle is the work, written out.`, "win");
+    } else {
+      setFeedback(`${x} x ${y} = ${expected}, and the rest drop down with it. Next: ${expected} x ${nextRow[1]}.`);
+    }
   }
 
   function nextTreeProblem() {
@@ -687,19 +694,22 @@ export default function LadderMethodTool() {
         .ft-kid::after { content:""; position:absolute; top:0; left:50%; width:2px; height:14px; background:var(--bdb-ink-faint); transform:translateX(-50%); }
 
         /* the landing line at the bottom of the panel */
-        .ft-line { position:relative; width:calc(100% + 20px); margin:6px -10px 0; border-top:3px solid var(--bdb-ink); background:color-mix(in srgb, var(--bdb-ground) 55%, var(--bdb-card)); border-radius:0 0 13px 13px; min-height:72px; display:flex; gap:9px; align-items:center; justify-content:center; padding:12px 14px 14px; flex-wrap:wrap; }
+        .ft-line { position:relative; width:calc(100% + 20px); margin:6px -10px 0; border-top:3px solid var(--bdb-ink); background:color-mix(in srgb, var(--bdb-ground) 55%, var(--bdb-card)); border-radius:0 0 13px 13px; min-height:72px; display:flex; flex-direction:column; gap:9px; align-items:center; justify-content:center; padding:12px 14px 14px; }
+        .ft-rows { display:flex; flex-direction:column; gap:7px; align-items:center; }
+        .ft-row { display:flex; gap:9px; align-items:center; justify-content:center; flex-wrap:wrap; animation:ftRowIn .32s ease; }
+        .ft-row.past { opacity:0.5; transform:scale(.92); }
+        @keyframes ftRowIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:none; } }
         .ft-line-label { position:absolute; top:-12px; left:12px; font-size:0.66rem; font-weight:900; letter-spacing:0.09em; text-transform:uppercase; color:var(--bdb-ink-faint); background:var(--bdb-card); padding:0 8px; border-radius:999px; border:1px solid var(--bdb-line); }
         .ft-lc { min-width:44px; padding:6px 12px; border-radius:999px; border:2px solid var(--bdb-green); background:color-mix(in srgb, var(--bdb-green) 12%, var(--bdb-card)); color:var(--bdb-green-deep); font-weight:900; font-size:1.2rem; text-align:center; font-variant-numeric:tabular-nums; transition:transform .28s ease, opacity .28s ease; }
         .ft-lc.pending { opacity:0; }
         .ft-lc.hot { border-color:var(--bdb-amber); background:color-mix(in srgb, var(--bdb-amber) 18%, var(--bdb-card)); color:var(--bdb-brown); animation:ftHot 1s ease-in-out infinite; }
         @keyframes ftHot { 50% { box-shadow:0 0 0 5px color-mix(in srgb, var(--bdb-amber) 38%, transparent); } }
-        .ft-lc.m0 { transform:translateX(26px) scale(.7); opacity:0; }
-        .ft-lc.m1 { transform:translateX(-26px) scale(.7); opacity:0; }
+        .ft-lc.did { border-style:dashed; }
         .ft-lc.final { border-color:var(--bdb-ink); background:var(--bdb-ink); color:#fff; font-size:1.5rem; animation:ftBorn .4s cubic-bezier(.3,.8,.35,1); }
         @keyframes ftBorn { 0% { transform:scale(.5); opacity:0; } 60% { transform:scale(1.15); } 100% { transform:none; opacity:1; } }
         .ft-empty { color:var(--bdb-ink-faint); font-size:0.85rem; font-weight:650; }
         .ft-fly { position:fixed; z-index:60; display:grid; place-items:center; border:2px solid var(--bdb-green); background:color-mix(in srgb, var(--bdb-green) 14%, #fff); color:var(--bdb-green-deep); font-family:var(--bdb-font); font-weight:900; font-size:1.1rem; border-radius:999px; pointer-events:none; }
-        .ft-pop { position:absolute; bottom:calc(100% + 10px); transform:translateX(-50%); background:var(--bdb-card); border:2px solid var(--bdb-ink); border-radius:12px; padding:8px 12px; display:flex; gap:8px; align-items:center; font-weight:900; font-size:1.15rem; box-shadow:0 6px 0 color-mix(in srgb, var(--bdb-ink) 25%, transparent); animation:ftPopIn .26s cubic-bezier(.3,.8,.35,1) both; z-index:5; white-space:nowrap; }
+        .ft-pop { position:absolute; transform:translateX(-50%); background:var(--bdb-card); border:2px solid var(--bdb-ink); border-radius:12px; padding:8px 12px; display:flex; gap:8px; align-items:center; font-weight:900; font-size:1.15rem; box-shadow:0 6px 0 color-mix(in srgb, var(--bdb-ink) 25%, transparent); animation:ftPopIn .26s cubic-bezier(.3,.8,.35,1) both; z-index:5; white-space:nowrap; }
         @keyframes ftPopIn { from { transform:translateX(-50%) translateY(10px) scale(.7); opacity:0; } to { transform:translateX(-50%) translateY(0) scale(1); opacity:1; } }
         .ft-pop input { width:76px; min-height:44px; border:2px solid var(--bdb-line); border-radius:9px; background:var(--bdb-ground); text-align:center; font-family:inherit; font-weight:900; font-size:1.15rem; color:var(--bdb-ink); }
         .ft-pop input:focus { outline:none; border-color:var(--bdb-amber); }
@@ -740,7 +750,7 @@ export default function LadderMethodTool() {
           .lm-fam { min-height:0; }
         }
         @media (prefers-reduced-motion: reduce) {
-          .lm-lrow, .lm-card, .ft-node, .lm-result, .ft-pop { animation:none !important; }
+          .lm-lrow, .lm-card, .ft-node, .lm-result, .ft-pop, .ft-row { animation:none !important; }
           .ft-node.flash { animation:none !important; box-shadow:0 0 0 4px color-mix(in srgb, var(--bdb-amber) 42%, transparent); }
           .ft-ring-c, .ft-ring-k { animation:none !important; stroke-dashoffset:0 !important; }
           .lm-row.hit.nudged { animation:none !important; }
@@ -921,33 +931,49 @@ export default function LadderMethodTool() {
                   </form>
                 )}
 
-                {/* the landing line - primes lift out of the tree and drop here */}
-                <div className="ft-line" ref={lineRef}>
+                {/* the landing line - primes lift out of the tree and drop
+                    here, then collapse as an upside-down triangle: one
+                    computation per row, everything else dropping down, until
+                    one number stands alone at the point. */}
+                <div
+                  className="ft-line"
+                  ref={lineRef}
+                  style={treePhase === "collapse" && lineLanded ? { paddingBottom: 86 } : undefined}
+                >
                   <span className="ft-line-label">The primes</span>
-                  {line.length === 0 && <span className="ft-empty">Your confirmed primes will land here.</span>}
-                  {line.map((v, i) => {
-                    const isFinal = treePhase === "done" && line.length === 1;
-                    const hot = treePhase === "collapse" && lineLanded && !merging && i < 2;
-                    const mergeCls = merging && i === 0 ? "m0" : merging && i === 1 ? "m1" : "";
-                    return (
-                      <Fragment key={`${seqIdx}-${line.length}-${i}-${v}`}>
-                        {i > 0 && <span className="lm-x">x</span>}
-                        <span
-                          ref={(el) => { lineChipRefs.current[i] = el; }}
-                          className={`ft-lc ${!lineLanded ? "pending" : ""} ${hot ? "hot" : ""} ${mergeCls} ${isFinal ? "final" : ""}`.trim()}
-                        >
-                          {v}
-                        </span>
-                      </Fragment>
-                    );
-                  })}
+                  {triRows.length === 0 && <span className="ft-empty">Your confirmed primes will land here.</span>}
+                  <div className="ft-rows">
+                    {triRows.map((row, r) => {
+                      const isActive = r === triRows.length - 1;
+                      return (
+                        <div key={`${seqIdx}-r${r}`} className={`ft-row${isActive ? "" : " past"}`}>
+                          {row.map((v, i) => {
+                            const isFinal = treePhase === "done" && isActive && row.length === 1;
+                            const hot = isActive && treePhase === "collapse" && lineLanded && row.length >= 2 && i < 2;
+                            const did = !isActive && row.length >= 2 && i < 2;
+                            return (
+                              <Fragment key={`${seqIdx}-r${r}-c${i}`}>
+                                {i > 0 && <span className="lm-x">x</span>}
+                                <span
+                                  ref={isActive ? (el) => { lineChipRefs.current[i] = el; } : undefined}
+                                  className={`ft-lc ${isActive && !lineLanded ? "pending" : ""} ${hot ? "hot" : ""} ${did ? "did" : ""} ${isFinal ? "final" : ""}`.trim()}
+                                >
+                                  {v}
+                                </span>
+                              </Fragment>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                  {treePhase === "collapse" && lineLanded && popLeft != null && line.length >= 2 && (
-                    <form className="ft-pop" style={{ left: popLeft }} onSubmit={submitCollapse}>
-                      <span>{line[0]} x {line[1]} =</span>
+                  {treePhase === "collapse" && lineLanded && popPos != null && (triRows[triRows.length - 1]?.length ?? 0) >= 2 && (
+                    <form className="ft-pop" style={{ left: popPos.left, top: popPos.top }} onSubmit={submitCollapse}>
+                      <span>{triRows[triRows.length - 1][0]} x {triRows[triRows.length - 1][1]} =</span>
                       <input inputMode="numeric" value={collapseDraft} autoFocus
                         onChange={(e) => { setCollapseDraft(e.target.value.replace(/\D/g, "")); setCollapseHint(null); }}
-                        aria-label={`${line[0]} times ${line[1]}`} />
+                        aria-label={`${triRows[triRows.length - 1][0]} times ${triRows[triRows.length - 1][1]}`} />
                       <button type="submit">Go</button>
                       {collapseHint && <span className="hint">{collapseHint}</span>}
                     </form>
