@@ -11,6 +11,14 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**Factor Trees collapse: the upside-down triangle** (7/26 - Steele's spec
+right behind the UX round: the primes must not combine in one morphing row.
+Each row is ONE computation - the highlighted pair becomes its product and
+every other factor drops straight down - repeating until the original
+number stands alone at the point. Every row stays visible, dimmed with the
+multiplied pair dashed, so the finished triangle IS the written-out work:
+2x2x2x3 / 4x2x3 / 8x3 / 24. The pop-out equation follows the active row's
+pair. Verified in-pane end to end on 24) ·
 **Ladder Method UX round: guided first tries, independent after** (7/26 -
 Steele's ask via /design-critique: intuitive layout for 6th graders, eyes
 drawn right, natural flow. First encounter per device: numbered step heads
