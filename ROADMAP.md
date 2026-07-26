@@ -11,6 +11,24 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**Ladder Method UX round: guided first tries, independent after** (7/26 -
+Steele's ask via /design-critique: intuitive layout for 6th graders, eyes
+drawn right, natural flow. First encounter per device: numbered step heads
+(1 check the lit rules, 2 type a divisor and run the ladder, 3 what you
+have earned) and a pulsing beacon on the divisor input; completing one full
+GCF+LCM cycle or one factor tree graduates the device to clean reference
+labels. Every visit: the six problem pills left the top bar for the bottom
+actions row (they outshouted the math), the divisor input tripled in
+presence, the rewards column dims until something lands, and the coach line
+is tone-coded (neutral / green win / coral try-again). Flow repairs: the
+Factor Tree split form moved INSIDE the panel tethered under the amber
+selected node with a matching lead chip, and the GCF result stays a
+question mark until the student multiplies the chain out themselves - it
+used to spoil the answer the moment the ladder closed. Plus AA deep-token
+contrast on every colored control and workspace-first stacking on narrow
+screens. Verified end to end in the pane: beacon animating, try/win tones,
+rail-tap loads divisor, full ladder to graduation persisting, tethered tree
+form following the selection, mobile order, zero horizontal overflow) ·
 **Period 2 shakedown fixes** (7/26 - Steele ran a real session and joined
 incognito; four findings, four fixes. (1) The Pace screen showed a
 Fist-to-Five histogram during a multiple-choice readiness check - the block
