@@ -11,6 +11,14 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**Warm-up culture screen: the steps of learning** (7/25 - Steele's ask: the
+Main projector's empty warm-up real estate now carries a big animated "steps
+of learning" list - 1 Confusion, 2 Try something, 3 Get it wrong, 4 Try again,
+5 Now you've got it - so confusion reads as step one, not failure, while
+students work the warm-up on Chromebooks. Numbers in the warm-up accent, labels
+in heading ink, each rising in staggered on the Warm Notebook cream. Editable
+LEARNING_STEPS constant in present/page.tsx; shows only when no anchor Puzzle
+of the day is posed, which still wins) ·
 **BRUH, the live team review game** (7/16 — ran in class and ran well. Replaces
 the 46-slide Canva deck + buzzer receiver: the board itself shows who is in, who
 is locked out and who is right. Teacher tool only; students arrive by broadcast.
