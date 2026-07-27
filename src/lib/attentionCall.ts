@@ -1,11 +1,13 @@
 "use client";
 
-// The class attention call - the big dog barks, the pack knocks back.
+// The class attention call.
 //
-// One signature sound for the room. Default: a deep double knock synthesized
-// in Web Audio (no asset file needed). The moment /sounds/attention-call.mp3
-// exists in the deploy it replaces the knock automatically - the intended
-// recording is Abbie herself, barking twice.
+// One signature sound for the room. Default: a two-tone bing-bong chime
+// synthesized in Web Audio (no asset file needed) - a descending doorbell
+// third with a full quarter-note of air between the notes (Steele's timing,
+// 2026-07-27: "bing, quarter note, bong" - his Stream Deck clip was too
+// fast). The moment /sounds/attention-call.mp3 exists in the deploy it
+// replaces the chime automatically - Abbie's real bark or any clip he picks.
 //
 // Browser autoplay policy: a display may not sound audio until it has received
 // one REAL tap or click after page load. armAttentionAudio() must therefore be
@@ -81,39 +83,26 @@ function loadCallFile(c: AudioContext): Promise<void> {
   return filePromise;
 }
 
-// One knock: a low thump (pitch falling 170 -> 52 Hz) under a short knuckle
-// click of band-passed noise. Two of these 0.34s apart make the call.
-function knockAt(c: AudioContext, out: AudioNode, t: number) {
-  const body = c.createOscillator();
-  const bodyGain = c.createGain();
-  body.type = "sine";
-  body.frequency.setValueAtTime(170, t);
-  body.frequency.exponentialRampToValueAtTime(52, t + 0.11);
-  bodyGain.gain.setValueAtTime(0.0001, t);
-  bodyGain.gain.exponentialRampToValueAtTime(0.95, t + 0.006);
-  bodyGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
-  body.connect(bodyGain);
-  bodyGain.connect(out);
-  body.start(t);
-  body.stop(t + 0.26);
+// The gap between bing and bong: one quarter note at an easy ~90 bpm.
+export const CALL_BEAT_S = 0.66;
 
-  const len = Math.max(1, Math.floor(c.sampleRate * 0.03));
-  const buf = c.createBuffer(1, len, c.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
-  const click = c.createBufferSource();
-  click.buffer = buf;
-  const band = c.createBiquadFilter();
-  band.type = "bandpass";
-  band.frequency.value = 1400;
-  band.Q.value = 0.8;
-  const clickGain = c.createGain();
-  clickGain.gain.value = 0.25;
-  click.connect(band);
-  band.connect(clickGain);
-  clickGain.connect(out);
-  click.start(t);
-  click.stop(t + 0.03);
+// One chime note: a soft-struck bell - fundamental plus two decaying
+// partials, gentle 12ms attack so it rings rather than stabs.
+function chimeAt(c: AudioContext, out: AudioNode, t: number, freq: number, peak: number, decay: number) {
+  const partials: [number, number][] = [[1, 1], [2, 0.35], [2.98, 0.1]];
+  for (const [ratio, amp] of partials) {
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq * ratio, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak * amp, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    o.connect(g);
+    g.connect(out);
+    o.start(t);
+    o.stop(t + decay + 0.05);
+  }
 }
 
 export function playAttentionCall(): void {
@@ -129,7 +118,9 @@ export function playAttentionCall(): void {
     s.start();
     return;
   }
+  // Bing: E5, ringing into the rest. Bong: C5, longer ring - the classic
+  // descending doorbell third, unhurried.
   const t0 = c.currentTime + 0.02;
-  knockAt(c, master, t0);
-  knockAt(c, master, t0 + 0.34);
+  chimeAt(c, master, t0, 659.25, 0.55, 1.0);
+  chimeAt(c, master, t0 + CALL_BEAT_S, 523.25, 0.6, 1.7);
 }

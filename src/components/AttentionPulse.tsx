@@ -75,11 +75,11 @@ export default function AttentionPulse({ signal, visualOnly = false }: { signal:
         .attn-stage { position:fixed; inset:0; z-index:70; pointer-events:none; display:grid; place-items:center; font-family:var(--bdb-font); animation:attnFade ${PULSE_MS}ms ease forwards; }
         .attn-wash { position:absolute; inset:0; background:var(--bdb-amber); opacity:0; animation:attnWash ${PULSE_MS}ms ease forwards; }
         .attn-ring { position:absolute; width:34vmin; height:34vmin; border-radius:50%; border:2.2vmin solid var(--bdb-amber); opacity:0; animation:attnRing 1.15s cubic-bezier(0.16,0.84,0.44,1) forwards; }
-        .attn-ring.r2 { animation-delay:0.34s; }
-        .attn-label { position:relative; padding:2.2vmin 5vmin; border-radius:999px; background:rgba(32,30,26,0.92); color:#fff; font-weight:800; font-size:7vmin; letter-spacing:-0.01em; opacity:0; animation:attnLabel 0.5s ease 0.55s forwards; }
+        .attn-ring.r2 { animation-delay:0.66s; }
+        .attn-label { position:relative; padding:2.2vmin 5vmin; border-radius:999px; background:rgba(32,30,26,0.92); color:#fff; font-weight:800; font-size:7vmin; letter-spacing:-0.01em; opacity:0; animation:attnLabel 0.5s ease 0.85s forwards; }
         .attn-chip { position:fixed; right:14px; bottom:14px; z-index:71; min-height:44px; padding:0 18px; border-radius:999px; border:1px solid color-mix(in srgb, var(--bdb-amber) 55%, transparent); background:rgba(32,30,26,0.88); color:#fff; font-family:var(--bdb-font); font-weight:800; font-size:0.9rem; cursor:pointer; box-shadow:0 10px 26px rgba(40,32,20,0.25); }
         @keyframes attnRing { 0% { opacity:0; transform:scale(0.25); } 12% { opacity:0.95; } 100% { opacity:0; transform:scale(1.9); } }
-        @keyframes attnWash { 0%, 100% { opacity:0; } 4% { opacity:0.22; } 9% { opacity:0; } 14% { opacity:0.22; } 20% { opacity:0; } }
+        @keyframes attnWash { 0%, 100% { opacity:0; } 4% { opacity:0.22; } 12% { opacity:0; } 21% { opacity:0.22; } 30% { opacity:0; } }
         @keyframes attnLabel { from { opacity:0; transform:translateY(1.5vmin); } to { opacity:1; transform:none; } }
         @keyframes attnFade { 0%, 86% { opacity:1; } 100% { opacity:0; } }
       `}</style>
