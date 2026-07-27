@@ -29,6 +29,12 @@ import {
 } from "@/lib/successCriterion";
 import { TeacherApiError, teacherApiRequest } from "@/lib/teacherApi";
 import { STUDIO_PREVIEW_MESSAGE, buildStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
+import SlideExtrasEditor from "@/components/SlideExtrasEditor";
+import {
+  parseSlideOverlay,
+  serializeSlideOverlay,
+  type SlideOverlayElement,
+} from "@/lib/slideOverlay";
 
 interface PublishedLesson {
   id: string;
@@ -114,6 +120,9 @@ interface StepDraft {
   workSpaceAvailable: boolean;
   publicSurfaceMode: PublicSurfaceMode;
   routineConfig: LessonRoutineConfig | null;
+  // Serialized Slide Overlay JSON. Kept as a STRING so buildChanges' !== diff
+  // works unchanged; an array here would read dirty on every render.
+  slideOverlay: string;
 }
 
 interface SurfaceTextResolution {
@@ -209,6 +218,7 @@ const EDITABLE_FIELDS: EditableField[] = [
   "workSpaceAvailable",
   "publicSurfaceMode",
   "routineConfig",
+  "slideOverlay",
 ];
 
 function fullRoutineConfigForStep(step: LessonStep): LessonRoutineConfig | null {
@@ -246,6 +256,10 @@ function draftFromStep(step: LessonStep): StepDraft {
     workSpaceAvailable: Boolean(step.workSpaceAvailable),
     publicSurfaceMode: step.publicSurfaceMode || defaultPublicSurfaceModeForState(step.stateId),
     routineConfig: fullRoutineConfigForStep(step),
+    // Round-trip through the parser so the canonical draft holds exactly what a
+    // save would write. Otherwise whitespace or stale keys in Notion read dirty
+    // the moment the step loads.
+    slideOverlay: serializeSlideOverlay({ v: 1, elements: parseSlideOverlay(step.slideOverlay)?.elements || [] }),
   };
 }
 
@@ -881,6 +895,23 @@ export default function LessonScreenStudioPage() {
       : mainText.text;
   const configuredStoryImages = lessonStoryImages(mainEditorText);
 
+  // Slide extras. The draft carries serialized JSON; the editor works in
+  // elements. Notion caps a rich_text value at 2000 characters, and the old
+  // standalone editor never checked - a busy overlay would 400 on save with no
+  // warning, so the limit is surfaced here and blocks the save button.
+  const overlayElements = useMemo(
+    () => parseSlideOverlay(draft?.slideOverlay)?.elements || [],
+    [draft?.slideOverlay],
+  );
+  const overlayLength = (draft?.slideOverlay || "").length;
+  const overlayValidationMessage = overlayLength > 2000
+    ? `These slide extras are ${overlayLength} characters of layout data; Notion stores 2000. Remove or shorten an element.`
+    : null;
+
+  function updateOverlay(next: SlideOverlayElement[]) {
+    updateDraft("slideOverlay", serializeSlideOverlay({ v: 1, elements: next }));
+  }
+
   function addStoryImage(url: string, alt: string) {
     const trimmedUrl = url.trim();
     if (!isHttpUrl(trimmedUrl)) {
@@ -997,7 +1028,8 @@ export default function LessonScreenStudioPage() {
     criterionValidationMessage
     || responseValidationMessage
     || assignedToolValidationMessage
-    || routineValidationMessage,
+    || routineValidationMessage
+    || overlayValidationMessage,
   );
   const assignedResourceLink = selectedStep && draft
     ? draft.linkUrl
@@ -1041,7 +1073,9 @@ export default function LessonScreenStudioPage() {
       responseMode: draft.responseMode || "",
       publicSurfaceMode: draft.publicSurfaceMode,
       notionStepId: selectedStep.id,
-      slideOverlay: selectedStep.slideOverlay || undefined,
+      // The DRAFT overlay, not the saved one - this is what makes the projector
+      // iframe a live preview of the extras being placed.
+      slideOverlay: draft.slideOverlay || undefined,
       discussionStems: stems,
       vocabulary,
       totalSteps: lesson.steps.length,
@@ -1742,6 +1776,28 @@ export default function LessonScreenStudioPage() {
                   )}
                 </div>
               ) : null}
+
+              <div className="studio-editor-section">
+                <h2>Slide extras</h2>
+                <p className="studio-source-note">
+                  Text, equations, and shapes placed over the projector slide. They sit above the auto slide as a
+                  separate layer, so they never reflow around the Main Display text - watch the preview for overlap.
+                  {mainScreenUsesStructuredLayout
+                    ? " This state builds its own layout and ignores Main Display, so extras are the only way to put custom text on it."
+                    : ""}
+                </p>
+                {overlayValidationMessage ? (
+                  <div className="studio-alert error" role="alert">{overlayValidationMessage}</div>
+                ) : null}
+                <SlideExtrasEditor
+                  elements={overlayElements}
+                  onChange={updateOverlay}
+                  backgroundText={mainEditorText}
+                  // The surrounding fieldset cannot disable a span-based drag
+                  // surface, so the editor takes the flag directly.
+                  disabled={stepLoading || saveState === "saving"}
+                />
+              </div>
 
               <label className="studio-field">
                 <span className="studio-label">Pace Directions<span className="studio-count">{paceEditorText.length}</span></span>
