@@ -206,13 +206,15 @@ export default function LessonPage() {
     setTimeout(() => setActivePoll(null), 1300);
   }
 
+  const [lessonUnreachable, setLessonUnreachable] = useState(false);
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/today", { cache: "no-store" });
+        if (!res.ok) { setLessonUnreachable(true); return; }
         const data = await res.json() as { lesson: LessonData | null; date: string };
         setLesson(data.lesson); setDate(data.date || "");
-      } catch { /* ignore */ } finally { setLoading(false); }
+      } catch { setLessonUnreachable(true); } finally { setLoading(false); }
     })();
   }, []);
 
@@ -357,7 +359,11 @@ export default function LessonPage() {
         </div>
 
         {!loading && !lesson && (
-          <p className="ls-muted">No lesson is published for today yet. Your teacher will open today&apos;s lesson soon.</p>
+          <p className="ls-muted">
+            {lessonUnreachable
+              ? "Today's lesson is taking a moment to load. Refresh in a minute - class keeps going either way."
+              : "No lesson is published for today yet. Your teacher will open today's lesson soon."}
+          </p>
         )}
 
         {lesson && (

@@ -6,6 +6,7 @@ import ClassroomSpinner from "@/components/ClassroomSpinner";
 import CityRouteCard from "@/components/CityRouteCard";
 import { getSupabase } from "@/lib/supabase";
 import { SECURE_STUDENT_DATA, StudentApiError, studentApiRequest } from "@/lib/studentApi";
+import { fetchSharedSessionState } from "@/lib/studentSessionShared";
 import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
 import { classroomStageTheme } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
@@ -228,9 +229,9 @@ export default function LiveFlowPage() {
     const readSession = async () => {
       try {
         if (SECURE_STUDENT_DATA) {
-          const result = await studentApiRequest<{ session: SessionRow }>(
-            `/api/student/session-state?sessionId=${encodeURIComponent(sessionId)}`,
-          );
+          // Shared read-through cache: one wire request per device per ~3s
+          // no matter how many components poll (see studentSessionShared).
+          const result = await fetchSharedSessionState<{ session: SessionRow }>(sessionId);
           applySession(result.session);
           return;
         }
@@ -406,9 +407,15 @@ export default function LiveFlowPage() {
       setPollAnswer("");
       setPollSaveState("submitted");
     } catch (error) {
-      if (error instanceof StudentApiError && error.code === "session_join_required") {
+      // ANY identity failure gets the Ask-for-help escape hatch, not just a
+      // missing join. The day-one reality is 428 warmup_verification_required
+      // (absent, late, or a broken Form) - without this branch that student
+      // reads "finish the warm-up" for a warm-up that closed 20 minutes ago,
+      // with no button and no way out.
+      const identityCodes = new Set(["session_join_required", "warmup_verification_required", "not_on_roster"]);
+      if (error instanceof StudentApiError && identityCodes.has(error.code)) {
         setJoinHelpNeeded(true);
-        setPollSubmitError("Your answer could not be saved because your teacher has not let you in yet.");
+        setPollSubmitError("Your answer could not be saved because your teacher has not let you in yet. Tap Ask for help and your teacher can admit you.");
       } else {
         setPollSubmitError(error instanceof Error ? error.message : "Your answer could not be saved. Try again.");
       }
@@ -508,8 +515,17 @@ export default function LiveFlowPage() {
       // chip mostly never reaches the 429.
       setSignalCooldown(true);
       window.setTimeout(() => setSignalCooldown(false), 10_000);
-    } catch {
+    } catch (error) {
       setMySignal(previous);
+      // A silent snap-back is worse than no button: the kid who most needs
+      // help taps it, watches it un-click, and concludes the teacher ignored
+      // them. Cooldown 429s stay quiet (the chip still reads as set); every
+      // identity failure surfaces the same admit path the polls use.
+      const identityCodes = new Set(["session_join_required", "warmup_verification_required", "not_on_roster"]);
+      if (error instanceof StudentApiError && identityCodes.has(error.code)) {
+        setJoinHelpNeeded(true);
+        setPollSubmitError("Your help signal did not reach your teacher because you are not let in yet. Tap Ask for help and your teacher can admit you.");
+      }
     } finally {
       setSignalBusy(false);
     }
@@ -937,8 +953,10 @@ export default function LiveFlowPage() {
               </section>
             ) : (
               <section className="lf-poll">
-                <h1 className="lf-poll-question">Response received</h1>
-                <p className="lf-poll-help">Look at the Pace + Support screen for the class view.</p>
+                {/* Honest copy either way: a student who never answered must
+                    not be told their response was received. */}
+                <h1 className="lf-poll-question">{pollSubmitted ? "Response received" : "Eyes up"}</h1>
+                <p className="lf-poll-help">{pollSubmitted ? "Look at the Pace + Support screen for the class view." : "Your class is reviewing this question on the board."}</p>
               </section>
             ) : null}
             {!activePoll && discussion?.directions && (

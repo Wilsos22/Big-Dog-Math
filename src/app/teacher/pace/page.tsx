@@ -135,7 +135,7 @@ export default function PaceSupportPage() {
       }
     };
     void load();
-    const interval = window.setInterval(load, requested ? 500 : 1000);
+    const interval = window.setInterval(load, requested ? 1000 : 1500);
     return () => {
       stopped = true;
       window.clearInterval(interval);

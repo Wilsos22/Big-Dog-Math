@@ -4,6 +4,7 @@
 // Shown at the top of every manipulative / guided practice page so teachers
 // and students can always get back to the right place.
 
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
 const NAV_LINKS = [
@@ -14,6 +15,13 @@ const NAV_LINKS = [
 
 export default function ToolNav({ title }: { title?: string }) {
   const path = usePathname();
+  // ?embed=1 marks a tool rendered inside the projector stage - the wall
+  // shows the tool itself, never this teacher chrome.
+  const [embedded, setEmbedded] = useState(false);
+  useEffect(() => {
+    try { setEmbedded(new URLSearchParams(window.location.search).get("embed") === "1"); } catch { /* show the nav */ }
+  }, []);
+  if (embedded) return null;
   return (
     <nav className="tn-bar">
       <style>{`

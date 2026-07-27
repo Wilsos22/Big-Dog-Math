@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { SECURE_STUDENT_DATA, studentApiRequest } from "@/lib/studentApi";
+import { fetchSharedSessionState } from "@/lib/studentSessionShared";
 import {
   getStoredStudentSessionId,
   getStoredTeacherSessionId,
@@ -47,9 +48,7 @@ export default function AbbieStudentBubble() {
     const read = async () => {
       if (SECURE_STUDENT_DATA) {
         try {
-          const result = await studentApiRequest<{ session: { abbie: AbbieBroadcast | null } | null }>(
-            `/api/student/session-state?sessionId=${encodeURIComponent(sessionId)}`,
-          );
+          const result = await fetchSharedSessionState<{ session: { abbie: AbbieBroadcast | null } | null }>(sessionId);
           apply(result.session?.abbie ?? null);
         } catch {
           // A transient error should not interrupt the student's task.

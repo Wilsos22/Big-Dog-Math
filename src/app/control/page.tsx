@@ -844,7 +844,9 @@ export default function ControlPage() {
     };
 
     void findTeacherSession();
-    const interval = window.setInterval(findTeacherSession, 400);
+    // 1.2s keeps the panel feeling live while quartering the full-snapshot
+    // request volume (this endpoint returns the whole lesson flow).
+    const interval = window.setInterval(findTeacherSession, 1200);
     return () => {
       stopped = true;
       window.clearInterval(interval);

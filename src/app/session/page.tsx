@@ -220,19 +220,36 @@ export default function SessionPage() {
 
   // Today's published lesson powers the Begin button - straight into the
   // live class host with the lesson loaded and running.
+  const [todayUnreachable, setTodayUnreachable] = useState(false);
   useEffect(() => {
     let cancelled = false;
     fetch("/api/today", { cache: "no-store" })
-      .then((response) => response.json())
+      .then(async (response) => {
+        // "Notion is down" and "no lesson published" must not look the same:
+        // one is fixed in Notion, the other by waiting or starting from
+        // Control - the teacher needs to know which morning they are having.
+        if (!response.ok) throw new Error("today-unreachable");
+        return response.json();
+      })
       .then((data: { lesson: TodayLesson | null }) => {
         if (!cancelled && data.lesson?.id) setTodayLesson(data.lesson);
       })
-      .catch(() => { /* the Begin button simply stays hidden */ });
+      .catch(() => { if (!cancelled) setTodayUnreachable(true); });
     return () => { cancelled = true; };
   }, []);
 
+  const [rosterStale, setRosterStale] = useState(false);
   const pollJoins = useCallback(async (sessionId: string) => {
-    const result = await teacherApiRequest<{ joins: Join[]; admissionRequests?: AdmissionRequest[] }>(`/api/teacher/session?sessionId=${encodeURIComponent(sessionId)}`);
+    let result: { joins: Join[]; admissionRequests?: AdmissionRequest[] };
+    try {
+      result = await teacherApiRequest<{ joins: Join[]; admissionRequests?: AdmissionRequest[] }>(`/api/teacher/session?sessionId=${encodeURIComponent(sessionId)}`);
+    } catch {
+      // One transient failure must not freeze "Joined: 12 of 30" for the rest
+      // of class with no symptom - keep the last list and SAY it is stale.
+      setRosterStale(true);
+      return;
+    }
+    setRosterStale(false);
     setJoins(result.joins);
     setAdmissionRequests(result.admissionRequests || []);
     // Student self-signals ride the same 3-second heartbeat. Quietly absent
@@ -273,12 +290,14 @@ export default function SessionPage() {
     if (!session) return;
     let cancelled = false;
     (async () => {
-      const result = await teacherApiRequest<{ polls: Array<{ id: string; question: string; choices: string[] | null; status: string }> }>(
-        `/api/teacher/session?sessionId=${encodeURIComponent(session.id)}`,
-      );
-      if (cancelled) return;
-      const p = result.polls.find((candidate) => candidate.status === "open") ?? null;
-      if (p) setPoll({ id: p.id, question: p.question, choices: p.choices && p.choices.length ? p.choices : null });
+      try {
+        const result = await teacherApiRequest<{ polls: Array<{ id: string; question: string; choices: string[] | null; status: string }> }>(
+          `/api/teacher/session?sessionId=${encodeURIComponent(session.id)}`,
+        );
+        if (cancelled) return;
+        const p = result.polls.find((candidate) => candidate.status === "open") ?? null;
+        if (p) setPoll({ id: p.id, question: p.question, choices: p.choices && p.choices.length ? p.choices : null });
+      } catch { /* the next joins heartbeat keeps the page alive; the off-switch reappears on reload */ }
     })();
     return () => { cancelled = true; };
   }, [session]);
@@ -735,7 +754,11 @@ export default function SessionPage() {
                   </button>
                 </div>
               ) : (
-                <p className="se-flow-none">No lesson is published for today, so there is nothing to start yet.</p>
+                <p className="se-flow-none">
+                  {todayUnreachable
+                    ? "Today's lesson could not be loaded from Notion. Reload to try again, or start the lesson from Control."
+                    : "No lesson is published for today, so there is nothing to start yet."}
+                </p>
               )}
               {flowNote && <p className="se-flow-note" role="status">{flowNote}</p>}
               <div className="se-code-actions">
@@ -827,7 +850,10 @@ export default function SessionPage() {
               </div>
             )}
             <div className="se-card">
-              <div className="se-count">Joined: {joins.length}{rosterCount ? ` of ${rosterCount}` : ""}</div>
+              <div className="se-count">
+                Joined: {joins.length}{rosterCount ? ` of ${rosterCount}` : ""}
+                {rosterStale && <span style={{ marginLeft: 10, fontWeight: 700, color: "#b8860b" }}>Roster is not refreshing - showing the last good list</span>}
+              </div>
               {joins.length === 0 ? <span className="se-empty">Waiting for students to join…</span>
                 : <div className="se-joins">{joins.map((j) => <span className="se-chip" key={j.id}>{j.display_name || "Student"}</span>)}</div>}
               {signalState ? (() => {

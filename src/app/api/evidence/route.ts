@@ -55,10 +55,21 @@ export async function POST(req: Request) {
 
   const rows = [];
   const unmatched: string[] = [];
+  // Every dropped event gets a named reason - a renamed sheet column or an
+  // Apps Script drift used to vanish a week of evidence while the script log
+  // said success. warmup-evidence.gs can now surface these.
+  const dropped: { itemRef: string | null; reason: string }[] = [];
   for (const e of events) {
     const studentId = e.studentId || (e.studentEmail ? emailToId.get(e.studentEmail.toLowerCase()) : undefined);
-    if (!studentId) { if (e.studentEmail) unmatched.push(e.studentEmail); continue; }
-    if (e.source !== "warmup" && e.source !== "tool") continue;
+    if (!studentId) {
+      if (e.studentEmail) unmatched.push(e.studentEmail);
+      dropped.push({ itemRef: e.itemRef || null, reason: e.studentEmail ? "email_not_on_roster" : "no_student_identity" });
+      continue;
+    }
+    if (e.source !== "warmup" && e.source !== "tool") {
+      dropped.push({ itemRef: e.itemRef || null, reason: `unknown_source:${String(e.source).slice(0, 40)}` });
+      continue;
+    }
     rows.push({
       student_id: studentId,
       problem_id: null,
@@ -75,7 +86,7 @@ export async function POST(req: Request) {
       submitted_at: e.at || new Date().toISOString(),
     });
   }
-  if (!rows.length) return Response.json({ inserted: 0, skipped: events.length, unmatched });
+  if (!rows.length) return Response.json({ inserted: 0, skipped: events.length, unmatched, dropped });
 
   // upsert on dedupe_key where present; plain insert otherwise
   const keyed = rows.filter((r) => r.dedupe_key);
@@ -92,5 +103,5 @@ export async function POST(req: Request) {
     if (error) return Response.json({ error: error.message }, { status: 500 });
     inserted += unkeyed.length;
   }
-  return Response.json({ inserted, skipped: events.length - rows.length, unmatched });
+  return Response.json({ inserted, skipped: events.length - rows.length, unmatched, dropped });
 }
