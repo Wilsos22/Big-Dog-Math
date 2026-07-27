@@ -228,6 +228,11 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   surfaces, WRONG on student screens; student-facing code uses `selectedSuccessCriterion()` and
   filters `SUCCESS_CRITERION_SETUP_PLACEHOLDER` (the snapshot's `successCriteria` can carry the
   placeholder too).
+- Student session-state reads go through `fetchSharedSessionState` (`src/lib/studentSessionShared.ts`)
+  in secure mode - a single-flight ~3s cache shared by ClassSync, /live-flow, AbbieStudentBubble,
+  and useLiveToolConfig (measured 0.27 req/s per device, was ~1.5). A NEW consumer that calls
+  `studentApiRequest` for session-state directly reintroduces the per-device request storm - go
+  through the shared fetcher.
 - Class-mode following is `ClassSync` in the root layout: every student device polls
   `/api/student/session-state` every 3s and navigates by `sessions.broadcast` ("free" releases,
   an explicit route sends, "live-flow" follows the lesson state - students are deliberately HELD
@@ -318,12 +323,11 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   `session_joins` - plus, since 2026-07-26, the session's OWN `source='tool'` aggregate `responses`
   as a boundary tie-breaker in `recommendRoute` (mixed answers move one step on strong >=4 / weak
   <2.5 tool averages, none-correct can rise to partner but never independent, strong work clears
-  the low-confidence flag; no tool work means the old behavior exactly - CAVEAT found by the
-  2026-07-27 launch audit: the secure `/api/student/tool-evidence` path writes per-problem rows
-  with `score: null` and never the daily 0-5 aggregate row, while `city-routes` selects
-  `.not("score","is",null)` - so in production the tie-breaker currently NEVER fires and
-  per-problem rows mis-weight the mastery bars; restoring the aggregate write is on the launch
-  punch list) - but NEVER the `responses`
+  the low-confidence flag; no tool work means the old behavior exactly - the 2026-07-27
+  launch audit found the secure `/api/student/tool-evidence` path had dropped the daily 0-5
+  aggregate row, so the tie-breaker never fired; FIXED same day: the device's day tally rides the
+  report body and the route upserts the legacy-keyed aggregate, with per-problem rows written only
+  when a seeded standard applies) - but NEVER the `responses`
   warm-up history, so it only populates inside a live session, while `/teacher/mastery` and
   `/teacher/rightnow` (`/api/live/groups`) replay `responses`. Seeding warm-up `responses` alone
   can never make City Routes light up (roster and readiness still come from joins + polls). Any new mock roster MUST stay fully fictional
