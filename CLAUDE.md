@@ -115,8 +115,9 @@ bars and live misconception grouping).
 - Attention call (2026-07-27, Steele's ask): the Bark pill on /ipad (always visible beside the
   Tools handle, 4s cooldown) sends `{t:"attention"}` on the `ink-<room>__ctrl` channel. /board
   handles it in its EXISTING ctrl handler; /teacher/present mounts `AttentionListener` (its first
-  __ctrl join); both play the class sound (`src/lib/attentionCall.ts` - synthesized double knock
-  until `public/sounds/attention-call.mp3` exists, intended to be Abbie's real bark) plus the
+  __ctrl join); both play the class sound (`src/lib/attentionCall.ts` - a synthesized bing-bong doorbell third,
+  E5 then C5 a 0.66s quarter-note apart per Steele's timing, until `public/sounds/attention-call.mp3`
+  exists - drop any clip there, Abbie's bark or his Stream Deck sound, and it replaces the chime) plus the
   two-beat Eyes-up pulse (`AttentionPulse`). `StudentAttentionSync` (root layout) gives every
   device holding `bdm-student-session` the pulse VISUAL-ONLY - sound is room-speakers-only by
   design, and its EXCLUDED_PREFIXES (/board, /ipad, /teacher) exist because joining the same ink
