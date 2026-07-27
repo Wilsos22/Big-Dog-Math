@@ -11,6 +11,23 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**The attention call: Bark on the iPad** (7/27 - Steele's ask, replacing the
+two-claps-and-a-woooo. One tap on the always-visible amber Bark pill next
+to the iPad's Tools handle booms the class call through the room displays
+(board + main projector) and flashes a two-beat amber Eyes-up pulse - and
+the same pulse, visual only, hits every joined student Chromebook wherever
+the student is, because the eyes-down kid staring at their screen is
+exactly who the redirect is for. The call is a deep synthesized double
+knock until public/sounds/attention-call.mp3 exists in the deploy; the
+intended recording is Abbie's real double bark - the class answers with two
+knuckle-knocks on the desk. Browser autoplay means each display needs one
+real tap after each load before it can sound: an arming chip shows for 90
+seconds at setup and reappears if a call arrives silent, and tapping it
+plays the call as a built-in speaker check. 4-second send cooldown so a
+grabbed iPad cannot spam the room. Verified end to end in the pane over
+real Supabase realtime: board pulse + counter, projector pulse, Chromebook
+visual-only pulse with no chip, cooldown disabling the button, zero console
+errors on fresh mounts) ·
 **Launch-readiness code batch** (7/27 - the Claude-owned half of the launch
 audit punch list, all five blockers plus first-week hardening, shipped as
 one verified merge. Shared session-state poller: ClassSync, /live-flow,
