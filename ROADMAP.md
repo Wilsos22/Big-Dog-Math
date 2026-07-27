@@ -17,10 +17,15 @@ to the iPad's Tools handle booms the class call through the room displays
 (board + main projector) and flashes a two-beat amber Eyes-up pulse - and
 the same pulse, visual only, hits every joined student Chromebook wherever
 the student is, because the eyes-down kid staring at their screen is
-exactly who the redirect is for. The call is a deep synthesized double
-knock until public/sounds/attention-call.mp3 exists in the deploy; the
-intended recording is Abbie's real double bark - the class answers with two
-knuckle-knocks on the desk. Browser autoplay means each display needs one
+exactly who the redirect is for. The call is a synthesized
+bing-bong - a descending doorbell third with a full quarter note of air
+between the notes (Steele's timing, 7/27: his Stream Deck bing-bong clip
+was "a little too fast") - until public/sounds/attention-call.mp3 exists in
+the deploy; any recording dropped there (Abbie's real bark stays the
+strongest candidate) replaces the chime automatically. The class answers
+with two knuckle-knocks on the desk. Same day: the Red Bull counter came
+off /control at Steele's request - the counter widget only; the running bit
+stays in Abbie's personality material. Browser autoplay means each display needs one
 real tap after each load before it can sound: an arming chip shows for 90
 seconds at setup and reappears if a call arrives silent, and tapping it
 plays the call as a built-in speaker check. 4-second send cooldown so a
