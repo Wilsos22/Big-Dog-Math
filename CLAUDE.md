@@ -318,7 +318,12 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   `session_joins` - plus, since 2026-07-26, the session's OWN `source='tool'` aggregate `responses`
   as a boundary tie-breaker in `recommendRoute` (mixed answers move one step on strong >=4 / weak
   <2.5 tool averages, none-correct can rise to partner but never independent, strong work clears
-  the low-confidence flag; no tool work means the old behavior exactly) - but NEVER the `responses`
+  the low-confidence flag; no tool work means the old behavior exactly - CAVEAT found by the
+  2026-07-27 launch audit: the secure `/api/student/tool-evidence` path writes per-problem rows
+  with `score: null` and never the daily 0-5 aggregate row, while `city-routes` selects
+  `.not("score","is",null)` - so in production the tie-breaker currently NEVER fires and
+  per-problem rows mis-weight the mastery bars; restoring the aggregate write is on the launch
+  punch list) - but NEVER the `responses`
   warm-up history, so it only populates inside a live session, while `/teacher/mastery` and
   `/teacher/rightnow` (`/api/live/groups`) replay `responses`. Seeding warm-up `responses` alone
   can never make City Routes light up (roster and readiness still come from joins + polls). Any new mock roster MUST stay fully fictional
