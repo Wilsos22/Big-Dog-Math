@@ -3,7 +3,18 @@
 
 const NOTION_API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2025-09-03";
-const MATH_6_LESSONS_DATA_SOURCE_ID = "e367e541-c0c7-4613-8066-d2e61b6fee64";
+// ALL of the Math 6 Lessons database's data sources - the same trio
+// notionLessons.ts queries. Querying only the first one made /api/lessons
+// (the archive, the weekly display range reads, and any calendar audit built
+// on them) silently blind to lessons living in the other two sources, while
+// /api/today saw them fine (found live 2026-07-26: two published pages
+// "vanished" from the archive because they sat in a source this file never
+// queried). Keep this list in lockstep with notionLessons.ts.
+const MATH_6_LESSONS_DATA_SOURCE_IDS = [
+  "e367e541-c0c7-4613-8066-d2e61b6fee64",
+  "3282eba1-de37-8069-a043-000b7c36799d",
+  "d1c8e7b0-9a3c-4f1b-8c5c-9a2e5f0a1a3f",
+];
 
 export interface PublishedLessonArchiveItem {
   id: string;
@@ -235,52 +246,85 @@ async function readJson<T>(response: Response, errorMessage: string): Promise<T>
 
 async function queryPublishedLessonPages(token: string): Promise<NotionPage[]> {
   const pages: NotionPage[] = [];
-  let cursor: string | null = null;
+  const seenPageIds = new Set<string>();
+  const errors: string[] = [];
+  let failedDataSources = 0;
 
-  do {
-    let response: Response;
-    try {
-      response = await fetch(`${NOTION_API}/data_sources/${MATH_6_LESSONS_DATA_SOURCE_ID}/query`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "Notion-Version": NOTION_VERSION,
-        },
-        body: JSON.stringify({
-          page_size: 100,
-          filter: {
-            property: "Publish Workflow",
-            select: { equals: "Published" },
+  // Per-source failure tolerance mirrors notionLessons.ts: one bad source
+  // must not blank the whole archive, but every source failing should.
+  for (const dataSourceId of MATH_6_LESSONS_DATA_SOURCE_IDS) {
+    let cursor: string | null = null;
+    let dataSourceFailed = false;
+
+    do {
+      let response: Response;
+      try {
+        response = await fetch(`${NOTION_API}/data_sources/${dataSourceId}/query`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            "Notion-Version": NOTION_VERSION,
           },
-          sorts: [{ property: "Date", direction: "descending" }],
-          ...(cursor ? { start_cursor: cursor } : {}),
-        }),
-        cache: "no-store",
-      });
-    } catch {
-      throw new Error("The Notion lesson archive request failed.");
-    }
+          body: JSON.stringify({
+            page_size: 100,
+            filter: {
+              property: "Publish Workflow",
+              select: { equals: "Published" },
+            },
+            sorts: [{ property: "Date", direction: "descending" }],
+            ...(cursor ? { start_cursor: cursor } : {}),
+          }),
+          cache: "no-store",
+        });
+      } catch {
+        errors.push(`${dataSourceId}: the Notion lesson archive request failed.`);
+        dataSourceFailed = true;
+        break;
+      }
 
-    if (!response.ok) {
-      throw new Error(`The Notion lesson archive query failed with status ${response.status}.`);
-    }
+      if (!response.ok) {
+        errors.push(`${dataSourceId}: the Notion lesson archive query failed with status ${response.status}.`);
+        dataSourceFailed = true;
+        break;
+      }
 
-    const data = await readJson<NotionQueryResponse>(response, "The Notion lesson archive returned an invalid response.");
-    const results = Array.isArray(data.results) ? data.results : [];
-    pages.push(...results.filter((page) => page && typeof page.id === "string" && !page.archived && !page.in_trash));
+      const data = await readJson<NotionQueryResponse>(response, "The Notion lesson archive returned an invalid response.");
+      const results = Array.isArray(data.results) ? data.results : [];
+      for (const page of results) {
+        if (!page || typeof page.id !== "string" || page.archived || page.in_trash) continue;
+        const compactId = page.id.replace(/-/g, "");
+        if (seenPageIds.has(compactId)) continue;
+        seenPageIds.add(compactId);
+        pages.push(page);
+      }
 
-    if (!data.has_more) {
-      cursor = null;
-      continue;
-    }
+      if (!data.has_more) {
+        cursor = null;
+        break;
+      }
 
-    const nextCursor = typeof data.next_cursor === "string" ? data.next_cursor.trim() : "";
-    if (!nextCursor || nextCursor === cursor) {
-      throw new Error("The Notion lesson archive pagination cursor was invalid.");
-    }
-    cursor = nextCursor;
-  } while (cursor);
+      const nextCursor = typeof data.next_cursor === "string" ? data.next_cursor.trim() : "";
+      if (!nextCursor || nextCursor === cursor) {
+        errors.push(`${dataSourceId}: the Notion lesson archive pagination cursor was invalid.`);
+        dataSourceFailed = true;
+        break;
+      }
+      cursor = nextCursor;
+    } while (cursor);
+
+    if (dataSourceFailed) failedDataSources += 1;
+  }
+
+  if (failedDataSources === MATH_6_LESSONS_DATA_SOURCE_IDS.length) {
+    throw new Error(errors.join(" | ") || "The Notion lesson archive request failed.");
+  }
+
+  // Merging three per-source date sorts loses the global order; restore
+  // newest-first by the Date property (ISO strings compare lexicographically).
+  const dateOf = (page: NotionPage): string =>
+    page.properties?.["Date"]?.date?.start || "";
+  pages.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
 
   return pages;
 }
@@ -400,6 +444,6 @@ export async function getPublishedLessonArchive(
 }
 
 export const NOTION_LESSON_ARCHIVE_CONTRACT = {
-  dataSourceId: MATH_6_LESSONS_DATA_SOURCE_ID,
+  dataSourceIds: MATH_6_LESSONS_DATA_SOURCE_IDS,
   notionVersion: NOTION_VERSION,
 } as const;

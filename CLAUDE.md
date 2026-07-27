@@ -308,7 +308,11 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
 - `src/lib/notionLessons.ts` reads the "Math 6 Lessons" DB via the Notion data_sources API
   (`NOTION_VERSION = 2025-09-03`, `POST /v1/data_sources/{id}/query`, three `DATA_SOURCE_IDS`), auth
   `NOTION_TOKEN` (server-side; the literal `const NOTION_TOKEN = "secret"` on line ~13 is dead code -
-  ignore it, never put a real token there).
+  ignore it, never put a real token there). THE DATABASE HAS THREE DATA SOURCES and published pages
+  really do live across them - any query that hits only one source is silently blind to the rest.
+  That bug shipped in `notionLessonArchive.ts` (fixed 2026-07-26): /api/lessons and
+  /api/teacher/lessons (the Studio + Slide-extras lesson pickers) missed two published launch-week
+  lessons that /api/today could see. Keep every lesson query iterating the SAME three-source list.
 - `/api/today` returns the lesson whose `Publish Workflow` select equals `Published` AND `Date` equals
   today in `America/Los_Angeles` (not UTC). Renaming those properties or assuming UTC silently returns
   nothing.
