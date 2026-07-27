@@ -33,17 +33,46 @@ function classroomDate(date = new Date()): string {
  * first student of the day gets the form without waiting. Once the teacher
  * loads a lesson into the session, the assigned link always wins.
  */
+// First-bell protection: when the bell rings, a whole class types the code
+// within seconds, and every concurrent call here used to hit Notion directly -
+// Notion's ~3 req/s integration limit 429'd most of them, the catch swallowed
+// it, and the day's session was created with NO warm-up attached, permanently.
+// Single-flight plus a short cache means one Notion request per instance per
+// window: hits are shared, and a failure is only remembered briefly so the
+// next window can succeed.
+const WARMUP_FLOW_TTL_MS = 120_000;
+const WARMUP_FLOW_FAIL_TTL_MS = 20_000;
+let warmupFlowCache: { day: string; at: number; value: { url: string; lessonCode: string; lessonTitle: string } | null } | null = null;
+let warmupFlowInflight: { day: string; promise: Promise<{ url: string; lessonCode: string; lessonTitle: string } | null> } | null = null;
+
 async function todaysWarmupFlow(): Promise<{ url: string; lessonCode: string; lessonTitle: string } | null> {
-  try {
-    const lesson = await getTodayLesson(classroomDate());
-    const url = lesson?.steps.find((step) => step.stateId?.trim().toLowerCase() === "warmup")?.linkUrl
-      || lesson?.warmUpLink
-      || "";
-    if (!lesson || !canonicalGoogleFormResource(url)) return null;
-    return { url, lessonCode: lesson.lessonCode || "", lessonTitle: lesson.title || "" };
-  } catch {
-    return null;
+  const day = classroomDate();
+  const now = Date.now();
+  if (warmupFlowCache && warmupFlowCache.day === day) {
+    const ttl = warmupFlowCache.value ? WARMUP_FLOW_TTL_MS : WARMUP_FLOW_FAIL_TTL_MS;
+    if (now - warmupFlowCache.at < ttl) return warmupFlowCache.value;
   }
+  if (warmupFlowInflight && warmupFlowInflight.day === day) return warmupFlowInflight.promise;
+  const promise = (async () => {
+    try {
+      const lesson = await getTodayLesson(day);
+      const url = lesson?.steps.find((step) => step.stateId?.trim().toLowerCase() === "warmup")?.linkUrl
+        || lesson?.warmUpLink
+        || "";
+      const value = !lesson || !canonicalGoogleFormResource(url)
+        ? null
+        : { url, lessonCode: lesson.lessonCode || "", lessonTitle: lesson.title || "" };
+      warmupFlowCache = { day, at: Date.now(), value };
+      return value;
+    } catch {
+      warmupFlowCache = { day, at: Date.now(), value: null };
+      return null;
+    } finally {
+      if (warmupFlowInflight && warmupFlowInflight.day === day) warmupFlowInflight = null;
+    }
+  })();
+  warmupFlowInflight = { day, promise };
+  return promise;
 }
 
 /**
@@ -100,7 +129,29 @@ export async function sessionFromPeriodCode(
       .limit(1)
       .maybeSingle();
     if (openResult.data) {
-      return openResult.data as { id: string; live_flow: LiveClassFlowSnapshot | null };
+      const open = openResult.data as { id: string; live_flow: LiveClassFlowSnapshot | null };
+      // A session born during a Notion hiccup has live_flow null forever
+      // unless someone retries - so retry here, on the polling the landing
+      // already does. The moment Notion answers, the day's warm-up appears
+      // for the whole class without anyone doing anything.
+      if (!open.live_flow) {
+        const today = await todaysWarmupFlow();
+        if (today) {
+          const healedFlow = {
+            sequence: { currentIndex: 0, steps: [{ stateId: "warmup", resourceUrl: today.url }] },
+            lesson: { code: today.lessonCode, title: today.lessonTitle },
+          };
+          const healed = await db
+            .from("sessions")
+            .update({ live_flow: healedFlow })
+            .eq("id", open.id)
+            .is("live_flow", null)
+            .select("id,live_flow")
+            .maybeSingle();
+          if (healed.data) return healed.data as { id: string; live_flow: LiveClassFlowSnapshot | null };
+        }
+      }
+      return open;
     }
 
     const today = await todaysWarmupFlow();

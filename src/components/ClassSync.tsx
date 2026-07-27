@@ -9,6 +9,7 @@ import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 import { SECURE_STUDENT_DATA, studentApiRequest } from "@/lib/studentApi";
+import { fetchSharedSessionState } from "@/lib/studentSessionShared";
 import {
   LIVE_FLOW_MODE,
   LIVE_FLOW_ROUTE,
@@ -109,9 +110,7 @@ export default function ClassSync() {
       let error: unknown = null;
       if (SECURE_STUDENT_DATA) {
         try {
-          const result = await studentApiRequest<{ session: StudentSessionState | null }>(
-            `/api/student/session-state?sessionId=${encodeURIComponent(sessionId)}`,
-          );
+          const result = await fetchSharedSessionState<{ session: StudentSessionState | null }>(sessionId);
           data = result.session;
         } catch (requestError) {
           error = requestError;

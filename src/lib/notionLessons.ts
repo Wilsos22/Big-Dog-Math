@@ -15,10 +15,12 @@ import {
   type PublicSurfaceMode,
 } from "./lessonStepMetadata";
 
+// Only the REAL lessons data source. The array used to carry two more ids
+// (a schemaless sibling and one that was never a data source of this DB);
+// every query against them failed, and with requireComplete that sank whole
+// lookups - the documented "by-code Notion lookup returned empty" symptom.
 const DATA_SOURCE_IDS = [
   "e367e541-c0c7-4613-8066-d2e61b6fee64",
-  "3282eba1-de37-8069-a043-000b7c36799d",
-  "d1c8e7b0-9a3c-4f1b-8c5c-9a2e5f0a1a3f",
 ];
 const LESSON_DATABASE_ID = "613d13a5-ac90-4ab3-9f5f-b7da95911ec3";
 const NOTION_API = "https://api.notion.com/v1";
@@ -243,6 +245,7 @@ async function fetchRelatedPage(pageId: string, token: string, cache: Map<string
   let cached = cache.get(pageId);
   if (!cached) {
     cached = fetch(`${NOTION_API}/pages/${pageId}`, {
+      signal: AbortSignal.timeout(8000),
       headers: {
         Authorization: `Bearer ${token}`,
         "Notion-Version": NOTION_VERSION,
@@ -590,6 +593,7 @@ async function queryLessons(
         ...(startCursor ? { start_cursor: startCursor } : {}),
       };
       const res = await fetch(`${NOTION_API}/data_sources/${dataSourceId}/query`, {
+        signal: AbortSignal.timeout(8000),
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -707,6 +711,7 @@ export async function getPublishedLessonById(pageId: string): Promise<LessonData
   }
 
   const res = await fetch(`${NOTION_API}/pages/${normalizedPageId}`, {
+    signal: AbortSignal.timeout(8000),
     headers: {
       Authorization: `Bearer ${token}`,
       "Notion-Version": NOTION_VERSION,

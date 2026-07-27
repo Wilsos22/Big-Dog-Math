@@ -49,21 +49,10 @@ export function reportToolResult(r: ToolResult): void {
     const supabase = getSupabase();
     if (!session || !supabase) return;
 
-    if (SECURE_STUDENT_DATA) {
-      void studentApiRequest("/api/student/tool-evidence", {
-        method: "POST",
-        body: JSON.stringify({
-          sessionId: session.sessionId,
-          tool: r.tool,
-          correct: r.correct,
-          standardId: r.standardId,
-          misconception: r.misconception,
-          problemId: r.problemId,
-        }),
-      }).catch(() => undefined);
-      return;
-    }
-
+    // The running day tally lives on the device in BOTH modes - it is what
+    // turns per-problem results into the ONE aggregate row per (student x
+    // tool x day) that actually moves the mastery bar and feeds the City
+    // Routes tie-breaker.
     const date = new Date().toISOString().slice(0, 10);
     const tallyKey = `bdm-tooltally:${r.tool}:${session.studentId}:${date}`;
     let tally: Tally = { a: 0, c: 0, tags: {} };
@@ -75,6 +64,27 @@ export function reportToolResult(r: ToolResult): void {
 
     const topTag = Object.keys(tally.tags).sort((a, b) => tally.tags[b] - tally.tags[a])[0] || null;
     const now = new Date().toISOString();
+
+    if (SECURE_STUDENT_DATA) {
+      void studentApiRequest("/api/student/tool-evidence", {
+        method: "POST",
+        body: JSON.stringify({
+          sessionId: session.sessionId,
+          tool: r.tool,
+          correct: r.correct,
+          standardId: r.standardId,
+          misconception: r.misconception,
+          problemId: r.problemId,
+          // Day-tally for the server-side aggregate row (launch-audit fix:
+          // without it the secure path wrote only score-null rows, the
+          // tie-breaker never fired, and bars mis-weighted tool work).
+          dayAttempts: tally.a,
+          dayCorrect: tally.c,
+          dayTopMisconception: topTag,
+        }),
+      }).catch(() => undefined);
+      return;
+    }
 
     // Aggregate row (updates in place all period long).
     void supabase.from("responses").upsert({

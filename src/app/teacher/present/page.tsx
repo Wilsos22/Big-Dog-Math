@@ -165,7 +165,9 @@ function TransitionScene({ vibe, directions, seconds, total, next }: {
 function toolUrl(flow: LiveClassFlowSnapshot) {
   const tool = flow.tool;
   if (!tool) return null;
-  const params = new URLSearchParams({ presentation: "1", prompt: tool.prompt });
+  // embed=1 hides the tool's own nav bar - the wall shows the tool, not the
+  // teacher chrome, and the permanent state marker gets clean space.
+  const params = new URLSearchParams({ presentation: "1", embed: "1", prompt: tool.prompt });
   for (const [key, value] of Object.entries(tool.config)) params.set(key, String(value));
   return `${tool.route}?${params.toString()}`;
 }
@@ -355,7 +357,7 @@ export default function ClassroomStagePage() {
       }
     };
     void load();
-    const interval = window.setInterval(load, requested.pinned ? 500 : 1000);
+    const interval = window.setInterval(load, requested.pinned ? 1000 : 1500);
     return () => {
       stopped = true;
       window.clearInterval(interval);

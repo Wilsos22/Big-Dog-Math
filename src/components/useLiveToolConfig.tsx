@@ -3,6 +3,7 @@
 import { type CSSProperties, useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { SECURE_STUDENT_DATA, studentApiRequest } from "@/lib/studentApi";
+import { fetchSharedSessionState } from "@/lib/studentSessionShared";
 import {
   LIVE_FLOW_MODE,
   getStoredStudentSessionId,
@@ -39,9 +40,7 @@ export function useLiveToolConfig(route: LiveToolRoute): LiveToolConfig | null {
     const readSession = async () => {
       if (SECURE_STUDENT_DATA) {
         try {
-          const result = await studentApiRequest<{ session: SessionRow | null }>(
-            `/api/student/session-state?sessionId=${encodeURIComponent(sessionId)}`,
-          );
+          const result = await fetchSharedSessionState<{ session: SessionRow | null }>(sessionId);
           applySession(result.session);
         } catch {
           applySession(null);

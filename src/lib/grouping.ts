@@ -110,7 +110,11 @@ export interface GroupingResult {
 
 export function buildGroups(students: StudentWork[], possibleDays: number, cfg = GROUPING_CONFIG): GroupingResult {
   const stats = students.map((s) => computeStats(s, possibleDays, cfg));
-  const statByName = new Map(stats.map((s) => [s.name, s]));
+  // Key on studentId when present so two students sharing a full name never
+  // inherit each other's archetype; name remains the fallback for callers
+  // that predate ids.
+  const statKey = (s: { studentId?: string; name: string }) => s.studentId || s.name;
+  const statByName = new Map(stats.map((s) => [statKey(s), s]));
 
   // cluster: misconception tag → students with ≥ recurringCount occurrences
   const byTag = new Map<string, { name: string; studentId?: string; occurrences: number }[]>();
@@ -127,7 +131,7 @@ export function buildGroups(students: StudentWork[], possibleDays: number, cfg =
     .filter(([, members]) => members.length >= 2) // a cluster is a GROUP — singletons stay individual
     .map(([tag, members]) => {
       const enriched = members
-        .map((m) => ({ ...m, archetype: statByName.get(m.name)?.archetype || ("growth" as Archetype), avg: statByName.get(m.name)?.avg || 0 }))
+        .map((m) => ({ ...m, archetype: statByName.get(statKey(m))?.archetype || ("growth" as Archetype), avg: statByName.get(statKey(m))?.avg || 0 }))
         .sort((a, b) => a.avg - b.avg);
       const byArch = new Map<Archetype, string[]>();
       for (const m of enriched) (byArch.get(m.archetype) || byArch.set(m.archetype, []).get(m.archetype)!).push(m.name);
