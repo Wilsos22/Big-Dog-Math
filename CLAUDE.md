@@ -112,6 +112,19 @@ bars and live misconception grouping).
 - Room/display surfaces: `/warmup` and `/live-flow` are public; `/board` + `/ipad` (pen-to-board)
   are TEACHER-GATED by the proxy (they are in PROTECTED_PREFIXES - an anonymous fetch redirects to
   /teacher-login, so curl probes of them return no page markup).
+- Attention call (2026-07-27, Steele's ask): the Bark pill on /ipad (always visible beside the
+  Tools handle, 4s cooldown) sends `{t:"attention"}` on the `ink-<room>__ctrl` channel. /board
+  handles it in its EXISTING ctrl handler; /teacher/present mounts `AttentionListener` (its first
+  __ctrl join); both play the class sound (`src/lib/attentionCall.ts` - synthesized double knock
+  until `public/sounds/attention-call.mp3` exists, intended to be Abbie's real bark) plus the
+  two-beat Eyes-up pulse (`AttentionPulse`). `StudentAttentionSync` (root layout) gives every
+  device holding `bdm-student-session` the pulse VISUAL-ONLY - sound is room-speakers-only by
+  design, and its EXCLUDED_PREFIXES (/board, /ipad, /teacher) exist because joining the same ink
+  room twice from one page context is never safe (supabase-js can throw on a duplicate topic
+  subscribe). Autoplay: a display sounds nothing until ONE real tap after each page load (deploys
+  reload displays via DeployRefresh, so re-arm after every deploy); the arming chip shows for 90s
+  at load and again whenever a call arrives silent, and tapping it plays the call as a speaker
+  check. The pulse fires armed or not.
 - Teacher (gated): `/teacher` and `/teacher/*` (analytics, assignments, challenges, checkpoint-upload,
   checkpoints, exit-tickets, mastery, rightnow), `/control`, `/session`, `/roster`, `/start-question`.
   `/teacher/growth` redirects to `/teacher/rightnow`. Note: `/builder` and `/abbie` are teacher-ish but
