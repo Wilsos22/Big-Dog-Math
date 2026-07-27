@@ -11,6 +11,27 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**Launch-readiness code batch** (7/27 - the Claude-owned half of the launch
+audit punch list, all five blockers plus first-week hardening, shipped as
+one verified merge. Shared session-state poller: ClassSync, /live-flow,
+AbbieStudentBubble, and useLiveToolConfig now ride one single-flight cached
+fetcher (src/lib/studentSessionShared.ts) - measured 0.27 requests/second
+per device, down from ~1.5, so 30 Chromebooks no longer look like a
+throttling incident. Teacher polling calmed (Control 1.2s, projectors
+1-1.5s). Dead-end escapes: the Ask-for-help gate opens on ALL identity
+failure codes and the I'm-stuck chip surfaces the admit path instead of
+silently un-clicking. First-bell stampede: the Notion lesson lookup is
+cached + single-flighted per day, and a session created without its warm-up
+heals itself on the next code entry. Tool evidence: the secure path now
+writes the daily 0-5 aggregate row (day tally rides the report body), so
+the City Routes tie-breaker fires in production and the bars weigh tool
+work once per day - per-problem rows only when a seeded standard applies;
+golden tests pass. Plus: Notion fetches carry 8s timeouts with distinct
+"Notion is down" vs "no lesson published" copy, /session's roster list
+survives failed polls, the phantom Notion data-source id is gone (by-code
+lookup works), embedded tools render chrome-free on the projector, review
+polls are honest with non-submitters, and grouping keys by student id so
+name collisions cannot swap archetypes) ·
 **Factor Trees collapse: the upside-down triangle** (7/26 - Steele's spec
 right behind the UX round: the primes must not combine in one morphing row.
 Each row is ONE computation - the highlighted pair becomes its product and
