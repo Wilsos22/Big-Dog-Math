@@ -75,6 +75,7 @@ export default function IpadPage() {
   const [scratchOpen, setScratchOpen] = useState(false);
   const [scratchClear, setScratchClear] = useState(0);
   const [boardStatus, setBoardStatus] = useState<InkConnectionStatus>("connecting");
+  const [barkCooling, setBarkCooling] = useState(false);
   const [screenAr, setScreenAr] = useState(16 / 9);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const ctrlRef = useRef<InkChannel | null>(null);
@@ -209,6 +210,18 @@ export default function IpadPage() {
     return () => view.close();
   }, [room, surface]);
 
+  // The attention call: one tap booms the room sound + Eyes-up pulse on the
+  // board and main projector, and flashes the same pulse (visual only, no
+  // audio) on every joined student Chromebook - the eyes-down kid is exactly
+  // who the redirect is for. Short cooldown so a grabbed iPad or a
+  // double-tap cannot spam the class.
+  function sendBark() {
+    if (barkCooling) return;
+    ctrlRef.current?.send({ t: "attention" });
+    setBarkCooling(true);
+    window.setTimeout(() => setBarkCooling(false), 4000);
+  }
+
   function toggleScratch() {
     setScratchOpen((v) => {
       const next = !v;
@@ -241,7 +254,10 @@ export default function IpadPage() {
       <style>{`
         .ip-page { position:fixed; inset:0; background:var(--bdb-ground); font-family:var(--bdb-font); }
         .ip-stage { position:absolute; inset:0; }
-        .ip-handle { position:fixed; top:10px; left:10px; z-index:30; display:inline-flex; align-items:center; gap:8px; min-height:40px; padding:0 15px; border-radius:999px; border:1px solid rgba(32,30,26,0.14); background:rgba(255,255,255,0.72); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); font:inherit; font-weight:800; font-size:0.85rem; color:var(--bdb-ink); cursor:pointer; touch-action:manipulation; box-shadow:0 8px 22px rgba(40,32,20,0.14); }
+        .ip-topbar { position:fixed; top:10px; left:10px; z-index:30; display:flex; gap:8px; }
+        .ip-handle { display:inline-flex; align-items:center; gap:8px; min-height:40px; padding:0 15px; border-radius:999px; border:1px solid rgba(32,30,26,0.14); background:rgba(255,255,255,0.72); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); font:inherit; font-weight:800; font-size:0.85rem; color:var(--bdb-ink); cursor:pointer; touch-action:manipulation; box-shadow:0 8px 22px rgba(40,32,20,0.14); }
+        .ip-bark { display:inline-flex; align-items:center; min-height:40px; padding:0 16px; border-radius:999px; border:1px solid color-mix(in srgb, var(--bdb-amber) 65%, rgba(32,30,26,0.14)); background:var(--bdb-amber); color:var(--bdb-ink); font:inherit; font-weight:800; font-size:0.85rem; cursor:pointer; touch-action:manipulation; box-shadow:0 8px 22px rgba(252,175,56,0.35); }
+        .ip-bark:disabled { opacity:0.45; cursor:default; }
         .ip-dot { width:8px; height:8px; border-radius:50%; background:#c78b24; }
         .ip-dot.connected { background:#2f9e6f; }
         .ip-dot.disconnected { background:#d05f3c; }
@@ -264,16 +280,21 @@ export default function IpadPage() {
         .ip-screen-frame { position:absolute; inset:0; width:100%; height:100%; border:0; pointer-events:none; background:#fff; }
         .ip-screen-note { position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:6; background:rgba(32,30,26,0.78); color:#fff; font-size:0.72rem; font-weight:800; padding:5px 12px; border-radius:999px; pointer-events:none; }
         .ip-scratch { position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; background:#fff; }
-        .ip-scratch-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; padding-left:64px; background:var(--bdb-card); border-bottom:1px solid var(--bdb-line); }
+        .ip-scratch-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; padding-left:210px; background:var(--bdb-card); border-bottom:1px solid var(--bdb-line); }
         .ip-scratch-title { font-weight:800; color:var(--bdb-ink); }
         .ip-scratch-stage { position:relative; flex:1; }
         .ip-spacer { flex:1; }
       `}</style>
 
-      <button className="ip-handle" onClick={toggleTools} aria-expanded={toolsOpen}>
-        <span className={`ip-dot ${boardStatus}`} aria-hidden="true" />
-        {toolsOpen ? "Hide tools" : "Tools"}
-      </button>
+      <div className="ip-topbar">
+        <button className="ip-handle" onClick={toggleTools} aria-expanded={toolsOpen}>
+          <span className={`ip-dot ${boardStatus}`} aria-hidden="true" />
+          {toolsOpen ? "Hide tools" : "Tools"}
+        </button>
+        <button className="ip-bark" onClick={sendBark} disabled={barkCooling} aria-label="Play the class attention call on the room displays">
+          Bark
+        </button>
+      </div>
 
       {toolsOpen && (
         <div className="ip-palette" role="toolbar" aria-label="Writing tools">

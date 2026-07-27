@@ -33,6 +33,7 @@ export type InkMessage =
   | { t: "problem"; text: string | null } // problem(s) to show with space to solve
   | { t: "scratch"; open: boolean } // open/close the scratch overlay on the board
   | { t: "pageflip"; index: number; count: number } // the pen surface changed pages; displays follow
+  | { t: "attention" } // the class attention call: displays play the room sound + Eyes-up pulse
   | { t: "view"; ar: number } // the display announces its stage aspect ratio so the pen surface can letterbox to match
   | { t: "remove"; ids: string[] } // undo / stroke-eraser: these strokes vanish
   | { t: "restore"; stroke: InkStroke } // redo / undo-of-erase: put a stroke back

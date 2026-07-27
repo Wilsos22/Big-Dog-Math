@@ -6,12 +6,14 @@
 // park at 1x1 canvases) so flipping back is instant and complete.
 
 import { useEffect, useRef, useState } from "react";
+import AttentionPulse from "@/components/AttentionPulse";
 import InkBoard from "@/components/InkBoard";
 import { joinInkRoom, type InkConnectionStatus } from "@/lib/inkSync";
 
 export default function BoardPage() {
   const [room, setRoom] = useState("main");
   const [scratchOpen, setScratchOpen] = useState(false);
+  const [attnSignal, setAttnSignal] = useState(0);
   const [pageView, setPageView] = useState({ index: 0, count: 1 });
   const lastCtrlStatus = useRef<InkConnectionStatus>("connecting");
   useEffect(() => {
@@ -26,6 +28,7 @@ export default function BoardPage() {
   useEffect(() => {
     const ctrl = joinInkRoom(`${room}__ctrl`, (m) => {
       if (m.t === "scratch") setScratchOpen(m.open);
+      else if (m.t === "attention") setAttnSignal((n) => n + 1);
       else if (m.t === "pageflip") {
         const count = Math.max(1, m.count);
         setPageView({ index: Math.min(Math.max(0, m.index), count - 1), count });
@@ -66,6 +69,7 @@ export default function BoardPage() {
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#14b8a6", display: "inline-block" }} />
         Board · {room}{pageView.count > 1 ? ` · Page ${pageView.index + 1} of ${pageView.count}` : ""}
       </div>
+      <AttentionPulse signal={attnSignal} />
     </main>
   );
 }

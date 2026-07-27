@@ -7,6 +7,7 @@ import WarmupJoinSync from "@/components/WarmupJoinSync";
 import AbbieStudentBubble from "@/components/AbbieStudentBubble";
 import AbbieStudentAsk from "@/components/AbbieStudentAsk";
 import DeployRefresh from "@/components/DeployRefresh";
+import StudentAttentionSync from "@/components/StudentAttentionSync";
 
 export const metadata: Metadata = {
   title: "Big Dog Math Classroom System",
@@ -26,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}<ClassSync /><WarmupJoinSync /><AbbieStudentBubble /><AbbieStudentAsk /><DeployRefresh /></body>
+      <body>{children}<ClassSync /><WarmupJoinSync /><AbbieStudentBubble /><AbbieStudentAsk /><DeployRefresh /><StudentAttentionSync /></body>
     </html>
   );
 }

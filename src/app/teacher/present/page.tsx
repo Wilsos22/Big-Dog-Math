@@ -4,6 +4,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
 import InkBoard from "@/components/InkBoard";
 import LessonVisual from "@/components/LessonVisual";
+import AttentionListener from "@/components/AttentionListener";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
 import SlideOverlayLayer from "@/components/SlideOverlayLayer";
 import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
@@ -1199,6 +1200,7 @@ export default function ClassroomStagePage() {
 
       </section>
       {inkOverlay && !inkOverlay.embed && <ScreenInkOverlay room={inkOverlay.room} />}
+      {inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && <AttentionListener room={inkOverlay.room} />}
     </main>
   );
 }
