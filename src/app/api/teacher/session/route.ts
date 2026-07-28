@@ -1,4 +1,5 @@
 import { recordSecurityEvent } from "@/lib/securityAudit";
+import { closeOtherOpenSessions, sweepStaleSessions } from "@/lib/sessionLifecycle";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +56,11 @@ export async function GET(request: Request) {
   const sessionId = searchParams.get("sessionId") || "";
   const liveSessionId = searchParams.get("liveSessionId") || "";
   const latestOpen = searchParams.get("latestOpen") === "1";
+
+  // Retire sessions that outlived their class before anything reads them, so a
+  // forgotten session cannot keep answering as "the open one". Throttled to one
+  // real query per minute per instance, which /control's 1.2s poll relies on.
+  await sweepStaleSessions(db);
 
   // Projectors and the live host only need the current session row. Keep this
   // path intentionally small because those classroom surfaces poll frequently.
@@ -428,6 +434,11 @@ export async function POST(request: Request) {
     const permanentCode = text(period.class_code ?? "", 8).toUpperCase();
     const joinCode = /^[A-Z0-9]{2,8}$/.test(permanentCode) ? permanentCode : requestedCode;
 
+    // Retire anything left over from an earlier class before looking for a
+    // session to adopt, so a forgotten morning session is never inherited as
+    // "today's". force=true: starting a class is exactly when this must run.
+    await sweepStaleSessions(db, true);
+
     // One open session per period, always. A second row is what split the class
     // in two: the teacher advanced states on one, the students polled the other.
     const existing = await db
@@ -439,17 +450,20 @@ export async function POST(request: Request) {
       .limit(1)
       .maybeSingle();
     if (existing.data) {
+      const adoptedId = (existing.data as { id: string }).id;
+      // Moving from period 2 to period 3 ends period 2. One class at a time.
+      const alsoClosed = await closeOtherOpenSessions(db, adoptedId);
       const adopted = existing.data as { join_code: string | null };
       if (adopted.join_code !== joinCode) {
         const recoded = await db
           .from("sessions")
           .update({ join_code: joinCode })
-          .eq("id", (existing.data as { id: string }).id)
+          .eq("id", adoptedId)
           .select("id,period_id,assignment_id,join_code,status,started_at,broadcast")
           .maybeSingle();
-        if (recoded.data) return Response.json({ session: recoded.data, adopted: true });
+        if (recoded.data) return Response.json({ session: recoded.data, adopted: true, closedStale: alsoClosed.length });
       }
-      return Response.json({ session: existing.data, adopted: true });
+      return Response.json({ session: existing.data, adopted: true, closedStale: alsoClosed.length });
     }
 
     const { data, error: insertError } = await db
@@ -458,13 +472,14 @@ export async function POST(request: Request) {
       .select("id,period_id,assignment_id,join_code,status,started_at,broadcast")
       .single();
     if (insertError) return Response.json({ error: insertError.message }, { status: 500 });
+    const alsoClosed = await closeOtherOpenSessions(db, data.id);
     void recordSecurityEvent({
       eventType: "teacher_session_change",
       outcome: "allowed",
       sessionId: data.id,
-      details: { action: body.action },
+      details: { action: body.action, closedStale: alsoClosed.length },
     });
-    return Response.json({ session: data }, { status: 201 });
+    return Response.json({ session: data, closedStale: alsoClosed.length }, { status: 201 });
   }
 
   if (body.action === "update") {

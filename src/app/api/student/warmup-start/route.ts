@@ -7,6 +7,7 @@ import {
 import type { LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
 import { assignedWarmupLink, canonicalGoogleFormResource } from "@/lib/warmupResource";
 import { sessionFromPeriodCode } from "@/lib/periodClassCodes";
+import { sweepStaleSessions } from "@/lib/sessionLifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +30,10 @@ export async function POST(request: Request) {
     if (!db) {
       throw new StudentIdentityError("Live sessions are not configured.", 503, "sessions_not_configured");
     }
+
+    // A student typing a code must never be handed yesterday's session, and
+    // must never be the reason a stale one stays alive. Throttled internally.
+    await sweepStaleSessions(db);
 
     const { data: openSession, error: sessionError } = await db
       .from("sessions")

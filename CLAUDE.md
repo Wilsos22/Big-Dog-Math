@@ -411,6 +411,16 @@ the invariants they protect are easy to break again.
   Notion page. Unknown ids now get a synthesized bank entry with an EMPTY `desc` and are named in the
   load message. When adding a second consumer of `lesson.steps`, make it agree with `stepsFromLesson`.
 - **`Anchor Problem` IS THE HOOK.** There is no `Hook` property in the lessons database.
+- **SESSIONS CLOSE THEMSELVES** (`src/lib/sessionLifecycle.ts`, Steele's ask 2026-07-28). One open
+  session at a time: starting or adopting a session closes every other open row, so moving from
+  period 2 to period 3 ends period 2 rather than racing it. A session also auto-closes once it
+  outlives its own planned length plus `STALE_GRACE_MINUTES` (15). The cutoff is DERIVED from that
+  session's lineup (`sequence.steps[].durationSeconds`) with a `MIN_SCHEDULED_MINUTES` floor of 55,
+  never a flat clock - a guardrail that can end a class still in progress is worse than none, so the
+  arithmetic only ever errs long. `sweepStaleSessions` is throttled to one real query per minute per
+  instance and is called from the teacher session GET, session start, and `/api/student/warmup-start`.
+  There is no cron: the sweep is lazy and idempotent, so it heals on the next request either surface
+  makes.
 
 ## Notion + warm-up pipeline
 
