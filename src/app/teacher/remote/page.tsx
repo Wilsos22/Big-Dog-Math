@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import CityRoutesPanel from "@/components/CityRoutesPanel";
+import VisitListPanel from "@/components/VisitListPanel";
 import LiveScreenPreview from "@/components/LiveScreenPreview";
 import {
   REMOTE_COMMAND_STALE_MS,
@@ -1331,6 +1332,8 @@ export default function TeacherRemotePage() {
                     ) : null}
                   </section>
                 ) : null}
+
+                <VisitListPanel sessionId={session.id} />
 
                 <CityRoutesPanel sessionId={session.id} />
 

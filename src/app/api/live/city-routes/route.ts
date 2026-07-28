@@ -17,22 +17,14 @@ import {
   type CityRouteId,
   type CityRouteRecommendation,
   type CityStop,
-  type ReadinessEvidence,
 } from "@/lib/cityRoutes";
+import { loadReadinessEvidence } from "@/lib/readinessEvidence";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 type Db = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
-
-interface StepLite {
-  stateId?: string;
-  question?: string;
-  correctAnswer?: string;
-  pollKind?: string | null;
-  lessonCode?: string;
-}
 
 interface RunRow {
   id: string;
@@ -54,99 +46,12 @@ interface AssignmentRow {
   low_confidence: boolean;
 }
 
-function studentKeyOf(studentId: string | null, displayName: string | null): string {
-  return studentId || `name:${displayName || "student"}`;
-}
-
 async function loadState(db: Db, sessionId: string) {
-  const { data: session, error: sessionError } = await db
-    .from("sessions")
-    .select("id, live_flow")
-    .eq("id", sessionId)
-    .maybeSingle();
-  if (sessionError) throw new Error(sessionError.message);
-  if (!session) throw new Error("Session not found.");
-
-  const steps: StepLite[] = session.live_flow?.sequence?.steps || [];
-  const lessonCode = steps.find((s) => s.lessonCode)?.lessonCode || "";
-  const questionSteps = steps.filter(
-    (s) => s.stateId === "question" && s.question && s.correctAnswer,
-  );
-  const fistStep = [...steps].reverse().find((s) => s.pollKind === "fist-to-five" && s.question) || null;
-
-  const [{ data: polls }, { data: joins }] = await Promise.all([
-    db.from("polls").select("id,question,kind,created_at").eq("session_id", sessionId)
-      .order("created_at", { ascending: true }),
-    db.from("session_joins").select("student_id,display_name,joined_at").eq("session_id", sessionId)
-      .order("joined_at", { ascending: true }),
-  ]);
-
-  // Latest poll per (kind, question) - a re-opened question supersedes.
-  const pollByQuestion = new Map<string, string>();
-  for (const p of polls || []) pollByQuestion.set(`${p.kind}|${p.question}`, p.id);
-  const questionPollIds = questionSteps.map(
-    (s) => pollByQuestion.get(`multiple-choice|${s.question}`) || null,
-  );
-  const fistPollId = fistStep ? pollByQuestion.get(`fist-to-five|${fistStep.question}`) || null : null;
-
-  const pollIds = [...questionPollIds, fistPollId].filter((id): id is string => Boolean(id));
-  const { data: answers } = pollIds.length
-    ? await db.from("poll_answers").select("poll_id,student_id,display_name,answer,created_at")
-        .in("poll_id", pollIds).order("created_at", { ascending: true })
-    : { data: [] as { poll_id: string; student_id: string | null; display_name: string | null; answer: string | null }[] };
-
-  // Latest answer per poll per student.
-  const latestAnswer = new Map<string, string>();
-  for (const a of answers || []) {
-    if (a.answer == null) continue;
-    latestAnswer.set(`${a.poll_id}|${studentKeyOf(a.student_id, a.display_name)}`, a.answer);
-  }
-
-  // Roster = everyone who joined this session (latest name wins).
-  const roster = new Map<string, string>();
-  for (const j of joins || []) {
-    roster.set(studentKeyOf(j.student_id, j.display_name), j.display_name || "Student");
-  }
-
-  // This session's constructed tool work: the 0-5 aggregate rows the
-  // manipulatives write (source 'tool', standard_id null). Averaged per
-  // student across tools, it is the routing tie-breaker - the evidence the
-  // critique pointed out was collected and then ignored.
-  const { data: toolRows } = await db
-    .from("responses")
-    .select("student_id,score")
-    .eq("session_id", sessionId)
-    .eq("source", "tool")
-    .is("standard_id", null)
-    .not("score", "is", null);
-  const toolTotals = new Map<string, { sum: number; count: number }>();
-  for (const row of (toolRows || []) as Array<{ student_id: string | null; score: number | string }>) {
-    if (!row.student_id) continue;
-    const score = Number(row.score);
-    if (!Number.isFinite(score)) continue;
-    const tally = toolTotals.get(row.student_id) || { sum: 0, count: 0 };
-    tally.sum += score;
-    tally.count += 1;
-    toolTotals.set(row.student_id, tally);
-  }
-  const toolScoreOf = (studentKey: string): number | null => {
-    const tally = toolTotals.get(studentKey);
-    return tally && tally.count ? tally.sum / tally.count : null;
-  };
-
-  const evidence: ReadinessEvidence[] = [...roster.entries()].map(([studentKey, name]) => {
-    const correct = questionSteps.map((step, i) => {
-      const pollId = questionPollIds[i];
-      if (!pollId) return null;
-      const answer = latestAnswer.get(`${pollId}|${studentKey}`);
-      if (answer === undefined) return null;
-      return answer === step.correctAnswer;
-    });
-    const fistRaw = fistPollId ? latestAnswer.get(`${fistPollId}|${studentKey}`) : undefined;
-    const fistParsed = fistRaw !== undefined ? Number.parseInt(fistRaw, 10) : Number.NaN;
-    const fist = Number.isInteger(fistParsed) && fistParsed >= 0 && fistParsed <= 5 ? fistParsed : null;
-    return { studentKey, name, correct, fist, toolScore: toolScoreOf(studentKey) };
-  });
+  // Readiness assembly is SHARED with the ranked visit list. Two engines
+  // computing the same thing from the same tables is exactly how /control and
+  // /api/control-remote ended up running different lessons from one Notion
+  // page, so both surfaces read through loadReadinessEvidence.
+  const { lessonCode, questionSteps, hasFist, evidence } = await loadReadinessEvidence(db, sessionId);
 
   const recommendations = new Map<string, CityRouteRecommendation>(
     evidence.map((e) => [e.studentKey, recommendRoute(e)]),
@@ -190,7 +95,7 @@ async function loadState(db: Db, sessionId: string) {
     })
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return { sessionId, lessonCode, questionCount: questionSteps.length, hasFist: Boolean(fistPollId), run, students, evidence, recommendations };
+  return { sessionId, lessonCode, questionCount: questionSteps.length, hasFist, run, students, evidence, recommendations };
 }
 
 function publicState(state: Awaited<ReturnType<typeof loadState>>) {
