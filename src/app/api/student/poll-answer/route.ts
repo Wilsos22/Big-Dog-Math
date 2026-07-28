@@ -59,20 +59,28 @@ export async function POST(request: Request) {
     if (joinError) throw new StudentIdentityError("Your class join could not be checked.", 500, "join_lookup_failed");
     if (!joined) throw new StudentIdentityError("Join the class before answering.", 403, "session_join_required");
 
-    const { error: answerError } = await db.from("poll_answers").upsert(
-      {
-        poll_id: poll.id,
-        student_id: student.id,
-        display_name: student.fullName,
-        answer,
-        // Only sent when present so plain polls keep working before the
-        // poll-explanations.sql / poll-structured-numeric.sql migrations have
-        // been run.
-        ...(explanation ? { explanation } : {}),
-        ...(values ? { values } : {}),
-      },
-      { onConflict: "poll_id,student_id" },
-    );
+    const base = {
+      poll_id: poll.id,
+      student_id: student.id,
+      display_name: student.fullName,
+      answer,
+      // Only sent when present so plain polls keep working before the
+      // poll-explanations.sql / poll-structured-numeric.sql migrations have
+      // been run.
+      ...(explanation ? { explanation } : {}),
+    };
+    // Try WITH the structured boxes, then fall back to the answer alone.
+    // The migrations here are HAND-RUN, and an upsert naming a column that
+    // does not exist fails outright - which would mean a student's exit
+    // ticket silently refusing to save on the one day it is the only
+    // conceptual evidence of the lesson. Losing the boxes is recoverable;
+    // losing the whole response is not.
+    let answerError = values
+      ? (await db.from("poll_answers").upsert({ ...base, values }, { onConflict: "poll_id,student_id" })).error
+      : null;
+    if (!values || answerError) {
+      answerError = (await db.from("poll_answers").upsert(base, { onConflict: "poll_id,student_id" })).error;
+    }
     if (answerError) throw new StudentIdentityError("Your answer could not be saved.", 500, "poll_answer_save_failed");
 
     return Response.json({ saved: true }, { headers: { "cache-control": "no-store" } });

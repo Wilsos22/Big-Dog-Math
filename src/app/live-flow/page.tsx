@@ -441,14 +441,20 @@ export default function LiveFlowPage() {
           }),
         });
       } else {
-        const result = await supabase.from("poll_answers").insert({
+        const base = {
           poll_id: activePoll.id,
           ...(student.studentId ? { student_id: student.studentId } : {}),
           display_name: student.name,
           answer: answer.trim(),
           ...(trimmedExplanation ? { explanation: trimmedExplanation } : {}),
-          ...(values ? { values } : {}),
-        });
+        };
+        // Same fallback as the secure route: poll-structured-numeric.sql is
+        // hand-run, and an insert naming a missing column fails outright.
+        // Losing the boxes is recoverable; losing the response is not.
+        let result = values
+          ? await supabase.from("poll_answers").insert({ ...base, values })
+          : { error: null };
+        if (!values || result.error) result = await supabase.from("poll_answers").insert(base);
         if (result.error) throw result.error;
       }
       const nextSubmitted = [...new Set([...submittedPollIds, activePoll.id])];
