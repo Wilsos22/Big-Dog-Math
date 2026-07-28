@@ -24,12 +24,41 @@ const TOOL_DOMAIN: Record<EvidenceTool, string> = {
   "area-explorer": "Geometry",
 };
 
+/**
+ * What the student actually DID on one attempt.
+ *
+ * A student who places one split line and stops is otherwise
+ * indistinguishable from one who tried three different splits and confirmed
+ * all three give the same total. They are not the same student, and the second
+ * one is the one who got the idea.
+ *
+ * `distinctSplits` is the field nothing else in the system can see, and it is
+ * what makes the exit ticket readable: a student who only ever cuts at the ten
+ * in the tool and then cuts at the ten on the exit has shown a habit, not
+ * flexibility.
+ */
+export interface ToolAttemptDetail {
+  /** The two addends the student cut the factor into. */
+  split?: [number, number];
+  /** Order-independent key, so 20+8 and 8+20 are the same decomposition. */
+  splitKey?: string;
+  /** How many DIFFERENT splits this device has tried on this problem. */
+  distinctSplits?: number;
+  /** 1-based attempt number for this problem on this device. */
+  attempt?: number;
+  /** Each partial the student entered, and whether it was right. */
+  partials?: { entered: number | null; expected: number; correct: boolean }[];
+  /** Wrong steps taken before finishing. */
+  missesBeforeCorrect?: number;
+}
+
 export interface ToolResult {
   tool: EvidenceTool;
   correct: boolean; // solved with zero wrong steps
   standardId?: string; // seeded CCSS code, when the tool maps to one
   misconception?: string | null; // vocabulary tag for the wrong-step pattern
   problemId?: string; // stable id/text of the problem (dedupes re-fires)
+  detail?: ToolAttemptDetail; // what the student did, not just whether it worked
 }
 
 interface Tally { a: number; c: number; tags: Record<string, number> }
@@ -115,6 +144,7 @@ export async function flushPendingToolResults(): Promise<number> {
           dayAttempts: tally.a,
           dayCorrect: tally.c,
           dayTopMisconception: topMisconception(tally),
+          detail: entry.detail,
         }),
       });
       sent += 1;
@@ -197,6 +227,8 @@ export function reportToolResult(r: ToolResult): void {
           dayAttempts: tally.a,
           dayCorrect: tally.c,
           dayTopMisconception: topTag,
+          // What the student actually did, not just whether it worked.
+          detail: r.detail,
         }),
       }).catch(() => undefined);
       return;

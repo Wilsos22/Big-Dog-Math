@@ -91,6 +91,42 @@ const FILLER: Problem[] = [
 ];
 const DEFAULT_SET: Problem[] = FILLER.slice(0, 4);
 
+/**
+ * Which splits this device has already tried on a given problem.
+ *
+ * Per device and per problem, so re-running 18 x 6 accumulates rather than
+ * starting over - trying 10+8 and then 9+9 is the evidence that the student
+ * understands ANY split works, and it is invisible if each run looks like a
+ * fresh attempt. Storage failure just means the count starts at one; the
+ * attempt itself is still reported.
+ */
+type SplitHistory = { splits: string[]; attempts: number };
+
+function splitHistoryKey(problemId: string) {
+  return `bdm-da-splits:${problemId}`;
+}
+
+function readSplitHistory(problemId: string): SplitHistory {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(splitHistoryKey(problemId)) || "null") as Partial<SplitHistory> | null;
+    return {
+      splits: Array.isArray(parsed?.splits) ? parsed.splits.filter((s): s is string => typeof s === "string") : [],
+      attempts: Number.isFinite(parsed?.attempts) ? Number(parsed?.attempts) : 0,
+    };
+  } catch {
+    return { splits: [], attempts: 0 };
+  }
+}
+
+function writeSplitHistory(problemId: string, history: SplitHistory): void {
+  try {
+    localStorage.setItem(splitHistoryKey(problemId), JSON.stringify({
+      splits: history.splits.slice(-12),
+      attempts: Math.min(history.attempts, 999),
+    }));
+  } catch { /* storage unavailable - the attempt still reports, just without history */ }
+}
+
 export default function DistributiveAreaMethod() {
   const [phase, setPhase] = useState<Phase>("enter");
   const [top, setTop] = useState(18);   // horizontal — the factor that gets split into (b + c)
@@ -308,12 +344,39 @@ export default function DistributiveAreaMethod() {
   const finishProblem = useCallback((missCount: number) => {
     if (!reportedRef.current) {
       reportedRef.current = true;
+      const problemId = `${top}x${side}`;
+      // Record which split they chose and how many DIFFERENT ones they have
+      // tried on this problem. One split line and stop looks identical to
+      // three splits all confirmed equal without this - and the second student
+      // is the one who got the idea.
+      const history = readSplitHistory(problemId);
+      const splitKey = b <= c ? `${b}+${c}` : `${c}+${b}`;
+      const splitsTried = history.splits.includes(splitKey)
+        ? history.splits
+        : [...history.splits, splitKey];
+      const attempt = history.attempts + 1;
+      writeSplitHistory(problemId, { splits: splitsTried, attempts: attempt });
+
       reportToolResult({
         tool: "distributive-area",
         correct: missCount === 0,
         standardId: "6.EE.A.3",
         misconception: missCount === 0 ? null : missTagRef.current,
-        problemId: `${top}x${side}`,
+        problemId,
+        detail: {
+          split: [b, c],
+          splitKey,
+          distinctSplits: splitsTried.length,
+          attempt,
+          // Only the two partial products and the total - the earlier slots
+          // are the student copying the split back, not new work.
+          partials: [4, 5, 6].map((slot) => {
+            const raw = (vals[slot] || "").trim();
+            const entered = raw ? Number(raw) : null;
+            return { entered, expected: expected[slot], correct: entered === expected[slot] };
+          }),
+          missesBeforeCorrect: missCount,
+        },
       });
     }
     // Indexed by position in the set, so re-running a problem replaces its row
@@ -324,7 +387,7 @@ export default function DistributiveAreaMethod() {
       return next;
     });
     setPhase("done");
-  }, [top, side, total, lesson, lIdx]);
+  }, [top, side, total, lesson, lIdx, b, c, vals, expected]);
 
   // One step at a time, with feedback aimed at what the wrong number actually
   // means rather than a bare "try again".

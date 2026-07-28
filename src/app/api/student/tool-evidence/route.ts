@@ -46,6 +46,13 @@ export async function POST(request: Request) {
     const dayTopMisconception = typeof body.dayTopMisconception === "string"
       ? body.dayTopMisconception.trim().slice(0, 160) || null
       : null;
+    // What the student DID on this attempt - which split they chose, how many
+    // distinct splits they tried, each partial and whether it was right.
+    // Bounded so a malformed client cannot push an unbounded blob into the row.
+    const detail = body.detail && typeof body.detail === "object" && !Array.isArray(body.detail)
+      && JSON.stringify(body.detail).length <= 4000
+      ? body.detail
+      : null;
     await requireOpenJoinedSession(student, sessionId);
 
     const db = getSupabaseAdmin();
@@ -57,25 +64,31 @@ export async function POST(request: Request) {
     // per-standard stage gates and is excluded from the bars. Writing one for
     // every attempt (the old behavior) made each miss a full-weight bar hit.
     if (standardId) {
-      const { error } = await db.from("responses").upsert(
-        {
-          student_id: student.id,
-          session_id: sessionId,
-          problem_id: null,
-          source: "tool",
-          domain: TOOL_DOMAIN[tool],
-          standard_id: standardId,
-          score: null,
-          is_correct: correct,
-          misconception,
-          item_ref: `${tool}:${problemId}`,
-          dedupe_key: `tool:${tool}:${student.id}:${date}:${problemId}`,
-          graded_by: "tool",
-          confirmed: false,
-          submitted_at: now,
-        },
-        { onConflict: "dedupe_key", ignoreDuplicates: true },
-      );
+      const row = {
+        student_id: student.id,
+        session_id: sessionId,
+        problem_id: null,
+        source: "tool",
+        domain: TOOL_DOMAIN[tool],
+        standard_id: standardId,
+        score: null,
+        is_correct: correct,
+        misconception,
+        item_ref: `${tool}:${problemId}`,
+        dedupe_key: `tool:${tool}:${student.id}:${date}:${problemId}`,
+        graded_by: "tool",
+        confirmed: false,
+        submitted_at: now,
+      };
+      // Try WITH detail, then without: tool-evidence-detail.sql is hand-run,
+      // and losing a whole attempt because the column is not there yet would
+      // be a far worse trade than losing the detail on it.
+      let error = detail
+        ? (await db.from("responses").upsert({ ...row, detail }, { onConflict: "dedupe_key", ignoreDuplicates: true })).error
+        : null;
+      if (!detail || error) {
+        error = (await db.from("responses").upsert(row, { onConflict: "dedupe_key", ignoreDuplicates: true })).error;
+      }
       if (error) throw new StudentIdentityError("Your learning evidence could not be saved.", 500, "evidence_save_failed");
     }
 
