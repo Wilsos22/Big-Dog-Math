@@ -33,7 +33,7 @@ type LoadState = "loading" | "ready" | "empty" | "error";
  * stripped because the screen supplies its own step counter, and a teacher
  * writes the list either way.
  */
-export function parseHelpPath(helpPath: string | undefined | null): string[] {
+function parseHelpPath(helpPath: string | undefined | null): string[] {
   return (helpPath || "")
     .split(/\r?\n/)
     .map((line) => line.replace(/^\s*(?:\d+\s*[.)]|[-*•])\s*/, "").trim())
