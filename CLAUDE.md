@@ -369,6 +369,49 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   can never make City Routes light up (roster and readiness still come from joins + polls). Any new mock roster MUST stay fully fictional
   (see the July 2026 real-names-in-a-public-repo incident) and have Steele eyeball the names first.
 
+## Live sessions - the failure modes that cost a class period
+
+Learned the hard way on 2026-07-28: a full period ran the `DEFAULT_STATES` bank skeleton while every
+student screen stayed frozen, and nothing on any surface said so. All of the following are fixed, but
+the invariants they protect are easy to break again.
+
+- **ONE OPEN SESSION PER PERIOD, KEYED TO THE PERMANENT CLASS CODE.** `periods.class_code` (`DOG<n>`,
+  `supabase/period-class-codes.sql`) is the only code students ever type. `/api/teacher/session`
+  `action:"start"` now prefers it over the client's `makeCode()` and adopts the period's existing open
+  session instead of inserting a second row. Never reintroduce a random per-session join code: it can
+  never equal `DOG<n>`, so the direct `join_code` lookup in `/api/student/warmup-start` misses and
+  students fall through to `sessionFromPeriodCode`, which is gated on `withinSchoolHours()` AND a
+  district account. When either gate closes it opens a DIFFERENT row - `broadcast:"free"`,
+  `live_flow` null - and `ClassSync` holds those students on `/` forever.
+- **`latestOpen=1` IS NOT SESSION IDENTITY.** It returns the newest open session across every period.
+  `/control` now pins to `getStoredTeacherSessionId()` via `?liveSessionId=` and only falls back once
+  that session is closed. Without the pin, a student typing a class code mid-period spawns a newer row
+  and silently drags Control onto it, re-hydrating the lineup from that row's seed flow.
+- **NEVER GATE A `teacherPost` PATH ON `getSupabase()`.** Control's live_flow publish effect did, and
+  `supabase` is unused in it. With a null browser client, `broadcast` still flipped to Live Class Flow
+  but no `live_flow` snapshot was ever written, so `live_flow.state.id` stayed null and every student
+  sat on the homepage while the teacher watched states advance normally.
+- **`saveProvisionalStudentSession` must clear the class-mode exit marker**, exactly as
+  `saveVerifiedStudentJoin` does. `leaveClassMode()` sets that marker whenever a session closes, and
+  `ClassSync` returns on every tick while it is set - so every Chromebook after period 1, and every
+  device on day 2, looked joined and never moved. Nothing in the UI revealed it.
+- **A SILENT CATCH IN A POLLING LOOP IS A CLASSROOM OUTAGE.** `ClassSync` swallowed every read error
+  with no state and no log, which made a dead session indistinguishable from a working one that had
+  not advanced. It now counts consecutive failures and tells the student after about 15 seconds. Hold
+  this line in every classroom poller.
+- **CATALOG COPY MUST NEVER STAND IN FOR AUTHORED CONTENT.** `DEFAULT_STATES[].desc` and
+  `DEFAULT_DISCUSSION_SUPPORTS` (`src/lib/classroomPilot.ts`) both reached projector screens as
+  terminal fallbacks - "Watch and take notes. I'll model each step." and the strategy / evidence /
+  justify cards, the latter unchanged from warm-up to closeout. `discussionSupportsForLesson` is now
+  discussion-only on both `/teacher/present` and `/teacher/pace`. Empty renders as nothing; wrong
+  renders on a classroom screen.
+- **DO NOT FILTER NOTION LESSON STEPS BY THE STATE CATALOG.** `/control` dropped every step whose
+  `State ID` was not in `DEFAULT_STATES` (about thirty real ids in the database) while
+  `/api/control-remote` did not filter at all - so the two engines ran different lessons from the same
+  Notion page. Unknown ids now get a synthesized bank entry with an EMPTY `desc` and are named in the
+  load message. When adding a second consumer of `lesson.steps`, make it agree with `stepsFromLesson`.
+- **`Anchor Problem` IS THE HOOK.** There is no `Hook` property in the lessons database.
+
 ## Notion + warm-up pipeline
 
 - `src/lib/notionLessons.ts` reads the "Math 6 Lessons" DB via the Notion data_sources API
