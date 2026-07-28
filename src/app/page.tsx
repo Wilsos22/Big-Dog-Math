@@ -649,6 +649,11 @@ export default function StudentLanding() {
             <span>Curious what this is? <b>Watch a class period run</b></span>
           </a>
         )}
+        {!pendingCode && (
+          <a className="st-explore" href="/homework-help">
+            <span>Stuck on the assignment? <b>Get unstuck</b></span>
+          </a>
+        )}
       </div>
 
       <div className="st-foot">
