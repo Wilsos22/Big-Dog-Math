@@ -39,8 +39,10 @@ bars and live misconception grouping).
 1. NO EMOJIS ANYWHERE. Not in UI copy, component text, button labels, nav labels, headings, console
    logs, code comments, commit messages, docs, or the Apps Script files. Use plain words or, where a
    glyph is truly needed, a clean text/SVG affordance - not a pictograph, dingbat, or emoji checkmark
-   or arrow. The existing codebase currently violates this heavily (roughly 440 emoji across ~70 files,
-   pre-dating this rule); do not add more, and strip emoji from any file you edit as you go.
+   or arrow. The existing codebase still carries legacy violations (measured 2026-07-27: ~60 true
+   pictographic emoji across 16 src/ files, plus ~85 typographic arrows in copy - the old
+   "~440 across ~70 files" figure counted the arrows); do not add more, and strip emoji from
+   any file you edit as you go.
 2. Never `git add .` or `git add -A`. A Google AI Studio agent and cloud Claude sessions commit to this
    same repo concurrently - stage only the explicit paths you changed. Always `git fetch` and merge (or
    fast-forward) before pushing; local `main` goes stale fast. Corollary: when a brief cites a commit as

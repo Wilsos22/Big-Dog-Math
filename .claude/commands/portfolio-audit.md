@@ -33,8 +33,14 @@ sending the link to anyone.
   (https://github.com/Wilsos22/Website-prototype) - the things a company can
   actually reach. Local code reads are for explaining what you observe, not a
   substitute for observing it.
-- COLD PROFILE, strictly: open a fresh pane tab, and before anything else clear
-  the origin's localStorage, sessionStorage, and cookies via javascript_tool.
+- COLD PROFILE, strictly - and know the pane's limit (learned 2026-07-27): pane
+  tabs SHARE one cookie jar per origin, and the teacher cookie is httpOnly, so
+  the pane CANNOT be made cold against production if this browser ever logged
+  in. curl is the true cold client - prove the security posture (401s,
+  redirects, 404s) with curl, and use the pane only for VISUALS of public
+  routes after clearing localStorage/sessionStorage via javascript_tool
+  (public pages render identically for cold visitors; never screenshot gated
+  routes as if they were public).
   Never authenticate as the teacher. Never plant a student session except where
   a phase explicitly says to simulate joining, and then only with the MOCK
   class (period code MOCK / join code MOCKLV). A cold visitor is the entire
