@@ -107,7 +107,14 @@ bars and live misconception grouping).
 ## Routes (as of this writing)
 
 - Student / public flow: `/` (landing, join-by-code), `/join`, `/explore`, `/lesson`, `/today`,
-  `/lessons`, `/practice`, `/challenge`, `/checkpoint`, `/exit-ticket`, `/assignment/[id]`, `/spinner`.
+  `/lessons`, `/practice`, `/challenge`, `/checkpoint`, `/exit-ticket`, `/assignment/[id]`, `/spinner`,
+  `/homework-help`.
+- `/homework-help` (added 2026-07-28) renders the lesson's existing `Help Path` property ONE STEP PER
+  SCREEN with one button, reading the public `/api/today` - zero new authoring, works every night for
+  whatever the assignment is, with no live session and no join (it runs at 8pm from a kitchen table).
+  Steele's constraint: sixth graders ignore a wall of supports and A LIST IS A WALL. Never turn it
+  into a list, and never add an "I am stuck, skip it" exit - an escape hatch cheaper than the work
+  gets used instead of the work. Reached from the third `.st-explore` button on the landing page.
 - Manipulative tools (public, no session): `/whiteboard`, `/number-line-plus`, `/number-line`,
   `/fraction-bars`, `/group-bars`, `/percent-bar`, `/algebra-tiles`, `/equation-builder`,
   `/order-of-operations` (GEMS), `/combine-like-terms`, `/proportions`, `/area-model`,
@@ -335,8 +342,22 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   AND `practice_assignments`; adding one entry there is all a new drill needs, no UI change. `emoji` is
   optional (new skills omit it per rule 1). `standardId` carries the dotted-letter CCSS as seeded in
   `standards`; `Problem.misses` maps a wrong choice to a canonical `misconceptions` label so drill
-  evidence can feed grouping once attempts reach `responses`. Tags are exact-match and foreign-keyed -
-  a new tag needs a `misconceptions` row (a migration) before it will ever cluster.
+  evidence can feed grouping once attempts reach `responses`.
+- MISCONCEPTION TAGS ARE EXACT-MATCH BUT **NOT** FOREIGN-KEYED (corrected 2026-07-28; the old line
+  here said "exact-match and foreign-keyed", which is wrong and made the failure sound loud).
+  `responses.misconception` is plain `text` (schema.sql:83) - only `recommendations.misconception`
+  has the FK. So an unseeded tag NEVER errors. It writes fine, it still clusters, and it silently
+  loses its domain (i-Ready corroboration in `/api/live/groups` goes to zero) while any teacher move
+  authored against it renders blank. The cluster still appears, just uncorroborated and unplanned.
+  `src/lib/misconceptions.ts` now holds the vocabulary in TypeScript - type a new emitter's tag as
+  `MisconceptionTag` and a bad label is a compile error at the call site - and
+  `npm run test:misconceptions` asserts it matches the `supabase/proficiency.sql` seed in BOTH
+  directions, so adding a tag means editing both files and running the SQL. Two known divergences are
+  recorded as a backlog the contract forces to shrink: `AreaExplorer.tsx` emits five HYPHENATED tags
+  (`slant-for-height`, `swapped-dims`, `compute-error`, `linear-unit`, `cubed-unit`) that match
+  nothing - it is one of the seven tools that actually emit evidence, so every `/area-explorer` miss
+  has been clustering into a domainless singleton - and `sbacCheckpoints.ts` uses ~39 free-text prose
+  notes instead of the vocabulary. Both need Steele's vocabulary call, not an invented relabel.
 - Student signals (the "I'm stuck" tap): fully live as of 2026-07-26 - Steele ran BOTH
   `supabase/student-signals.sql` (chips on /live-flow, counts on /session + /teacher/remote)
   and `supabase/student-signal-controls.sql` (per-student mute + the sessions.signals_off
@@ -447,6 +468,37 @@ the invariants they protect are easy to break again.
   submit. Answers previously lived in React state alone, so a discarded tab lost a half-written exit
   ticket silently. This matters more now that the exit ticket IS the day's evidence - it carries the
   hook problem, not a procedure question (Steele's decision, 2026-07-28).
+- **A STRUCTURED-NUMERIC STEP CAN NEVER BE JUDGED BY STRING EQUALITY** (added 2026-07-28).
+  Learning checks and the exit ticket moved from multiple choice to N numeric boxes
+  (`Response Mode: Structured Numeric`), because multiple choice cannot separate a student who
+  misunderstands the distributive property from one who understands it and cannot multiply - and
+  those need different teacher moves. `Correct Answer` on such a step is no longer an answer, it is a
+  four-form rule spec parsed by `src/lib/structuredNumeric.ts` (`boxes: N`, `sum(a,b)=N`, `a=K*b`,
+  `a=N`); ANY valid split passes, so there is no single correct string. `poll_answers.answer` keeps
+  the final box and the boxes go in the new `values` column, because `answer` is exact-matched by
+  City Routes and the readiness tallies. THE TRAP: `/api/live/city-routes` looked polls up by the
+  `multiple-choice` key only and compared `answer === correctAnswer` - against a structured step that
+  finds no poll at all, or compares "168" to four lines of rules, marking EVERY student incorrect and
+  routing the whole class to the teacher table. Confidently wrong is worse than blank. Both City
+  Routes and the visit list now read through one shared `src/lib/readinessEvidence.ts`; keep it that
+  way. Only the BOX COUNT crosses `studentSafeLiveFlow` - the rules carry the answer (`5=168` IS the
+  product). A spec that will not parse fails LOUDLY in the /control load message and blocks the
+  server-side start rather than opening a step with zero inputs.
+- **THE RELEASE BLOCK IS A RANKED VISIT LIST, NOT WORK STATIONS** (Steele 2026-07-28). Nobody moves.
+  `src/lib/visitList.ts` + `/api/live/visit-list` + `VisitListPanel` on `/teacher/remote`: four tiers,
+  tier 2 grouped BY THE ERROR (nine students with one misconception is one stop, not nine visits),
+  a stop-and-reteach banner when one error holds >40% of the class, and Got it / Partly / Still stuck
+  taps that clear the row so what remains is WHO HAS NOT BEEN REACHED. Two students who must never be
+  tier 1: one who split the harder factor (correct, just slower) and one whose only wrong box was the
+  final total (arithmetic, concept intact) - that distinction is the entire reason the response kind
+  changed. The taps are the ONLY path by which the teacher's read of a student's PAPER work enters
+  the system; the assignment can go home unfinished, so it is never exit evidence. Requires
+  `supabase/visit-check-ins.sql` (RLS on, NO policies - teacher routes only). Nothing here may reach
+  a student device or a public projector; do not widen `studentSafeLiveFlow` to carry any of it.
+- **`/api/teacher/poll` VALIDATED KINDS AGAINST A HAND-COPIED ARRAY** that omitted
+  `multiple-choice-explain`, so every one of those polls was stored as `short-answer` (the student
+  surface still rendered right from the flow snapshot, so nothing surfaced it). It now reads the
+  shared `LIVE_POLL_KINDS` union. Never re-introduce a local literal list of poll kinds.
 - **TIMER WARNINGS ARE SHARED** (`src/lib/timerUrgency.ts`, Steele 2026-07-28): amber at 30s, coral
   and pulsing at 15s, faster at 5s, on the projector, the pace screen AND the student device - a
   head-down student needs the same runway the room gets. Colour and opacity only, never layout, and
@@ -597,7 +649,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 17 golden/contract suites, run with typecheck by
+  2026-07-27 `npm test` - the aggregate of all 20 golden/contract suites, run with typecheck by
   GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.
@@ -605,6 +657,13 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   that; an unreviewed Next/React major landing on a school-morning deploy is the failure mode).
   `scripts/proxy-gate-contract.mjs` asserts every PROTECTED_PREFIX has its `/:path*` matcher
   entry in src/proxy.ts - the two lists can no longer drift fail-open.
+- AN APP ROUTER `page.tsx` MAY ONLY EXPORT the default component plus the fixed config exports
+  (`dynamic`, `runtime`, `metadata`, ...). Exporting a helper for testing fails the BUILD with a
+  `OmitWithTag ... not assignable to type 'never'` error pointing at `.next/dev/types`, and
+  `npm run typecheck` can PASS beforehand because those route types are only regenerated when the dev
+  server sees the new file - so a clean typecheck is not proof here. Put shared helpers in `src/lib/`.
+  Same story in reverse: after deleting a route, a stale `.next/dev/types/app/<route>/` makes
+  typecheck fail on a file that no longer exists - delete the folder (`.next` is gitignored).
 - Scratch worktrees: `npm run build` (Turbopack) panics if the `node_modules` symlink points outside
   what it takes as the project root - "Symlink [project]/node_modules is invalid". Put worktrees that
   need a BUILD under `.claude/worktrees/` inside the repo; a tmp-dir worktree with the symlink is
