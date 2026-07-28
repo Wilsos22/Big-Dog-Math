@@ -47,7 +47,14 @@ export function reportToolResult(r: ToolResult): void {
   try {
     const session = readSession();
     const supabase = getSupabase();
-    if (!session || !supabase) return;
+    if (!session) return;
+    // Do NOT require the browser Supabase client on the secure path - it posts
+    // through /api/student/tool-evidence and never touches `supabase`. Gating on
+    // it meant a deployment where getSupabase() returns null silently recorded
+    // ZERO tool evidence: students used the manipulative for a whole lesson and
+    // nothing reached the proficiency spine. Same defect shape as the live_flow
+    // publish guard in /control.
+    if (!SECURE_STUDENT_DATA && !supabase) return;
 
     // The running day tally lives on the device in BOTH modes - it is what
     // turns per-problem results into the ONE aggregate row per (student x
@@ -86,6 +93,9 @@ export function reportToolResult(r: ToolResult): void {
       return;
     }
 
+    // Legacy direct-write path. Unreachable when SECURE_STUDENT_DATA is on, and
+    // the guard above already returned if the client is missing.
+    if (!supabase) return;
     // Aggregate row (updates in place all period long).
     void supabase.from("responses").upsert({
       student_id: session.studentId,

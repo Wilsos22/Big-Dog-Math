@@ -34,6 +34,11 @@ const CLASS_MODE_TARGETS = new Set([
   "/number-line-plus",
   "/percent-bar",
   "/equation-builder",
+  // Present in LiveToolRoute but missing here, so a teacher broadcasting one of
+  // these explicitly could not send students to it.
+  "/distributive-area",
+  "/area-explorer",
+  "/balance-beam",
   "/order-of-operations",
   "/fraction-bars",
   "/divisibility",
