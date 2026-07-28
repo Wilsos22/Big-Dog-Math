@@ -504,7 +504,6 @@ export const SKILLS: Skill[] = [
   {
     key: "order-of-operations",
     label: "Order of Operations",
-    emoji: "🧮",
     blurb: "GEMS — evaluate the expression",
     toolRoute: "/order-of-operations",
     levels: ["No parentheses", "Parentheses", "Exponents & ÷"],
@@ -513,7 +512,6 @@ export const SKILLS: Skill[] = [
   {
     key: "solve-for-x",
     label: "Solve for x",
-    emoji: "⚖️",
     blurb: "One-step & two-step equations",
     toolRoute: "/equation-builder",
     levels: ["x + b = c", "ax + b = c", "Harder / negatives"],
@@ -522,7 +520,6 @@ export const SKILLS: Skill[] = [
   {
     key: "combine-like-terms",
     label: "Combine Like Terms",
-    emoji: "🟰",
     blurb: "Simplify the expression",
     toolRoute: "/combine-like-terms",
     levels: ["All positive", "With subtraction", "Mixed order"],
@@ -531,7 +528,6 @@ export const SKILLS: Skill[] = [
   {
     key: "multiplication",
     label: "Multiplication Facts",
-    emoji: "✖️",
     blurb: "Fast multiplication fluency",
     toolRoute: "/multiplication-fluency",
     levels: ["Up to 9×9", "Up to 12×12", "2-digit × 1-digit"],
@@ -549,7 +545,6 @@ export const SKILLS: Skill[] = [
   {
     key: "integers",
     label: "Integer Operations",
-    emoji: "➕",
     blurb: "Add, subtract & multiply with negatives",
     toolRoute: "/number-line-plus",
     levels: ["Adding", "Subtracting", "Multiply / mixed"],
@@ -558,7 +553,6 @@ export const SKILLS: Skill[] = [
   {
     key: "fractions",
     label: "Fractions",
-    emoji: "🍕",
     blurb: "Equivalent, compare & simplify",
     toolRoute: "/fraction-bars",
     levels: ["Equivalent", "Compare", "Simplify"],

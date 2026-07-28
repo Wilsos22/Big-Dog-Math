@@ -64,7 +64,7 @@ export default function TeacherCheckpointsPage() {
         {missing && <div className="cp-warn">Run <b>supabase/checkpoints.sql</b> in the Supabase SQL editor to start collecting checkpoint data.</div>}
         {loading && <p className="cp-soft">Loading…</p>}
         {!loading && supabase && !missing && runs.length === 0 && (
-          <div className="cp-card"><p className="cp-soft">No checkpoints yet. Add the <b>✅ SBAC Checkpoint</b> state to a lesson and send one during class.</p></div>
+          <div className="cp-card"><p className="cp-soft">No checkpoints yet. Add the <b>SBAC Checkpoint</b> state to a lesson and send one during class.</p></div>
         )}
 
         {!open && runs.length > 0 && (

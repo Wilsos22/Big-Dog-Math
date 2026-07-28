@@ -93,7 +93,7 @@ export default function ClassroomTools() {
             }}
           />
           <div className="text-white text-xs">
-            <span className="font-extrabold text-white text-sm block">⏰ Cleanup Warning!</span>
+            <span className="font-extrabold text-white text-sm block">Cleanup Warning!</span>
             "Hey class! We've hit the 5-minute mark! Start packing up your materials soon."
           </div>
           <button
@@ -178,7 +178,7 @@ export default function ClassroomTools() {
 
           <div className="text-center mb-8">
             <span className="bg-pink-500/20 text-pink-300 border border-pink-500/30 text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-widest animate-pulse">
-              🚨 Time is Up! Exit Mode Activated
+              Time is Up! Exit Mode Activated
             </span>
             <h1 className="text-4xl font-black mt-4 bg-clip-text text-transparent bg-gradient-to-r from-pink-400 to-rose-400">
               Exit Procedure Dashboard
@@ -189,7 +189,7 @@ export default function ClassroomTools() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
             {/* Steps Left Panel */}
             <div className="bg-slate-950/80 border border-slate-800 p-6 rounded-3xl shadow-2xl flex flex-col gap-4">
-              <h3 className="text-xs font-extrabold text-pink-400 uppercase tracking-wider mb-2">📋 Transition Checklist</h3>
+              <h3 className="text-xs font-extrabold text-pink-400 uppercase tracking-wider mb-2">Transition Checklist</h3>
               
               {[
                 { step: "1", title: "Clear Desk", desc: "Brush all crumbs, papers, and trash into the bin." },
@@ -215,7 +215,7 @@ export default function ClassroomTools() {
               {/* Audio controller */}
               <div className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
                 <div className="flex items-center gap-2.5 text-left">
-                  <span className="text-pink-400 animate-spin text-lg">🎵</span>
+                  <span className="text-pink-400 animate-spin text-lg"></span>
                   <div>
                     <span className="text-xs font-extrabold text-white block">Playing: Ambient Lofi Exit</span>
                     <span className="text-[10px] text-slate-400 block">Volume: 30% soft background</span>
@@ -225,7 +225,7 @@ export default function ClassroomTools() {
                   onClick={toggleMute}
                   className="bg-slate-800 hover:bg-slate-700 text-[10px] font-bold px-3 py-1.5 rounded-xl border border-slate-700 transition"
                 >
-                  {isMuted ? "🔈 Unmute" : "🔇 Mute"}
+                  {isMuted ? "Unmute" : "Mute"}
                 </button>
               </div>
 

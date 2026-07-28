@@ -333,7 +333,7 @@ export default function BuilderPage() {
                       <div className="nm">{p.title || "Untitled"}</div>
                       <div className="sub">{p.code ? p.code + " · " : ""}{p.lineup.length} step{p.lineup.length === 1 ? "" : "s"}</div>
                     </div>
-                    <button className="bx-ibtn" title="Load to edit" onClick={() => loadForEdit(p)}>✎</button>
+                    <button className="bx-ibtn" title="Load to edit" onClick={() => loadForEdit(p)}>Edit</button>
                     <button className="bx-btn go" style={{ padding: "8px 12px" }} onClick={() => launchPreset(p)}>▶ Launch</button>
                     <button className="bx-ibtn" title="Delete" onClick={() => removePreset(p)}>×</button>
                   </div>

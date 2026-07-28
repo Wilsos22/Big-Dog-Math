@@ -75,7 +75,7 @@ export default function CheckpointUpload() {
       `}</style>
 
       <div className="cu-wrap">
-        <h1 className="cu-h1">✅ Checkpoint upload</h1>
+        <h1 className="cu-h1">Checkpoint upload</h1>
         <div className="cu-sub">
           Upload a checkpoint (or practice-day) results CSV and mastery updates instantly — checkpoints are
           the produced-work evidence, so this is what moves students into <b>Mastered</b> and <b>Complete</b>.
@@ -95,7 +95,7 @@ export default function CheckpointUpload() {
           </div>
 
           <label className="cu-drop" style={{ display: "block" }}>
-            {fileName ? `📄 ${fileName}` : "Click to choose the results CSV (or paste it below)"}
+            {fileName ? `${fileName}` : "Click to choose the results CSV (or paste it below)"}
             <input type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={(e) => onFile(e.target.files?.[0])} />
           </label>
           <textarea className="cu-ta" placeholder="…or paste CSV text here" value={csv} onChange={(e) => { setCsv(e.target.value); setFileName(null); }} spellCheck={false} />
@@ -112,7 +112,7 @@ export default function CheckpointUpload() {
           </button>
         </div>
 
-        {error && <div className="cu-bad">⚠ {error}</div>}
+        {error && <div className="cu-bad">{error}</div>}
         {result && (
           <div className="cu-good">
             ✓ <b>{result.checkpoints.join(", ")}</b> ingested as Tier-{result.tier} —

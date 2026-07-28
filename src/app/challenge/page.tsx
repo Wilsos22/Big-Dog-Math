@@ -209,7 +209,7 @@ export default function ChallengePage() {
 
       {view === "needjoin" && (
         <div className="cg-mid cg-card">
-          <div className="cg-emoji">🎮</div>
+          <div className="cg-emoji"></div>
           <h1 className="cg-h">Join your class to play</h1>
           <p className="cg-soft">Challenges are part of a live class session. Tap below and enter your teacher&apos;s code.</p>
           <a className="cg-btn" href="/">Enter class code →</a>
@@ -218,7 +218,7 @@ export default function ChallengePage() {
 
       {view === "waiting" && (
         <div className="cg-mid cg-card">
-          <div className="cg-emoji cg-bounce">⏳</div>
+          <div className="cg-emoji cg-bounce"></div>
           <h1 className="cg-h">Get ready{session ? `, ${session.name.split(" ")[0]}` : ""}!</h1>
           <p className="cg-soft">Waiting for your teacher to start the challenge…</p>
           <div className="cg-dots"><span /><span /><span /></div>
@@ -239,7 +239,7 @@ export default function ChallengePage() {
               <span className="cg-pts">{score}</span>
               <span className="cg-pts-lbl">points</span>
             </div>
-            {streak >= 2 && <div className="cg-streak">🔥 {streak} streak</div>}
+            {streak >= 2 && <div className="cg-streak">{streak} streak</div>}
             <div className="cg-clock" data-low={secondsLeft <= 10}>{secondsLeft}s</div>
           </div>
           <div className="cg-bar"><div className="cg-bar-fill" style={{ width: `${challenge ? (secondsLeft / challenge.duration_seconds) * 100 : 0}%` }} /></div>
@@ -284,7 +284,7 @@ export default function ChallengePage() {
               <>
                 {board.slice(0, 3).map((r, i) => (
                 <span key={r.key} className={`cg-mini-row${session && r.key === session.studentId ? " me" : ""}`}>
-                  <b>{["🥇", "🥈", "🥉"][i]}</b> {r.name.split(" ")[0]} · {r.points}
+                  <b>{["1st", "2nd", "3rd"][i]}</b> {r.name.split(" ")[0]} · {r.points}
                 </span>
                 ))}
                 {myRank > 3 && <span className="cg-mini-row me">You · #{myRank} · {score}</span>}
@@ -297,7 +297,7 @@ export default function ChallengePage() {
       {view === "ended" && (
         <div className="cg-mid">
           <div className="cg-card cg-results">
-            <div className="cg-emoji">{myRank === 1 ? "🏆" : "🎉"}</div>
+            <div className="cg-emoji"></div>
             <h1 className="cg-h">{myRank === 1 ? "You won!" : myRank > 0 ? `You finished #${myRank}` : "Time!"}</h1>
             <div className="cg-stats">
               <div><b>{score}</b><span>points</span></div>
@@ -308,7 +308,7 @@ export default function ChallengePage() {
               <div className="cg-final">
                 {board.slice(0, 5).map((r, i) => (
                   <div key={r.key} className={`cg-final-row${session && r.key === session.studentId ? " me" : ""}`}>
-                    <span className="cg-final-rank">{["🥇", "🥈", "🥉"][i] || `${i + 1}`}</span>
+                    <span className="cg-final-rank">{["1st", "2nd", "3rd"][i] || `${i + 1}`}</span>
                     <span className="cg-final-name">{r.name}</span>
                     <span className="cg-final-pts">{r.points}</span>
                   </div>

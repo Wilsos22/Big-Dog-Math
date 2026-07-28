@@ -60,7 +60,7 @@ export default function FractionBars() {
             {/* Modal Header */}
             <div className="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <span className="text-rose-400">🎬</span>
+                <span className="text-rose-400"></span>
                 <span className="font-bold text-sm text-slate-200">Abbie's Fraction Visual Tutor</span>
               </div>
               <button
@@ -139,7 +139,7 @@ export default function FractionBars() {
         
         {/* Left Spawner sidebar */}
         <div className="md:col-span-1 bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-md flex flex-col gap-4">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">🛠️ Add Fraction Bar</h3>
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Add Fraction Bar</h3>
           
           <div className="flex flex-col gap-1">
             <label className="text-[10px] text-slate-400 font-semibold block">Select Denominator:</label>
@@ -179,7 +179,7 @@ export default function FractionBars() {
         <div className="md:col-span-3 bg-slate-800/80 border border-slate-700 p-6 rounded-3xl shadow-xl flex flex-col justify-between gap-6 min-h-[400px]">
           
           <div className="flex justify-between items-center">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">🍫 Active Fraction Workspace</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Fraction Workspace</span>
             <span className="text-[10px] text-slate-500">Click segments to color and compare proportions.</span>
           </div>
 
@@ -229,7 +229,7 @@ export default function FractionBars() {
           </div>
 
           <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700 text-[10px] text-slate-400">
-            💡 <span className="font-bold text-slate-300">Pro-Tip:</span> Compare bars vertically to analyze equivalence! For example, line up 1/2 with 2/4, 3/6, or 4/8 to see they represent the same total region size.
+            <span className="font-bold text-slate-300">Pro-Tip:</span> Compare bars vertically to analyze equivalence! For example, line up 1/2 with 2/4, 3/6, or 4/8 to see they represent the same total region size.
           </div>
 
         </div>

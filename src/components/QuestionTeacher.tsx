@@ -318,7 +318,7 @@ export function QuestionTeacher() {
                 style={{ flex: 1 }}
                 type="button"
               >
-                ✋ Fist to Five
+                Fist to Five
               </button>
               <button
                 className={`small-button${sessionType === "question" ? " active" : ""}`}
@@ -326,7 +326,7 @@ export function QuestionTeacher() {
                 style={{ flex: 1 }}
                 type="button"
               >
-                💬 Question
+                Question
               </button>
             </div>
           </div>
@@ -359,7 +359,7 @@ export function QuestionTeacher() {
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
               <div>
                 <h2 style={{ margin: 0 }}>
-                  {session.type === "fist-to-five" ? "✋ Fist to Five" : "💬 Question"} — Live
+                  {session.type === "fist-to-five" ? "Fist to Five" : "Question"} — Live
                 </h2>
                 <p style={{ margin: "4px 0 0", color: "var(--muted)", fontSize: "0.9rem" }}>
                   {session.question}
@@ -388,7 +388,7 @@ export function QuestionTeacher() {
                 style={activeTab === "anon" ? { background: "var(--warning)", borderColor: "var(--warning)" } : {}}
                 type="button"
               >
-                🔒 Questions
+                Anonymous questions
                 {anonCount > 0 && (
                   <span style={{
                     background: activeTab === "anon" ? "rgba(255,255,255,0.3)" : "var(--warning)",

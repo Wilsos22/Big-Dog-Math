@@ -142,7 +142,7 @@ export default function PercentBar() {
       <header className="pc-top">
         <p className="pc-mark">Percent Bar</p>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="pc-btn" onClick={() => load(makeProblem())}>🎲 New problem</button>
+          <button className="pc-btn" onClick={() => load(makeProblem())}>New problem</button>
           <a className="pc-btn" href="/">Home</a>
         </div>
       </header>
@@ -181,9 +181,9 @@ export default function PercentBar() {
         {solved ? (
           <>
             <div className="pc-solved">
-              {unknown === "part" && `${P}% of ${W} = ${part} 🎉`}
-              {unknown === "whole" && `${part} is ${P}% of ${W} 🎉`}
-              {unknown === "percent" && `${part} is ${finalPercent}% of ${W} 🎉`}
+              {unknown === "part" && `${P}% of ${W} = ${part}`}
+              {unknown === "whole" && `${part} is ${P}% of ${W}`}
+              {unknown === "percent" && `${part} is ${finalPercent}% of ${W}`}
             </div>
             <p className="pc-q" style={{ color: "var(--bdb-ink-soft)", fontSize: "0.95rem" }}>Solved with benchmark 10%{wrong === 0 ? " · no mistakes!" : "!"}</p>
             <button className="pc-go" onClick={() => load(makeProblem())}>Next problem →</button>
@@ -195,7 +195,7 @@ export default function PercentBar() {
               <input className="pc-input" type="number" value={input} autoFocus onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") check(); }} />
               <button className="pc-go" onClick={check}>Check →</button>
             </div>
-            {hint ? <div className="pc-hint">💡 {hint}</div> : <button className="pc-hintbtn" onClick={() => setHint(stepIdx === 0 ? "Benchmarks make percents easy — 10% is just the whole split into 10 equal parts." : "Use your 10% benchmark and scale up.")}>Need a hint?</button>}
+            {hint ? <div className="pc-hint">{hint}</div> : <button className="pc-hintbtn" onClick={() => setHint(stepIdx === 0 ? "Benchmarks make percents easy — 10% is just the whole split into 10 equal parts." : "Use your 10% benchmark and scale up.")}>Need a hint?</button>}
             {feedback && !hint && <p className="pc-q" style={{ color: "var(--bdb-ink-soft)", fontSize: "0.92rem" }}>{feedback}</p>}
           </>
         )}

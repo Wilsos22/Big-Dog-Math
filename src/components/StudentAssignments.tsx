@@ -44,7 +44,7 @@ export default function StudentAssignments() {
           const skill = getSkill(a.skill);
           return (
             <a key={a.id} className="sa-card" href={`/assignment/${a.id}`}>
-              <span className="sa-emoji">{skill?.emoji || "📝"}</span>
+              <span className="sa-emoji">{skill?.emoji}</span>
               <span>
                 <span className="sa-label">{a.title}</span>
                 <span className="sa-meta">{a.target_rounds} rounds{a.due_label ? ` · ${a.due_label}` : ""}</span>

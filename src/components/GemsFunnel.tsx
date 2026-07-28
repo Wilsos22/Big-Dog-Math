@@ -387,7 +387,7 @@ export default function GemsFunnel() {
         <div className="md:col-span-1 flex flex-col gap-6">
           
           <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-md">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">⚡ Presets</h3>
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Presets</h3>
             <div className="flex flex-col gap-2">
               {presets.map((p, idx) => (
                 <button
@@ -407,7 +407,7 @@ export default function GemsFunnel() {
           </div>
 
           <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-md">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">✏️ Custom Solver</h3>
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Custom Solver</h3>
             <form onSubmit={handleSolveCustom} className="flex flex-col gap-2">
               <input
                 type="text"
@@ -427,7 +427,7 @@ export default function GemsFunnel() {
 
           {/* GEMS Checklist Card */}
           <div className="bg-slate-800 border border-slate-700 p-5 rounded-2xl shadow-md">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">💎 GEMS Checklist</h3>
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">GEMS Checklist</h3>
             <div className="flex flex-col gap-3">
               {[
                 { key: "G", title: "G - Grouping Symbols", desc: "Parentheses (), Brackets []" },
@@ -472,7 +472,7 @@ export default function GemsFunnel() {
         <div className="md:col-span-2 bg-slate-800/80 border border-slate-700 p-6 rounded-3xl flex flex-col justify-between shadow-xl min-h-[450px]">
           <div>
             <div className="flex justify-between items-center mb-6">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">🌪️ Funnel Visualizer</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Funnel Visualizer</span>
               <div className="flex gap-1">
                 <button
                   onClick={() => {

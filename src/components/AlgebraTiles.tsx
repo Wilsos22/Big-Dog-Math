@@ -194,7 +194,7 @@ export default function AlgebraTiles() {
             {/* Modal Header */}
             <div className="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <span className="text-emerald-400">🧱</span>
+                <span className="text-emerald-400"></span>
                 <span className="font-bold text-sm text-slate-200">Abbie's Algebra Tiles Visualizer Guide</span>
               </div>
               <button
@@ -276,7 +276,7 @@ export default function AlgebraTiles() {
           
           {/* Teacher formula box */}
           <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-md">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">✏️ Spawn Equation</h3>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Spawn Equation</h3>
             <form onSubmit={handleParseFormula} className="flex flex-col gap-2">
               <input
                 type="text"
@@ -296,7 +296,7 @@ export default function AlgebraTiles() {
 
           {/* Manual Tiles click spawner */}
           <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-md">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">🧱 Manual Spawner</h3>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Manual Spawner</h3>
             <div className="flex flex-col gap-2">
               <div className="grid grid-cols-2 gap-1.5">
                 <button
@@ -358,7 +358,7 @@ export default function AlgebraTiles() {
         <div className="md:col-span-3 bg-slate-800/80 border border-slate-700 p-6 rounded-3xl shadow-xl flex flex-col justify-between gap-6 min-h-[450px]">
           
           <div className="flex justify-between items-center">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">🎛️ Drag Canvas workspace</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Drag Canvas workspace</span>
             
             {/* Zap Zero pairs trigger */}
             {activePairs.length > 0 && (
@@ -366,7 +366,7 @@ export default function AlgebraTiles() {
                 onClick={handleZapPairs}
                 className="bg-red-600 hover:bg-red-500 text-white text-[10px] font-extrabold py-1 px-3 rounded-full animate-pulse flex items-center gap-1.5 border border-red-400"
               >
-                💥 Zap {activePairs.length} Zero Pairs!
+                Zap {activePairs.length} Zero Pairs!
               </button>
             )}
           </div>
@@ -458,7 +458,7 @@ export default function AlgebraTiles() {
           </div>
 
           <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700 text-[10px] text-slate-400">
-            💡 <span className="font-bold text-slate-300">How to solve equations:</span> Enter standard form polynomials. Spawning will lay out positive vs negative blocks. Group opposing tiles together to trigger cancellation zero-pairs.
+            <span className="font-bold text-slate-300">How to solve equations:</span> Enter standard form polynomials. Spawning will lay out positive vs negative blocks. Group opposing tiles together to trigger cancellation zero-pairs.
           </div>
 
         </div>

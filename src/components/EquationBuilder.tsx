@@ -584,7 +584,7 @@ export default function EquationBuilder() {
       `}</style>
 
       <div className="eqb-strip">
-        <div className="eqb-streak" title="Equations solved this session">⭐ <b>{streak}</b> in a row</div>
+        <div className="eqb-streak" title="Equations solved this session"><b>{streak}</b> in a row</div>
         <div className="eqb-lvlwrap">
           <div className={`eqb-seg lvl${levelFx ? " bump" : ""}`} role="group" aria-label="Difficulty">
             <button className={level === "regular" ? "on" : ""} onClick={() => saveLevel("regular")}>Regular</button>

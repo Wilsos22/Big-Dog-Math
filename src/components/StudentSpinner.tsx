@@ -287,7 +287,7 @@ export default function StudentSpinner({ onClose }: { onClose?: () => void }) {
           ))}
         </div>
         <button className="sp-spin-btn" onClick={spin} disabled={spinning || !current}>
-          {spinning ? "Spinning…" : "🎰 SPIN"}
+          {spinning ? "Spinning…" : "SPIN"}
         </button>
         {abbiePresent && !spinning && lastPicks.length > 0 && (
           <button className="sp-abbie-btn" onClick={announceWithAbbie}>Have Abbie announce it</button>
@@ -330,7 +330,7 @@ export default function StudentSpinner({ onClose }: { onClose?: () => void }) {
                     const on = ipadNames.includes(n);
                     return (
                       <div key={n} className={`sp-ipad-row${on ? " on" : ""}`} onClick={() => toggleIpad(n)}>
-                        <span>{on ? "📱" : "○"}</span> {n}
+                        <span>{on ? "iPad" : "○"}</span> {n}
                       </div>
                     );
                   })}

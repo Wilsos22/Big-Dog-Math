@@ -319,7 +319,7 @@ export default function LessonsPage() {
 
         {!loading && !error && filtered.length === 0 && (
           <div className="lessons-empty">
-            <div className="lessons-empty-icon">{search ? "🔍" : "📭"}</div>
+            <div className="lessons-empty-icon"></div>
             <p className="lessons-empty-title">
               {search ? "No lessons match that search" : "No published lessons yet"}
             </p>

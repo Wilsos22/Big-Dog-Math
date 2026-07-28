@@ -13,7 +13,7 @@ interface PresetScale {
 export default function DoubleNumberLine() {
   const presets: PresetScale[] = [
     {
-      name: "🚗 Speed (Distance vs Time)",
+      name: "Speed (Distance vs Time)",
       lineALabel: "Distance",
       lineBLabel: "Time",
       lineAMax: 120,
@@ -22,7 +22,7 @@ export default function DoubleNumberLine() {
       lineBUnit: "hours",
     },
     {
-      name: "📊 Percentage (Score vs Total)",
+      name: "Percentage (Score vs Total)",
       lineALabel: "Score",
       lineBLabel: "Percentage",
       lineAMax: 40,
@@ -31,7 +31,7 @@ export default function DoubleNumberLine() {
       lineBUnit: "%",
     },
     {
-      name: "🥣 Cooking (Flour vs Sugar)",
+      name: "Cooking (Flour vs Sugar)",
       lineALabel: "Cups of Flour",
       lineBLabel: "Cups of Sugar",
       lineAMax: 6,
@@ -40,7 +40,7 @@ export default function DoubleNumberLine() {
       lineBUnit: "cups",
     },
     {
-      name: "💶 Exchange Rate (USD vs EUR)",
+      name: "Exchange Rate (USD vs EUR)",
       lineALabel: "USD",
       lineBLabel: "EUR",
       lineAMax: 100,
@@ -149,7 +149,7 @@ export default function DoubleNumberLine() {
         {/* Preset Side Selector & Custom Bounds Editor */}
         <div className="md:col-span-1 flex flex-col gap-5">
           <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl shadow-md">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">📋 Choose a Rate Preset</h3>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Choose a Rate Preset</h3>
             <div className="flex flex-col gap-2">
               {presets.map((p, idx) => (
                 <button
@@ -172,7 +172,7 @@ export default function DoubleNumberLine() {
                     : "bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700"
                 }`}
               >
-                ⚙️ Custom Scale
+                Custom Scale
               </button>
             </div>
           </div>
@@ -321,7 +321,7 @@ export default function DoubleNumberLine() {
 
           {/* Equivalence analysis box */}
           <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-3">
-            <div>\n              <h4 className="text-sm font-bold text-cyan-300">✨ Proportional Equivalence</h4>\n              <p className="text-xs text-slate-400">\n                The ratio remains constant: {currentValA} / {currentValB} is equivalent to {lineAMax} / {lineBMax}.\n              </p>\n            </div>
+            <div>\n              <h4 className="text-sm font-bold text-cyan-300">Proportional Equivalence</h4>\n              <p className="text-xs text-slate-400">\n                The ratio remains constant: {currentValA} / {currentValB} is equivalent to {lineAMax} / {lineBMax}.\n              </p>\n            </div>
             <div className="bg-slate-900 border border-slate-800 p-2.5 rounded-xl text-center flex-shrink-0 min-w-[130px]">
               <span className="text-[10px] text-slate-500 uppercase block tracking-wider font-bold">Unit Rate</span>
               <span className="text-base font-black text-emerald-400">
