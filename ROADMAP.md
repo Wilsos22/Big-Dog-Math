@@ -11,6 +11,23 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**/demo: watch a class period run** (7/27 night - the audit memo's number
+one fix and Steele's directive: outsiders see the ROOM RUNNING, not a
+slideshow about it. The real Main projector, Support projector, student
+page, and all-day boards render in scaled iframes and play a scripted
+fictional GCF lesson - warm-up culture list, hook, we-do, a quick check
+whose mock answers trickle onto the wall and hold through the results
+flip, tool time, fist-to-five, closeout, end card. Autoplay with captions;
+the Next button is the teacher's remote in the visitor's hand; the student
+pane is live (answer the poll yourself - local echo, the redacted snapshot
+goes through the production privacy module inside the surface). Public
+wrappers re-export the gated projector pages safely: preview mode renders
+only posted data. Along the way: theme lookups no longer crash on unknown
+semantics, present's poll fetcher is preview-gated, and /teacher/pace +
+/weekly-display finally joined DeployRefresh. Landing gained the outsider
+door. Repo renamed to Big-Dog-Math and the folder to Big Dog Math Site -
+which, renamed mid-dev-server, produced the evening's brief false alarm of
+a vanished repo) ·
 **Portfolio-audit fix batch: the repo grows up** (7/27 evening - Steele's
 "lets get that squared away tonight" after the company-vantage audit. The
 public repo's floor swept: 60 tracked junk files untracked (AI Studio
