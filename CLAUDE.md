@@ -39,10 +39,9 @@ bars and live misconception grouping).
 1. NO EMOJIS ANYWHERE. Not in UI copy, component text, button labels, nav labels, headings, console
    logs, code comments, commit messages, docs, or the Apps Script files. Use plain words or, where a
    glyph is truly needed, a clean text/SVG affordance - not a pictograph, dingbat, or emoji checkmark
-   or arrow. The existing codebase still carries legacy violations (measured 2026-07-27: ~60 true
-   pictographic emoji across 16 src/ files, plus ~85 typographic arrows in copy - the old
-   "~440 across ~70 files" figure counted the arrows); do not add more, and strip emoji from
-   any file you edit as you go.
+   or arrow. The legacy emoji debt was PURGED 2026-07-27 (68 pictographs across 17 src/ files
+   went to zero; plain check/x glyphs and typographic arrows deliberately remain). Keep it at
+   zero - the aggregate test suite and this rule are now in agreement with the code.
 2. Never `git add .` or `git add -A`. A Google AI Studio agent and cloud Claude sessions commit to this
    same repo concurrently - stage only the explicit paths you changed. Always `git fetch` and merge (or
    fast-forward) before pushing; local `main` goes stale fast. Corollary: when a brief cites a commit as
@@ -476,7 +475,15 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 
 ## Build, deploy, test
 
-- `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`).
+- `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
+  2026-07-27 `npm test` - the aggregate of all 17 golden/contract suites, run with typecheck by
+  GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
+  weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
+  deliberate design change, update the CONTRACT to the new approved truth in the same commit.
+  Dependencies are pinned EXACT in package.json (they were "latest" until 7/27 - never revert
+  that; an unreviewed Next/React major landing on a school-morning deploy is the failure mode).
+  `scripts/proxy-gate-contract.mjs` asserts every PROTECTED_PREFIX has its `/:path*` matcher
+  entry in src/proxy.ts - the two lists can no longer drift fail-open.
 - Scratch worktrees: `npm run build` (Turbopack) panics if the `node_modules` symlink points outside
   what it takes as the project root - "Symlink [project]/node_modules is invalid". Put worktrees that
   need a BUILD under `.claude/worktrees/` inside the repo; a tmp-dir worktree with the symlink is
