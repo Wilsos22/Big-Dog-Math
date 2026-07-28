@@ -305,14 +305,18 @@ export default function SessionPage() {
   async function start() {
     if (!periodId) return;
     setError(null);
-    const code = makeCode();
+    // Only a suggestion now. The server prefers the period's PERMANENT class
+    // code (the one students actually type) and returns the code it settled on,
+    // so never assume this value made it onto the row.
+    const requestedCode = makeCode();
     // Start in free mode so students can complete the assigned warm-up from the
     // homepage before Begin lesson starts synchronized pacing.
-    let data: { id: string; broadcast: string | null };
+    let data: { id: string; broadcast: string | null; join_code?: string | null };
     try {
-      const result = await teacherPost<{ session: { id: string; broadcast: string | null } }>("/api/teacher/session", { action: "start", periodId, joinCode: code });
+      const result = await teacherPost<{ session: { id: string; broadcast: string | null; join_code?: string | null } }>("/api/teacher/session", { action: "start", periodId, joinCode: requestedCode });
       data = result.session;
     } catch (actionError) { setError(actionError instanceof Error ? actionError.message : "Session could not be started."); return; }
+    const code = (data.join_code || requestedCode).toUpperCase();
     const periodName = periods.find((p) => p.id === periodId)?.name || "";
     const roster = await teacherApiRequest<{ students: RosterStudent[] }>("/api/teacher/roster");
     setRosterStudents(roster.students);

@@ -191,14 +191,18 @@ export default function PaceSupportPage() {
       ? phase.sentenceStems
       : flow?.lesson?.discussionStems?.filter(Boolean).length
         ? flow.lesson.discussionStems
-        : configuredDiscussionSupports.sentenceStems;
+        : isDiscussion ? configuredDiscussionSupports.sentenceStems : [];
+  // The configured supports are a DISCUSSION fallback, never a general one.
+  // As a terminal fallback they rendered the hardcoded strategy / evidence /
+  // justify table on the support screen for the entire lesson, unchanged from
+  // warm-up to closeout, and it read as authored lesson content.
   const discussionVocabulary = flow?.presentation?.vocabulary?.filter(Boolean).length
     ? flow.presentation.vocabulary
     : phase?.keyVocabulary?.filter(Boolean).length
       ? phase.keyVocabulary
       : flow?.lesson?.discussionVocabulary?.filter(Boolean).length
         ? flow.lesson.discussionVocabulary
-        : configuredDiscussionSupports.keyVocabulary;
+        : isDiscussion ? configuredDiscussionSupports.keyVocabulary : [];
   const paceDirections = state?.id === "closeout"
     ? CLOSEOUT_DIRECTIONS
     : publicSurfacesLinked

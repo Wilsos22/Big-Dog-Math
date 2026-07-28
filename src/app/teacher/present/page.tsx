@@ -501,20 +501,23 @@ export default function ClassroomStagePage() {
     currentStepIndex: flow.sequence?.currentIndex,
   }) : null;
   const configuredDiscussionSupports = discussionSupportsForLesson(lesson?.code);
+  // Discussion-only fallback. Used as a terminal fallback it put hardcoded
+  // supports on the projector during states that never asked for them.
+  const supportsDiscussion = theme.id === "discussion" || Boolean(phase);
   const sentenceStems = presentation?.discussionStems?.filter(Boolean).length
     ? presentation.discussionStems
     : lesson?.discussionStems?.filter(Boolean).length
       ? lesson.discussionStems
       : phase?.sentenceStems?.filter(Boolean).length
         ? phase.sentenceStems
-        : configuredDiscussionSupports.sentenceStems;
+        : supportsDiscussion ? configuredDiscussionSupports.sentenceStems : [];
   const keyVocabulary = presentation?.vocabulary?.filter(Boolean).length
     ? presentation.vocabulary
     : lesson?.discussionVocabulary?.filter(Boolean).length
       ? lesson.discussionVocabulary
       : phase?.keyVocabulary?.filter(Boolean).length
         ? phase.keyVocabulary
-        : configuredDiscussionSupports.keyVocabulary;
+        : supportsDiscussion ? configuredDiscussionSupports.keyVocabulary : [];
   const structuredSections = structuredWorkSections(lesson);
   const paperSections = theme.id === "independent"
     ? structuredSections.length ? structuredSections : independentSections(slideBody)

@@ -5,7 +5,7 @@
 // view (e.g. /lesson or a tool), this navigates the screen to match. When the
 // broadcast is empty/'free', students browse freely. Closing the session releases.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 import { SECURE_STUDENT_DATA, studentApiRequest } from "@/lib/studentApi";
@@ -21,6 +21,10 @@ import {
   leaveClassMode,
 } from "@/lib/liveClassFlow";
 
+// 5 ticks at 3s = about 15 seconds of silence before the student is told.
+// Short enough to catch a broken session inside one transition, long enough
+// that a Chromebook waking from sleep never flashes the notice.
+const FAILURES_BEFORE_NOTICE = 5;
 const TEACHER_ROUTE_PREFIXES = ["/teacher", "/control", "/session", "/roster"];
 const STUDENT_SWITCH_ROUTE_PREFIXES = ["/join"];
 const CLASS_MODE_TARGETS = new Set([
@@ -84,6 +88,13 @@ export default function ClassSync() {
   const pathname = usePathname();
   const pathRef = useRef(pathname);
   pathRef.current = pathname;
+  // A dead session used to be indistinguishable from a working one that simply
+  // had not advanced: every read error returned silently. After FAILURES_BEFORE_NOTICE
+  // consecutive failures the student sees that the device is not connected,
+  // instead of sitting on a frozen screen for a whole period.
+  const failureCountRef = useRef(0);
+  const loggedFailureRef = useRef(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
     if (!supabase && !SECURE_STUDENT_DATA) return;
@@ -132,8 +143,19 @@ export default function ClassSync() {
         // Transient read error or a momentary empty result — keep the student in
         // the session and retry on the next tick instead of kicking them out
         // (that was what made students get asked to re-join mid-class).
+        failureCountRef.current += 1;
+        if (failureCountRef.current >= FAILURES_BEFORE_NOTICE) {
+          setReconnecting(true);
+          if (!loggedFailureRef.current) {
+            loggedFailureRef.current = true;
+            console.warn("ClassSync: session state unreadable", { sessionId, error });
+          }
+        }
         return;
       }
+      failureCountRef.current = 0;
+      loggedFailureRef.current = false;
+      setReconnecting(false);
       const d = data;
       if (d.status === "closed") {
         leaveClassMode();
@@ -177,5 +199,29 @@ export default function ClassSync() {
     };
   }, [supabase, router, pathname]);
 
-  return null;
+  if (!reconnecting) return null;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: "fixed",
+        left: "50%",
+        bottom: 16,
+        transform: "translateX(-50%)",
+        zIndex: 60,
+        maxWidth: "min(92vw, 30rem)",
+        padding: "10px 16px",
+        borderRadius: 12,
+        border: "1px solid #674a40",
+        background: "#fcaf38",
+        color: "#201e1a",
+        font: "700 0.9rem/1.35 var(--bdb-font, system-ui, sans-serif)",
+        textAlign: "center",
+        boxShadow: "0 6px 20px rgba(32,30,26,0.22)",
+      }}
+    >
+      Not connected to class right now. Keep working - this screen will catch up on its own.
+    </div>
+  );
 }

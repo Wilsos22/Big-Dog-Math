@@ -581,11 +581,39 @@ function matchLessonToolStateId(name: string): string | null {
   return loose ? loose.id : null;
 }
 
+// A Notion Lesson Step can carry any State ID Steele types. Rather than drop it
+// (which is what silently shortened lessons to the bank skeleton), mint a
+// placeholder bank entry so every lookup downstream resolves and the step's
+// authored Main Display / Pace Directions still reach the surfaces.
+// desc stays EMPTY on purpose: a synthesized state must never supply copy of
+// its own, because fabricated copy on a projector reads as authored content.
+function synthesizeClassState(stateId: string): ClassState {
+  const label = stateId
+    .split(/[-_.\s]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+  return { id: stateId, label: label || stateId, minutes: 1, color: "#7c7363", desc: "" };
+}
+
 export default function ControlPage() {
   const supabase = TEACHER_SERVER_CLIENT;
-  const [bank, setBank] = useState<ClassState[]>(DEFAULT_STATES);
+  const [storedBank, setBank] = useState<ClassState[]>(DEFAULT_STATES);
   const [lineup, setLineup] = useState<LineupItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
+  // Every state the running lineup references, whether or not it is a catalog
+  // state. Unknown ids surface in the bank palette as ungrouped entries, so an
+  // unmapped State ID is visible instead of silently missing from the lesson.
+  const bank = useMemo<ClassState[]>(() => {
+    const known = new Set(storedBank.map((state) => state.id));
+    const extras: ClassState[] = [];
+    for (const item of lineup) {
+      if (!item.stateId || known.has(item.stateId)) continue;
+      known.add(item.stateId);
+      extras.push(synthesizeClassState(item.stateId));
+    }
+    return extras.length ? [...storedBank, ...extras] : storedBank;
+  }, [storedBank, lineup]);
 
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [running, setRunning] = useState(false);
@@ -828,10 +856,26 @@ export default function ControlPage() {
       checking = true;
       try {
         const storedSessionId = getStoredTeacherSessionId();
-        const result = await teacherApiRequest<{ sessions: TeacherSessionRow[] }>("/api/teacher/session?latestOpen=1");
-        if (stopped) return;
-        const openSession = result.sessions.find((candidate) => candidate.status === "open") ?? null;
-        if (storedSessionId && storedSessionId !== openSession?.id) clearStoredTeacherSession(storedSessionId);
+        // Stay pinned to the session THIS teacher started. latestOpen=1 returns
+        // the newest open session across every period, so a student typing a
+        // class code mid-period could spawn a newer row and silently drag
+        // Control onto it - abandoning the session the class had joined and
+        // re-hydrating the lineup from that row's seed flow. Only fall back to
+        // the newest open session once the pinned one is genuinely closed.
+        let openSession: TeacherSessionRow | null = null;
+        if (storedSessionId) {
+          const pinned = await teacherApiRequest<{ sessions: TeacherSessionRow[] }>(
+            `/api/teacher/session?liveSessionId=${encodeURIComponent(storedSessionId)}`,
+          );
+          if (stopped) return;
+          openSession = pinned.sessions.find((candidate) => candidate.status === "open") ?? null;
+        }
+        if (!openSession) {
+          const result = await teacherApiRequest<{ sessions: TeacherSessionRow[] }>("/api/teacher/session?latestOpen=1");
+          if (stopped) return;
+          openSession = result.sessions.find((candidate) => candidate.status === "open") ?? null;
+          if (storedSessionId && storedSessionId !== openSession?.id) clearStoredTeacherSession(storedSessionId);
+        }
         setCurrentTeacherSession(openSession);
         setTeacherSessionReady(true);
       } catch {
@@ -1566,14 +1610,20 @@ export default function ControlPage() {
         ? structuredWork || activeItem?.paperTask || activeItem?.question || activeItem?.studentDirections || activeState?.desc || ""
         : activeItem?.question || activeItem?.studentDirections || activeItem?.paperTask || activeState?.desc || "");
     const configuredDiscussionSupports = discussionSupportsForLesson(activeLessonContext?.code);
-    const discussionStems = activeUsesDiscussionProtocol
-      ? splitLiveFlowLines(activeItem?.discussionStems || activeLessonContext?.discussionStems)
-        .concat(activeItem?.discussionStems || activeLessonContext?.discussionStems ? [] : configuredDiscussionSupports.sentenceStems)
-      : [];
-    const vocabulary = activeUsesDiscussionProtocol
-      ? splitLiveFlowVocabulary(activeItem?.vocabulary || activeLessonContext?.discussionVocabulary)
-        .concat(activeItem?.vocabulary || activeLessonContext?.discussionVocabulary ? [] : configuredDiscussionSupports.keyVocabulary)
-      : [];
+    // Publish AUTHORED stems and vocabulary on every state, not only discussion
+    // ones. Gating them on the discussion protocol meant a lesson's real
+    // vocabulary could never displace the hardcoded strategy/evidence/justify
+    // table on the pace screen - that table sat there unchanged all period while
+    // the lesson's own six terms were never sent. The configured fallback stays
+    // discussion-only, and only when nothing is authored.
+    const authoredStems = splitLiveFlowLines(activeItem?.discussionStems || activeLessonContext?.discussionStems);
+    const authoredVocabulary = splitLiveFlowVocabulary(activeItem?.vocabulary || activeLessonContext?.discussionVocabulary);
+    const discussionStems = authoredStems.length
+      ? authoredStems
+      : activeUsesDiscussionProtocol ? configuredDiscussionSupports.sentenceStems : [];
+    const vocabulary = authoredVocabulary.length
+      ? authoredVocabulary
+      : activeUsesDiscussionProtocol ? configuredDiscussionSupports.keyVocabulary : [];
     const presentation = activeState
       ? {
           title: activeItem?.title || activeState.label,
@@ -1756,7 +1806,14 @@ export default function ControlPage() {
     const canStageWarmup = teacherSession?.broadcast === "free"
       && Boolean(activeLessonContext)
       && lineup.some((item) => item.stateId === "warmup" && Boolean(item.linkUrl));
-    if (!supabase || (!canPublishLiveFlow && !canStageWarmup)) {
+    // Do NOT gate this on the browser Supabase client. Every write below goes
+    // through teacherPost("/api/teacher/session"); supabase is never used here.
+    // When getSupabase() returned null in the deployed bundle, broadcast still
+    // flipped to Live Class Flow (that path also uses teacherPost) but no
+    // live_flow snapshot was ever written - so live_flow.state.id stayed null
+    // and ClassSync held every student on the homepage for the whole period
+    // while the teacher watched states advance normally.
+    if (!canPublishLiveFlow && !canStageWarmup) {
       pendingLiveFlowSyncRef.current = null;
       return;
     }
@@ -1780,7 +1837,7 @@ export default function ControlPage() {
       expectedRevision: liveFlowSyncingRef.current ? undefined : serverFlowRevisionRef.current,
     };
     void flushLiveFlowUpdates();
-  }, [activeLessonContext, flushLiveFlowUpdates, lineup, liveFlowSignature, previewSyncPaused, serverHydrationGeneration, supabase, teacherSession?.broadcast, teacherSession?.id]);
+  }, [activeLessonContext, flushLiveFlowUpdates, lineup, liveFlowSignature, previewSyncPaused, serverHydrationGeneration, teacherSession?.broadcast, teacherSession?.id]);
 
   const handleDiscussionFlowChange = useCallback((snapshot: DiscussionPhaseSnapshot) => {
     setDiscussionFlow(normalizeDiscussionPhaseSnapshot(snapshot));
@@ -1885,7 +1942,7 @@ export default function ControlPage() {
     if (!code) { setLessonMsg("Add a code first (e.g. M1.T1.L1)."); return; }
     if (lineup.length === 0) { setLessonMsg("Build a lineup before saving."); return; }
     const minutes: Record<string, number> = {};
-    bank.forEach((b) => { minutes[b.id] = b.minutes; });
+    storedBank.forEach((b) => { minutes[b.id] = b.minutes; });
     const res = await saveLessonPreset({
       code,
       title: saveTitle.trim(),
@@ -1919,7 +1976,14 @@ export default function ControlPage() {
       return false;
     }
     setPreviewSyncPaused(true);
-    const lessonSteps = (lesson.steps || []).filter((step) => step.stateId && bank.some((state) => state.id === step.stateId));
+    // Never drop an authored step. Filtering to catalog states used to discard
+    // roughly thirty real State IDs in the Notion database - and the server path
+    // (api/control-remote) does NOT filter, so /control and the remote ran
+    // different lessons. Unknown ids get a synthesized bank entry instead.
+    const lessonSteps = (lesson.steps || []).filter((step) => step.stateId);
+    const unknownStateIds = Array.from(new Set(
+      lessonSteps.map((step) => step.stateId).filter((stateId) => !bank.some((state) => state.id === stateId)),
+    ));
     const newLineup: LineupItem[] = lessonSteps.length
       ? lessonSteps.map((step) => ({
           uid: uid(),
@@ -1999,6 +2063,7 @@ export default function ControlPage() {
     const criterionValidationMessage = selectedSuccessCriterionValidationMessage(lesson.selectedSuccessCriterion);
     if (criterionValidationMessage) parts.push(`start blocked: ${criterionValidationMessage}`);
     if (unmatched.length) parts.push(`couldn't match: ${unmatched.join(", ")}`);
+    if (unknownStateIds.length) parts.push(`kept ${unknownStateIds.length} step${unknownStateIds.length === 1 ? "" : "s"} with an unmapped State ID: ${unknownStateIds.join(", ")}`);
     setTodayMsg(parts.join(" · "));
     window.setTimeout(() => setTodayMsg(null), 8000);
     return true;
@@ -2267,6 +2332,19 @@ export default function ControlPage() {
   }
   async function runSequence() {
     if (lineup.length === 0) return;
+    // With no lesson attached, every surface falls back to catalog copy and the
+    // class runs the bank skeleton while looking normal - that is how a whole
+    // period ran without the day's hook, Fist-to-Five or learning check. A
+    // hand-built practice-day lineup is legitimate, so confirm rather than block.
+    if (!activeLessonContext && !window.confirm(
+      "No Notion lesson is attached. The projector and pace screens will show catalog defaults, not today's lesson. Start anyway?",
+    )) {
+      setPendingRun(false);
+      const message = "Lesson not started. Load today's lesson from Notion first.";
+      setLessonMsg(message);
+      setTodayMsg(message);
+      return;
+    }
     if (activeLessonCriterionValidationMessage) {
       setPendingRun(false);
       setLessonMsg(activeLessonCriterionValidationMessage);
@@ -2542,7 +2620,7 @@ export default function ControlPage() {
   }, [teacherSession?.remote_command?.nonce, flushRemoteReceipt]);
   function editMinutes(id: string, minutes: number) {
     const clamped = Math.max(1, Math.min(120, Math.round(minutes) || 1));
-    persistBank(bank.map((s) => (s.id === id ? { ...s, minutes: clamped } : s)));
+    persistBank(storedBank.map((s) => (s.id === id ? { ...s, minutes: clamped } : s)));
     if (activeState && id === activeState.id && !running) {
       secRef.current = clamped * 60; setSecondsLeft(clamped * 60);
     }

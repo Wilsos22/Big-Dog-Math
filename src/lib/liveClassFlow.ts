@@ -394,6 +394,12 @@ export function saveVerifiedStudentJoin(session: StoredStudentSession): void {
  * advancing past warm-up pushes every device that typed the code.
  */
 export function saveProvisionalStudentSession(sessionId: string, name: string, syncKey: string): void {
+  // Match saveVerifiedStudentJoin: a device that was in a session which later
+  // closed carries an exit marker, and ClassSync returns on every tick while it
+  // is set. Without this clear, every Chromebook after period 1 - and every
+  // device on day 2 - re-enters the class code, looks joined, and never moves
+  // again. Nothing in the UI reveals it.
+  clearClassModeExitMarker();
   const existing = getStoredStudentSession();
   // Never downgrade a verified session for the same live session.
   if (existing && existing.sessionId === sessionId && existing.studentId) return;

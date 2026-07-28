@@ -400,15 +400,57 @@ export async function POST(request: Request) {
 
   if (body.action === "start") {
     const periodId = text(body.periodId, 80);
-    const joinCode = text(body.joinCode, 8).toUpperCase();
+    const requestedCode = text(body.joinCode, 8).toUpperCase();
     const assignmentId = text(body.assignmentId, 80) || null;
-    if (!periodId || !/^[A-Z0-9]{2,8}$/.test(joinCode)) {
+    if (!periodId || !/^[A-Z0-9]{2,8}$/.test(requestedCode)) {
       return Response.json({ error: "A valid period and join code are required." }, { status: 400 });
     }
 
-    const { data: period, error: periodError } = await db.from("periods").select("id").eq("id", periodId).maybeSingle();
-    if (periodError) return Response.json({ error: periodError.message }, { status: 500 });
+    // The period's PERMANENT class code wins over whatever the client generated.
+    // Students type the permanent code (DOG2); a random per-session code can
+    // never equal it, so the direct join_code lookup in /api/student/warmup-start
+    // misses and the student is pushed onto the period-code fallback, which is
+    // gated on school hours AND a district account. When either gate closes, the
+    // student silently lands on a DIFFERENT open session row than the teacher is
+    // running - broadcast "free", live_flow null - and freezes there all period.
+    // Selecting class_code tolerates period-class-codes.sql not having run.
+    const periodResult = await db.from("periods").select("id,class_code").eq("id", periodId).maybeSingle();
+    if (periodResult.error && !/class_code/i.test(periodResult.error.message)) {
+      return Response.json({ error: periodResult.error.message }, { status: 500 });
+    }
+    let period = periodResult.data as { id: string; class_code?: string | null } | null;
+    if (!period) {
+      const fallback = await db.from("periods").select("id").eq("id", periodId).maybeSingle();
+      if (fallback.error) return Response.json({ error: fallback.error.message }, { status: 500 });
+      period = fallback.data as { id: string } | null;
+    }
     if (!period) return Response.json({ error: "Period not found." }, { status: 404 });
+    const permanentCode = text(period.class_code ?? "", 8).toUpperCase();
+    const joinCode = /^[A-Z0-9]{2,8}$/.test(permanentCode) ? permanentCode : requestedCode;
+
+    // One open session per period, always. A second row is what split the class
+    // in two: the teacher advanced states on one, the students polled the other.
+    const existing = await db
+      .from("sessions")
+      .select("id,period_id,assignment_id,join_code,status,started_at,broadcast")
+      .eq("period_id", periodId)
+      .eq("status", "open")
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existing.data) {
+      const adopted = existing.data as { join_code: string | null };
+      if (adopted.join_code !== joinCode) {
+        const recoded = await db
+          .from("sessions")
+          .update({ join_code: joinCode })
+          .eq("id", (existing.data as { id: string }).id)
+          .select("id,period_id,assignment_id,join_code,status,started_at,broadcast")
+          .maybeSingle();
+        if (recoded.data) return Response.json({ session: recoded.data, adopted: true });
+      }
+      return Response.json({ session: existing.data, adopted: true });
+    }
 
     const { data, error: insertError } = await db
       .from("sessions")
