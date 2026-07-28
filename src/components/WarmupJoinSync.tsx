@@ -16,6 +16,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { SECURE_STUDENT_DATA, StudentApiError, studentApiRequest } from "@/lib/studentApi";
+import { flushPendingToolResults } from "@/lib/toolEvidence";
 import {
   getStoredStudentSession,
   saveVerifiedStudentJoin,
@@ -44,8 +45,10 @@ export default function WarmupJoinSync() {
       const code = pendingClassCode();
       if (!code) return;
       const stored = getStoredStudentSession();
-      // A verified session (studentId present) means the chain is complete.
-      if (stored?.studentId) return;
+      // A verified session (studentId present) means the chain is complete. Still
+      // retry the buffer flush: a verification that landed while the network was
+      // down would otherwise strand that student's tool work until tomorrow.
+      if (stored?.studentId) { void flushPendingToolResults(); return; }
       checking = true;
       try {
         const status = await studentApiRequest<{ sessionId: string; complete: boolean }>(
@@ -59,6 +62,10 @@ export default function WarmupJoinSync() {
         );
         if (!stopped && result.session.sessionId === status.sessionId) {
           saveVerifiedStudentJoin(result.session);
+          // File everything this device buffered while it was unverified. A
+          // student who submits the warm-up late still gets the whole period's
+          // tool work attributed instead of losing it.
+          void flushPendingToolResults();
         }
       } catch (error) {
         // Waiting states are normal; a closed session ends the pending code so
