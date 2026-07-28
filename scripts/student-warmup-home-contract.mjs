@@ -36,18 +36,29 @@ if (!home.includes("background:var(--bdb-amber)") || !home.includes("Open today'
 if (!home.includes("Today&apos;s lesson") || !home.includes("Module {moduleNumber}") || !home.includes("Topic {topicNumber}")) {
   throw new Error("The accepted-code homepage must show today's lesson, module, and topic before the warm-up action.");
 }
-if (!home.includes("identityReady &&") || !home.includes('href="/practice"')) {
-  throw new Error("Verified warm-up completion must unlock the solo challenge activities.");
+// 2026-07-26 home-base redesign: the homepage NEVER locks navigation. The
+// warm-up card adapts its copy to identity state; onward links stay live.
+if (!home.includes('href="/explore"')) {
+  throw new Error("The home base must always link students onward to Explore - links are never locked.");
 }
-const verifiedJoinStart = home.indexOf("function saveVerifiedJoin");
-const verifiedJoinEnd = home.indexOf("\n\n  useEffect", verifiedJoinStart);
-const verifiedJoin = verifiedJoinStart >= 0 && verifiedJoinEnd > verifiedJoinStart
-  ? home.slice(verifiedJoinStart, verifiedJoinEnd)
-  : "";
-if (!verifiedJoin.includes("setIdentityReady(true)")
-  || !verifiedJoin.includes("STUDENT_SESSION_READY_EVENT")
-  || verifiedJoin.includes("router.push")) {
-  throw new Error("Automatic warm-up verification must unlock the homepage without routing away from it.");
+if (!home.includes("Warm-up connected") || !home.includes("Open today's warm-up")) {
+  throw new Error("The warm-up card must adapt to identity state instead of locking the page.");
+}
+// Verification runs GLOBALLY (WarmupJoinSync in the root layout) so it
+// survives the student navigating anywhere in the tab; the homepage only
+// LISTENS for the ready event and never routes the student away.
+const layout = read("src/app/layout.tsx");
+const joinSync = read("src/components/WarmupJoinSync.tsx");
+if (!layout.includes("<WarmupJoinSync />")) {
+  throw new Error("WarmupJoinSync must be mounted globally in the root layout.");
+}
+if (!joinSync.includes('sessionStorage.getItem("bdm-pending-class-code")')
+  || !joinSync.includes("saveVerifiedStudentJoin(result.session)")) {
+  throw new Error("Global verification must key on the pending class code and save the verified join.");
+}
+const readyEffect = sliceBetween(home, "const onReady = ()", "removeEventListener(STUDENT_SESSION_READY_EVENT");
+if (!readyEffect.includes("setIdentityReady(true)") || readyEffect.includes("router.push")) {
+  throw new Error("The homepage must flip to connected on the ready event without routing away from it.");
 }
 if (!teacherSession.includes('status: "open", broadcast: "free"')) {
   throw new Error("A new class session must leave verified students free on the homepage until Begin lesson.");
@@ -85,11 +96,11 @@ if (!submitCode.includes("await fetchWarmupLink(c)")
   throw new Error("The receipt must be created before the Chromebook enters the accepted-code state.");
 }
 
-const completionPoll = sliceBetween(home, "const status = await studentApiRequest", "async function requestTeacherHelp");
-if (!completionPoll.includes('"/api/student/warmup-status"')
-  || !completionPoll.includes("if (!status.complete) return")
-  || completionPoll.indexOf('"/api/student/warmup-status"') > completionPoll.indexOf('"/api/student/join"')) {
-  throw new Error("The homepage must confirm this session's warm-up receipt before joining the lesson.");
+const joinChain = sliceBetween(joinSync, "const check = async", "window.setInterval");
+if (!joinChain.includes('"/api/student/warmup-status"')
+  || !joinChain.includes("if (!status.complete || stopped) return;")
+  || joinChain.indexOf('"/api/student/warmup-status"') > joinChain.indexOf('"/api/student/join"')) {
+  throw new Error("The global poller must confirm this session's warm-up receipt before joining the lesson.");
 }
 if (!warmupStatus.includes('.eq("auth_user_id", student.authUserId)')
   || !warmupStatus.includes('.eq("session_id", session.id)')
@@ -181,7 +192,9 @@ for (const requiredSql of [
 }
 
 // Behavioral state table for the student journey. A previous-day identity link
-// is deliberately insufficient; only today's completed receipt unlocks.
+// is deliberately insufficient; only today's completed receipt marks the
+// warm-up connected (navigation itself is never locked - the receipt gates
+// verified JOINS and writes, not links).
 const journeyCases = [
   { codeOpen: true, identityLinked: false, receiptComplete: false, expected: "warmup" },
   { codeOpen: true, identityLinked: true, receiptComplete: false, expected: "warmup" },
@@ -199,4 +212,4 @@ for (const testCase of journeyCases) {
   }
 }
 
-console.log("PASS - current-session Google Form completion gates challenge unlock and synchronized lesson entry.");
+console.log("PASS - the receipt chain gates verified joins while the home base never locks navigation.");

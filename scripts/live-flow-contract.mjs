@@ -22,6 +22,7 @@ if (!studioSource.includes("DISCUSSION_ROUNDS.map") || !studioSource.includes('c
 const expectedPollKinds = new Map([
   ["Short Answer", "short-answer"],
   ["Multiple Choice", "multiple-choice"],
+  ["Multiple Choice + Explain", "multiple-choice-explain"],
   ["Fist to Five", "fist-to-five"],
 ]);
 

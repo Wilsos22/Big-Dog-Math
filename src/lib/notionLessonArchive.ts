@@ -10,10 +10,11 @@ const NOTION_VERSION = "2025-09-03";
 // /api/today saw them fine (found live 2026-07-26: two published pages
 // "vanished" from the archive because they sat in a source this file never
 // queried). Keep this list in lockstep with notionLessons.ts.
+// 2026-07-27: trimmed to the one REAL source, matching notionLessons.ts -
+// 3282eba1 is schemaless and d1c8e7b0 never existed (it 404s; querying it
+// added dead latency to every archive read).
 const MATH_6_LESSONS_DATA_SOURCE_IDS = [
   "e367e541-c0c7-4613-8066-d2e61b6fee64",
-  "3282eba1-de37-8069-a043-000b7c36799d",
-  "d1c8e7b0-9a3c-4f1b-8c5c-9a2e5f0a1a3f",
 ];
 
 export interface PublishedLessonArchiveItem {

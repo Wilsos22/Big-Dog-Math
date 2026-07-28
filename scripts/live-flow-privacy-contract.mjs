@@ -118,7 +118,21 @@ assert.equal(safeLesson.selectedSuccessCriterion, selectedCriterion);
 
 const safeFlow = studentSafeLiveFlow(flow);
 assert.ok(safeFlow);
-assert.equal(safeFlow.sequence, null, "Future lesson steps must never enter a student payload.");
+// 2026-07-26 student progress strip: the public sequence is EXACTLY this
+// minimal projection - position plus the next step's student-facing label
+// and directions. deepEqual guarantees no extra key (especially `steps`,
+// which carries correct answers and teacher notes) can ever ride along.
+assert.deepEqual(
+  safeFlow.sequence,
+  {
+    currentIndex: 0,
+    totalSteps: 2,
+    nextLabel: "Future check",
+    nextDirections: "future-private-directions",
+    advanceMode: "automatic",
+  },
+  "Students receive only the minimal progress projection - never sequence.steps.",
+);
 assert.equal("transition" in safeFlow, false, "Teacher transition claims must remain private.");
 assert.equal(safeFlow.lesson.successCriteria, selectedCriterion);
 assert.equal(safeFlow.lesson.selectedSuccessCriterion, selectedCriterion);
@@ -128,6 +142,10 @@ assert.equal("remoteActions" in safeFlow.presentation, false, "Remote controls m
 assert.equal(safeFlow.resource.url, "/current-public-resource", "The current public resource should remain available.");
 assert.equal(safeFlow.paper.task, "Current public paper direction", "The current public paper direction should remain available.");
 
+// The next step's description (its student-facing directions) is public by
+// design since the progress strip; everything else about future steps stays
+// private - especially questions, correct answers, resources, and remote
+// actions.
 const safeJson = JSON.stringify(safeFlow);
 for (const privateValue of [
   "Legacy option one",
@@ -135,7 +153,6 @@ for (const privateValue of [
   "private-transition-token",
   "private-gallery-material",
   "private-remote-action",
-  "future-private-directions",
   "future-private-question",
   "future-correct-answer",
   "/future-private-resource",

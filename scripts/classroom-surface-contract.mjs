@@ -18,11 +18,13 @@ const timers = read("src/lib/liveClassFlow.ts");
 const remoteLayout = read("src/app/teacher/remote/layout.tsx");
 const remoteManifest = read("public/teacher-remote.webmanifest");
 
+// Anchors re-based 2026-07-27 to the Warm Notebook canonical surfaces
+// (the 2026-07-20 Turn 12 standardization) - same intents, current landmarks.
 for (const required of [
   "grid-template-rows:66px minmax(0,1fr)",
-  'className="stage-mark"',
+  'src="/big-dog-mark.png"',
   'className="stage-dot"',
-  'content:"Time left"',
+  "className={`stage-timer",
   'className="stage-main-prompt"',
   "session?.abbie?.text",
 ]) {
@@ -36,11 +38,11 @@ if (!present.includes('resource.url.startsWith("/")')
 }
 
 for (const required of [
-  'className="pace-topbar"',
-  'className="pace-mark"',
-  'className="pace-dot"',
-  'content:"Time left"',
-  'className="pace-current-label"',
+  'className="pw-left"',
+  'className="pw-center"',
+  'className="pw-right"',
+  'className="pw-pace"',
+  'className="pw-pace-copy"',
 ]) {
   if (!pace.includes(required)) {
     throw new Error(`Pace + Support is missing the approved projector frame: ${required}`);
@@ -53,7 +55,7 @@ for (const required of [
   'className="lf-sync"',
   'className="lf-who"',
   'className="lf-body"',
-  "linear-gradient(180deg,#fbf6ea,#f1e8d5)",
+  "var(--bdb-",
 ]) {
   if (!student.includes(required)) {
     throw new Error(`Chromebook is missing the approved warm-cream frame: ${required}`);
