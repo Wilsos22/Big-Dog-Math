@@ -7,6 +7,8 @@ import CityRouteCard from "@/components/CityRouteCard";
 import { getSupabase } from "@/lib/supabase";
 import { SECURE_STUDENT_DATA, StudentApiError, studentApiRequest } from "@/lib/studentApi";
 import { fetchSharedSessionState } from "@/lib/studentSessionShared";
+import { studentSafeLiveFlow } from "@/lib/liveFlowPrivacy";
+import { useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
 import { classroomStageTheme } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
@@ -190,7 +192,23 @@ export default function LiveFlowPage() {
     return () => { stopped = true; };
   }, [signalProbeStep]);
 
+  // Preview mode (the public /demo run-through, same bridge Screen Studio
+  // uses): render from a posted snapshot instead of a session. The privacy
+  // boundary stays INSIDE this surface - whatever the parent posts goes
+  // through studentSafeLiveFlow before it renders, exactly like production.
+  const { active: isStudioPreviewMode, snapshot: studioPreviewSnapshot } = useStudioPreviewSnapshot();
   useEffect(() => {
+    if (!isStudioPreviewMode) return;
+    setConnectionState("connected");
+    setHolding(true);
+    if (studioPreviewSnapshot) {
+      setFlow(studentSafeLiveFlow(studioPreviewSnapshot));
+      setLoading(false);
+    }
+  }, [isStudioPreviewMode, studioPreviewSnapshot]);
+
+  useEffect(() => {
+    if (isStudioPreviewMode) return;
     const sessionId = getStoredStudentSessionId();
     if (!supabase || !sessionId) {
       setEmptyMessage(!supabase ? "Live sync is not set up." : "Join the class first.");
@@ -257,7 +275,7 @@ export default function LiveFlowPage() {
       window.clearTimeout(connectionFallback);
       window.clearInterval(poll);
     };
-  }, [supabase]);
+  }, [supabase, isStudioPreviewMode]);
 
   useEffect(() => {
     if (!WARMUP_IDENTITY || !supabase) return;
@@ -371,6 +389,17 @@ export default function LiveFlowPage() {
   }, [activePollId, activeResponseKey, fistRating, pollAnswer, submittedPollIds]);
 
   async function submitPollAnswer(answer: string, explanation?: string) {
+    // Preview mode: the visitor can answer, and it succeeds locally - no
+    // network write exists to make. Their answer never joins the mock tally,
+    // which is itself a small honest demo of the privacy boundary.
+    if (isStudioPreviewMode) {
+      if (!activePoll || !answer.trim() || submittedPollIds.includes(activePoll.id)) return;
+      setSubmittedPollIds((ids) => [...new Set([...ids, activePoll.id])]);
+      setPollAnswer("");
+      setPollSubmitError(null);
+      setPollSaveState("submitted");
+      return;
+    }
     const student = getStoredStudentSession();
     if (!supabase || !activePoll || !student || !answer.trim() || submittedPollIds.includes(activePoll.id)) return;
     // The answer column stays the bare choice so tallies and correctness
@@ -598,8 +627,8 @@ export default function LiveFlowPage() {
   const embeddedResourceUrl = resolvedResourceUrl?.includes("docs.google.com/forms")
     ? `${resolvedResourceUrl}${resolvedResourceUrl.includes("?") ? "&" : "?"}embedded=true`
     : null;
-  const hasStudentSession = Boolean(getStoredStudentSessionId());
-  const studentName = getStoredStudentSession()?.name || "Student";
+  const hasStudentSession = isStudioPreviewMode || Boolean(getStoredStudentSessionId());
+  const studentName = isStudioPreviewMode ? "Abbie (demo)" : (getStoredStudentSession()?.name || "Student");
 
   return (
     <main className="lf-page" style={{ "--lf-accent": accent } as CSSProperties}>

@@ -154,24 +154,37 @@ export function isStudioPreviewMode(): boolean {
 }
 
 // The surfaces call this once. In studio-preview mode it returns the snapshot
-// posted by the Studio parent frame (and null until the first message);
-// otherwise it stays inert and the surface uses its normal session fetch.
-export function useStudioPreviewSnapshot(): { active: boolean; snapshot: LiveClassFlowSnapshot | null } {
+// posted by the parent frame (and null until the first message); otherwise it
+// stays inert and the surface uses its normal session fetch. The optional
+// pollAnswers ride the same message so the /demo run-through can trickle a
+// fictional class's responses onto the teacher surfaces; Studio never sends
+// them and the surfaces treat them as absent.
+export function useStudioPreviewSnapshot(): {
+  active: boolean;
+  snapshot: LiveClassFlowSnapshot | null;
+  pollAnswers: { id: string; answer: string | null }[] | null;
+} {
   const [active] = useState(isStudioPreviewMode);
   const [snapshot, setSnapshot] = useState<LiveClassFlowSnapshot | null>(null);
+  const [pollAnswers, setPollAnswers] = useState<{ id: string; answer: string | null }[] | null>(null);
   useEffect(() => {
     if (!active) return;
     const onMessage = (event: MessageEvent) => {
-      const data = event.data as { type?: string; snapshot?: LiveClassFlowSnapshot } | null;
+      const data = event.data as {
+        type?: string;
+        snapshot?: LiveClassFlowSnapshot;
+        pollAnswers?: { id: string; answer: string | null }[];
+      } | null;
       if (!data || data.type !== STUDIO_PREVIEW_MESSAGE || !data.snapshot) return;
       setSnapshot(data.snapshot);
+      setPollAnswers(Array.isArray(data.pollAnswers) ? data.pollAnswers : null);
     };
     window.addEventListener("message", onMessage);
     // Tell the parent this frame is ready to receive the first snapshot.
     try { window.parent?.postMessage({ type: `${STUDIO_PREVIEW_MESSAGE}-ready` }, "*"); } catch { /* ignore */ }
     return () => window.removeEventListener("message", onMessage);
   }, [active]);
-  return { active, snapshot };
+  return { active, snapshot, pollAnswers };
 }
 
 // A synthetic StageSession the surfaces can drop into their existing session

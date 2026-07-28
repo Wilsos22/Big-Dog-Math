@@ -298,13 +298,17 @@ export default function ClassroomStagePage() {
   // Studio preview: this projector, embedded in Screen Studio, renders from a
   // snapshot the parent posts instead of a live session, so Studio shows the
   // real surface rather than a hand-built copy.
-  const { active: isStudioPreviewMode, snapshot: studioPreviewSnapshot } = useStudioPreviewSnapshot();
+  const { active: isStudioPreviewMode, snapshot: studioPreviewSnapshot, pollAnswers: previewPollAnswers } = useStudioPreviewSnapshot();
   useEffect(() => {
     if (!isStudioPreviewMode) return;
     setLoading(false);
     setSession(studioPreviewSnapshot ? (studioPreviewSession(studioPreviewSnapshot) as StageSession) : null);
     setSessionMessage(studioPreviewSnapshot ? "Studio preview." : "Waiting for the Studio draft.");
-  }, [isStudioPreviewMode, studioPreviewSnapshot]);
+    // The /demo run-through posts a fictional class's answers with each
+    // snapshot; Studio posts none. Never mixed with live poll data - this
+    // branch only runs in preview mode, where the session fetch is off.
+    setPollAnswers(previewPollAnswers ?? []);
+  }, [isStudioPreviewMode, studioPreviewSnapshot, previewPollAnswers]);
 
   useEffect(() => {
     setPreviewStage(previewStageParam());
@@ -369,6 +373,9 @@ export default function ClassroomStagePage() {
   const pollId = flow?.poll?.id ?? null;
 
   useEffect(() => {
+    // Preview mode: answers arrive with the posted snapshot. Without this
+    // gate the 1s fetcher's catch-to-empty overwrote them every tick.
+    if (isStudioPreviewMode) return;
     if (!pollId) {
       setPollAnswers([]);
       return;
@@ -386,7 +393,7 @@ export default function ClassroomStagePage() {
       stopped = true;
       window.clearInterval(interval);
     };
-  }, [pollId]);
+  }, [pollId, isStudioPreviewMode]);
 
   const state = flow?.state ?? null;
   const timer = flow?.timer ?? null;
@@ -397,9 +404,11 @@ export default function ClassroomStagePage() {
   const presentation = flow?.presentation ?? null;
   const lesson = flow?.lesson ?? null;
   const phase = normalizeDiscussionPhaseSnapshot(flow?.phase);
-  const theme = state?.semantic
-    ? CLASSROOM_STAGE_THEMES[state.semantic]
-    : classroomStageTheme(state?.id, state?.label);
+  // Fallback through the inferrer if the semantic is unknown - a stray value
+  // in a snapshot must never crash the projector (found 2026-07-27 when a
+  // demo snapshot carried a non-canonical semantic and theme.id threw).
+  const theme = (state?.semantic ? CLASSROOM_STAGE_THEMES[state.semantic] : undefined)
+    ?? classroomStageTheme(state?.id, state?.label);
   const showReaderSpinner = state?.id === "learning-target-readers";
   const showIpadKidSpinner = state?.id === "ipad-kid";
   const routineConfig = presentation?.routineConfig || null;

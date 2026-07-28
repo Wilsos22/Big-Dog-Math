@@ -15,11 +15,15 @@ bars and live misconception grouping).
 
 - Stack: Next.js (App Router) + TypeScript, deployed on Vercel.
 - Live: https://bigdogmath.com (also website-prototype-three.vercel.app).
-- Repo: https://github.com/Wilsos22/Website-prototype (default branch `main`).
-- Local working folder: `/Users/steelewilson/Website prototype` (moved OUT of Documents on
-  2026-07-21 - Documents is Google Drive-synced, and Drive sync corrupted `.git`, `.next`, and
-  `node_modules` with ` 2`-suffixed duplicate files at least six separate times. Never move this
-  repo back inside a cloud-synced folder).
+- Repo: https://github.com/Wilsos22/Big-Dog-Math (default branch `main`; renamed from
+  Website-prototype on 2026-07-27 - old URLs redirect, Vercel and CI followed automatically).
+- Local working folder: `/Users/steelewilson/Big Dog Math Site` (renamed by Steele 2026-07-27
+  from "Website prototype"; an EMPTY decoy folder may exist at the old path - some agent
+  sessions are anchored there and keep a launcher shim in its .claude/launch.json. Renaming
+  the folder while a dev server runs in it presents as catastrophic module-not-found errors
+  and an apparently emptied repo - check for a rename before declaring data loss. Original
+  2026-07-21 rule stands: never put this repo inside a cloud-synced folder; Documents is
+  Google Drive-synced and Drive corrupted `.git`/`.next`/`node_modules` six separate times).
 - Teacher/owner: Steele Wilson. Mascot: Abbie (Steele's dog).
 - Priority signal (Steele, 2026-07-21): the iPad ink surface - /ipad, /board, and the glass sheet
   over /teacher/present - is the most important feature of the whole system after data collection
@@ -127,6 +131,23 @@ bars and live misconception grouping).
   reload displays via DeployRefresh, so re-arm after every deploy); the arming chip shows for 90s
   at load and again whenever a call arrives silent, and tapping it plays the call as a speaker
   check. The pulse fires armed or not.
+- /weekly-display is the FIFTH room surface: two all-day TVs in the back rotating
+  learning intention / success criteria / week schedule / bells every 20s, fed by public
+  /api/weekly-display (params ?screen= pins one view, ?day=, ?track=acc). Public route,
+  in DeployRefresh.
+- /demo is the PUBLIC mock run-through (portfolio front door, built 2026-07-27): the REAL
+  surfaces embedded in scaled iframes and driven through a scripted fictional GCF lesson
+  (src/lib/demoLesson.ts) via the studio-preview bridge. /demo/present and /demo/pace are
+  thin PUBLIC wrappers that re-export the gated page components - NOT an auth hole: in
+  studioPreview mode the surfaces fetch nothing and render only posted data, and every data
+  API stays gated (do not add fetching to the wrappers). /live-flow gained the same preview
+  mode and applies studentSafeLiveFlow INTERNALLY to whatever is posted, so even the demo
+  honors the privacy boundary; its preview submit is a local echo. The parent delivers
+  snapshots on a 700ms drip because a fast-loading iframe's one-shot ready handshake can
+  fire before the parent listener mounts. Poll answers ride the same message (Studio never
+  sends them). Present/pace theme lookups now fall back through the inferrer on unknown
+  semantics, and present's 1s poll-answer fetcher is preview-gated - it used to overwrite
+  posted answers with its catch-to-empty every tick.
 - Teacher (gated): `/teacher` and `/teacher/*` (analytics, assignments, challenges, checkpoint-upload,
   checkpoints, exit-tickets, mastery, rightnow), `/control`, `/session`, `/roster`, `/start-question`.
   `/teacher/growth` redirects to `/teacher/rightnow`. Note: `/builder` and `/abbie` are teacher-ish but
@@ -497,8 +518,10 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 - Classroom DISPLAY tabs stay open across deploys and never pick up new builds on their own - that
   is how "the wall is missing the feature" happens (cost a live confusion 2026-07-22: the
   projector's present tab predated the glass sheet entirely). `DeployRefresh` (root layout) polls
-  the public `/api/build-id` on display routes (/board, /teacher/present, /live-flow, /warmup) and
-  reloads them when a new deploy ships. NEVER add /ipad to its DISPLAY_ROUTES - the pen surface
+  the public `/api/build-id` on display routes (/board, /teacher/present, /teacher/pace,
+  /live-flow, /warmup, /weekly-display - the pace projector and the all-day TVs joined
+  2026-07-27; they are the longest-open tabs in the building and were silently missing
+  deploys) and reloads them when a new deploy ships. NEVER add /ipad to its DISPLAY_ROUTES - the pen surface
   holds the authoritative ink state and an auto-reload would wipe the room's boards. Displays are
   safe to reload; ink resyncs via hello/state on mount.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),

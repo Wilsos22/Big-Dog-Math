@@ -374,11 +374,33 @@ export default function WeeklyDisplayPage() {
     }
   }, []);
 
+  // Preview mode (the public /demo run-through): render a posted mock week
+  // instead of fetching. The parent posts { type: "bdm-studio-preview",
+  // weeklyDisplay } - same bridge the live-lesson surfaces use.
+  const [previewMode, setPreviewMode] = useState(false);
   useEffect(() => {
+    let active = false;
+    try { active = new URLSearchParams(window.location.search).get("studioPreview") === "1"; } catch { /* ignore */ }
+    if (!active) return;
+    setPreviewMode(true);
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; weeklyDisplay?: WeeklyDisplayPayload } | null;
+      if (!data || data.type !== "bdm-studio-preview" || !data.weeklyDisplay) return;
+      setPayload(data.weeklyDisplay);
+      setError(null);
+      setLoading(false);
+    };
+    window.addEventListener("message", onMessage);
+    try { window.parent?.postMessage({ type: "bdm-studio-preview-ready" }, "*"); } catch { /* ignore */ }
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  useEffect(() => {
+    if (previewMode) return;
     void loadWeek(true);
     const refresh = window.setInterval(() => void loadWeek(false), 60_000);
     return () => window.clearInterval(refresh);
-  }, [loadWeek]);
+  }, [loadWeek, previewMode]);
 
   const activeDay = useMemo(() => {
     if (!payload?.days.length) return null;

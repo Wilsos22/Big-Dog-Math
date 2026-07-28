@@ -168,9 +168,10 @@ export default function PaceSupportPage() {
   const timer = flow?.timer ?? null;
   const timerSeconds = liveTimerSeconds(timer);
   const timerFinished = Boolean(timer?.finished || (timer?.running && timerSeconds <= 0));
-  const theme = state?.semantic
-    ? CLASSROOM_STAGE_THEMES[state.semantic]
-    : classroomStageTheme(state?.id, state?.label);
+  // Fallback through the inferrer if the semantic is unknown - a stray value
+  // in a snapshot must never crash a projector (see the same guard on Main).
+  const theme = (state?.semantic ? CLASSROOM_STAGE_THEMES[state.semantic] : undefined)
+    ?? classroomStageTheme(state?.id, state?.label);
   const publicSurfacesLinked = flow?.presentation?.publicSurfaceMode === "linked";
   const linkedSpinnerMode = publicSurfacesLinked && state?.id === "learning-target-readers"
     ? "readers"

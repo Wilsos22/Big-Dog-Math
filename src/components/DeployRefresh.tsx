@@ -11,7 +11,10 @@
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
-const DISPLAY_ROUTES = ["/board", "/teacher/present", "/live-flow", "/warmup"];
+// /teacher/pace (the Support projector) and /weekly-display (the two all-day
+// TVs in the back of the room) joined 2026-07-27 - they are the longest-open
+// tabs in the building and were silently missing deploys. NEVER add /ipad.
+const DISPLAY_ROUTES = ["/board", "/teacher/present", "/teacher/pace", "/live-flow", "/warmup", "/weekly-display"];
 const POLL_MS = 4 * 60 * 1000;
 
 export default function DeployRefresh() {
