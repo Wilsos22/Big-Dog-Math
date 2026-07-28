@@ -20,7 +20,7 @@ Ask for whatever isn't already obvious from context:
 1. **Topic / standard** (e.g. "ratios — introducing tape diagrams", "6.RP.A.1")
 2. **Date** (specific date or "next Monday")
 3. **Module** (the unit name as it appears in Notion — e.g. "Ratios & Proportions")
-4. **Period length** — default 55 minutes if not specified
+4. **Period length** — default 50 minutes if not specified
 5. **Available manipulatives** — which `Tool:` checkboxes are relevant (see TOOL_ROUTES below)
 
 If Steele has the Notion connector authorized, prefer reading an existing recent lesson to mirror tone and field formatting. Otherwise produce the lesson as a Markdown spec he can paste in.
@@ -62,7 +62,7 @@ of them; per-day Agenda/Learning Intention/Success Criteria on each. Why this is
 
 ### Agenda lines — match the control panel state sequence
 
-Write agenda lines in the same order and naming as the control panel states. The lesson page renders them as a numbered journey; the control panel uses the order to drive its timer sequence. Default sequence for a 55-minute period:
+Write agenda lines in the same order and naming as the control panel states. The lesson page renders them as a numbered journey; the control panel uses the order to drive its timer sequence. Default sequence for a 50-minute period:
 
 1. **Warm Up (8 min)** — students arrive, music on, work the 2 review + 3 current problems
 2. **Spinner / Share Out (3 min)** — student spinner picks 2 + 1 iPad kid to share warm-up thinking; surface the misconception from question 3

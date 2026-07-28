@@ -1,157 +1,190 @@
 ---
 name: classroom-os-context
-description: Auto-load the Big Dog Math classroom OS project context — the live Next.js/Vercel site, Notion lessons database, control panel state sequence, Abbie the dog mascot, teaching philosophy, design system, and warm-up format. Trigger on any mention of the classroom site, lesson page, control panel, warm-up, Abbie, "the site", "my site", manipulatives, period/roster, session code, class mode, or the Notion "Math 6 Lessons" database. Load this at the start of any conversation that touches the codebase, Notion lessons, or anything the teacher Steele Wilson is building for his 6th grade math class.
+description: Standing context for Steele Wilson's Big Dog Math classroom operating system - the live Next.js/Vercel site at bigdogmath.com, the Notion "Math 6 Lessons" database and its Lesson Steps runtime, the 11-state CRA lesson spine, the four classroom surfaces, the proficiency spine, Abbie the dog mascot, and the teaching philosophy. Load this at the start of any conversation touching the codebase, the Notion lessons, the control panel, the projector or iPad surfaces, warm-ups, manipulatives, rosters, session codes, class mode, or anything Steele is building for his 6th grade math class. Trigger on "the site", "my site", "the lesson page", "the control panel", "Screen Studio", "the warm-up", "Abbie", "the tools", or the Math 6 Lessons database.
 ---
 
-# Big Dog Math — Classroom OS
+# Big Dog Math - classroom OS context
 
-This is the standing context for Steele Wilson's 6th grade math classroom operating system. Read it whenever the conversation touches the site, lessons, control panel, Notion, or classroom workflows. Do not ask the teacher to re-explain things covered here.
+Standing context so Steele never re-explains the project. Read it whenever the conversation touches the site, lessons, the control panel, Notion, or classroom workflows.
+
+**`CLAUDE.md` at the repo root outranks this file.** It is the shared brain across Claude Code, Codex, and cloud sessions, it is kept deliberately current, and its own rule 9 requires correcting it the moment something turns out to be stale. When the two disagree, CLAUDE.md is right and this file needs fixing. Read it before any code work.
 
 ## The teacher
 
-- **Name:** Steele Wilson
-- **Role:** 6th grade math teacher
-- **Tone:** young, jokes around with students, builds classroom culture around *how to think, not what to think*. "Being confused is step one — that's how you know you're engaged. Step two is *what do you know*. Step three is *try something*."
-- **Mascot:** Abbie (Steele's dog). Use Abbie as the friendly visual anchor anywhere you're producing graphics, slides, or in-app illustrations. Logo lives at `public/big-dog-logo.png`.
-- **Preference:** pragmatic builds that streamline the classroom; suggest plugins/skills/extensions that get the job done thoroughly; reduce token usage when it doesn't hurt the product.
+Steele Wilson, 6th grade math. Young, jokes with students, builds culture around **how to think, not what to think**.
+
+The three steps, which are load-bearing and appear on the walls and the screens: **being confused is step one - that is how you know you are engaged. Step two is what do you know. Step three is try something.** Attempts get rewarded, not just right answers.
+
+Five beliefs: We Think. We Try. We Don't Give Up. We Help Each Other. We Celebrate Effort.
+
+Poster vocabulary, which is the working vocabulary for directions and stems: learning must leave evidence, make thinking visible, try one move, check the evidence, revise and try again, use a resource, ask for help, help a thinker.
+
+**Abbie** is Steele's grown dog and the mascot, voiced by `/api/abbie`. Deadpan, calls him "dad", roasts *him* - never a student, never a student's ability. One sentence, no emoji, no stage directions.
+
+He teaches **Carnegie Learning** but adapts rather than implements faithfully, and that adaptation is deliberately the point: the collaborative classroom day has no software layer at most publishers, and this system generates that missing dataset. Carnegie says "Learning by Doing" and "productive struggle"; Carnegie does **not** frame confusion as valuable. The confusion-is-step-one framing is Steele's own and must never be attributed to Carnegie.
 
 ## The product
 
-**Name:** Big Dog Math
-**Live:** https://website-prototype-three.vercel.app
-**Repo:** https://github.com/wilsos22/website-prototype (some commits land via `Wilsos22/Website-prototype`)
-**Local working folder:** `/Users/steelewilson/Documents/Website prototype`
+- **Live:** https://bigdogmath.com (also website-prototype-three.vercel.app)
+- **Repo:** https://github.com/Wilsos22/Big-Dog-Math, default branch `main`
+- **Local folder:** `/Users/steelewilson/Big Dog Math Site` - **not** inside Documents. It was moved out on 2026-07-21 because Google Drive sync corrupted `.git`, `.next`, and `node_modules` with ` 2`-suffixed duplicates at least six times. Never move it back into a cloud-synced folder.
+- Stack: Next.js App Router + TypeScript on Vercel, Supabase, Notion via the data_sources API.
 
-This is a classroom OS — not just a homework site. It facilitates class from start to finish: transitions, manipulatives, timers, visuals, plus a Notion-fed lesson agenda and a teacher control panel.
+**Priority signal:** the iPad ink surface (`/ipad`, `/board`, the glass sheet over `/teacher/present`) is the most important feature after data collection. Treat ink regressions as urgent. The planned buildout is complete; do not propose new ink features without his word.
 
-## Tech stack
+## Hard rules
 
-- **Next.js (App Router)** + TypeScript, deployed to Vercel via GitHub pushes (GitHub Desktop)
-- **Supabase** (`@supabase/supabase-js ^2.45.0`) — browser client via `getSupabase()` reading `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Tables: `periods`, `students`, `sessions`, `session_joins`, `polls`, `poll_answers`. RLS uses permissive `prototype_all` policies. Polling (~3s) instead of realtime.
-- **Notion** — server-side fetch with `NOTION_TOKEN` env var; lessons database id `e367e541-c0c7-4613-8066-d2e61b6fee64`. See "Notion schema" below.
-- **State persistence** — IndexedDB (`bdm-control` store) for uploaded sounds/media; `localStorage` for student name/session, class lists, control panel settings.
+1. **No emojis anywhere.** UI copy, headings, comments, commit messages, docs, Apps Script. The codebase has ~440 pre-existing ones; do not add more, strip them from files you edit.
+2. **Never `git add .`** - a Google AI Studio agent and cloud sessions commit to this same repo concurrently. Stage explicit paths. Fetch and merge before pushing.
+3. **Verified work ships without waiting** - push the branch, merge to `main`, typecheck and build the merged tree, push, verify the live route changed. Still ask first for: curriculum and Notion content, classroom-orchestration core, locked designs, schema/RLS migrations, anything destructive.
+4. Never import `supabaseServer.ts` (service role) into client-reachable code.
+5. Secrets live in Vercel env vars only.
+6. `/control` stays **dark** for projector contrast. Do not carry the cream theme onto it.
+7. Verify the build before saying done - `npm run typecheck` minimum, `npm run build` for anything non-trivial.
+8. No real student PII until RLS is tightened. Mock identities stay fully fictional.
+9. **Keep CLAUDE.md true immediately** - correct it in the same turn you discover a stale line, as its own commit onto `main`. Anything another agent needs goes there, not in a Claude-only memory note, because Codex cannot read those.
 
-Secrets (service_role key, NOTION_TOKEN) live in Vercel env vars — never paste them into chat.
+## The lesson runtime
 
-## Site map (file → purpose)
+**A lesson lives in Notion; the site renders it from properties and Lesson Steps, never from page body blocks.** There are zero `/blocks` calls in `src/`. Prose written into a page body is invisible to the site - it is for the teacher.
 
-| Path | Purpose |
-|------|---------|
-| `src/app/page.tsx` | Student home. Abbie banner, "Hey {name}" / "Welcome!", primary "Today's Lesson" card → `/lesson` (no code needed). Optional "Join with a code" reveals code → roster → pick-name flow that stores `localStorage bdm-student-session` + `bdm-student-name`. Small "Teacher" link → `/control`. |
-| `src/app/lesson/page.tsx` | Student lesson page. Cream/Abbie theme. Reads from Notion via `/api/today`. Hero (date, "Hey {firstName}! 👋", module/topic chips, serif title) → warm-up CTA card (orange) → numbered agenda journey → Supplies + Tools two-up → Today's focus → Assignment → Exit Ticket → poll overlay modal. Reachable WITHOUT a session code. |
-| `src/app/control/page.tsx` | Teacher control panel. Intentionally **dark** for projector contrast. Per-state instructions, draining progress bar, auto-advance, spinner, sounds, edit times, fullscreen. Links to Session, Rosters, Tools. |
-| `src/app/session/page.tsx` | Teacher live session. Start session (DOG+3 code), live joins polling, poll controls, Class Mode controls (`broadcast` field in `sessions` table) that push student screens to `/lesson` or a specific tool. |
-| `src/app/roster/page.tsx` | Reads/writes periods + students from Supabase. |
-| `src/app/teacher/analytics/page.tsx` | Form-response analytics (built by another agent). |
-| `src/app/area-model/` | One of the manipulative tools. |
-| `src/app/api/today/route.ts` | Returns today's published lesson from Notion, filtered by `Date = today` (America/Los_Angeles) AND `Publish Workflow = Published`. |
-| `src/components/SiteNav.tsx` | Shared nav. Two variants: `teacher` (Tools / Control / Session / Rosters / Student view) and `student` (Home / Lesson). Cream pills, current path highlighted via `usePathname`. |
-| `src/components/ClassSync.tsx` | Global listener mounted in `src/app/layout.tsx`. Reads `bdm-student-session`, polls `sessions.broadcast` + `status` every 3s; if broadcast is a route and differs from current path, `router.push` to it; if status closed, clears localStorage. |
-| `src/lib/supabase.ts` | `getSupabase()` returns null when env vars are missing — build-safe. |
-| `src/lib/notionLessons.ts` | Notion fetcher. Supports checkbox-prefixed properties (`Supply:` and `Tool:`), relation resolution for warm-up + exit ticket links, `suppliesConfigured` / `toolsConfigured` flags. |
-| `supabase/*.sql` | Schema, seed, policies, session-joins, polls, class-mode. Run in Supabase SQL Editor. |
+- Lessons database: `collection://e367e541-c0c7-4613-8066-d2e61b6fee64`. Title property is **`Lesson`**. Module and topic are **`Module #`** and **`Topic #`**.
+- **Lesson Steps**: `collection://8e467c1b-8937-4902-811e-ca0a2e15af4d`. Title property is **`Step`**. This is what the control panel and every surface actually run. Read them with one SQL query filtered on the lesson page id, not one fetch per step.
+- `/api/today` returns the lesson where `Publish Workflow` = `Published` **and** `Date` equals today in `America/Los_Angeles`. **One page per teaching day, never a Date range.**
+- Entering an agreed lesson is **transcription, not authoring**. A field the agreement does not dictate stays empty - empty renders as nothing, wrong renders on a classroom screen.
+
+### The 50-minute spine - the canonical new-learning day
+
+This sequence is Steele's, stated directly in July 2026. It is the order, not a suggestion.
+
+| Min | State | What happens |
+|---|---|---|
+| 0-5 | `warmup` | Google Form retrieval. **The projector carries the hook the whole time** - a real-world problem students only read and think about. Not solvable yet; solvable by the end. |
+| 5-8 | `launch` | Brief discussion of how they would attack the hook. Approaches, not answers. |
+| 8-9 | `learning-target-readers` | LI and SC revealed, **read aloud by whoever the spinner lands on**. No confidence collected here. |
+| 9-16 | `concrete` | **C.** Structured exploration with explicit instructions, **in pairs or table groups** by default. |
+| 16-22 | `representational` | **R, and R is normally a website tool.** Teacher demos one problem on it, then students run a stated number of reps. |
+| 22-29 | `abstract` | **A.** The assignment appears, and **the numbered routine gets derived here** - see the rule below. Teacher works one, class works one together. |
+| 29-30 | `learning-target-readers` | LI and SC again - the review, not the reveal. Carries the **Fist-to-Five**. |
+| 30-33 | `question` | **Two problems.** Answers set the private routes. Use `question`, not `learning-check` - the bank's `learning-check` is the 0-to-5 confidence state and the UI special-cases it. |
+| 33-46 | `small-group` | Differentiated release. This is the block that flexes. |
+| 46-49 | `exit` | Back at seats. Independent evidence. The hook returns. |
+| 49-50 | `closeout` | Payoff - you can answer it now - and cleanup. |
+
+Sums to 50 exactly. `review` is conditional; when it runs its minutes come out of `concrete`.
+
+### Abstract always carries a numbered step-by-step
+
+Whenever the mathematics allows it, `abstract` teaches an explicitly numbered routine. Three clauses make it a handrail instead of a recipe:
+
+1. **It belongs in `abstract` and nowhere earlier.** C and R build the meaning; A packages it. A procedure introduced before the meaning is a recipe students run without understanding.
+2. **The steps get derived, not delivered.** The teacher works the problem and each number appears on the board as that step happens. The list is the residue of the work, never a preamble to it. Do not put the finished list on screen first.
+3. **The numbering is stable across every surface.** Step 4 on the board is step 4 on `Pace Directions`, step 4 on the homework help page, and step 4 in the teacher's visit list. Once that holds, "I'm stuck on 4" becomes something a student can say to a partner or a parent - and the step numbers become the diagnostic vocabulary, so the prepared teacher move is just "go back to step 4".
+
+Include at least one step that is a **decision rather than a move** - the place where the student chooses, and where "why did you do that?" has a real answer. In M1.T1.L1 that is step 3, *which factor is easier for me to work with?*
+
+`universalStateTitle()` renders the state word on the projector every step - `concrete` shows **I Do**, `representational` **We Do**, `abstract` and `independent` **You Do**. Students learn to read those words because they are identical lesson to lesson. **The screen word and the participation structure are separate things**: the real gradual release sits inside each phase (demo then reps in R, one worked then one shared in A), not across them.
+
+Fixed and universal: warm-up 0-5 with the hook up · LI/SC read from the spinner · **every lesson carries a Fist-to-Five**, before the graded items · exit **46-49** · closeout **49-50** · `Advance` Automatic except closeout and private-release states. The release block flexes; what does not flex is stating where the required work lands.
+
+**Transitions are designed, not absorbed.** Every physical move - into pairs, out to vertical surfaces, back to seats before the exit ticket - is its own `transition-hustle` (1 min) or `transition-reset` (2 min) record, and its minutes come out of neighbouring instruction so the day still sums to 50. Same-location changes of prompt or attention use Settle 30s from the iPad Remote and cost no planned minute.
+
+### Three kinds of day
+
+- **New-learning day** - the CRA spine above.
+- **Practice day** - error analysis run extensively, gallery walks, the vertical classroom. A different structure, not a CRA day with a game attached. Every activity has to end in something written that could be graded.
+- **Review day before a test** - **Bruh** or **Grudge Ball**. Self-contained games, already built, nothing to set up and nothing to author.
+
+Everything in the "fixed and universal" line above applies to all three.
+
+### Discussion is three different moves
+
+Not interchangeable, and each has one home:
+
+1. **Compare what you did** - inside `concrete`, no state, 60-90 seconds, one line on Pace Directions.
+2. **Insight with no work** - a 4-minute `discussion` state right after `concrete`, before the tool in R gives the idea a name. Capture two student noticings verbatim and reuse the exact wording in the R demo.
+3. **The whiteboard protocol** - think, write, try, discuss with your partner, revise, share out via the spinner wheel. A full work cycle that **is** the release block rather than an addition to it. Wrong work never gets erased, and every student leaves with an individual receipt because the board is not evidence the system can see.
+
+### The release block has two shapes
+
+One coupled decision - the shape decides where the assignment lands.
+
+- **Shape A, whiteboard release.** The class works the assignment's own problems on whiteboards at their desks, no small groups, teacher circulates. The paper assignment goes home rehearsed. `abstract` shrinks to modelling one, because the "we do one together" beat becomes the first board problem; the release runs 35-51.
+- **Shape B, small-group release.** `abstract` runs full - model one, do one together on the actual assignment paper - then straight into small groups 38-51, teacher pulling by route while the rest work the paper. The assignment is finished in class.
+
+### Room logistics
+
+Students grab the assignment on the way in and slide it under the Chromebook. **Computers stay open all period**; the whiteboard lies flat on the keyboard deck and manipulatives use the space between partners. That means no class transition for board work - the only movement is the handful pulled to a table in Shape B.
+
+Vertical whiteboards at the walls are a **practice-day** structure, not the everyday release, and those do cost transition minutes (1 out, 2 back).
+
+**Keys under the board.** A whiteboard on a keyboard presses keys. If a text input is focused - the `/live-flow` poll answer box saves drafts on every keystroke - a student leaning on their board types into it and the garbage persists. Do not schedule a text-entry state underneath board work.
+
+### Closing a Chromebook lid does not remove a student
+
+There is **no presence tracking anywhere in the system** - no heartbeat, no `last_seen`, no timeout, no disconnect handler. Joining is a one-time insert into `session_joins`; identity lives in `localStorage` and survives sleep and browser restart. Live state arrives by `setInterval` polling that Chrome pauses on sleep and resumes on wake. `ClassSync.tsx` explicitly swallows transient read errors rather than kicking students out.
+
+Two consequences: the teacher's "Joined: N of 30" is **cumulative, not live**, so it is not an attendance check; and `/exit-ticket` holds typed text in React state only, with no `localStorage` backup - a discarded tab loses a half-written exit ticket silently. That is the one real data-loss path in the student flow.
+
+### The four surfaces
+
+Each is written for its own audience, and the separation is the whole design:
+
+- **Main projector** (`Main Display`) - the mathematics only. No call-to-action verb: the state marker already says I Do / We Do / You Do, so `WATCH:` is the same instruction twice, read at 25 feet by thirty people.
+- **Pace + Support projector** (`Pace Directions`) - current directions only, present tense, a sequence not a sentence.
+- **Student Chromebook** (`Student Action`) - one device-scoped action.
+- **Private teacher iPad** (`Remote Actions`) - look-fors, evidence, routing, overrides. Teacher-only.
+
+### Privacy is absolute
+
+No student ever sees their own score, tier, confidence category, misconception label, or an ability-revealing group name. Public projectors never show names or rosters. Route names rotate their meaning daily so a name never becomes a label. Support changes the path, not the required work - every route completes the identical product.
+
+## The tools
+
+Adding a manipulative takes **two** wirings or it silently fails:
+
+1. A lowercase entry in `TOOL_ROUTES` (`src/app/lesson/page.tsx`) or the Notion `Tool:` name renders as a **dead pill**.
+2. An entry in `LiveToolRoute` (`src/lib/liveClassFlow.ts`) **and** the component calling `useLiveToolConfig("/route")` and rendering `<LiveToolBanner tool={...} />`, or published directions are dropped and students see nothing.
+
+Route names that trip people up: `gems` → `/order-of-operations`, `combine like terms` → `/combine-like-terms`, `proportion builder` → `/proportions`, `box method` → `/area-model`, `number line` → `/number-line-plus`.
+
+`src/lib/challengeSkills.ts` is the shared problem bank for `/challenge` **and** assignable practice - 15 skills, one entry is all a new drill needs, no UI change.
+
+## Evidence and the proficiency spine
+
+Design is locked. Build it, do not redesign it.
+
+- Per-domain EWMA mastery bars; accuracy alone caps at `approaching`; a Tier-2 checkpoint >=80% with produced work reaches `mastered`.
+- **Misconceptions are a finite exact-match vocabulary** (18 tags in the `misconceptions` table). Clustering keys on the exact string. **Adding a tag is a SQL migration** - a tag typed into Notion never clusters and renders a blank prepared move in `/teacher/rightnow`.
+- `reportToolResult` fires **only** inside a joined live session, and only 7 tools emit. At-home tool play records nothing.
+- Assigned practice (`practice_assignments`, created at `/teacher/assignments`) writes only to `practice_assignment_attempts` and **never** to `responses` - it moves no mastery bar. `formative.sql`'s comments claim otherwise; they describe intent that was never wired.
+
+## Warm-ups
+
+5 multiple-choice (exactly 4 choices, one correct, no duplicate values) + 1 short-answer bonus. Q1 fluency, Q2-Q3 spiral review, **Q4-Q5 retention of the previous taught day**, drawn from that lesson's `Retention Q4`/`Retention Q5`, pulling backward only. The pipeline is Google Apps Script, mirrored in the repo as `warmup-*.gs`.
 
 ## Design system
 
-Cream / "Abbie" theme:
+Warm Notebook, decided 2026-07-20, turn 12 canonical.
 
-- **Background:** `#fbf7ef` (cream)
-- **Cards:** white, rounded
-- **Headings:** Georgia serif
-- **Accent colors (retro):** orange `#ff6b3d`, teal `#14b8a6`, green `#22c55e`, amber `#f5b915`, blue `#4d8df6`
-- **Control panel:** intentionally dark (projector contrast). Do not "fix" this by carrying the cream theme onto the control panel unless Steele explicitly asks.
-- **SiteNav** is the standard navigation — apply it to new pages, but be cautious about the individual manipulative tools (Steele hasn't decided whether they get the nav).
+- Font `--bdb-font` = **Albert Sans**, not Georgia. Georgia survives on ~7 legacy teacher pages only.
+- Palette is `--bdb-*` in `globals.css`: ground `#faf6ee`, card `#ffffff`, ink `#201e1a`, line `#ece4d4`, amber `#fcaf38`, teal `#50a3a4`, brown `#674a40`, coral `#f95335`, green `#2f9e6f`.
+- **Contrast rule:** white text fails AA on teal, coral and green - filled controls use the deep companions `--bdb-teal-deep`, `--bdb-coral-deep`, `--bdb-green-deep`.
+- Pages self-style with a per-page inline `<style>` and a unique class prefix reading `var(--bdb-*)`.
+- **Manipulative layout:** reference material in a large LEFT rail, the thing being acted on in the center, the product being built on the right. Never stack reference under the workspace. `/divisibility` is the reference implementation.
+- Copy tone: friendly, second person, playful. Teach how to think, not what to think. Still no emojis.
 
-## The warm-up format
+## Authoring surfaces
 
-Steele's warm-up structure is fixed:
+`/teacher/studio` is Screen Studio - it embeds the **real** `/teacher/present` and `/teacher/pace` in scaled iframes and posts the draft as a snapshot, so redesigning a surface never needs a matching Studio change. Its per-step editor includes the slide-extras panel beside Main Display, so a slide's text and the format of the components on it are edited in one place. `/teacher/slides` remains for focused overlay work and renders the same shared editor.
 
-1. **2 review computation problems** — quick fluency practice
-2. **3 current questions** — the misconceptions on these are the *goal* to highlight (not just to get right)
+## What Steele usually wants
 
-When generating warm-ups, always follow this 2+3 shape and explicitly name the misconception the third question is designed to surface. Steele is open to alternatives to Google Forms for collecting answers (e.g. Notion forms, Tally) that auto-collect emails like Google Forms does.
+1. **Instant feedback on student work during class** - the high-value one. Read the response, name the specific misconception, give one concrete move he can make in the next thirty seconds. Not a long analysis.
+2. New site features and manipulatives.
+3. Design and UX passes that match Warm Notebook and reduce what students have to look at.
+4. Automating something that should run itself.
 
-## The control panel state sequence
+Suggest skills, plugins and connectors that would do the job thoroughly, even ones he does not have yet. Reduce token usage where it does not hurt the product.
 
-A class period is 55 minutes. The control panel walks through ordered states with adjustable timers, sounds, and visuals. Each state has:
-
-- a name (e.g. Warm Up, Mini-Lesson, Work Time, Exit Ticket)
-- a duration (in minutes)
-- a description / teacher instruction
-- optional sound triggers (music during state, alert at 30s, countdown from 10)
-- visual screens shown to students when Class Mode is on
-
-Music during warm-up; alert at 30 seconds, then countdown from 10. Student screens count down from 10 in sync. Steele has the sounds wired to his Stream Deck and can also upload sounds in-app per state.
-
-## The student spinner
-
-At the end of warm-up: 2 wheels (or "poker machine" style) that pick students from the roster, plus a 3rd spinner for "the iPad kid." Students can't pick someone else's name or a fake name — names come from the loaded roster. Reads the learning intention and success criteria when it lands.
-
-## Notion schema — "Math 6 Lessons" database
-
-Database id: `e367e541-c0c7-4613-8066-d2e61b6fee64`
-
-Known properties (some are checkbox-prefixed; others are relations):
-
-| Property | Type | Notes |
-|----------|------|-------|
-| Name / Title | title | Lesson title |
-| Date | date | Filtered by today in `America/Los_Angeles` |
-| Publish Workflow | select | Only `Published` shows on the student page |
-| Module | text/select | Shown as chip on lesson hero |
-| Topic | text/select | Shown as chip on lesson hero |
-| Learning Intention | text | "Today's focus" section |
-| Success Criteria | text | Often paired with learning intention |
-| Agenda | text (lines) | Becomes the numbered journey on lesson page |
-| Supply: ___ | checkbox (multiple, prefixed) | Each `Supply:` checkbox represents one supply item. Parsed by `notionLessons.ts`. |
-| Tool: ___ | checkbox (multiple, prefixed) | Each `Tool:` checkbox links to a manipulative route via `TOOL_ROUTES` map in `lesson/page.tsx`. |
-| Warm Up Link | relation | Resolved to a URL (Notion page link or external) |
-| Exit Ticket Link | relation | Same resolution pattern |
-| Assignment | text or URL | Shown in Assignment section |
-
-When asked to add a lesson, populate every field above. When `Supply:` / `Tool:` checkboxes are absent, the lesson page falls back to `DEFAULT_SUPPLIES` / `DEFAULT_TOOLS` and sets `suppliesConfigured: false` / `toolsConfigured: false`.
-
-## Supabase tables
-
-- `periods` — class periods (e.g. P1, P3, P5)
-- `students` — roster rows linked to a period
-- `sessions` — live class sessions (code, status, `broadcast` text field controlling Class Mode)
-- `session_joins` — which students have joined the current session
-- `polls`, `poll_answers` — live polls (MC and open-ended)
-
-RLS is permissive (`prototype_all` policies) — secure this before storing real student data behind a teacher login.
-
-## Build & deploy workflow
-
-1. Edit files locally in `/Users/steelewilson/Documents/Website prototype`.
-2. **Verify build before pushing:** copy working tree (excluding `.next`, `node_modules`, `.git`, `aistudio_*`) to `$HOME`, `npm install`, `npm run build`, grep for `Compiled` / `error`.
-3. Commit hygiene: only `git add` specific paths — another agent edits this repo concurrently. Claude commits locally; Steele pushes via GitHub Desktop.
-4. If `.next` build errors with `ENOTEMPTY rmdir '.next/server/app 3'` (cloud-sync artifact), `rm -rf .next` and rebuild.
-5. Merge conflicts: when both agents touched `src/app/lesson/page.tsx`, default to keeping Steele's cream redesign (`git checkout --ours`) and merging the other agent's data-layer work (which usually lives in `src/lib/notionLessons.ts`).
-
-## Open / pending items (as of last session)
-
-- **Lesson database build-out:** pre-build a library of lessons in Notion matching the schema above so the control panel can select from premade lessons. **(This plugin's `lesson-database-builder` skill handles this.)**
-- **Teacher-curated student tool view:** Notion "Enabled Tools" field → student homebase shows only those tools when in Class Mode.
-- **Database security:** add a teacher login and tighten RLS before storing real student data.
-- **NotebookLM bridge:** turn lessons into slideshows / infographics automatically.
-- **Student progress tracking:** year-long progress dashboard.
-- **Responsive warm-ups:** generate warm-ups from prior misconception data.
-- **Games / website features that match the design system:** future skill territory.
-
-## What Steele typically asks Claude for
-
-Most conversations are one of these four:
-
-1. **Add new site features** — new manipulatives, new lesson page sections, new control panel states, new Notion integrations.
-2. **Design / UX improvements** — match the cream Abbie theme, simplify navigation, make things bigger / more visual.
-3. **Automate something** — recurring workflows that should run themselves (warm-up generation, lesson backfill, broadcast triggers).
-4. **Instant feedback on student work during class** — *the high-value workflow*. While class is live, Steele wants to surface a student's response (from a poll, exit ticket, warm-up form, or manipulative) and get an actionable teacher move *in the moment*: who to pull for small group, what misconception is firing, what reteach to deliver in the next 30 seconds. When this comes up, default to: (a) read the student response, (b) name the specific misconception or strength, (c) give Steele one concrete next move he can do *right now*, not a long-form analysis.
-
-## What Claude should default to
-
-- **Never re-ask** for the philosophy, mascot, tech stack, Notion schema, design system, or warm-up format. They're in this file.
-- **Do ask** before touching the control panel theme (Steele wants it dark), before storing real student data (security first), and before doing anything irreversible to the repo.
-- **Always verify builds** before reporting "done." Don't rely on the file edits alone.
-- **Suggest skills/plugins/extensions** that thoroughly accomplish the task, even if Steele doesn't have them yet — recommend available resources to best complete the work.
-- **Match Abbie's tone** when writing student-facing copy: friendly, slightly playful, "how to think" not "what to think."
+For building or revising a single lesson to deployment depth, use the **lesson-deployment-builder** skill. For bulk stubs across an unbuilt unit, use **lesson-database-builder**.
