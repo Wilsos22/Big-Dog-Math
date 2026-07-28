@@ -23,6 +23,10 @@ const expectedPollKinds = new Map([
   ["Short Answer", "short-answer"],
   ["Multiple Choice", "multiple-choice"],
   ["Multiple Choice + Explain", "multiple-choice-explain"],
+  // Learning checks and the exit ticket moved off multiple choice: it cannot
+  // separate a student who misunderstands the distributive property from one
+  // who understands it and cannot multiply, and those need different moves.
+  ["Structured Numeric", "structured-numeric"],
   ["Fist to Five", "fist-to-five"],
 ]);
 

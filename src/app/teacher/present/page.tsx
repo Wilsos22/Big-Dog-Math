@@ -1034,7 +1034,11 @@ export default function ClassroomStagePage() {
             <div className="stage-poll">
               {showLessonTargets && lesson?.learningIntention ? <p className="stage-learning">{lesson.learningIntention}</p> : null}
               <h2 className="stage-question">{poll.stage === "results" ? "Class Results" : poll.question}</h2>
-              {poll.stage === "responding" || poll.kind === "short-answer" ? (
+              {/* structured-numeric has no authored choices, so the choice
+                  tally below would render an EMPTY results box on the
+                  projector. It stays a count here by design as well: this is a
+                  PUBLIC screen, and the per-student diagnosis is teacher-only. */}
+              {poll.stage === "responding" || poll.kind === "short-answer" || poll.kind === "structured-numeric" ? (
                 <p className="stage-response-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received</p>
               ) : (
                 <div className="stage-results">

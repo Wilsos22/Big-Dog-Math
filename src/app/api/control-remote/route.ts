@@ -7,6 +7,7 @@ import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import { normalizePublicLessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { publicLiveLessonSnapshot } from "@/lib/liveFlowPrivacy";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
+import { parseStructuredNumericSpec, structuredNumericBoxCount } from "@/lib/structuredNumeric";
 import {
   LIVE_FLOW_MODE,
   REMOTE_COMMAND_STALE_MS,
@@ -292,6 +293,15 @@ async function navigateFlow(
     : resolveLiveStepPollKind(step.responseMode, step.pollKind || undefined, step.stateId);
   if (step.question && pollKind) {
     const choices = pollKind === "fist-to-five" ? ["0", "1", "2", "3", "4", "5"] : step.choices;
+    // Fail loudly rather than opening a Structured Numeric step with zero
+    // boxes. A student staring at a question with no inputs cannot tell that
+    // from a frozen screen, and the teacher would never learn it happened.
+    if (pollKind === "structured-numeric") {
+      const parsed = parseStructuredNumericSpec(step.correctAnswer);
+      if (!parsed.ok) {
+        throw new Error(`"${step.label}" has a Structured Numeric answer spec that will not parse. ${parsed.errors[0]}`);
+      }
+    }
     const inserted = await db
       .from("polls")
       .insert({
@@ -315,6 +325,9 @@ async function navigateFlow(
       question: step.question,
       choices: choices.length ? choices : null,
       stage: "responding",
+      ...(pollKind === "structured-numeric"
+        ? { boxes: structuredNumericBoxCount(step.correctAnswer) ?? undefined }
+        : {}),
     };
   }
 

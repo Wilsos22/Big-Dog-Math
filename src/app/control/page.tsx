@@ -44,6 +44,11 @@ import {
   type LiveToolRoute,
   type TeacherRemoteCommand,
 } from "@/lib/liveClassFlow";
+import {
+  parseStructuredNumericSpec,
+  structuredNumericBoxCount,
+  summarizeStructuredNumeric,
+} from "@/lib/structuredNumeric";
 import { normalizeDistributiveSet, parseDistributiveSet } from "@/lib/distributiveProblems";
 import { normalizeFactorTreeSet, parseFactorTreeSet } from "@/lib/factorTreeSet";
 import {
@@ -192,12 +197,16 @@ interface ControlPoll {
   choices: string[] | null;
   stage: "responding" | "results";
   awaitingTeacherAdvance?: boolean;
+  /** Structured Numeric input count. The rules stay teacher-side; only this crosses. */
+  boxes?: number;
 }
 
 interface ControlPollAnswer {
   id: string;
   display_name: string | null;
   answer: string | null;
+  /** Structured Numeric boxes, null before poll-structured-numeric.sql is run. */
+  values?: (number | null)[] | null;
 }
 
 interface PollLaunchConfig {
@@ -1158,6 +1167,7 @@ export default function ControlPage() {
           choices: flow.poll.choices,
           stage: flow.poll.stage,
           awaitingTeacherAdvance: flow.poll.awaitingTeacherAdvance,
+          boxes: flow.poll.boxes,
         }
       : null);
   }, [armTimer, disarmTimer, markServerHydration, persistLineup, startMusicFor, stopMusic, teacherSession]);
@@ -1262,6 +1272,23 @@ export default function ControlPage() {
     ? activeState.id
     : null;
   const activeToolState: ToolStateId | null = isToolStateId(activeState?.id) ? activeState.id : null;
+
+  // Structured Numeric diagnosis, grouped by error. The spec is read from the
+  // lineup item and NEVER from the flow snapshot - the rules carry the answer,
+  // so they must not travel to a student device.
+  const structuredNumericSummary = (() => {
+    if (controlPoll?.kind !== "structured-numeric") return null;
+    const parsed = parseStructuredNumericSpec(activeItem?.correctAnswer);
+    if (!parsed.ok) return null;
+    return summarizeStructuredNumeric(
+      parsed.spec,
+      pollAnswers.map((answer) => ({
+        id: answer.id,
+        name: answer.display_name || "Student",
+        values: Array.isArray(answer.values) ? answer.values : [],
+      })),
+    );
+  })();
 
   useEffect(() => {
     if (!activeUsesDiscussionProtocol || !activeItem) {
@@ -1411,6 +1438,9 @@ export default function ControlPage() {
       question,
       choices,
       stage: "responding",
+      ...(kind === "structured-numeric"
+        ? { boxes: structuredNumericBoxCount(config?.correctAnswer) ?? undefined }
+        : {}),
     });
     setPollAnswers([]);
     setFinished(false);
@@ -1600,6 +1630,9 @@ export default function ControlPage() {
           choices: controlPoll.choices,
           stage: controlPoll.stage,
           awaitingTeacherAdvance: controlPoll.awaitingTeacherAdvance,
+          // Control's snapshot is a full REPLACE - a field omitted here is
+          // deleted, and a deleted box count renders zero inputs.
+          boxes: controlPoll.boxes,
         }
       : null;
     const tool = publishedTool?.stateId === activeToolState ? publishedTool.tool : null;
@@ -2018,6 +2051,15 @@ export default function ControlPage() {
     const unknownStateIds = Array.from(new Set(
       lessonSteps.map((step) => step.stateId).filter((stateId) => !bank.some((state) => state.id === stateId)),
     ));
+    // A Structured Numeric step whose Correct Answer does not parse must fail
+    // LOUDLY here. Accepting it silently would render zero boxes and mark the
+    // whole class wrong against rules nobody wrote - the exact class of defect
+    // that let catalog copy reach a projector.
+    const structuredNumericProblems = lessonSteps.flatMap((step) => {
+      if (resolveLiveStepPollKind(step.responseMode, step.pollKind, step.stateId) !== "structured-numeric") return [];
+      const parsed = parseStructuredNumericSpec(step.correctAnswer);
+      return parsed.ok ? [] : [`${step.title || step.stateId}: ${parsed.errors[0]}`];
+    });
     const newLineup: LineupItem[] = lessonSteps.length
       ? lessonSteps.map((step) => ({
           uid: uid(),
@@ -2098,8 +2140,10 @@ export default function ControlPage() {
     if (criterionValidationMessage) parts.push(`start blocked: ${criterionValidationMessage}`);
     if (unmatched.length) parts.push(`couldn't match: ${unmatched.join(", ")}`);
     if (unknownStateIds.length) parts.push(`kept ${unknownStateIds.length} step${unknownStateIds.length === 1 ? "" : "s"} with an unmapped State ID: ${unknownStateIds.join(", ")}`);
+    if (structuredNumericProblems.length) parts.push(`ANSWER SPEC WILL NOT PARSE - ${structuredNumericProblems.join("; ")}`);
     setTodayMsg(parts.join(" · "));
-    window.setTimeout(() => setTodayMsg(null), 8000);
+    // A broken answer spec has to stay on screen long enough to read and fix.
+    window.setTimeout(() => setTodayMsg(null), structuredNumericProblems.length ? 30000 : 8000);
     return true;
   }
 
@@ -3133,7 +3177,39 @@ export default function ControlPage() {
                         <span className="cx-poll-summary">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"}</span>
                       </div>
                       <div className="cx-poll-note">{controlPoll.question}</div>
-                      {controlPoll.kind === "short-answer" ? (
+                      {controlPoll.kind === "structured-numeric" ? (
+                        /* A choice tally would render an EMPTY box here: a
+                           structured step has no authored choices. The teacher
+                           gets the diagnosis grouped by error instead. */
+                        structuredNumericSummary ? (
+                          <div className="cx-poll-answers">
+                            <span className="cx-poll-note">
+                              {structuredNumericSummary.correct} of {structuredNumericSummary.total} correct
+                            </span>
+                            {structuredNumericSummary.reteachPhrase ? (
+                              <span className="cx-poll-answer">
+                                Stop and reteach - most of the class shows &ldquo;{structuredNumericSummary.reteachPhrase}&rdquo;
+                              </span>
+                            ) : null}
+                            {structuredNumericSummary.groups.map((group) => (
+                              <span className="cx-poll-answer" key={group.phrase}>
+                                {group.tierLabel} · {group.phrase} ({group.students.length}):{" "}
+                                {group.students.map((student) => student.name).join(", ")}
+                              </span>
+                            ))}
+                            {structuredNumericSummary.splits.share > 0.8 && structuredNumericSummary.splits.total > 2 ? (
+                              <span className="cx-poll-note">
+                                Nearly every student split {structuredNumericSummary.splits.topKey} - flexibility has not landed yet.
+                              </span>
+                            ) : null}
+                            {structuredNumericSummary.total === 0 ? <span className="cx-poll-note">No responses yet.</span> : null}
+                          </div>
+                        ) : (
+                          <div className="cx-poll-note">
+                            This step&rsquo;s answer spec will not parse, so responses cannot be diagnosed. Fix Correct Answer in Notion.
+                          </div>
+                        )
+                      ) : controlPoll.kind === "short-answer" ? (
                         <div className="cx-poll-answers">
                           {pollAnswers.length === 0
                             ? <span className="cx-poll-note">No responses yet.</span>

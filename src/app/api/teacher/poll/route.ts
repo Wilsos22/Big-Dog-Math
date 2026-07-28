@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
+import { isLivePollKind } from "@/lib/liveClassFlow";
 
 export const dynamic = "force-dynamic";
 
@@ -27,16 +28,18 @@ export async function GET(request: Request) {
   const pollId = new URL(request.url).searchParams.get("pollId") || "";
   if (!pollId) return Response.json({ error: "Poll is required." }, { status: 400 });
 
-  // Prefer the explanation column (Multiple Choice + Explain); fall back to
-  // the narrow select so polls keep working before poll-explanations.sql has
-  // been run in the Supabase SQL Editor.
-  const wide = await db
-    .from("poll_answers")
-    .select("id,student_id,display_name,answer,explanation,created_at")
-    .eq("poll_id", pollId)
-    .order("created_at");
-  if (!wide.error) {
-    return Response.json({ answers: wide.data ?? [] }, { headers: { "cache-control": "no-store" } });
+  // Prefer the widest select (explanation for Multiple Choice + Explain,
+  // values for Structured Numeric), then narrow one column at a time. Each
+  // step is a migration that may not have been hand-run yet in this
+  // environment, and a poll must keep working either way.
+  for (const columns of [
+    "id,student_id,display_name,answer,explanation,values,created_at",
+    "id,student_id,display_name,answer,explanation,created_at",
+  ]) {
+    const wide = await db.from("poll_answers").select(columns).eq("poll_id", pollId).order("created_at");
+    if (!wide.error) {
+      return Response.json({ answers: wide.data ?? [] }, { headers: { "cache-control": "no-store" } });
+    }
   }
   const { data, error } = await db
     .from("poll_answers")
@@ -58,9 +61,11 @@ export async function POST(request: Request) {
     const choices = Array.isArray(body.choices)
       ? body.choices.filter((choice): choice is string => typeof choice === "string").map((choice) => text(choice, 500)).filter(Boolean).slice(0, 12)
       : null;
-    const kind = ["short-answer", "multiple-choice", "fist-to-five"].includes(text(body.kind, 40))
-      ? text(body.kind, 40)
-      : "short-answer";
+    // Validated against the shared LIVE_POLL_KINDS union, never a local
+    // literal list: the old hand-copied array omitted multiple-choice-explain,
+    // so every one of those polls was stored as short-answer.
+    const requestedKind = text(body.kind, 40);
+    const kind = isLivePollKind(requestedKind) ? requestedKind : "short-answer";
     if (!sessionId || !question) return Response.json({ error: "Session and question are required." }, { status: 400 });
 
     const { data: session, error: sessionError } = await db.from("sessions").select("id,status").eq("id", sessionId).maybeSingle();

@@ -10,12 +10,21 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const student = await requireVerifiedStudent(request);
-    const body = await request.json().catch(() => ({})) as { pollId?: unknown; answer?: unknown; explanation?: unknown };
+    const body = await request.json().catch(() => ({})) as {
+      pollId?: unknown; answer?: unknown; explanation?: unknown; values?: unknown;
+    };
     const pollId = typeof body.pollId === "string" ? body.pollId : "";
     const answer = typeof body.answer === "string" ? body.answer.trim() : "";
     // Multiple Choice + Explain: the answer stays the bare choice (tallies and
     // correctness exact-match it); the explanation is stored beside it.
     const explanation = typeof body.explanation === "string" ? body.explanation.trim() : "";
+    // Structured Numeric: the boxes travel in their own column for the same
+    // reason - `answer` keeps the canonical summary so City Routes and the
+    // readiness tallies keep exact-matching it. A blank box stays null rather
+    // than collapsing to 0, which is a real answer.
+    const values = Array.isArray(body.values) && body.values.length <= 12
+      ? body.values.map((value) => (typeof value === "number" && Number.isFinite(value) ? value : null))
+      : null;
     if (!pollId || !answer || answer.length > 2000 || explanation.length > 2000) {
       throw new StudentIdentityError("A valid question and answer are required.", 400, "invalid_poll_answer");
     }
@@ -57,8 +66,10 @@ export async function POST(request: Request) {
         display_name: student.fullName,
         answer,
         // Only sent when present so plain polls keep working before the
-        // poll-explanations.sql migration has been run.
+        // poll-explanations.sql / poll-structured-numeric.sql migrations have
+        // been run.
         ...(explanation ? { explanation } : {}),
+        ...(values ? { values } : {}),
       },
       { onConflict: "poll_id,student_id" },
     );

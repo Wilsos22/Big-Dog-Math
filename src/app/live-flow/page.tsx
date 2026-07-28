@@ -15,6 +15,11 @@ import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { TIMER_URGENCY_CSS, TIMER_URGENT_SECONDS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 import {
+  canonicalStructuredNumericAnswer,
+  structuredNumericBlankCount,
+  structuredNumericSegments,
+} from "@/lib/structuredNumeric";
+import {
   publicSuccessCriterion,
   selectedSuccessCriterion,
   SUCCESS_CRITERION_SETUP_PLACEHOLDER,
@@ -49,6 +54,8 @@ type PollSaveState = "idle" | "editing" | "saved" | "saving" | "error" | "submit
 type StoredPollDraft = {
   answer: string;
   fistRating: number;
+  /** Structured Numeric boxes, kept as typed text so a half-filled row survives a reload. */
+  boxes?: string[];
 };
 
 function pollDraftKey(sessionId: string, responseKey: string) {
@@ -129,6 +136,7 @@ export default function LiveFlowPage() {
   const [holding, setHolding] = useState(false);
   const [pollAnswer, setPollAnswer] = useState("");
   const [selectedChoice, setSelectedChoice] = useState("");
+  const [numericBoxes, setNumericBoxes] = useState<string[]>([]);
   const [fistRating, setFistRating] = useState(3);
   const [submittedPollIds, setSubmittedPollIds] = useState<string[]>([]);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -362,7 +370,13 @@ export default function LiveFlowPage() {
       try {
         const parsed = JSON.parse(localStorage.getItem(key) || "null") as Partial<StoredPollDraft> | null;
         if (parsed && typeof parsed.answer === "string" && typeof parsed.fistRating === "number") {
-          draft = { answer: parsed.answer, fistRating: Math.max(0, Math.min(5, parsed.fistRating)) };
+          draft = {
+            answer: parsed.answer,
+            fistRating: Math.max(0, Math.min(5, parsed.fistRating)),
+            boxes: Array.isArray(parsed.boxes)
+              ? parsed.boxes.filter((value): value is string => typeof value === "string")
+              : undefined,
+          };
         }
       } catch {
         draft = null;
@@ -371,6 +385,10 @@ export default function LiveFlowPage() {
     setPollAnswer(draft?.answer || "");
     setSelectedChoice("");
     setFistRating(draft?.fistRating ?? 3);
+    // Size from the poll's own box count so a restored draft from a different
+    // step can never leave a short or long row of inputs.
+    const boxCount = Math.max(0, activePoll.boxes || 0);
+    setNumericBoxes(Array.from({ length: boxCount }, (_, index) => draft?.boxes?.[index] || ""));
     loadedDraftKeyRef.current = key;
     setPollSaveState(submittedPollIds.includes(activePoll.id) ? "submitted" : draft ? "saved" : "idle");
   }, [activePollId, activeResponseKey, submittedPollIds]);
@@ -382,14 +400,17 @@ export default function LiveFlowPage() {
     if (!key || loadedDraftKeyRef.current !== key) return;
     setPollSaveState("editing");
     try {
-      localStorage.setItem(key, JSON.stringify({ answer: pollAnswer, fistRating } satisfies StoredPollDraft));
+      localStorage.setItem(
+        key,
+        JSON.stringify({ answer: pollAnswer, fistRating, boxes: numericBoxes } satisfies StoredPollDraft),
+      );
       setPollSaveState("saved");
     } catch {
       setPollSaveState("error");
     }
-  }, [activePollId, activeResponseKey, fistRating, pollAnswer, submittedPollIds]);
+  }, [activePollId, activeResponseKey, fistRating, numericBoxes, pollAnswer, submittedPollIds]);
 
-  async function submitPollAnswer(answer: string, explanation?: string) {
+  async function submitPollAnswer(answer: string, explanation?: string, values?: (number | null)[]) {
     // Preview mode: the visitor can answer, and it succeeds locally - no
     // network write exists to make. Their answer never joins the mock tally,
     // which is itself a small honest demo of the privacy boundary.
@@ -416,6 +437,7 @@ export default function LiveFlowPage() {
             pollId: activePoll.id,
             answer: answer.trim(),
             ...(trimmedExplanation ? { explanation: trimmedExplanation } : {}),
+            ...(values ? { values } : {}),
           }),
         });
       } else {
@@ -425,6 +447,7 @@ export default function LiveFlowPage() {
           display_name: student.name,
           answer: answer.trim(),
           ...(trimmedExplanation ? { explanation: trimmedExplanation } : {}),
+          ...(values ? { values } : {}),
         });
         if (result.error) throw result.error;
       }
@@ -566,6 +589,52 @@ export default function LiveFlowPage() {
     }
   }
   const pollSubmitted = activePoll ? submittedPollIds.includes(activePoll.id) : false;
+  const isStructuredNumeric = activePoll?.kind === "structured-numeric" && numericBoxes.length > 0;
+  const numericValues = numericBoxes.map((raw) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  });
+  // Every box must be filled before Send. A blank box is not a wrong answer,
+  // and diagnosing one as a misconception would send the teacher to the wrong
+  // student.
+  const numericComplete = isStructuredNumeric && numericValues.every((value) => value !== null);
+  const numericSegments = structuredNumericSegments(activePoll?.question);
+  // Lay the boxes into the equation itself when the authored question marks
+  // them with `[ ]`. Brackets, never underscores - Notion silently eats `___`
+  // in a text property. When the counts disagree, fall back to numbered boxes
+  // rather than rendering a mangled equation on a student's screen.
+  const numericInline = isStructuredNumeric
+    && structuredNumericBlankCount(activePoll?.question) === numericBoxes.length;
+
+  function setNumericBoxAt(index: number, raw: string) {
+    // Digits and a leading minus only: a stray letter would silently become a
+    // blank box at submit time.
+    const cleaned = raw.replace(/[^0-9-]/g, "").replace(/(?!^)-/g, "").slice(0, 7);
+    setNumericBoxes((boxes) => boxes.map((value, position) => (position === index ? cleaned : value)));
+  }
+
+  function submitNumericBoxes() {
+    if (!numericComplete) return;
+    void submitPollAnswer(canonicalStructuredNumericAnswer(numericValues), undefined, numericValues);
+  }
+
+  function renderNumericBox(index: number) {
+    return (
+      <input
+        className="lf-numeric-box"
+        key={index}
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        aria-label={`Box ${index + 1} of ${numericBoxes.length}`}
+        value={numericBoxes[index] ?? ""}
+        disabled={pollSubmitted}
+        onChange={(event) => setNumericBoxAt(index, event.target.value)}
+      />
+    );
+  }
   const pollSaveLabel = connectionState === "reconnecting"
     ? "Reconnecting"
     : pollSubmitted || pollSaveState === "submitted"
@@ -726,6 +795,16 @@ export default function LiveFlowPage() {
         .lf-poll-text { width:100%; min-height:130px; box-sizing:border-box; border:2px solid var(--bdb-line); border-radius:10px; background:#fff; color:var(--bdb-ink); padding:14px 16px; font:inherit; font-size:1.1rem; font-weight:700; resize:vertical; box-shadow:var(--bdb-shadow-sm); }
         .lf-poll-text:focus { border-color:var(--lf-accent); outline:none; }
         .lf-poll-send { border-color:var(--lf-accent); background:var(--lf-accent); color:#fff; }
+        .lf-numeric { width:min(100%,760px); display:grid; gap:14px; justify-items:start; }
+        .lf-numeric-equation { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin:0; color:var(--lf-head); font-size:clamp(1.3rem,3vw,2.2rem); font-weight:800; line-height:1.25; }
+        .lf-numeric-part { white-space:pre-wrap; }
+        .lf-numeric-box { width:4.4ch; min-height:58px; box-sizing:content-box; border:2px solid var(--bdb-line); border-radius:10px; background:#fff; color:var(--bdb-ink); padding:6px 10px; font:inherit; font-size:clamp(1.2rem,2.8vw,1.9rem); font-weight:900; text-align:center; box-shadow:var(--bdb-shadow-sm); }
+        .lf-numeric-box:focus { border-color:var(--lf-accent); outline:none; }
+        .lf-numeric-box:disabled { cursor:not-allowed; opacity:0.72; }
+        .lf-numeric-stack { display:grid; grid-template-columns:repeat(auto-fit,minmax(104px,1fr)); gap:12px; width:100%; }
+        .lf-numeric-cell { display:grid; gap:6px; justify-items:center; }
+        .lf-numeric-label { color:var(--bdb-ink-soft); font-size:0.72rem; font-weight:900; text-transform:uppercase; letter-spacing:0.04em; }
+        .lf-numeric-send { justify-self:stretch; }
         .lf-fist { width:min(100%,700px); display:grid; gap:14px; }
         .lf-fist-options { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; }
         .lf-fist-option { min-height:72px; border:2px solid var(--bdb-line); border-radius:12px; background:#fff; color:var(--bdb-ink); font:inherit; font-size:clamp(1.35rem,3vw,2.15rem); font-weight:950; cursor:pointer; box-shadow:var(--bdb-shadow-sm); }
@@ -893,7 +972,10 @@ export default function LiveFlowPage() {
             ) : null}
             {activePoll ? activePoll.stage === "responding" ? (
               <section className="lf-poll">
-                <h1 className="lf-poll-question">{activePoll.question}</h1>
+                {/* An inline structured-numeric step renders the equation WITH
+                    its boxes below, so repeating the raw question here would
+                    show the bracket placeholders twice. */}
+                {numericInline ? null : <h1 className="lf-poll-question">{activePoll.question}</h1>}
                 {joinHelpNeeded ? (
                   <div className="lf-join-help" role="status">
                     {joinHelpCode ? (
@@ -978,6 +1060,43 @@ export default function LiveFlowPage() {
                     )}
                     {!pollSubmitted && (!selectedChoice || !pollAnswer.trim()) ? (
                       <p className="lf-poll-help">Pick one answer and write your explanation, then send.</p>
+                    ) : null}
+                    {pollSubmitError && <p className="lf-poll-help">{pollSubmitError}</p>}
+                  </div>
+                ) : isStructuredNumeric ? (
+                  <div className="lf-numeric">
+                    {numericInline ? (
+                      <p className="lf-numeric-equation">
+                        {numericSegments.map((segment, index) => (
+                          <span className="lf-numeric-part" key={`segment-${index}`}>
+                            {segment}
+                            {index < numericBoxes.length ? renderNumericBox(index) : null}
+                          </span>
+                        ))}
+                      </p>
+                    ) : (
+                      <div className="lf-numeric-stack">
+                        {numericBoxes.map((_, index) => (
+                          <span className="lf-numeric-cell" key={index}>
+                            <span className="lf-numeric-label">Box {index + 1}</span>
+                            {renderNumericBox(index)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {pollSubmitted ? (
+                      <p className="lf-poll-sent">Answer submitted.</p>
+                    ) : (
+                      <button
+                        className="lf-poll-send lf-numeric-send"
+                        disabled={pollSaveState === "saving" || !numericComplete}
+                        onClick={submitNumericBoxes}
+                      >
+                        Send answer
+                      </button>
+                    )}
+                    {!pollSubmitted && !numericComplete ? (
+                      <p className="lf-poll-help">Fill in every box, then send.</p>
                     ) : null}
                     {pollSubmitError && <p className="lf-poll-help">{pollSubmitError}</p>}
                   </div>

@@ -2,9 +2,31 @@ import { publicSuccessCriterion } from "./successCriterion";
 import { usesDiscussionProtocol } from "./classroomPilot";
 import { normalizeDiscussionPhaseSnapshot, type DiscussionPhaseSnapshot } from "./discussionProtocol";
 
-export type LivePollKind = "short-answer" | "multiple-choice" | "multiple-choice-explain" | "fist-to-five";
+/**
+ * Every response kind, in one place.
+ *
+ * Anything that needs to validate a kind reads THIS - never a hand-copied
+ * array. `/api/teacher/poll` kept its own literal list, which silently omitted
+ * multiple-choice-explain and stored those polls as `short-answer`; the
+ * student surface still rendered correctly from the flow snapshot, so nothing
+ * ever surfaced the wrong row.
+ */
+export const LIVE_POLL_KINDS = [
+  "short-answer",
+  "multiple-choice",
+  "multiple-choice-explain",
+  "fist-to-five",
+  "structured-numeric",
+] as const;
 
-/** Kinds whose response is a tap on one of the authored choices. */
+export type LivePollKind = (typeof LIVE_POLL_KINDS)[number];
+
+/**
+ * Kinds whose response is a tap on one of the authored choices.
+ *
+ * structured-numeric is deliberately NOT one: it has no choices to author, so
+ * the "add at least two answer choices" guard must never fire on it.
+ */
 export function isChoicePollKind(kind: string | null | undefined): boolean {
   return kind === "multiple-choice" || kind === "multiple-choice-explain";
 }
@@ -99,6 +121,7 @@ export const LIVE_RESPONSE_MODES = [
   "Short Answer",
   "Multiple Choice",
   "Multiple Choice + Explain",
+  "Structured Numeric",
   "Fist to Five",
   "Assigned Tool",
   "Physical Response",
@@ -112,13 +135,13 @@ export function liveResponseModePollKind(responseMode: string | undefined): Live
   if (normalized === "multiple choice") return "multiple-choice";
   // Accept the natural author spellings: "+", "and", "&".
   if (/^multiple choice\s*(\+|and|&)\s*explain$/.test(normalized || "")) return "multiple-choice-explain";
+  if (normalized === "structured numeric") return "structured-numeric";
   if (normalized === "fist to five") return "fist-to-five";
   return null;
 }
 
-function isLivePollKind(value: string | undefined): value is LivePollKind {
-  return value === "short-answer" || value === "multiple-choice"
-    || value === "multiple-choice-explain" || value === "fist-to-five";
+export function isLivePollKind(value: string | undefined): value is LivePollKind {
+  return LIVE_POLL_KINDS.includes(value as LivePollKind);
 }
 
 /**

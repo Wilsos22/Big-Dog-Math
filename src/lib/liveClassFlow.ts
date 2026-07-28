@@ -7,9 +7,11 @@ import type { PublicSurfaceMode } from "@/lib/lessonStepMetadata";
 import type { DiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 
 export {
+  LIVE_POLL_KINDS,
   LIVE_RESPONSE_MODES,
   canRevealM2T1L1FinalScore,
   isChoicePollKind,
+  isLivePollKind,
   liveAssignedToolRoute,
   liveIndependentSupportItems,
   liveResponseModePollKind,
@@ -231,6 +233,14 @@ export interface LiveClassFlowSnapshot {
     choices: string[] | null;
     stage: "responding" | "results";
     awaitingTeacherAdvance?: boolean;
+    /**
+     * How many numeric inputs a structured-numeric step renders.
+     *
+     * The COUNT only. The rest of the answer spec stays teacher-side, because
+     * the rules literally carry the answer - `5=168` is the product - and this
+     * field crosses studentSafeLiveFlow to a Chromebook.
+     */
+    boxes?: number;
   } | null;
   resource: {
     label: string;
