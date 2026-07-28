@@ -13,6 +13,35 @@ import { SECURE_STUDENT_DATA, studentApiRequest } from "@/lib/studentApi";
 
 type View = "loading" | "needjoin" | "waiting" | "answering" | "submitted";
 
+// Per-ticket draft backup. Keyed by ticket id so a new exit ticket never
+// inherits yesterday's text, and cleared on successful submit.
+const EXIT_DRAFT_PREFIX = "bdm-exit-draft-";
+
+function exitDraftKey(ticketId: string) {
+  return `${EXIT_DRAFT_PREFIX}${ticketId}`;
+}
+
+function readExitDraft(ticketId: string): string {
+  try {
+    return localStorage.getItem(exitDraftKey(ticketId)) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeExitDraft(ticketId: string, value: string): void {
+  try {
+    if (value.trim()) localStorage.setItem(exitDraftKey(ticketId), value);
+    else localStorage.removeItem(exitDraftKey(ticketId));
+  } catch { /* private mode or full storage - the in-memory value still works */ }
+}
+
+function clearExitDraft(ticketId: string): void {
+  try {
+    localStorage.removeItem(exitDraftKey(ticketId));
+  } catch { /* ignore */ }
+}
+
 export default function ExitTicketPage() {
   const supabase = getSupabase();
   const [session, setSession] = useState<StoredStudentSession | null>(null);
@@ -46,7 +75,11 @@ export default function ExitTicketPage() {
       }
       if (t.id !== ticket?.id && t.id !== submittedIdRef.current) {
         setTicket(t);
-        setText("");
+        // Restore any draft for THIS ticket. Answers lived in React state only,
+        // so a closed or discarded tab lost a half-written exit ticket with no
+        // trace - the one real data-loss path in the student flow, and it
+        // matters more now that the exit ticket is the day's evidence.
+        setText(readExitDraft(t.id));
         setView("answering");
       }
     };
@@ -72,6 +105,7 @@ export default function ExitTicketPage() {
         response: answer.trim(),
       });
     }
+    clearExitDraft(ticket.id);
     setView("submitted");
   }, [supabase, session, ticket]);
 
@@ -106,7 +140,16 @@ export default function ExitTicketPage() {
 
             {ticket.kind === "short-answer" && (
               <>
-                <textarea className="et-text" value={text} placeholder="Type your answer" onChange={(e) => setText(e.target.value)} autoFocus />
+                <textarea
+                  className="et-text"
+                  value={text}
+                  placeholder="Type your answer"
+                  onChange={(e) => {
+                    setText(e.target.value);
+                    if (ticket) writeExitDraft(ticket.id, e.target.value);
+                  }}
+                  autoFocus
+                />
                 <button className="et-submit" onClick={() => submit(text)} disabled={!text.trim()}>Turn in</button>
               </>
             )}

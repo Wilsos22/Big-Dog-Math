@@ -937,9 +937,12 @@ export default function LiveFlowPage() {
                   </>
                 ) : activePoll.kind === "multiple-choice" ? (
                   <div className="lf-poll-choices">
-                    {activePoll.choices?.map((choice) => (
+                    {/* A multiple-choice step with no authored choices rendered an
+                        empty box - indistinguishable from a frozen screen, and a
+                        student has no way to tell the difference or report it. */}
+                    {activePoll.choices?.length ? activePoll.choices.map((choice) => (
                       <button className="lf-poll-choice" key={choice} disabled={pollSubmitted || pollSaveState === "saving"} onClick={() => submitPollAnswer(choice)}>{choice}</button>
-                    ))}
+                    )) : <p className="lf-poll-help">This question has no answer choices yet. Tell your teacher.</p>}
                     {pollSubmitted && <p className="lf-poll-sent">Answer submitted.</p>}
                     {pollSubmitError && <p className="lf-poll-help">{pollSubmitError}</p>}
                   </div>

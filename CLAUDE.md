@@ -434,6 +434,19 @@ the invariants they protect are easy to break again.
 - **`resolveLessonVisual` TAKES TWO ID NAMESPACES.** `stateId` is the `ClassroomStageId` (warmup maps
   to `evergreen`, launch to `scenario`); `rawStateId` is the class-state id. Skip lists written in
   raw ids must be checked against `rawStateId` or they never fire.
+- **EVERY CLASSROOM TOGGLE NEEDS ITS OFF SWITCH IN THE UI.** `hide-board` was wired end to end -
+  action type, `/api/control-remote` handler, `/control` listener - but the iPad Remote only ever
+  rendered "Open work space". Once the writing surface was up there was no way to put it away, and
+  it covered the slide for the rest of the lesson. The deck key is now a toggle driven by
+  `flow.presentation.boardOpen`.
+- **`/teacher` CAN START THE LESSON.** The live-session card has a Start lesson button that POSTs
+  `start-lesson` to `/api/control-remote` - the complete server-side start (seeds the sequence,
+  flips broadcast, arms step zero) that needs no `/control` tab anywhere. `/control?...&run=1` is
+  still the other path, but it hard-blocks when no session is open and only says so in a status line.
+- **`/exit-ticket` BACKS DRAFTS TO `localStorage`**, keyed `bdm-exit-draft-<ticketId>` and cleared on
+  submit. Answers previously lived in React state alone, so a discarded tab lost a half-written exit
+  ticket silently. This matters more now that the exit ticket IS the day's evidence - it carries the
+  hook problem, not a procedure question (Steele's decision, 2026-07-28).
 - **TIMER WARNINGS ARE SHARED** (`src/lib/timerUrgency.ts`, Steele 2026-07-28): amber at 30s, coral
   and pulsing at 15s, faster at 5s, on the projector, the pace screen AND the student device - a
   head-down student needs the same runway the room gets. Colour and opacity only, never layout, and

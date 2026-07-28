@@ -702,6 +702,7 @@ export default function TeacherRemotePage() {
     ? privateLessonStepDetails.routineConfig.teacherPlan
     : null;
   const controlsDisabled = !session || Boolean(busy) || Boolean(pendingCommand);
+  const boardIsOpen = Boolean(flow?.presentation?.boardOpen);
   const isDiscussionState = Boolean(
     flow?.state
     && (
@@ -1194,11 +1195,17 @@ export default function TeacherRemotePage() {
                     <div className="remote-control-block">
                       <h3 className="deck-section-title">This slide</h3>
                       <div className="deck-grid spinner-control">
+                        {/* A TOGGLE. This was open-only: hide-board was wired end
+                            to end but no control ever sent it, so once the work
+                            space was up there was no way to put it away and it
+                            sat over the slide for the rest of the lesson. */}
                         <DeckKey
-                          button={{ action: "show-board", label: "Open work space", detail: "Write beside the current problem", tone: "green" }}
+                          button={boardIsOpen
+                            ? { action: "hide-board", label: "Close work space", detail: "Put the writing surface away", tone: "orange" }
+                            : { action: "show-board", label: "Open work space", detail: "Write beside the current problem", tone: "green" }}
                           busy={busy}
                           disabled={controlsDisabled || !flow?.presentation}
-                          onSend={() => { void setWritingMode(true); }}
+                          onSend={() => { void setWritingMode(!boardIsOpen); }}
                         />
                       </div>
                     </div>

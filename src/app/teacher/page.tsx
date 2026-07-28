@@ -8,7 +8,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { teacherApiRequest } from "@/lib/teacherApi";
+import { teacherApiRequest, teacherPost } from "@/lib/teacherApi";
 import { listLessonPresets, type LessonPreset } from "@/lib/lessonPresets";
 
 interface LinkItem { href: string; label: string; letter: string; color: string; desc: string; newWindow?: boolean }
@@ -179,7 +179,12 @@ export default function TeacherHome() {
   const [publishedLessonsLoading, setPublishedLessonsLoading] = useState(true);
   const [publishedLessonsError, setPublishedLessonsError] = useState<string | null>(null);
 
-  const [today, setToday] = useState<{ loading: boolean; lesson: { title?: string; module?: string; topic?: string } | null; error?: string }>({ loading: true, lesson: null });
+  const [today, setToday] = useState<{ loading: boolean; lesson: { id?: string; lessonCode?: string; title?: string; module?: string; topic?: string } | null; error?: string }>({ loading: true, lesson: null });
+  // Start the day's lesson from here. It used to require opening /control and
+  // finding Start in the panel - and if no session was open yet, /control just
+  // parked the lesson in preview and said nothing more.
+  const [startBusy, setStartBusy] = useState(false);
+  const [startNote, setStartNote] = useState<string | null>(null);
   const [live, setLive] = useState<{ loading: boolean; connected: boolean; sessions: LiveSession[] }>({ loading: true, connected: true, sessions: [] });
   const [roster, setRoster] = useState<{ periods: number; students: number } | null>(null);
 
@@ -246,6 +251,29 @@ export default function TeacherHome() {
     const t = setInterval(() => void loadLive(), 5000);
     return () => clearInterval(t);
   }, [loadLive]);
+
+  // start-lesson is the COMPLETE server-side start (api/control-remote): it
+  // seeds the sequence, flips broadcast to Live Class Flow and arms step zero.
+  // It needs no /control tab open anywhere.
+  const startTodaysLesson = useCallback(async (sessionId: string) => {
+    if (startBusy) return;
+    setStartBusy(true);
+    setStartNote(null);
+    try {
+      await teacherPost("/api/control-remote", {
+        action: "start-lesson",
+        sessionId,
+        notionLessonId: today.lesson?.id || "",
+        lessonCode: today.lesson?.lessonCode || "",
+      });
+      setStartNote("Lesson started. Screens are live.");
+      void loadLive();
+    } catch (startError) {
+      setStartNote(startError instanceof Error ? startError.message : "The lesson did not start.");
+    } finally {
+      setStartBusy(false);
+    }
+  }, [loadLive, startBusy, today.lesson?.id, today.lesson?.lessonCode]);
 
   // Roster totals.
   useEffect(() => {
@@ -481,9 +509,17 @@ export default function TeacherHome() {
                   <div className="bd-code">{live.sessions[0].code}</div>
                   <p className="bd-stat-meta">{live.sessions[0].joined} joined{live.sessions.length > 1 ? ` - +${live.sessions.length - 1} more open` : ""}</p>
                   <div className="bd-stat-actions">
-                    <Link href={`/session?sessionId=${encodeURIComponent(live.sessions[0].id)}`} className="bd-btn p">Manage session</Link>
+                    <button
+                      type="button"
+                      className="bd-btn p"
+                      disabled={startBusy || !today.lesson?.id}
+                      onClick={() => { void startTodaysLesson(live.sessions[0].id); }}
+                    >{startBusy ? "Starting" : "Start lesson"}</button>
+                    <Link href={`/session?sessionId=${encodeURIComponent(live.sessions[0].id)}`} className="bd-btn">Manage session</Link>
                     <Link href={`/session?sessionId=${encodeURIComponent(live.sessions[0].id)}#classroom-screens-title`} className="bd-btn">Set up screens</Link>
                   </div>
+                  {startNote ? <p className="bd-stat-meta">{startNote}</p> : null}
+                  {!today.lesson?.id && !today.loading ? <p className="bd-stat-meta">No lesson is published for today.</p> : null}
                 </>
               ) : (
                 <>
