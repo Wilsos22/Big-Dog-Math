@@ -189,9 +189,12 @@ def main() -> int:
     period_type = props[period_prop]["type"]
     print(f"\nTarget properties: title={title_prop!r}, email={email_prop!r} ({email_type}), period={period_prop!r} ({period_type})")
 
-    # Existing rows -> skip anything already present (by email, else name+period).
+    # Existing rows -> skip anything already present (by email, else
+    # name+period), and remember page ids so a later run can backfill emails
+    # onto rows imported before the email format was known.
     existing_emails: set[str] = set()
     existing_namekeys: set[tuple[str, str]] = set()
+    existing_pages: dict[tuple[str, str], tuple[str, bool]] = {}
     cursor = None
     while True:
         body = {"page_size": 100}
@@ -220,25 +223,44 @@ def main() -> int:
                 existing_emails.add(em.lower())
             if nm:
                 existing_namekeys.add((nm.lower(), pd))
+                existing_pages[(nm.lower(), pd)] = (pg.get("id", ""), bool(em))
         cursor = page.get("next_cursor") if page.get("has_more") else None
         if not cursor:
             break
 
     to_create = []
+    to_backfill = []  # (page_id, email): existing row imported without email
     already = 0
     for name, email, period in students:
         if email and email.lower() in existing_emails:
             already += 1
             continue
-        if not email and (name.lower(), period) in existing_namekeys:
-            already += 1
+        key = (name.lower(), period)
+        if key in existing_namekeys:
+            page_id, has_email = existing_pages.get(key, ("", True))
+            if email and not has_email and page_id and email_prop:
+                to_backfill.append((page_id, email))
+            else:
+                already += 1
             continue
         to_create.append((name, email, period))
-    print(f"Already in Notion (skipped): {already}. To create: {len(to_create)}.")
+    print(f"Already in Notion (skipped): {already}. To create: {len(to_create)}. Emails to backfill onto existing rows: {len(to_backfill)}.")
 
     if not args.go:
         print("\nDry run complete. Re-run with --go to import.")
         return 0
+
+    backfilled = 0
+    for page_id, email in to_backfill:
+        value = {"email": email} if email_type == "email" else {"rich_text": [{"text": {"content": email}}]}
+        try:
+            notion(token, "PATCH", f"/pages/{page_id}", {"properties": {email_prop: value}})
+            backfilled += 1
+        except Exception as e:
+            print(f"  email backfill failed ({type(e).__name__}) for one row")
+        time.sleep(0.35)
+    if to_backfill:
+        print(f"Backfilled emails onto {backfilled} existing rows.")
 
     created = failed = 0
     for name, email, period in to_create:
