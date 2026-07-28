@@ -11,6 +11,27 @@ Snapshot (2026-07-16):
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·
+**Portfolio-audit fix batch: the repo grows up** (7/27 evening - Steele's
+"lets get that squared away tonight" after the company-vantage audit. The
+public repo's floor swept: 60 tracked junk files untracked (AI Studio
+scratch dirs that sat alphabetically above src/ on GitHub, build-output
+PDFs, extracted third-party worksheet text). Dependencies pinned exact -
+next/react/react-dom/supabase were all "latest", meaning any deploy could
+silently adopt a new major. npm test now aggregates all 17 golden/contract
+suites and GitHub Actions CI runs typecheck + tests on every push - the
+suites existed for weeks with nothing running them, and reviving them found
+four stale contracts (pre-home-base link locking, pre-Warm-Notebook frame
+anchors, the missing Multiple Choice + Explain mode, the pre-progress-strip
+privacy shape - each re-anchored to the current approved design) plus ONE
+REAL BUG: notionLessonArchive still queried two dead Notion data sources on
+every archive read. New proxy-gate contract makes the auth gate's two
+hand-synced lists unable to drift fail-open (probed live first: no actual
+hole existed). The 68 remaining legacy emoji across 17 src files went to
+zero. README rewritten as the engineering front door - the old one claimed
+"there is no login, database, account system, or cloud sync yet" over a
+locked-down RLS data layer. Repo description + homepage set. Left for
+Steele: the repo rename and profile pin, two clicks on GitHub. Next build:
+the /demo mock run-through of the room running) ·
 **The attention call: Bark on the iPad** (7/27 - Steele's ask, replacing the
 two-claps-and-a-woooo. One tap on the always-visible amber Bark pill next
 to the iPad's Tools handle booms the class call through the room displays
