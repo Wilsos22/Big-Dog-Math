@@ -475,6 +475,13 @@ the invariants they protect are easy to break again.
   in exactly the fields no one re-read. After any lesson entry, audit every step text field
   against the lesson page's scope contract ("Held for Day 2: ...") with a case-SENSITIVE sweep
   (SQLite GLOB, not LIKE - base64 blobs false-positive case-insensitive matches).
+- NOTION EATS MARKDOWN IN TEXT PROPERTIES. Writing `___` into any Lesson Step or lesson text
+  property (Main Display, Question, Pace Directions, Help Path, Live Questions) SILENTLY DELETES it -
+  the parser reads triple underscores as formatting. On 2026-07-28 this landed
+  `5 x 27 = 5 x ( 20 + 7 ) = + = ` on three Main Displays, which is a broken equation pointed at a
+  projector. Use `[   ]` brackets for fill-in blanks instead, and ALWAYS re-read a text property
+  after writing it - the write returns success either way. Same hazard class as
+  "empty renders as nothing, wrong renders on a classroom screen".
 - One page per teaching day (locked convention) - never a Notion Date range. Ranges are only a
   fallback; single dates are what make `/api/today` and the day-to-day retention chain work.
 - Evidence ingest: `POST /api/evidence` is the single write path for warm-up + tool events (rows into

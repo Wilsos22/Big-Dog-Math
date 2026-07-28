@@ -147,7 +147,8 @@ insert into misconceptions (label, standard_id, description) values
   ('forgets to halve base × height for triangle area','6.G.A.1',   'Uses b×h for triangles without the ×1/2.'),
   ('confuses mean and median',                        null,        'Reports the middle value as the mean or vice versa.'),
   ('miscounts frequencies in a data display',         null,        'Misreads dot plots/histograms when tallying frequencies.'),
-  ('distributes to first term only',                  '6.EE.A.3',  'Writes a(b + c) = ab + c, distributing to the first term only.')
+  ('distributes to first term only',                  '6.EE.A.3',  'Writes a(b + c) = ab + c, distributing to the first term only.'),
+  ('changes the whole',                               '6.EE.A.3',  'Splits a factor into parts that do not add back to the original number, so a(b + c) no longer equals the starting product.')
 on conflict (label) do nothing;
 
 -- ---------------------------------------------------------------------------
