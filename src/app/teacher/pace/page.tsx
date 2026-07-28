@@ -2,6 +2,8 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
+import ScreenInkOverlay from "@/components/ScreenInkOverlay";
+import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
 import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
@@ -164,10 +166,25 @@ export default function PaceSupportPage() {
     };
   }, [pollId]);
 
+  const [inkOverlay, setInkOverlay] = useState<{ room: string; embed: boolean } | null>(null);
+  useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      setInkOverlay({ room: p.get("room")?.trim() || "main", embed: p.get("embed") === "1" });
+    } catch {
+      setInkOverlay({ room: "main", embed: false });
+    }
+  }, []);
+
   const state = flow?.state ?? null;
   const timer = flow?.timer ?? null;
   const timerSeconds = liveTimerSeconds(timer);
   const timerFinished = Boolean(timer?.finished || (timer?.running && timerSeconds <= 0));
+  // Escalating visual warning ahead of every state change (Steele, 2026-07-28).
+  const currentTimerUrgency = timerUrgency(timerSeconds, {
+    running: Boolean(timer?.running),
+    finished: timerFinished,
+  });
   // Fallback through the inferrer if the semantic is unknown - a stray value
   // in a snapshot must never crash a projector (see the same guard on Main).
   const theme = (state?.semantic ? CLASSROOM_STAGE_THEMES[state.semantic] : undefined)
@@ -318,6 +335,7 @@ export default function PaceSupportPage() {
         .pw-timer::before { content:""; width:8px; height:8px; border-radius:999px; background:var(--acc); }
         .pw-timer.finished { color:#A82C15; }
         .pw-timer.finished::before { background:#F95335; }
+        ${TIMER_URGENCY_CSS}
         .pw-textbtns { display:inline-flex; gap:6px; margin-left:auto; }
         .pw-textbtns + .pw-timer { margin-left:12px; }
         .pw-textbtn { min-width:40px; min-height:30px; border:1.2px solid var(--hair); border-radius:8px; background:var(--card); color:var(--head); font:inherit; font-size:0.78rem; font-weight:800; cursor:pointer; }
@@ -374,7 +392,7 @@ export default function PaceSupportPage() {
           <button className="pw-textbtn" type="button" onClick={() => adjustTextScale(-0.25)} disabled={textScale <= 1} aria-label="Smaller text">A-</button>
           <button className="pw-textbtn" type="button" onClick={() => adjustTextScale(0.25)} disabled={textScale >= 2.5} aria-label="Bigger text">A+</button>
         </span>
-        <span className={`pw-timer${timerFinished ? " finished" : ""}`} aria-label="Class timer">
+        <span className={`pw-timer${timerFinished ? " finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`} aria-label="Class timer">
           {previewSample ? "5:00" : timer ? formatTime(timerSeconds) : "--:--"}
         </span>
       </header>
@@ -520,7 +538,7 @@ export default function PaceSupportPage() {
               ) : null}
               {timer ? (
                 <div className="pw-pace">
-                  <span className={`pw-bigtimer${timerFinished ? " finished" : ""}`}>{formatTime(timerSeconds)}</span>
+                  <span className={`pw-bigtimer${timerFinished ? " finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`}>{formatTime(timerSeconds)}</span>
                   <span className="pw-pace-copy"><b>{flow.presentation?.title || state.label}</b><span>Shared class clock</span></span>
                 </div>
               ) : null}
@@ -551,7 +569,7 @@ export default function PaceSupportPage() {
               ) : null}
               {timer ? (
                 <div className="pw-pace">
-                  <span className={`pw-bigtimer${timerFinished ? " finished" : ""}`}>{formatTime(timerSeconds)}</span>
+                  <span className={`pw-bigtimer${timerFinished ? " finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`}>{formatTime(timerSeconds)}</span>
                   <span className="pw-pace-copy"><b>{flow.presentation?.title || state.label}</b><span>Shared class clock</span></span>
                 </div>
               ) : null}
@@ -569,6 +587,10 @@ export default function PaceSupportPage() {
         )}
         </div>
       </section>
+      {/* Write-on-screen was mounted only on /teacher/present, so the support
+          projector could never be annotated - the teacher circled something on
+          the iPad and half the room's screen never changed. */}
+      {inkOverlay && !inkOverlay.embed ? <ScreenInkOverlay room={inkOverlay.room} /> : null}
     </main>
   );
 }

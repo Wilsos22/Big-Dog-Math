@@ -65,7 +65,16 @@ export type LessonVisual =
 
 export interface LessonVisualInput {
   lessonCode?: string;
+  /** The projector's ClassroomStageId (evergreen, scenario, concrete, ...). */
   stateId: string;
+  /**
+   * The RAW class-state id (warmup, launch, learning-check, ...). Callers pass
+   * the stage id above, and the two namespaces only partly overlap - warmup maps
+   * to `evergreen`, launch to `scenario` - so a skip list written in raw ids
+   * never fired for those states. Any a x b product in a warm-up could hand the
+   * warm-up screen to an area-model figure and displace the hook.
+   */
+  rawStateId?: string;
   text: string;
   fallbackTexts?: string[];
   contextSteps?: Array<{ stateId: string; text: string }>;
@@ -138,9 +147,11 @@ function resolveAreaModelVisual(
   lessonCode: string | undefined,
   stateId: string,
   candidates: string[],
+  rawStateId?: string,
 ): LessonVisual | null {
   if (!AREA_MODEL_LESSONS.test((lessonCode || "").trim())) return null;
   if (AREA_MODEL_SKIP_STATES.has(stateId)) return null;
+  if (rawStateId && AREA_MODEL_SKIP_STATES.has(rawStateId)) return null;
   for (const text of candidates) {
     // Equation-chain steps (two equals signs, or fill-in blanks) deliberately
     // remove the model - the chain layout is the scaffold there.
@@ -306,7 +317,12 @@ export function resolveLessonVisual(input: LessonVisualInput): LessonVisual | nu
     images.findIndex((candidate) => candidate.url === image.url) === index
   ));
 
-  const areaModel = resolveAreaModelVisual(input.lessonCode, stateId, candidates);
+  const areaModel = resolveAreaModelVisual(
+    input.lessonCode,
+    stateId,
+    candidates,
+    input.rawStateId?.trim().toLowerCase(),
+  );
   if (areaModel) return areaModel;
 
   if (importedImages.length && (stateId === "launch" || stateId === "scenario")) {

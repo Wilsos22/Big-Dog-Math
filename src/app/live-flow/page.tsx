@@ -13,6 +13,7 @@ import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
 import { classroomStageTheme } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
+import { TIMER_URGENCY_CSS, TIMER_URGENT_SECONDS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 import {
   publicSuccessCriterion,
   selectedSuccessCriterion,
@@ -519,7 +520,12 @@ export default function LiveFlowPage() {
   // red and announces inside 10.
   const timerTicking = Boolean(showTimer && timer && (timer.running || (phase?.timed && typeof phase.secondsLeft === "number")));
   const timeWarning = timerTicking && activeTimerSeconds <= 30 && activeTimerSeconds > 0;
-  const timeCritical = timerTicking && activeTimerSeconds <= 10 && activeTimerSeconds > 0;
+  // 10s was too late to be a warning - by then the sound is the only thing a
+  // student reacts to. Match the projectors: amber at 30, coral and pulsing at
+  // 15, so a head-down student on a Chromebook gets the same runway the room
+  // gets (Steele, 2026-07-28).
+  const studentTimerUrgency = timerUrgency(activeTimerSeconds, { running: timerTicking });
+  const timeCritical = timerTicking && activeTimerSeconds <= TIMER_URGENT_SECONDS && activeTimerSeconds > 0;
   // A new lesson step clears the local signal highlight - "stuck" on the last
   // step is not "stuck" on this one. The server row keeps its step tag and the
   // teacher view scopes to the current step on its own.
@@ -654,6 +660,7 @@ export default function LiveFlowPage() {
         .lf-timer.low { border-color:#ef4444; animation:lfTimerLow 1s ease-in-out infinite; }
         .lf-timer.low::before { background:#ef4444; }
         .lf-timer.low .lf-time { color:#b91c1c; font-weight:900; }
+        ${TIMER_URGENCY_CSS}
         .lf-time-left { color:#b91c1c; font-size:0.72rem; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; }
         @media (max-width:640px) { .lf-time-left { display:none; } }
         /* Student self-signals: persistent, low-stakes, bottom of the screen. */
@@ -769,7 +776,7 @@ export default function LiveFlowPage() {
           <span className="lf-sync">{!hasStudentSession ? "Not joined" : connectionState === "connected" ? "Synced" : "Connecting"}</span>
           {showTimer && timer ? (
             <div className={`lf-timer${timeCritical ? " low" : ""}`} aria-label="Current lesson timer" role={timeCritical ? "status" : undefined}>
-              <div className="lf-time">{formatTime(activeTimerSeconds)}</div>
+              <div className={`lf-time ${timerUrgencyClass(studentTimerUrgency)}`}>{formatTime(activeTimerSeconds)}</div>
               {timeCritical ? <span className="lf-time-left">left</span> : null}
             </div>
           ) : null}

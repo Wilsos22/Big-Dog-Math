@@ -89,6 +89,9 @@ interface LineupItem {
   paceDirections?: string;
   studentAction?: string;
   remoteActions?: string;
+  // Carried through the published sequence so a Control reconnect cannot wipe
+  // the slide overlays the lesson authored.
+  slideOverlay?: string;
   discussionStems?: string;
   vocabulary?: string;
   responseMode?: string;
@@ -1191,6 +1194,10 @@ export default function ControlPage() {
   // advance while lesson pacing remains on.
   useEffect(() => {
     if (!finished || !autoAdvance || (controlPoll?.stage === "results" && controlPoll.awaitingTeacherAdvance)) return;
+    // A Hustle or Settle is fired at the END of a state, so `finished` is already
+    // true when it starts. Without this guard the auto-advance fired 2.6s later
+    // and skipped straight past the transition the room was still executing.
+    if (teacherSession?.live_flow?.interlude) return;
     if (controlPoll?.stage === "responding") {
       setControlPoll((current) => current ? { ...current, stage: "results" } : null);
       void teacherPost("/api/teacher/poll", { action: "close", pollId: controlPoll.id });
@@ -1213,7 +1220,7 @@ export default function ControlPage() {
       startMusicFor(st.id);
     }, controlPoll?.stage === "results" ? 6000 : 2600);
     return () => clearTimeout(t);
-  }, [armTimer, finished, autoAdvance, bank, controlPoll, currentIndex, lineup, startMusicFor, stopMusic]);
+  }, [armTimer, finished, autoAdvance, bank, controlPoll, currentIndex, lineup, startMusicFor, stopMusic, teacherSession?.live_flow?.interlude]);
 
   const activeItem = currentIndex >= 0 ? lineup[currentIndex] : undefined;
   const filteredPresets = presets.filter((p) => {
@@ -1562,6 +1569,12 @@ export default function ControlPage() {
     }
   }, [activeUsesDiscussionProtocol, showDiscussion]);
 
+  // Server-owned pacing fields. Control does not author these - /api/control-remote
+  // does - but Control's snapshot is a full replace, so it has to hand them back
+  // untouched or it deletes them.
+  const serverInterlude = teacherSession?.live_flow?.interlude ?? null;
+  const serverTransition = teacherSession?.live_flow?.transition ?? null;
+
   const liveFlowSignature = useMemo(() => {
     const activeSemantic = activeState
       ? inferClassroomStage(activeState.id, activeItem?.title || activeState.label)
@@ -1635,7 +1648,13 @@ export default function ControlPage() {
               ? "poll" as const
               : tool
                 ? "tool" as const
-                : activeState.id === "i-do" || activeState.id === "manip" || activeState.id === "we-do"
+                // Board mode ONLY when the teacher actually opened the board.
+                // Keying it to i-do / we-do / manip meant those states handed the
+                // projector an unwritten ink canvas - a blank screen - and threw
+                // away Main Display entirely, so the authored mathematics for
+                // every direct-instruction and guided-practice step was never
+                // shown to the room.
+                : boardOpen
                   ? "board" as const
                   : "directions" as const,
           notionStepId: activeItem?.notionStepId || null,
@@ -1744,6 +1763,12 @@ export default function ControlPage() {
               workSpaceAvailable: item.workSpaceAvailable,
               publicSurfaceMode: item.publicSurfaceMode || defaultPublicSurfaceModeForState(item.stateId),
               routineConfig: item.routineConfig || null,
+              // Both of these are READ BACK during rehydration. Omitting them
+              // here meant any Control reconnect - or a remote-driven rehydrate -
+              // silently wiped the iPad's Remote Actions and every slide overlay,
+              // and the iPad then degraded to restating the pace directions.
+              remoteActions: item.remoteActions || "",
+              slideOverlay: item.slideOverlay || undefined,
             };
           }),
         }
@@ -1753,8 +1778,17 @@ export default function ControlPage() {
       || "";
     const paper = activePaperTask ? { task: activePaperTask } : null;
 
-    return JSON.stringify({ version: 2, state, phase, timer, poll, resource, presentation, tool, lesson, sequence, paper });
-  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, finished, lineup, publishedTool, running, scoreboardStage, secondsLeft, showDiscussion]);
+    // CARRY the server's interlude and transition through. This snapshot is
+    // written with a full replace, and Control republishes about once a second
+    // while a timer runs - so omitting these keys ERASED a Hustle or Settle
+    // roughly one second after it started. The room saw the transition flash up
+    // and vanish, then the state auto-advanced out from under it.
+    return JSON.stringify({
+      version: 2, state, phase, timer, poll, resource, presentation, tool, lesson, sequence, paper,
+      interlude: serverInterlude,
+      transition: serverTransition,
+    });
+  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, finished, lineup, publishedTool, running, scoreboardStage, secondsLeft, serverInterlude, serverTransition, showDiscussion]);
 
   const flushLiveFlowUpdates = useCallback(async () => {
     if (liveFlowSyncingRef.current) return;
@@ -3625,6 +3659,7 @@ export default function ControlPage() {
               initialFlow={discussionFlow}
               remoteCommand={discussionRemoteCommand}
               onRemoteCommandHandled={handleDiscussionRemoteCommand}
+              onPreviousState={() => { closeDiscussion(); previous(); }}
             />
           </div>
         )}

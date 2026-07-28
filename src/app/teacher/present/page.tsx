@@ -24,6 +24,7 @@ import {
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { studioPreviewSession, useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { parseSlideOverlay } from "@/lib/slideOverlay";
+import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 
 interface StageSession {
   id: string;
@@ -487,6 +488,7 @@ export default function ClassroomStagePage() {
   const lessonVisual = flow ? resolveLessonVisual({
     lessonCode: lesson?.code || activeSequenceStep?.lessonCode,
     stateId: theme.id,
+    rawStateId: state?.id,
     text: slideBody,
     fallbackTexts: [
       activeSequenceStep?.mainDisplay || "",
@@ -553,6 +555,12 @@ export default function ClassroomStagePage() {
   const overrideDirection = (presentation?.mainDisplay || presentation?.body || "")
     .split(/\n+/).slice(1).join(" ").trim();
   const overrideTimerText = timer ? formatTime(timerSeconds) : "";
+  // Escalating visual warning so a state change is never a surprise the sound
+  // announces first (Steele, 2026-07-28).
+  const currentTimerUrgency = timerUrgency(timerSeconds, {
+    running: Boolean(timer?.running),
+    finished: timerFinished,
+  });
   useEffect(() => {
     if (!overrideFrame) return;
     const doc = overrideFrame.contentDocument;
@@ -655,6 +663,7 @@ export default function ClassroomStagePage() {
         .stage-timer::before { content:""; width:8px; height:8px; border-radius:999px; background:var(--acc); }
         .stage-timer.finished { color:#A82C15; }
         .stage-timer.finished::before { background:#F95335; }
+        ${TIMER_URGENCY_CSS}
         .stage-textbtns { display:inline-flex; gap:6px; margin-left:12px; }
         .stage-textbtn { min-width:40px; min-height:30px; border:1.2px solid var(--hair); border-radius:8px; background:var(--card); color:var(--head); font:inherit; font-size:0.78rem; font-weight:800; cursor:pointer; }
         .stage-textbtn:hover:not(:disabled) { border-color:var(--acc); }
@@ -895,7 +904,7 @@ export default function ClassroomStagePage() {
             <button className="stage-textbtn" type="button" onClick={() => adjustTextScale(-0.25)} disabled={textScale <= 1} aria-label="Smaller text">A-</button>
             <button className="stage-textbtn" type="button" onClick={() => adjustTextScale(0.25)} disabled={textScale >= 2.5} aria-label="Bigger text">A+</button>
           </span>
-          <div className={`stage-timer ${timerFinished ? "finished" : ""}`}>{previewSample ? "5:00" : timer ? formatTime(timerSeconds) : "--:--"}</div>
+          <div className={`stage-timer ${timerFinished ? "finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`}>{previewSample ? "5:00" : timer ? formatTime(timerSeconds) : "--:--"}</div>
         </div>
 
         {/* zoom, not transform: the stage is fixed and non-scrolling, so zoom
@@ -1054,7 +1063,13 @@ export default function ClassroomStagePage() {
             <div className="stage-board-scene">
               <div className="stage-board-wrap">
                 {slideOverlayData ? <SlideOverlayLayer overlay={slideOverlayData} /> : null}
-                <InkBoard room={session.id} interactive problem={stripSlideTitlePrefix(presentation.body, slideTitle, state?.label)} />
+                {/* Main Display first: the mathematics stays visible BEHIND the
+                    ink instead of being discarded the moment the board opens. */}
+                <InkBoard
+                  room={inkOverlay?.room ?? "main"}
+                  interactive
+                  problem={stripSlideTitlePrefix(presentation.mainDisplay || presentation.body, slideTitle, state?.label)}
+                />
                 {lessonVisual?.kind === "area-model" ? (
                   <aside className="stage-figure-float" aria-label="Area model support">
                     <LessonVisual visual={lessonVisual} variant="projector" accent={accent} />
@@ -1062,7 +1077,11 @@ export default function ClassroomStagePage() {
                 ) : null}
               </div>
             </div>
-          ) : lessonVisual && !anchorMode ? (
+          ) : lessonVisual && !anchorMode && theme.id !== "discussion" ? (
+            // Discussion outranks a lesson visual. Evaluated the other way round,
+            // any discussion step whose text happened to resolve a visual took
+            // this branch and silently dropped the entire stems and vocabulary
+            // aside - the supports the protocol exists to put in front of them.
             lessonVisual.kind === "area-model" ? (
               <div className="stage-directions">
                 <div className="stage-directions-inner">
@@ -1192,7 +1211,11 @@ export default function ClassroomStagePage() {
           </div>
           {showBoardPanel && session ? (
             <aside className="stage-board-panel" aria-label="Live writing workspace">
-              <InkBoard room={session.id} interactive={false} />
+              {/* Same room as the glass sheet and the iPad. Keying the board to
+                  session.id put the projector on channel ink-<uuid> while /ipad
+                  and /board broadcast on ink-main, so nothing the teacher wrote
+                  ever arrived and the board was permanently empty. */}
+              <InkBoard room={inkOverlay?.room ?? "main"} interactive={false} />
             </aside>
           ) : null}
         </section>

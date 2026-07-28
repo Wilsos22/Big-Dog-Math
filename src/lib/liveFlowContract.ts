@@ -209,10 +209,47 @@ const ASSIGNED_TOOL_ROUTES: Record<string, string> = {
   divisibilityrules: "/divisibility",
 };
 
+function normalizeAssignedToolName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/^bigdogmath/, "");
+}
+
+/**
+ * Resolve a Notion `Tool:` value to a route.
+ *
+ * Three passes, because a Lesson Step names a tool the way a teacher writes it,
+ * not the way a lookup table is keyed:
+ *
+ * 1. Exact match on the normalized name.
+ * 2. Drop a trailing qualifier after a dash - "Distributive Area Method -
+ *    teacher display", "... - equation phase", "... - optional support" all
+ *    name the same tool used in a different beat of the lesson.
+ * 3. Longest key that PREFIXES the normalized name, so "Distributive Area
+ *    Method" resolves through the `distributivearea` key instead of returning
+ *    null. Exact-match-only silently dropped every Area Tool step in
+ *    M1.T1.L1-D1 - the tool never embedded on any surface for the entire
+ *    lesson, and nothing anywhere reported it.
+ *
+ * Longest-first is what keeps `numberline` from stealing `numberlineplus`.
+ */
 export function liveAssignedToolRoute(toolName: string | undefined): string | null {
   if (!toolName) return null;
-  const normalized = toolName.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/^bigdogmath/, "");
-  return ASSIGNED_TOOL_ROUTES[normalized] || null;
+  const candidates = [toolName, toolName.split(/\s[-‐-―]\s|[–—]/)[0] ?? ""];
+  for (const candidate of candidates) {
+    const normalized = normalizeAssignedToolName(candidate);
+    if (!normalized) continue;
+    if (ASSIGNED_TOOL_ROUTES[normalized]) return ASSIGNED_TOOL_ROUTES[normalized];
+  }
+  const normalized = normalizeAssignedToolName(candidates[0]);
+  if (!normalized) return null;
+  let best: string | null = null;
+  let bestLength = 0;
+  for (const [key, route] of Object.entries(ASSIGNED_TOOL_ROUTES)) {
+    if (key.length > bestLength && normalized.startsWith(key)) {
+      best = route;
+      bestLength = key.length;
+    }
+  }
+  return best;
 }
 
 export function splitLiveFlowLines(value: string | undefined): string[] {

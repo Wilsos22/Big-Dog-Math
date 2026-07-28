@@ -142,6 +142,7 @@ export default function DiscussionProtocol({
   initialFlow,
   remoteCommand,
   onRemoteCommandHandled,
+  onPreviousState,
 }: {
   onClose?: () => void;
   onFlowChange?: (snapshot: DiscussionPhaseSnapshot) => void;
@@ -150,6 +151,11 @@ export default function DiscussionProtocol({
   initialFlow?: DiscussionPhaseSnapshot | null;
   remoteCommand?: TeacherRemoteCommand | null;
   onRemoteCommandHandled?: (command: TeacherRemoteCommand) => void;
+  /** Step back out of discussion into the PREVIOUS lesson state. This overlay
+   *  covers Control at z-index 50, so without it the only reachable Back is the
+   *  one below - which is disabled on arrival, because discussion always opens
+   *  on round 1. That read as a dead Back button with no way out but Close. */
+  onPreviousState?: () => void;
 }) {
   const normalizedInitialFlow = normalizeDiscussionPhaseSnapshot(initialFlow);
   const initialIndex = normalizedInitialFlow ? discussionRoundIndex(normalizedInitialFlow.id) : 0;
@@ -544,7 +550,11 @@ export default function DiscussionProtocol({
         </div>
 
         <div className="dp-actions">
-          <button className="dp-a" onClick={() => goAdjacentPhase(idx - 1)} disabled={idx === 0}>Back</button>
+          <button
+            className="dp-a"
+            onClick={() => (idx === 0 && onPreviousState ? onPreviousState() : goAdjacentPhase(idx - 1))}
+            disabled={idx === 0 && !onPreviousState}
+          >Back</button>
           <button className="dp-a next" onClick={() => goAdjacentPhase(idx + 1)} disabled={idx + 1 >= DISCUSSION_ROUNDS.length}>Next round</button>
         </div>
       </main>

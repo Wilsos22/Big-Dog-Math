@@ -411,6 +411,33 @@ the invariants they protect are easy to break again.
   Notion page. Unknown ids now get a synthesized bank entry with an EMPTY `desc` and are named in the
   load message. When adding a second consumer of `lesson.steps`, make it agree with `stepsFromLesson`.
 - **`Anchor Problem` IS THE HOOK.** There is no `Hook` property in the lessons database.
+- **`liveAssignedToolRoute` MATCHES BY PREFIX, and drops a trailing dash qualifier.** A Lesson Step
+  names a tool the way a teacher writes it - `Distributive Area Method`, `... - teacher display`,
+  `... - equation phase`, `... - optional support` - and exact-match-only resolved NONE of them
+  against the `distributivearea` key. Every Area Tool step in M1.T1.L1-D1 silently failed to embed
+  on any surface for the whole lesson. Keep the longest-key-wins rule; it is what stops `numberline`
+  stealing `numberlineplus`.
+- **BOARD MODE FOLLOWS `boardOpen`, NEVER A STATE ID.** Keying it to `i-do`/`we-do`/`manip` handed
+  those states an unwritten ink canvas - a blank projector - and discarded `Main Display` entirely.
+  The board also renders `mainDisplay || body`, so the mathematics stays visible behind the ink.
+- **EVERY INK SURFACE USES THE `?room=` PARAM, DEFAULT `"main"`.** `/teacher/present` used
+  `session.id` for its two `InkBoard` mounts while `/ipad` and `/board` broadcast on `ink-main`, so
+  the projector board was permanently blank. `ScreenInkOverlay` is now mounted on `/teacher/pace`
+  too - it was on `/present` only, so the support projector could never be annotated.
+- **CONTROL'S SNAPSHOT IS A FULL REPLACE.** Any field Control does not carry through is DELETED.
+  `interlude` and `transition` are owned by `/api/control-remote`, and omitting them erased a Hustle
+  or Settle about one second after it started, then auto-advanced past it. Same class of bug wiped
+  `remoteActions` and `slideOverlay` on any reconnect. When adding a server-authored `live_flow`
+  field, add it to the `liveFlowSignature` snapshot in the same commit.
+- **THE DISCUSSION OVERLAY COVERS `/control` AT z-index 50.** Any control the teacher needs mid-
+  discussion must be reachable from inside `DiscussionProtocol`; Control's own Back is invisible.
+- **`resolveLessonVisual` TAKES TWO ID NAMESPACES.** `stateId` is the `ClassroomStageId` (warmup maps
+  to `evergreen`, launch to `scenario`); `rawStateId` is the class-state id. Skip lists written in
+  raw ids must be checked against `rawStateId` or they never fire.
+- **TIMER WARNINGS ARE SHARED** (`src/lib/timerUrgency.ts`, Steele 2026-07-28): amber at 30s, coral
+  and pulsing at 15s, faster at 5s, on the projector, the pace screen AND the student device - a
+  head-down student needs the same runway the room gets. Colour and opacity only, never layout, and
+  the colour survives `prefers-reduced-motion`. The sound must never be the first signal.
 - **SESSIONS CLOSE THEMSELVES** (`src/lib/sessionLifecycle.ts`, Steele's ask 2026-07-28). One open
   session at a time: starting or adopting a session closes every other open row, so moving from
   period 2 to period 3 ends period 2 rather than racing it. A session also auto-closes once it
