@@ -510,6 +510,25 @@ the invariants they protect are easy to break again.
   students fall through to `sessionFromPeriodCode`, which is gated on `withinSchoolHours()` AND a
   district account. When either gate closes it opens a DIFFERENT row - `broadcast:"free"`,
   `live_flow` null - and `ClassSync` holds those students on `/` forever.
+- **NEVER OPEN A SECOND `/control` TAB ON A RUNNING SESSION.** (Found 2026-07-29 while verifying a
+  live CC.3 run - a second tab was opened to observe, and it was one poll away from destroying the
+  lesson.) Control's snapshot is a FULL REPLACE published about once a second while a timer runs, and
+  the lineup it publishes is that tab's own LOCAL React state. A freshly opened `/control` has no
+  `bdm-teacher-session` in localStorage, so it falls back to `latestOpen` and adopts the running
+  session while still holding the `DEFAULT_STATES` skeleton it booted with - the right session, the
+  WRONG lineup. The moment it sees `broadcast === "live-flow"` it will publish that skeleton over the
+  real lesson: eleven authored CC.3 steps replaced by seven catalog states, mid-period, with nothing on
+  any surface saying so. The pin added in `24d66e1` fixes session IDENTITY, not lineup divergence, so
+  this is still live. To watch a running lesson, use a DISPLAY route (`/teacher/present`,
+  `/teacher/pace`) or read `/api/teacher/session` - never a second Control.
+- **A LESSON THAT DOES NOT PUBLISH LOOKS EXACTLY LIKE ONE THAT DOES.** Same run: the session sat at
+  `broadcast: "free"` with `live_flow: null` while the teacher advanced states and watched the
+  discussion overlay run on `/control`. Everything looked correct on the operator's screen; the
+  projector and every Chromebook would have shown nothing. Advancing states and opening the discussion
+  overlay do NOT publish - only `Start lesson` (which calls `switchSessionToLiveFlow`) does. `/control`
+  does say so, in the amber `Session <CODE> - select Live Class Flow` banner, and that banner is the
+  only warning there is. When a room reports "nothing is on the screens", read `broadcast` and
+  `live_flow` from the session row FIRST.
 - **`latestOpen=1` IS NOT SESSION IDENTITY.** It returns the newest open session across every period.
   `/control` now pins to `getStoredTeacherSessionId()` via `?liveSessionId=` and only falls back once
   that session is closed. Without the pin, a student typing a class code mid-period spawns a newer row
