@@ -485,6 +485,23 @@ the invariants they protect are easy to break again.
 - **`resolveLessonVisual` TAKES TWO ID NAMESPACES.** `stateId` is the `ClassroomStageId` (warmup maps
   to `evergreen`, launch to `scenario`); `rawStateId` is the class-state id. Skip lists written in
   raw ids must be checked against `rawStateId` or they never fire.
+- **THE CLASSROOM STATE STRIP IS ALL FOUR SLOTS OR NOTHING** (added 2026-07-29, Steele's ask). Four
+  authored select properties per Lesson Step - `Eyes`, `Voice`, `Supplies`, `Body` - render as a
+  permanent four-slot strip on `/teacher/pace` and `/teacher/present`, modelled on a garment care
+  label. The mechanism is PRECORRECTION: naming the state before the transition that breaks it. Slot
+  ORDER is a cue students read by position and may never be reordered; colour and glyph are the other
+  two. `src/lib/classroomStateStrip.ts` owns the vocabulary and `npm run test:state-strip` guards it.
+  A step missing ANY slot renders NO strip - a strip that is sometimes empty stops being scanned, and
+  a stale slot is how a student ends up holding rods during the exit ticket - and `/control` names the
+  part-filled steps in its load message. An unrecognised value fails rather than snapping to a near
+  match. Reported, NOT blocking: the properties are new and no lesson is backfilled, and a check that
+  refuses to start a class is worse than a lesson with no strip. Backfilling the existing steps is
+  AUTHORING and needs Steele - reading the values off `Pace Directions` prose is inference, not
+  transcription. The live override (`behaviorOverride`, iPad deck) is SERVER-AUTHORED, so it is in the
+  `interlude`/`transition` class and Control must carry it through its full-replace snapshot; it is
+  stamped with the sequence index it was issued at and expires on the next advance with no clearing
+  code anywhere. The strip DOES cross `studentSafeLiveFlow` on purpose - "voice 0" is announced to the
+  room and painted on two projectors, and a head-down student needs the same read the room gets.
 - **EVERY CLASSROOM TOGGLE NEEDS ITS OFF SWITCH IN THE UI.** `hide-board` was wired end to end -
   action type, `/api/control-remote` handler, `/control` listener - but the iPad Remote only ever
   rendered "Open work space". Once the writing surface was up there was no way to put it away, and
@@ -498,6 +515,18 @@ the invariants they protect are easy to break again.
   submit. Answers previously lived in React state alone, so a discarded tab lost a half-written exit
   ticket silently. This matters more now that the exit ticket IS the day's evidence - it carries the
   hook problem, not a procedure question (Steele's decision, 2026-07-28).
+- **THE NOTION SELECT OPTIONS AND `LIVE_RESPONSE_MODES` HAVE DRIFTED** (found 2026-07-29). The code
+  knows TEN response modes; the `Math 6 Lesson Steps` data source offers NINE - `Structured Numeric`
+  is missing, and `Poll Kind` is missing `structured-numeric` too. So the response kind the exit
+  ticket and both learning checks depend on CANNOT BE PICKED from the property, even though the whole
+  code path shipped in `f729ff6`. A teacher can still type the option name inline while authoring,
+  and Notion creates it - but it must be typed EXACTLY `Structured Numeric`, because
+  `liveResponseModePollKind` matches the lowercased string "structured numeric" and anything else
+  falls through to `Poll Kind`, then to the state-id default, and `exit` HAS NO DEFAULT. Adding the
+  option through the API means re-declaring every option on the select (the DDL has no ADD OPTION),
+  which risks orphaning the values on every existing step, so it is a UI change and Steele's call.
+  Nothing in code can catch this class of drift: the vocabulary contracts deliberately do not claim
+  the Notion half, because it needs a token.
 - **A STRUCTURED-NUMERIC STEP CAN NEVER BE JUDGED BY STRING EQUALITY** (added 2026-07-28).
   Learning checks and the exit ticket moved from multiple choice to N numeric boxes
   (`Response Mode: Structured Numeric`), because multiple choice cannot separate a student who
