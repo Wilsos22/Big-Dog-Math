@@ -92,6 +92,19 @@ bars and live misconception grouping).
 - `src/app/**` - App Router pages and API routes (one folder per route, direct `page.tsx`/`route.ts`;
   no route groups, no per-segment layouts except the root `layout.tsx`).
 - `src/components/**` - shared React components (SiteNav, ToolNav, AbbieTalk, the manipulatives, etc.).
+  THE LIVE TOOL IS USUALLY THE `*Board.tsx` FILE. A pre-redesign generation of dark-themed
+  (slate-900, Tailwind, placekitten fallbacks) prototypes still sits beside the real components
+  under a name one suffix away - `FractionBars.tsx` beside `FractionBarsBoard.tsx` (deleted
+  2026-07-29, nothing imported it), `AlgebraTiles.tsx` beside the live `AlgebraTilesBoard.tsx` -
+  so an edit aimed at a tool can land in a file nothing imports, typecheck clean, build clean,
+  and change nothing on screen. Read what the route's `page.tsx` imports before editing a
+  component. Still unimported as of 2026-07-29: `AlgebraTiles.tsx`, `ClassroomTools.tsx`,
+  `DoubleNumberLine.tsx`, `GemsFunnel.tsx` (plus `TeacherGate.tsx`, already documented as legacy
+  under Auth) - deleting those needs Steele's word, not a silent sweep. Inverse trap, and the
+  reason that list is short: to prove a component is dead, grep the BARE NAME, never
+  `@/components/<name>`. Components import each other RELATIVELY (`from "./ToolHeader"`), so a
+  path-shaped grep reports `ToolHeader.tsx` (5 importers) and `useLiveToolConfig.tsx` (19) as
+  dead code.
 - `src/lib/**` - non-UI logic: `supabase.ts`, `supabaseServer.ts`, `notionLessons.ts`, `mastery.ts`,
   `grouping.ts`, `toolEvidence.ts`, `teacherToken.ts`, `classStates.ts`, `liveClassFlow.ts`.
 - `src/proxy.ts` - the real access-control gate (see Auth).
