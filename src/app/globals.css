@@ -1,5 +1,8 @@
-/* Big Dog Board design-system font (Albert Sans). Must stay at the top of the file. */
-@import url("https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&display=swap");
+/* Big Dog Board design-system fonts. Must stay at the top of the file.
+   Albert Sans is the display face (--bdb-font); Geist is the body/UI face
+   (--bdb-font-body) the design system pairs with it and the one that carries
+   real tabular numerals. */
+@import url("https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&family=Geist:wght@400;500;600;700&display=swap");
 
 * {
   box-sizing: border-box;
@@ -52,6 +55,7 @@
   --bdb-r-lg: 22px;
   --bdb-r-pill: 999px;
   --bdb-font: "Albert Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+  --bdb-font-body: "Geist", "Albert Sans", Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
 html,

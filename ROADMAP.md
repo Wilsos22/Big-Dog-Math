@@ -374,10 +374,16 @@ screens themselves are never regenerated — Steele edits them directly.
 the attribute locks hand-written content. Ships with a blank starter and a rich
 exemplar; intended rendering layer under `/teacher/studio` and the four
 surfaces) ·
-**Weekly classroom display** (7/16 — separately launched projector display with
-five weekday themes and four 20-second screens: Notion-fed learning intention,
-success criteria, weekly topics with the current day highlighted, and the bell
-schedule) ·
+**Weekly classroom display** (7/16, rebuilt from the Claude Design board 7/29 —
+two all-day TVs rotating four screens on a fixed 1920x1080 stage scaled to the
+display: the learning intention resolves into its key term (highlighter sweep,
+then every other word drops away while the highlighted term pans up and its
+definition and a worked example populate around it), success criteria on ink,
+the week with today's row raised, and a bell schedule that derives "Now" and its
+progress bars from the classroom clock. One accent hue per weekday. The reveal
+reads `Term - definition` out of the existing Notion Discussion Vocabulary and
+holds the sentence unchanged when no definition is authored, so nothing new is
+required to ship it and one dash per lesson turns it on) ·
 **Screen Studio previews are the live surfaces** (7/22 - Steele's catch: the
 Studio Main and Pace previews were still the old dark projector design
 because they were hand-built copies that drifted from the Warm Notebook

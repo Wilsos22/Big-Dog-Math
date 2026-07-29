@@ -1,14 +1,45 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-const WEEKDAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday"] as const;
-const SCREEN_KEYS = ["learning", "success", "week", "bells"] as const;
-const SCREEN_INTERVAL_MS = 20_000;
+import { BELL_SCHEDULE, bellRowStates, minutesInZone, type BellRowState } from "@/lib/bellSchedule";
+import {
+  BOARD_CREAM,
+  BOARD_FAINT,
+  BOARD_INK,
+  BOARD_LINE,
+  BOARD_MUTED,
+  BOARD_PAPER,
+  BOARD_TIMING,
+  BOARD_WHITE,
+  DAY_PALETTES,
+  SCREEN_KEYS,
+  SCREEN_LABELS,
+  WEEKDAY_KEYS,
+  dwellSeconds,
+  intentionBody,
+  intentionMaxSize,
+  padTwo,
+  readBoardVocabulary,
+  selectKeyTerm,
+  successSize,
+  termTravelScale,
+  tokenizeIntention,
+  weekdayKeyFor,
+  type BoardFigure,
+  type BoardToken,
+  type DayPalette,
+  type ScreenKey,
+  type WeekdayKey,
+} from "@/lib/weeklyDisplayBoard";
 
-type WeekdayKey = (typeof WEEKDAY_KEYS)[number];
-type ScreenKey = (typeof SCREEN_KEYS)[number];
+// The board is authored at one size and scaled to whatever display it lands on.
+// That is what makes the vocabulary reveal deterministic: every measurement the
+// travelling key term depends on happens in these coordinates, not in the TV's.
+const STAGE_W = 1920;
+const STAGE_H = 1080;
+const DEFAULT_ROTATION_SECONDS = 9;
 
 interface DisplayLesson {
   id: string;
@@ -19,6 +50,7 @@ interface DisplayLesson {
   successCriteria: string;
   discussionVocabulary: string;
   topic: string;
+  module?: string;
   moduleTopic: string;
   classroomMode: string;
 }
@@ -38,161 +70,18 @@ interface WeeklyDisplayPayload {
   error?: string;
 }
 
-interface WeekdayTheme {
-  dark: string;
-  light: string;
-  ink: string;
-  action: string;
-  vocabulary: string;
-  vocabularyOnDark: string;
-  soft: string;
-  layout: "left" | "top" | "right" | "bottom";
-}
-
-interface BellRow {
-  label: string;
-  time: string;
-  emphasis?: boolean;
-}
-
-const WEEKDAY_THEMES: Record<WeekdayKey, WeekdayTheme> = {
-  monday: {
-    dark: "#3f1647",
-    light: "#fbf7ef",
-    ink: "#4d164f",
-    action: "#f5ad00",
-    vocabulary: "#6d7b38",
-    vocabularyOnDark: "#dce6b5",
-    soft: "#ff9d7f",
-    layout: "left",
-  },
-  tuesday: {
-    dark: "#224b3c",
-    light: "#fff8e8",
-    ink: "#214a3a",
-    action: "#e7aa2f",
-    vocabulary: "#6b7d43",
-    vocabularyOnDark: "#d9e7b5",
-    soft: "#e8c08a",
-    layout: "top",
-  },
-  wednesday: {
-    dark: "#573a2c",
-    light: "#fff4dd",
-    ink: "#57352b",
-    action: "#dc9d27",
-    vocabulary: "#708044",
-    vocabularyOnDark: "#dce8b0",
-    soft: "#d7b39a",
-    layout: "right",
-  },
-  thursday: {
-    dark: "#6b5823",
-    light: "#fff9e8",
-    ink: "#5f4e20",
-    action: "#d9902f",
-    vocabulary: "#64783c",
-    vocabularyOnDark: "#e0ebba",
-    soft: "#e8b98c",
-    layout: "bottom",
-  },
-  friday: {
-    dark: "#67405f",
-    light: "#fff3dc",
-    ink: "#5f3a58",
-    action: "#dda228",
-    vocabulary: "#697b3e",
-    vocabularyOnDark: "#dce8ad",
-    soft: "#efbd86",
-    layout: "left",
-  },
-};
-
-const BELL_SCHEDULE: { start: string; end: string; rows: BellRow[] } = {
-  start: "7:30 AM",
-  end: "1:41 PM",
-  rows: [],
-};
-
-const ACTION_VERBS = new Set([
-  "analyze", "apply", "build", "calculate", "classify", "compare", "construct", "convert", "create",
-  "define", "demonstrate", "describe", "determine", "divide", "estimate", "evaluate", "explain", "find",
-  "graph", "identify", "interpret", "justify", "measure", "model", "multiply", "plot",
-  "prove", "reason", "represent", "scale", "show", "simplify", "solve", "use", "verify", "write",
-]);
-
-const COMMON_MATH_WORDS = new Set([
-  "area", "decimal", "decimals", "denominator", "equation", "equations", "equivalent", "expression",
-  "expressions", "factor", "factors", "fraction", "fractions", "graph", "graphs", "integer", "integers",
-  "mean", "median", "numerator", "parttopart", "parttowhole", "percent", "percents", "proportion",
-  "proportions", "quantity", "quantities", "rate", "rates", "ratio", "ratios", "table", "tables", "unit",
-  "variable", "variables", "volume",
-]);
-
-const SCREEN_LABELS: Record<ScreenKey, string> = {
-  learning: "Learning intention",
-  success: "Success criteria",
-  week: "Weekly schedule",
-  bells: "Bell schedule",
-};
-
-function normalizeWord(value: string): string {
-  return value.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function vocabularyWords(lesson: DisplayLesson): Set<string> {
-  const source = [lesson.discussionVocabulary, lesson.topic, lesson.moduleTopic]
-    .filter(Boolean)
-    .join(",");
-  const words = source
-    .split(/[\s,;|/]+/)
-    .map(normalizeWord)
-    .filter((word) => word.length > 2);
-  return new Set([...COMMON_MATH_WORDS, ...words]);
-}
-
-function copySize(text: string): string {
-  if (text.length > 175) return "clamp(2.15rem, 4.35vw, 5.25rem)";
-  if (text.length > 120) return "clamp(2.5rem, 5vw, 6rem)";
-  return "clamp(3rem, 5.8vw, 7rem)";
-}
-
-function KineticText({ text, vocabulary }: { text: string; vocabulary: Set<string> }) {
-  const pieces = text.match(/\s+|[A-Za-z0-9]+(?:[.'’-][A-Za-z0-9]+)*|[^\sA-Za-z0-9]+/g) ?? [text];
-  let wordIndex = 0;
-
-  return (
-    <>
-      {pieces.map((piece, index) => {
-        if (/^\s+$/.test(piece)) return <span key={`${index}-${piece}`}>{piece}</span>;
-        const normalized = normalizeWord(piece);
-        const isWord = Boolean(normalized);
-        const isVerb = ACTION_VERBS.has(normalized);
-        const isVocabulary = vocabulary.has(normalized) && !isVerb;
-        const currentWord = wordIndex;
-        if (isWord) wordIndex += 1;
-        const style = isWord ? ({ "--word-index": currentWord } as CSSProperties) : undefined;
-        const className = [
-          isWord ? "wld-word" : "",
-          isVerb ? "wld-verb" : "",
-          isVocabulary ? "wld-vocabulary" : "",
-        ].filter(Boolean).join(" ");
-        return <span className={className || undefined} style={style} key={`${index}-${piece}`}>{piece}</span>;
-      })}
-    </>
-  );
-}
-
-function formatDisplayDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" })
-    .format(new Date(Date.UTC(year, month - 1, day, 12)));
-}
-
-function weekdayIndex(isoDate: string): number {
-  const day = new Date(`${isoDate}T12:00:00Z`).getUTCDay();
-  if (day === 0) return 0;
-  return Math.min(4, Math.max(0, day - 1));
+interface BoardTheme {
+  bg: string;
+  fg: string;
+  rule: string;
+  dots: string;
+  muted: string;
+  badgeBg: string;
+  badgeFg: string;
+  chipBg: string;
+  chipFg: string;
+  pipFill: string;
+  onDark: boolean;
 }
 
 function trackMatches(lesson: DisplayLesson, track: string): boolean {
@@ -205,136 +94,645 @@ function lessonForTrack(day: DisplayDay, track: string): DisplayLesson | null {
   return day.lessons.find((lesson) => trackMatches(lesson, track)) ?? day.lessons[0] ?? null;
 }
 
-function weekdayKey(day: DisplayDay): WeekdayKey {
-  const normalized = day.weekday.toLocaleLowerCase();
-  return WEEKDAY_KEYS.includes(normalized as WeekdayKey) ? normalized as WeekdayKey : "monday";
+function dayFocus(lesson: DisplayLesson | null): string {
+  return lesson?.topic.trim() || lesson?.title.trim() || "";
 }
 
-function themeStyle(theme: WeekdayTheme): CSSProperties {
+function formatLongDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric" })
+    .format(new Date(Date.UTC(year, month - 1, day, 12)));
+}
+
+function formatShortDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" })
+    .format(new Date(Date.UTC(year, month - 1, day, 12)));
+}
+
+function weekdayIndexOf(isoDate: string): number {
+  const day = new Date(`${isoDate}T12:00:00Z`).getUTCDay();
+  if (day === 0) return 0;
+  return Math.min(4, Math.max(0, day - 1));
+}
+
+function themeFor(screen: ScreenKey, palette: DayPalette): BoardTheme {
+  const onDark = screen === "success";
+  const bg = screen === "learning" ? palette.tint
+    : screen === "success" ? BOARD_INK
+      : screen === "week" ? BOARD_WHITE
+        : palette.accent;
+  const fg = onDark ? BOARD_PAPER : BOARD_INK;
+  const rule = onDark ? "rgba(246,243,236,.22)" : "rgba(32,30,26,.16)";
+  const dotInk = onDark ? "rgba(246,243,236,.10)" : "rgba(32,30,26,.07)";
   return {
-    "--wld-dark": theme.dark,
-    "--wld-light": theme.light,
-    "--wld-ink": theme.ink,
-    "--wld-action": theme.action,
-    "--wld-vocab": theme.vocabulary,
-    "--wld-vocab-dark": theme.vocabularyOnDark,
-    "--wld-soft": theme.soft,
-  } as CSSProperties;
+    bg,
+    fg,
+    rule,
+    dots: `radial-gradient(circle at 1px 1px, ${dotInk} 1.5px, transparent 0)`,
+    muted: onDark ? "rgba(246,243,236,.82)" : "rgba(32,30,26,.66)",
+    badgeBg: onDark ? palette.tint : screen === "bells" ? palette.deep : BOARD_INK,
+    badgeFg: onDark ? BOARD_INK : BOARD_PAPER,
+    chipBg: onDark ? palette.tint : palette.deep,
+    chipFg: onDark ? BOARD_INK : BOARD_PAPER,
+    pipFill: onDark ? BOARD_PAPER : BOARD_INK,
+    onDark,
+  };
 }
 
-function DayRail({ day }: { day: DisplayDay }) {
+const EYEBROW: CSSProperties = {
+  fontSize: 24,
+  fontWeight: 700,
+  letterSpacing: ".18em",
+  textTransform: "uppercase",
+};
+
+const COLUMN_HEAD: CSSProperties = {
+  fontSize: 26,
+  fontWeight: 700,
+  letterSpacing: ".16em",
+  textTransform: "uppercase",
+};
+
+function Chip({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return (
-    <header className="wld-rail">
-      <strong className="wld-rail-day">{day.weekday}</strong>
-      <span className="wld-rail-rule" aria-hidden="true" />
-      <time className="wld-rail-date" dateTime={day.date}>{formatDisplayDate(day.date)}</time>
-    </header>
+    <span style={{
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "12px 26px",
+      borderRadius: 14,
+      fontSize: 28,
+      fontWeight: 600,
+      ...style,
+    }}>{children}</span>
   );
 }
 
-function Shapes() {
+function StepChip({ label, theme }: { label: string; theme: BoardTheme }) {
   return (
-    <div className="wld-shapes" aria-hidden="true">
-      <span className="wld-shape-circle" />
-      <span className="wld-shape-square" />
-      <span className="wld-shape-rule wld-shape-rule-main" />
-      <span className="wld-shape-rule wld-shape-rule-echo" />
+    <span style={{
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: 52,
+      height: 52,
+      borderRadius: 14,
+      fontFamily: "var(--bdb-font)",
+      fontWeight: 800,
+      fontSize: 26,
+      background: theme.chipBg,
+      color: theme.chipFg,
+    }}>{label}</span>
+  );
+}
+
+/* ------------------------------------------------------------------ figures */
+
+function FigureView({ figure, palette }: { figure: BoardFigure; palette: DayPalette }) {
+  const ink = BOARD_INK;
+  const muted = "rgba(32,30,26,.60)";
+  const sunk = "rgba(32,30,26,.09)";
+
+  if (figure.kind === "table") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {figure.rows.map((row) => (
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }} key={row.label}>
+            <span style={{
+              width: 210, flex: "none", textAlign: "right", paddingRight: 12,
+              fontSize: 30, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: muted,
+            }}>{row.label}</span>
+            {row.cells.map((cell, index) => {
+              const marked = index === row.highlight;
+              return (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 150, height: 88, borderRadius: 16,
+                  fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 44,
+                  fontFeatureSettings: "'tnum' 1",
+                  background: marked ? palette.deep : sunk,
+                  color: marked ? BOARD_PAPER : ink,
+                }} key={`${row.label}-${index}`}>{cell}</span>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (figure.kind === "lines") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 34, width: 1180 }}>
+        {figure.lines.map((line) => (
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 26 }} key={line.label}>
+            <span style={{
+              width: 170, flex: "none", paddingTop: 2,
+              fontSize: 30, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: muted,
+            }}>{line.label}</span>
+            <div style={{ flex: 1, position: "relative" }}>
+              <span style={{
+                position: "absolute", left: 0, right: 0, top: 11, height: 6,
+                borderRadius: 3, background: palette.deep,
+              }} />
+              <div style={{ position: "relative", display: "flex", justifyContent: "space-between" }}>
+                {line.ticks.map((tick, index) => (
+                  <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }} key={`${line.label}-${index}`}>
+                    <span style={{ width: 6, height: 28, borderRadius: 3, background: palette.deep }} />
+                    <span style={{ fontSize: 34, fontWeight: 700, fontFeatureSettings: "'tnum' 1", color: ink }}>{tick}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (figure.kind === "grid") {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 44 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(10,26px)", gridAutoRows: "26px", gap: 5 }}>
+          {Array.from({ length: 100 }, (_, index) => (
+            <span style={{
+              borderRadius: 5,
+              background: index < figure.shaded ? palette.deep : "rgba(32,30,26,.14)",
+            }} key={index} />
+          ))}
+        </div>
+        <span style={{ fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 52, letterSpacing: "-.02em", color: ink }}>
+          {figure.caption}
+        </span>
+      </div>
+    );
+  }
+
+  if (figure.kind === "blocks") {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 30 }}>
+        {figure.blocks.map((block, index) => (
+          <span style={{ display: "flex", alignItems: "center", gap: 30 }} key={`${block}-${index}`}>
+            {index > 0 && (
+              <span style={{ fontSize: 46, fontWeight: 700, color: "rgba(32,30,26,.55)" }} aria-hidden="true">&rarr;</span>
+            )}
+            <span style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              padding: "22px 34px", borderRadius: 18,
+              fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 46,
+              fontFeatureSettings: "'tnum' 1",
+              background: index === figure.blocks.length - 1 ? palette.deep : sunk,
+              color: index === figure.blocks.length - 1 ? BOARD_PAPER : ink,
+            }}>{block}</span>
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  if (figure.kind === "steps") {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+        {figure.steps.map((step, index) => (
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 18,
+            padding: "20px 30px", borderRadius: 18,
+            fontSize: 38, fontWeight: 600, background: sunk, color: ink,
+          }} key={`${step}-${index}`}>
+            <span style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 48, height: 48, borderRadius: 14,
+              fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 26,
+              background: palette.deep, color: BOARD_PAPER,
+            }}>{index + 1}</span>
+            {step}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <span style={{
+      maxWidth: 1400, textAlign: "center",
+      fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 52, lineHeight: 1.15,
+      letterSpacing: "-.02em", color: ink,
+    }}>{figure.text}</span>
+  );
+}
+
+/* ------------------------------------------------------- learning intention */
+
+interface LearningScreenProps {
+  theme: BoardTheme;
+  palette: DayPalette;
+  stepLabel: string;
+  intention: string;
+  tokens: BoardToken[];
+  maxSize: number;
+  definition: string;
+  figure: BoardFigure | null;
+  keyTermLabel: string;
+  standard: string;
+  focus: string;
+  motion: boolean;
+  revealing: boolean;
+  stageRef: React.RefObject<HTMLDivElement | null>;
+  intentionRef: React.RefObject<HTMLParagraphElement | null>;
+  termRef: React.RefObject<HTMLSpanElement | null>;
+}
+
+function LearningScreen(props: LearningScreenProps) {
+  const {
+    theme, palette, stepLabel, intention, tokens, maxSize, definition, figure,
+    keyTermLabel, standard, focus, motion, revealing, stageRef, intentionRef, termRef,
+  } = props;
+  const t = BOARD_TIMING;
+
+  const drop = revealing ? `wldDrop .6s ${t.dropStart}s cubic-bezier(.45,0,.9,.4) both` : "none";
+  const typeIn = motion ? `wldType ${t.typeDuration}s ${t.typeStart}s cubic-bezier(.62,0,.2,1) both` : "none";
+  const aura = revealing ? `wldFade 1.1s ${(t.dropStart + t.auraDelay).toFixed(2)}s cubic-bezier(.16,1,.3,1) both` : "none";
+  const defIn = revealing ? `wldLensRise .8s ${(t.dropStart + t.definitionDelay).toFixed(2)}s cubic-bezier(.16,1,.3,1) both` : "none";
+  const figIn = revealing ? `wldLensRise .8s ${(t.dropStart + t.figureDelay).toFixed(2)}s cubic-bezier(.16,1,.3,1) both` : "none";
+
+  let verbIndex = 0;
+
+  return (
+    <div ref={stageRef} style={{ position: "relative", height: "100%", overflow: "hidden" }}>
+      {/* The reticle is the lens the term settles into. It only means anything
+          once the reveal runs, so a board with nothing to reveal never draws it. */}
+      {revealing && (
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", animation: aura }} aria-hidden="true">
+          <span style={{ position: "absolute", left: 0, right: 0, top: "60%", height: 2, background: "rgba(32,30,26,.09)" }} />
+          <span style={{ position: "absolute", top: 0, bottom: 0, left: "50%", width: 2, background: "rgba(32,30,26,.09)" }} />
+        </div>
+      )}
+
+      <div style={{
+        position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+        justifyContent: "space-between", gap: 26,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 22, animation: drop }}>
+          <StepChip label={stepLabel} theme={theme} />
+          <span style={{ ...EYEBROW, color: theme.muted }}>Today we are learning to</span>
+          <span style={{ flex: 1, height: 2, background: theme.rule }} />
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "center" }}>
+          {intention ? (
+            <p ref={intentionRef} style={{
+              margin: 0, width: "100%",
+              fontFamily: "var(--bdb-font)", fontWeight: 800, lineHeight: 1.1, letterSpacing: "-.032em",
+              fontSize: maxSize,
+              display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: ".06em .26em",
+              animation: typeIn,
+            }}>
+              {tokens.map((token) => {
+                if (token.hit) {
+                  const highlight = motion
+                    ? `wldHi ${t.highlightDuration}s ${t.highlightStart}s cubic-bezier(.22,1,.3,1) forwards, wldInk ${t.highlightDuration}s ${t.highlightStart}s cubic-bezier(.22,1,.3,1) forwards`
+                    : "";
+                  const travel = revealing
+                    ? `wldTravel ${t.travelDuration}s ${t.dropStart}s cubic-bezier(.42,0,.14,1) both`
+                    : "";
+                  return (
+                    <span
+                      ref={termRef}
+                      style={{
+                        position: "relative", display: "inline-block", whiteSpace: "nowrap",
+                        padding: "0 .1em", borderRadius: 12,
+                        color: motion ? BOARD_INK : BOARD_PAPER,
+                        backgroundImage: `linear-gradient(${palette.deep}, ${palette.deep})`,
+                        backgroundRepeat: "no-repeat",
+                        backgroundPosition: "left center",
+                        backgroundSize: motion ? "0% 100%" : "100% 100%",
+                        animation: [highlight, travel].filter(Boolean).join(", ") || "none",
+                      }}
+                      key={`hit-${token.index}`}
+                    >{token.text}</span>
+                  );
+                }
+                const rise = revealing
+                  ? `wldDrop .6s ${(t.dropStart + token.index * t.dropStagger).toFixed(3)}s cubic-bezier(.45,0,.9,.4) both`
+                  : "";
+                const pulse = token.verb && motion
+                  ? `wldPulse 1.5s ${(t.verbPulseStart + (verbIndex++) * t.verbPulseStagger).toFixed(2)}s ease-in-out 2`
+                  : "";
+                return (
+                  <span
+                    style={{
+                      display: "inline-block", whiteSpace: "nowrap", padding: "0 .1em",
+                      color: token.verb ? palette.deep : "inherit",
+                      animation: [rise, pulse].filter(Boolean).join(", ") || "none",
+                    }}
+                    key={`tok-${token.index}`}
+                  >{token.text}</span>
+                );
+              })}
+            </p>
+          ) : (
+            <MissingCopy label="No learning intention published for today." theme={theme} />
+          )}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", animation: drop }}>
+          {standard && (
+            <Chip style={{ fontFamily: "var(--bdb-font)", fontWeight: 800, background: theme.chipBg, color: theme.chipFg }}>
+              {standard}
+            </Chip>
+          )}
+          {focus && <Chip style={{ border: `2px solid ${theme.rule}`, color: theme.fg }}>{focus}</Chip>}
+          {keyTermLabel && (
+            <Chip style={{ gap: 12, border: `2px solid ${theme.rule}`, color: theme.muted }}>
+              <span style={{ width: 14, height: 14, borderRadius: 4, background: palette.accent }} />
+              Key term - {keyTermLabel}
+            </Chip>
+          )}
+        </div>
+      </div>
+
+      {revealing && (
+        <div style={{
+          position: "absolute", left: 0, right: 0, top: "29%", bottom: "2%",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 46, pointerEvents: "none",
+        }}>
+          {definition && (
+            <p style={{
+              margin: 0, maxWidth: 1520, textAlign: "center",
+              fontSize: 60, lineHeight: 1.2, fontWeight: 500, letterSpacing: "-.015em",
+              textWrap: "pretty", color: BOARD_INK, animation: defIn,
+            }}>{definition}</p>
+          )}
+          {figure && (
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              minHeight: 210, animation: figIn,
+            }}>
+              <FigureView figure={figure} palette={palette} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function TargetScreen({
-  activeLesson,
-  screen,
-  vocabulary,
+function MissingCopy({ label, theme }: { label: string; theme: BoardTheme }) {
+  return (
+    <p style={{
+      margin: 0,
+      fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 92, lineHeight: 1.08,
+      letterSpacing: "-.03em", color: theme.muted,
+    }}>{label}</p>
+  );
+}
+
+/* --------------------------------------------------------- success criteria */
+
+function SuccessScreen({
+  theme, palette, stepLabel, statement, standard, focus, motion,
 }: {
-  activeLesson: DisplayLesson | null;
-  screen: "learning" | "success";
-  vocabulary: Set<string>;
+  theme: BoardTheme;
+  palette: DayPalette;
+  stepLabel: string;
+  statement: string;
+  standard: string;
+  focus: string;
+  motion: boolean;
 }) {
-  const text = screen === "learning"
-    ? activeLesson?.learningIntention.trim() ?? ""
-    : activeLesson?.successCriteria.trim() ?? "";
-
+  const t = BOARD_TIMING;
   return (
-    <section className="wld-target" aria-labelledby="wld-target-label">
-      {activeLesson?.standard && <div className="wld-standard-block">{activeLesson.standard}</div>}
-      <h1 className="wld-screen-label" id="wld-target-label">{SCREEN_LABELS[screen]}</h1>
-      {text ? (
-        <p className="wld-target-copy" style={{ fontSize: copySize(text) }}>
-          <KineticText text={text} vocabulary={vocabulary} />
-        </p>
-      ) : (
-        <div className="wld-missing" role="status">
-          <strong>Not published yet.</strong>
-          <span>This screen will update when the target is ready in Notion.</span>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function WeekScreen({ days, activeDay, track }: { days: DisplayDay[]; activeDay: DisplayDay; track: string }) {
-  return (
-    <section className="wld-week" aria-labelledby="wld-week-title">
-      <h1 className="wld-page-title" id="wld-week-title">This week</h1>
-      <div className="wld-week-list">
-        {days.map((day, index) => {
-          const lesson = lessonForTrack(day, track);
-          const topic = lesson?.topic.trim() || lesson?.moduleTopic.trim() || "Topic not published";
-          const isActive = day.date === activeDay.date;
-          return (
-            <article
-              className={`wld-week-row${isActive ? " active" : ""}`}
-              aria-current={isActive ? "date" : undefined}
-              style={{ "--row-index": index } as CSSProperties}
-              key={day.date}
-            >
-              <span className="wld-week-marker" aria-hidden="true" />
-              <strong>{day.weekday.slice(0, 3)}</strong>
-              <span>{topic}</span>
-            </article>
-          );
-        })}
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 26 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+        <StepChip label={stepLabel} theme={theme} />
+        <span style={{ ...EYEBROW, color: theme.muted }}>You&apos;ve got it when</span>
+        <span style={{ flex: 1, height: 2, background: theme.rule }} />
       </div>
-    </section>
+      <div style={{
+        flex: 1, minHeight: 0, display: "flex", alignItems: "center", gap: 40,
+        animation: motion ? "wldEnter .6s .18s cubic-bezier(.16,1,.3,1) both" : "none",
+      }}>
+        {statement ? (
+          <>
+            <span style={{
+              flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 112, height: 112, borderRadius: 32,
+              fontSize: 60, fontWeight: 700, background: palette.accent, color: BOARD_INK,
+            }} aria-hidden="true">&#10003;</span>
+            <p style={{
+              margin: 0, flex: 1,
+              fontFamily: "var(--bdb-font)", fontWeight: 800, lineHeight: 1.1, letterSpacing: "-.03em",
+              textWrap: "pretty", fontSize: successSize(statement),
+              animation: motion ? `wldType ${t.typeDuration}s .4s cubic-bezier(.62,0,.2,1) both` : "none",
+            }}>{statement}</p>
+          </>
+        ) : (
+          <MissingCopy label="No success criterion published for today." theme={theme} />
+        )}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        {standard && (
+          <Chip style={{ fontFamily: "var(--bdb-font)", fontWeight: 800, background: theme.chipBg, color: theme.chipFg }}>
+            {standard}
+          </Chip>
+        )}
+        {focus && <Chip style={{ border: `2px solid ${theme.rule}`, color: theme.muted }}>{focus}</Chip>}
+      </div>
+    </div>
   );
 }
 
-function BellScreen() {
-  const hasRows = BELL_SCHEDULE.rows.length > 0;
+/* ---------------------------------------------------------- weekly schedule */
+
+function WeekScreen({
+  theme, palette, days, activeDate, track, motion,
+}: {
+  theme: BoardTheme;
+  palette: DayPalette;
+  days: DisplayDay[];
+  activeDate: string;
+  track: string;
+  motion: boolean;
+}) {
   return (
-    <section className="wld-bells" aria-labelledby="wld-bells-title">
-      <h1 className="wld-page-title" id="wld-bells-title">Bell schedule</h1>
-      {hasRows ? (
-        <div className="wld-bell-list" style={{ "--bell-count": BELL_SCHEDULE.rows.length } as CSSProperties}>
-          {BELL_SCHEDULE.rows.map((row, index) => (
-            <div
-              className={`wld-bell-row${row.emphasis ? " emphasis" : ""}`}
-              style={{ "--row-index": index } as CSSProperties}
-              key={`${row.label}-${row.time}`}
-            >
-              <strong>{row.label}</strong>
-              <span>{row.time}</span>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{
+        flex: "none", display: "flex", alignItems: "center", gap: 28,
+        padding: "0 26px 12px", color: theme.muted, ...COLUMN_HEAD,
+      }}>
+        <span style={{ width: 196, flex: "none" }}>Day</span>
+        <span style={{ flex: 1, minWidth: 0 }}>Focus</span>
+        <span style={{ width: 380, flex: "none" }}>Key term</span>
+        <span style={{ width: 220, flex: "none", textAlign: "right" }}>Standard</span>
+      </div>
+      {days.map((day, index) => {
+        const lesson = lessonForTrack(day, track);
+        const active = day.date === activeDate;
+        const vocabulary = readBoardVocabulary(lesson?.discussionVocabulary ?? "");
+        const keyTerm = selectKeyTerm(vocabulary.entries, intentionBody(lesson?.learningIntention ?? ""));
+        return (
+          <div
+            style={{
+              flex: 1, display: "flex", alignItems: "stretch", marginBottom: 8,
+              borderRadius: 20, overflow: "hidden",
+              background: active ? BOARD_INK : BOARD_PAPER,
+              color: active ? BOARD_PAPER : BOARD_INK,
+              boxShadow: active ? "0 12px 28px rgba(32,30,26,.24)" : "none",
+              animation: motion ? "wldRow .5s cubic-bezier(.16,1,.3,1) both" : "none",
+              animationDelay: `${(0.12 + index * 0.08).toFixed(2)}s`,
+            }}
+            key={day.date}
+          >
+            <span style={{ flex: "none", width: 14, background: active ? palette.accent : BOARD_LINE }} />
+            <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 28, padding: "0 26px 0 24px" }}>
+              <span style={{ width: 196, flex: "none", display: "flex", alignItems: "center", gap: 16 }}>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 64, height: 64, borderRadius: 18,
+                  fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 26,
+                  textTransform: "uppercase", letterSpacing: ".04em",
+                  background: active ? palette.accent : BOARD_CREAM,
+                  color: active ? BOARD_INK : BOARD_MUTED,
+                }}>{day.weekday.slice(0, 3)}</span>
+                <span style={{
+                  fontSize: 26, fontWeight: 600, fontFeatureSettings: "'tnum' 1",
+                  color: active ? "rgba(246,243,236,.72)" : BOARD_FAINT,
+                }}>{formatShortDate(day.date)}</span>
+              </span>
+              <span style={{
+                flex: 1, minWidth: 0,
+                fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 46, letterSpacing: "-.025em",
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}>{dayFocus(lesson) || "Not published yet"}</span>
+              {active && (
+                <span style={{
+                  flex: "none", display: "inline-flex", alignItems: "center", height: 44, padding: "0 20px",
+                  borderRadius: 999, fontSize: 24, fontWeight: 700, letterSpacing: ".14em",
+                  textTransform: "uppercase", background: palette.accent, color: BOARD_INK,
+                }}>Today</span>
+              )}
+              <span style={{
+                width: 380, flex: "none", fontSize: 26, fontWeight: 600,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                color: active ? "rgba(246,243,236,.84)" : BOARD_MUTED,
+              }}>{keyTerm?.term ?? ""}</span>
+              <span style={{ width: 220, flex: "none", display: "flex", justifyContent: "flex-end" }}>
+                {lesson?.standard && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", height: 48, padding: "0 20px",
+                    borderRadius: 12, fontSize: 26, fontWeight: 700, fontFeatureSettings: "'tnum' 1",
+                    background: active ? "rgba(246,243,236,.14)" : BOARD_CREAM,
+                    color: active ? BOARD_PAPER : BOARD_MUTED,
+                  }}>{lesson.standard}</span>
+                )}
+              </span>
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="wld-bell-preview">
-          <div className="wld-bell-preview-row">
-            <strong>School starts</strong>
-            <span>{BELL_SCHEDULE.start}</span>
           </div>
-          <div className="wld-bell-preview-row">
-            <strong>School ends</strong>
-            <span>{BELL_SCHEDULE.end}</span>
-          </div>
-          <p>Period schedule coming soon.</p>
-        </div>
-      )}
-    </section>
+        );
+      })}
+    </div>
   );
 }
+
+/* ------------------------------------------------------------ bell schedule */
+
+function BellsScreen({
+  theme, palette, rows, motion,
+}: {
+  theme: BoardTheme;
+  palette: DayPalette;
+  rows: BellRowState[];
+  motion: boolean;
+}) {
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{
+        flex: "none", display: "flex", alignItems: "center", gap: 26,
+        padding: "0 26px 10px", color: theme.muted, ...COLUMN_HEAD,
+      }}>
+        <span style={{ width: 172, flex: "none" }}>Period</span>
+        <span style={{ flex: 1, minWidth: 0 }}>Block</span>
+        <span style={{ width: 300, flex: "none" }}>Status</span>
+        <span style={{ width: 270, flex: "none", textAlign: "right" }}>Time</span>
+        <span style={{ width: 110, flex: "none", textAlign: "right" }}>Min</span>
+      </div>
+      {rows.map((row, index) => {
+        const isClass = row.kind === "Class";
+        return (
+          <div
+            style={{
+              flex: 1, display: "flex", alignItems: "stretch", marginBottom: 6,
+              borderRadius: 16, overflow: "hidden",
+              background: row.now ? BOARD_INK : isClass ? BOARD_WHITE : BOARD_PAPER,
+              color: row.now ? BOARD_PAPER : BOARD_INK,
+              border: isClass || row.now ? "2px solid transparent" : "2px dashed rgba(32,30,26,.42)",
+              boxShadow: row.now ? "0 12px 30px rgba(32,30,26,.28)"
+                : isClass ? "0 4px 14px rgba(32,30,26,.10)" : "none",
+              animation: motion ? "wldRow .5s cubic-bezier(.16,1,.3,1) both" : "none",
+              animationDelay: `${(0.1 + index * 0.06).toFixed(2)}s`,
+            }}
+            key={`${row.label}-${row.timeLabel}`}
+          >
+            <span style={{
+              flex: "none", width: 12,
+              background: row.now ? palette.accent : isClass ? palette.deep : "rgba(32,30,26,.24)",
+            }} />
+            <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 26, padding: "0 26px 0 22px" }}>
+              <span style={{ width: 172, flex: "none", display: "flex", alignItems: "center", gap: 16 }}>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 58, height: 58, borderRadius: 16,
+                  fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 26,
+                  fontFeatureSettings: "'tnum' 1",
+                  background: row.now ? palette.accent : isClass ? palette.tint : "rgba(32,30,26,.10)",
+                  color: row.now ? BOARD_INK : isClass ? palette.deep : BOARD_MUTED,
+                }}>{row.periodLabel || "—"}</span>
+                <span style={{
+                  fontSize: 24, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase",
+                  color: row.now ? BOARD_CREAM : BOARD_MUTED,
+                }}>{row.kind}</span>
+              </span>
+              <span style={{
+                flex: 1, minWidth: 0,
+                fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 38, letterSpacing: "-.02em",
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}>{row.label}</span>
+              <span style={{ width: 300, flex: "none", display: "flex", alignItems: "center", gap: 14 }}>
+                {row.now && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", height: 44, padding: "0 20px",
+                    borderRadius: 999, fontSize: 24, fontWeight: 700, letterSpacing: ".14em",
+                    textTransform: "uppercase", background: palette.accent, color: BOARD_INK,
+                  }}>Now</span>
+                )}
+                <span style={{
+                  flex: 1, height: 12, borderRadius: 999, overflow: "hidden",
+                  background: row.now ? "rgba(246,243,236,.24)" : "rgba(32,30,26,.12)",
+                }}>
+                  <span style={{
+                    display: "block", height: "100%", borderRadius: 999,
+                    width: `${Math.round(row.progress * 100)}%`,
+                    background: row.now ? palette.accent : "rgba(32,30,26,.30)",
+                  }} />
+                </span>
+              </span>
+              <span style={{ width: 270, flex: "none", textAlign: "right", fontSize: 32, fontWeight: 700, fontFeatureSettings: "'tnum' 1" }}>
+                {row.timeLabel}
+              </span>
+              <span style={{
+                width: 110, flex: "none", textAlign: "right", fontSize: 26, fontWeight: 600,
+                fontFeatureSettings: "'tnum' 1", color: row.now ? BOARD_CREAM : BOARD_MUTED,
+              }}>{row.minutesLabel}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------- board */
 
 export default function WeeklyDisplayPage() {
   const [payload, setPayload] = useState<WeeklyDisplayPayload | null>(null);
@@ -342,10 +740,22 @@ export default function WeeklyDisplayPage() {
   const [loading, setLoading] = useState(true);
   const [dayOverride, setDayOverride] = useState<WeekdayKey | null>(null);
   const [track, setTrack] = useState("math6");
+  const [course, setCourse] = useState("Math 6");
+  const [rotationSeconds, setRotationSeconds] = useState(DEFAULT_ROTATION_SECONDS);
   const [screenIndex, setScreenIndex] = useState(0);
+  const [phase, setPhase] = useState<"in" | "out">("in");
+  const [cycle, setCycle] = useState(0);
   const [rotation, setRotation] = useState(true);
   const [motion, setMotion] = useState(true);
-  const [animationKey, setAnimationKey] = useState(0);
+  const [reveal, setReveal] = useState(true);
+  const [now, setNow] = useState<Date | null>(null);
+  const [scale, setScale] = useState(1);
+  const [previewMode, setPreviewMode] = useState(false);
+
+  const rootRef = useRef<HTMLElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const intentionRef = useRef<HTMLParagraphElement | null>(null);
+  const termRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -357,6 +767,17 @@ export default function WeeklyDisplayPage() {
       setRotation(false);
     }
     setTrack(params.get("track")?.toLocaleLowerCase() === "acc" ? "acc" : "math6");
+    const requestedCourse = params.get("course")?.trim();
+    if (requestedCourse) setCourse(requestedCourse);
+    const requestedSeconds = Number(params.get("seconds"));
+    if (Number.isFinite(requestedSeconds) && requestedSeconds >= 4) setRotationSeconds(requestedSeconds);
+    setNow(new Date());
+  }, []);
+
+  // The footer clock and the "Now" bell row only need minute resolution.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 15_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const loadWeek = useCallback(async (showLoading = false) => {
@@ -377,7 +798,6 @@ export default function WeeklyDisplayPage() {
   // Preview mode (the public /demo run-through): render a posted mock week
   // instead of fetching. The parent posts { type: "bdm-studio-preview",
   // weeklyDisplay } - same bridge the live-lesson surfaces use.
-  const [previewMode, setPreviewMode] = useState(false);
   useEffect(() => {
     let active = false;
     try { active = new URLSearchParams(window.location.search).get("studioPreview") === "1"; } catch { /* ignore */ }
@@ -402,56 +822,174 @@ export default function WeeklyDisplayPage() {
     return () => window.clearInterval(refresh);
   }, [loadWeek, previewMode]);
 
+  // Scale the fixed 1920x1080 board to the display. Measured from the container
+  // rather than window.innerWidth, which reports the pane frame in the in-app
+  // browser and misreports under zoom; a zero rect retries until it is real.
+  useEffect(() => {
+    const fit = () => {
+      const root = rootRef.current;
+      if (!root) return false;
+      const width = root.clientWidth;
+      const height = root.clientHeight;
+      if (!width || !height) return false;
+      setScale(Math.min(width / STAGE_W, height / STAGE_H));
+      return true;
+    };
+    let attempts = 0;
+    const retry = window.setInterval(() => {
+      if (fit() || attempts++ > 40) window.clearInterval(retry);
+    }, 100);
+    fit();
+    window.addEventListener("resize", fit);
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(() => fit()) : null;
+    if (observer && rootRef.current) observer.observe(rootRef.current);
+    return () => {
+      window.clearInterval(retry);
+      window.removeEventListener("resize", fit);
+      observer?.disconnect();
+    };
+  }, []);
+
   const activeDay = useMemo(() => {
     if (!payload?.days.length) return null;
     if (dayOverride) return payload.days.find((day) => day.weekday.toLocaleLowerCase() === dayOverride) ?? null;
-    return payload.days.find((day) => day.date === payload.today) ?? payload.days[weekdayIndex(payload.today)] ?? payload.days[0];
+    return payload.days.find((day) => day.date === payload.today)
+      ?? payload.days[weekdayIndexOf(payload.today)]
+      ?? payload.days[0];
   }, [dayOverride, payload]);
 
-  const activeLesson = useMemo(() => activeDay ? lessonForTrack(activeDay, track) : null, [activeDay, track]);
-  const vocabulary = useMemo(() => activeLesson ? vocabularyWords(activeLesson) : new Set<string>(), [activeLesson]);
+  const activeLesson = useMemo(() => (activeDay ? lessonForTrack(activeDay, track) : null), [activeDay, track]);
   const screen = SCREEN_KEYS[screenIndex];
-  const dayKey = activeDay ? weekdayKey(activeDay) : "monday";
-  const theme = WEEKDAY_THEMES[dayKey];
+  const dayKey = activeDay ? weekdayKeyFor(activeDay.weekday) : "monday";
+  const palette = DAY_PALETTES[dayKey];
+  const theme = themeFor(screen, palette);
 
+  const board = useMemo(() => {
+    const intention = intentionBody(activeLesson?.learningIntention ?? "");
+    const vocabulary = readBoardVocabulary(activeLesson?.discussionVocabulary ?? "");
+    const keyTerm = selectKeyTerm(vocabulary.entries, intention);
+    const hasReveal = Boolean(keyTerm?.phrase && (keyTerm.definition || vocabulary.figure));
+    return {
+      intention,
+      tokens: tokenizeIntention(intention, keyTerm?.phrase ?? null),
+      maxSize: intentionMaxSize(intention),
+      keyTerm,
+      figure: vocabulary.figure,
+      hasReveal,
+    };
+  }, [activeLesson]);
+
+  const revealing = motion && reveal && board.hasReveal;
+  const hold = dwellSeconds(screen, rotationSeconds, revealing);
+
+  // Rotation runs in two beats so the outgoing screen can slide away before the
+  // next one lands, exactly as the design frames it.
   useEffect(() => {
     if (!rotation || !activeDay) return;
-    const timer = window.setTimeout(() => {
+    const toExit = window.setTimeout(() => setPhase("out"), hold * 1000);
+    const toNext = window.setTimeout(() => {
       setScreenIndex((value) => (value + 1) % SCREEN_KEYS.length);
-    }, SCREEN_INTERVAL_MS);
-    return () => window.clearTimeout(timer);
-  }, [activeDay, rotation, screenIndex]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-      if (event.key === "ArrowRight" || event.key === " ") {
-        event.preventDefault();
-        setScreenIndex((value) => (value + 1) % SCREEN_KEYS.length);
-      } else if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        setScreenIndex((value) => (value - 1 + SCREEN_KEYS.length) % SCREEN_KEYS.length);
-      } else if (/^[1-4]$/.test(event.key)) {
-        setScreenIndex(Number(event.key) - 1);
-      }
+      setPhase("in");
+      setCycle((value) => value + 1);
+    }, hold * 1000 + BOARD_TIMING.exitMs);
+    return () => {
+      window.clearTimeout(toExit);
+      window.clearTimeout(toNext);
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [activeDay, rotation, screenIndex, cycle, hold]);
+
+  const frameKey = `${dayKey}-${screen}-${cycle}-${activeLesson?.id ?? "empty"}`;
+
+  // Fit the intention to the stage, then measure where the key term has to
+  // travel to. Both happen in unscaled stage pixels, so the reveal lands in the
+  // same place on a 4K TV and a laptop.
+  useLayoutEffect(() => {
+    if (screen !== "learning") return;
+    let cancelled = false;
+    const fit = (): boolean => {
+      const paragraph = intentionRef.current;
+      const stage = stageRef.current;
+      const wrap = paragraph?.parentElement;
+      if (!paragraph || !stage || !wrap) return false;
+      if (!wrap.clientHeight || !stage.offsetWidth) return false;
+
+      let size = board.maxSize;
+      paragraph.style.fontSize = `${size}px`;
+      let guard = 0;
+      while (
+        (paragraph.scrollHeight > wrap.clientHeight || paragraph.scrollWidth > paragraph.clientWidth + 1)
+        && size > 60 && guard++ < 40
+      ) {
+        size -= 4;
+        paragraph.style.fontSize = `${size}px`;
+      }
+
+      const term = termRef.current;
+      if (term) {
+        let x = 0;
+        let y = 0;
+        let node: HTMLElement | null = term;
+        while (node && node !== stage) {
+          x += node.offsetLeft;
+          y += node.offsetTop;
+          node = node.offsetParent as HTMLElement | null;
+        }
+        term.style.setProperty("--dx", `${(stage.offsetWidth / 2 - (x + term.offsetWidth / 2)).toFixed(1)}px`);
+        term.style.setProperty("--dy", `${(stage.offsetHeight * 0.155 - (y + term.offsetHeight / 2)).toFixed(1)}px`);
+        term.style.setProperty("--sc", termTravelScale(size).toFixed(3));
+      }
+      return true;
+    };
+
+    const settled = fit();
+    if (document.fonts?.ready) void document.fonts.ready.then(() => { if (!cancelled) fit(); });
+    if (settled) return () => { cancelled = true; };
+    let attempts = 0;
+    const retry = window.setInterval(() => {
+      if (cancelled || attempts++ > 40 || fit()) window.clearInterval(retry);
+    }, 120);
+    return () => {
+      cancelled = true;
+      window.clearInterval(retry);
+    };
+  }, [frameKey, screen, board.maxSize, board.tokens]);
+
+  const bellRows = useMemo(
+    () => bellRowStates(now ? minutesInZone(now, payload?.timeZone || "America/Los_Angeles") : null, BELL_SCHEDULE),
+    [now, payload?.timeZone],
+  );
+
+  // The footer clock reads the same zone the bell rows do, so the board can
+  // never show a time that disagrees with the block it says is happening now.
+  const clockLabel = useMemo(() => {
+    if (!now) return "";
+    try {
+      return new Intl.DateTimeFormat("en-US", {
+        timeZone: payload?.timeZone || "America/Los_Angeles",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(now);
+    } catch {
+      return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(now);
+    }
+  }, [now, payload?.timeZone]);
 
   const chooseDay = (day: WeekdayKey | null) => {
     setDayOverride(day);
     setScreenIndex(0);
+    setPhase("in");
+    setCycle((value) => value + 1);
     const url = new URL(window.location.href);
     if (day) url.searchParams.set("day", day);
     else url.searchParams.delete("day");
     window.history.replaceState({}, "", url);
-    setAnimationKey((value) => value + 1);
   };
 
-  const chooseScreen = (nextScreen: ScreenKey) => {
-    setScreenIndex(SCREEN_KEYS.indexOf(nextScreen));
-    setAnimationKey((value) => value + 1);
+  const chooseScreen = (next: ScreenKey) => {
+    setScreenIndex(SCREEN_KEYS.indexOf(next));
+    setPhase("in");
+    setCycle((value) => value + 1);
+    setRotation(false);
   };
 
   const toggleFullscreen = async () => {
@@ -459,248 +997,227 @@ export default function WeeklyDisplayPage() {
     else await document.documentElement.requestFullscreen?.();
   };
 
-  const toggleMotion = () => {
-    setMotion((value) => {
-      if (!value) setAnimationKey((key) => key + 1);
-      return !value;
-    });
-  };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      if (event.key === "ArrowRight" || event.key === " ") {
+        event.preventDefault();
+        chooseScreen(SCREEN_KEYS[(screenIndex + 1) % SCREEN_KEYS.length]);
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        chooseScreen(SCREEN_KEYS[(screenIndex - 1 + SCREEN_KEYS.length) % SCREEN_KEYS.length]);
+      } else if (/^[1-4]$/.test(event.key)) {
+        chooseScreen(SCREEN_KEYS[Number(event.key) - 1]);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [screenIndex]);
+
+  const frameAnimation = !motion ? "none"
+    : phase === "out" ? `wldSlideOut ${BOARD_TIMING.exitMs}ms cubic-bezier(.55,0,.85,.3) forwards`
+      : "wldSlideIn .68s cubic-bezier(.16,1,.3,1) both";
+
+  const unitLabel = activeLesson?.moduleTopic.trim() || activeLesson?.module?.trim() || activeLesson?.topic.trim() || "";
+  const focus = dayFocus(activeLesson);
+  const stepLabel = padTwo(screenIndex + 1);
 
   return (
-    <main className={`wld-stage${motion ? "" : " wld-motion-off"}`} style={themeStyle(theme)}>
+    <main
+      ref={rootRef}
+      style={{
+        position: "fixed",
+        inset: 0,
+        overflow: "hidden",
+        display: "grid",
+        placeItems: "center",
+        background: BOARD_CREAM,
+        color: BOARD_INK,
+        fontFamily: "var(--bdb-font-body)",
+      }}
+    >
       <style>{`
-        .wld-stage {
-          --wld-rail:clamp(150px,11.2vw,215px);
-          position:fixed;
-          inset:0;
-          overflow:hidden;
-          background:var(--wld-light);
-          color:var(--wld-ink);
-          font-family:var(--bdb-font);
-          isolation:isolate;
-        }
         .asa-fab,.asa-panel,.asa-toast,.abs-stage { display:none !important; }
-        .wld-frame { position:absolute; inset:0; overflow:hidden; background:var(--wld-light); color:var(--wld-ink); animation:wld-screen-in .7s cubic-bezier(.16,1,.3,1) both; }
-        .wld-screen-success { background:var(--wld-dark); color:var(--wld-light); }
-        .wld-screen-bells { background:var(--wld-action); color:var(--wld-dark); }
-        @keyframes wld-screen-in { from{ opacity:0; clip-path:inset(0 7% 0 7%); } to{ opacity:1; clip-path:inset(0); } }
-        .wld-rail {
-          position:absolute;
-          z-index:5;
-          inset:0 auto 0 0;
-          width:var(--wld-rail);
-          display:flex;
-          flex-direction:column;
-          align-items:center;
-          justify-content:center;
-          gap:clamp(26px,3vh,48px);
-          padding:clamp(24px,3vh,48px) 18px;
-          background:var(--wld-dark);
-          color:var(--wld-light);
-          text-transform:uppercase;
-          animation:wld-rail-in .72s cubic-bezier(.16,1,.3,1) both;
-        }
-        @keyframes wld-rail-in { from{ translate:-100% 0; } to{ translate:0 0; } }
-        .wld-rail-day,.wld-rail-date { font-weight:800; line-height:1; white-space:nowrap; writing-mode:vertical-rl; transform:rotate(180deg); }
-        .wld-rail-day { font-size:clamp(2.6rem,4.15vw,5.25rem); letter-spacing:-.04em; }
-        .wld-rail-date { font-size:clamp(1.7rem,2.55vw,3.25rem); letter-spacing:-.035em; }
-        .wld-rail-rule { width:clamp(56px,5vw,96px); height:4px; background:var(--wld-action); flex:0 0 auto; }
-        .wld-screen-success .wld-rail { background:var(--wld-light); color:var(--wld-dark); }
-        .wld-screen-bells .wld-rail { background:var(--wld-dark); color:var(--wld-light); }
-        .wld-layout-right .wld-rail { inset:0 0 0 auto; animation-name:wld-rail-right-in; }
-        @keyframes wld-rail-right-in { from{ translate:100% 0; } to{ translate:0 0; } }
-        .wld-layout-top .wld-rail,.wld-layout-bottom .wld-rail {
-          width:auto;
-          height:clamp(112px,14vh,150px);
-          flex-direction:row;
-          justify-content:flex-start;
-          gap:clamp(22px,2.5vw,44px);
-          padding:16px clamp(28px,4vw,76px);
-        }
-        .wld-layout-top .wld-rail { inset:0 0 auto 0; animation-name:wld-rail-top-in; }
-        .wld-layout-bottom .wld-rail { inset:auto 0 0 0; animation-name:wld-rail-bottom-in; }
-        @keyframes wld-rail-top-in { from{ translate:0 -100%; } to{ translate:0 0; } }
-        @keyframes wld-rail-bottom-in { from{ translate:0 100%; } to{ translate:0 0; } }
-        .wld-layout-top .wld-rail-day,.wld-layout-top .wld-rail-date,.wld-layout-bottom .wld-rail-day,.wld-layout-bottom .wld-rail-date { writing-mode:horizontal-tb; transform:none; }
-        .wld-layout-top .wld-rail-day,.wld-layout-bottom .wld-rail-day { font-size:clamp(2.4rem,5vw,5.5rem); }
-        .wld-layout-top .wld-rail-date,.wld-layout-bottom .wld-rail-date { font-size:clamp(1.4rem,2.7vw,3rem); }
-        .wld-layout-top .wld-rail-rule,.wld-layout-bottom .wld-rail-rule { width:4px; height:clamp(46px,7vh,76px); }
-        .wld-content { position:absolute; z-index:2; inset:5.5vh 4.5vw 5.5vh calc(var(--wld-rail) + 4vw); }
-        .wld-layout-right .wld-content { inset:5.5vh calc(var(--wld-rail) + 4vw) 5.5vh 4.5vw; }
-        .wld-layout-top .wld-content { inset:calc(clamp(112px,14vh,150px) + 4.5vh) 4.5vw 4.5vh; }
-        .wld-layout-bottom .wld-content { inset:4.5vh 4.5vw calc(clamp(112px,14vh,150px) + 4.5vh); }
-        .wld-target { position:relative; height:100%; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; }
-        .wld-standard-block {
-          position:absolute;
-          top:0;
-          left:0;
-          padding:.18em .45em .24em;
-          background:var(--wld-action);
-          color:var(--wld-dark);
-          font-size:clamp(2rem,3.7vw,4.8rem);
-          font-weight:800;
-          line-height:1;
-          letter-spacing:-.035em;
-          animation:wld-standard-in .55s .12s cubic-bezier(.16,1,.3,1) both;
-        }
-        @keyframes wld-standard-in { from{ opacity:0; translate:0 -36px; } to{ opacity:1; translate:0 0; } }
-        .wld-screen-label { margin:clamp(70px,10vh,118px) 0 clamp(24px,3.5vh,48px); font-size:clamp(1.45rem,2.1vw,2.65rem); line-height:1; font-weight:800; letter-spacing:.015em; text-transform:uppercase; animation:wld-label-in .55s .24s ease-out both; }
-        @keyframes wld-label-in { from{ opacity:0; translate:28px 0; } to{ opacity:1; translate:0 0; } }
-        .wld-screen-success .wld-target { justify-content:flex-start; padding-top:clamp(130px,17vh,190px); }
-        .wld-screen-success .wld-standard-block { color:var(--wld-dark); }
-        .wld-screen-success .wld-screen-label { position:absolute; top:0; right:0; min-width:min(470px,46vw); margin:0; padding:.85em 1.2em; background:var(--wld-soft); color:var(--wld-dark); text-align:center; }
-        .wld-target-copy { position:relative; z-index:2; max-width:100%; margin:0; color:inherit; font-weight:800; line-height:1.04; letter-spacing:-.052em; text-wrap:balance; }
-        .wld-word { display:inline-block; opacity:0; transform:translateY(42px); animation:wld-word-in .56s calc(.45s + (var(--word-index) * .045s)) cubic-bezier(.16,1,.3,1) forwards; }
-        @keyframes wld-word-in { to{ opacity:1; transform:translateY(0); } }
-        .wld-verb { color:var(--wld-action); }
-        .wld-vocabulary { color:var(--wld-vocab); }
-        .wld-screen-success .wld-vocabulary { color:var(--wld-vocab-dark); }
-        .wld-missing { display:grid; gap:16px; max-width:900px; }
-        .wld-missing strong { font-size:clamp(2.7rem,6vw,7.5rem); line-height:.95; letter-spacing:-.05em; }
-        .wld-missing span { font-size:clamp(1.2rem,2vw,2.25rem); font-weight:700; }
-        .wld-page-title { margin:0; font-size:clamp(3.8rem,7.5vw,9.5rem); line-height:.85; font-weight:800; letter-spacing:-.055em; text-transform:uppercase; }
-        .wld-week { height:100%; display:grid; grid-template-rows:auto 1fr; gap:clamp(24px,4vh,50px); }
-        .wld-week-list { min-height:0; display:grid; grid-template-rows:repeat(5,1fr); }
-        .wld-week-row {
-          position:relative;
-          display:grid;
-          grid-template-columns:clamp(22px,2vw,38px) minmax(90px,13%) 1fr;
-          align-items:center;
-          gap:clamp(24px,4vw,70px);
-          padding:0 clamp(22px,2.5vw,46px);
-          border-bottom:4px solid var(--wld-vocab);
-          color:var(--wld-ink);
-          opacity:0;
-          translate:55px 0;
-          animation:wld-row-in .52s calc(.18s + (var(--row-index) * .1s)) cubic-bezier(.16,1,.3,1) forwards;
-        }
-        @keyframes wld-row-in { to{ opacity:1; translate:0 0; } }
-        .wld-week-row:last-child { border-bottom:0; }
-        .wld-week-row strong { font-size:clamp(2rem,3.8vw,4.8rem); line-height:1; text-transform:uppercase; }
-        .wld-week-row > span:last-child { font-size:clamp(1.75rem,3.25vw,4rem); line-height:1; font-weight:800; letter-spacing:-.035em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .wld-week-row.active { background:var(--wld-dark); color:var(--wld-light); border-bottom-color:var(--wld-dark); }
-        .wld-week-marker { position:relative; width:clamp(16px,1.7vw,32px); aspect-ratio:1; background:var(--wld-action); opacity:0; transform:scale(.5); }
-        .wld-week-row.active .wld-week-marker { opacity:1; transform:scale(1); animation:wld-marker-pulse 4s 1.4s ease-in-out infinite; }
-        @keyframes wld-marker-pulse { 0%,86%,100%{ transform:scale(1); } 93%{ transform:scale(1.18); } }
-        .wld-bells { height:100%; display:grid; grid-template-rows:auto 1fr; gap:clamp(30px,5vh,62px); }
-        .wld-bell-list { min-height:0; display:grid; grid-template-rows:repeat(var(--bell-count,7),1fr); }
-        .wld-bell-row,.wld-bell-preview-row { display:grid; grid-template-columns:1fr 1fr; align-items:center; border-bottom:4px solid var(--wld-light); color:var(--wld-dark); }
-        .wld-bell-row { opacity:0; translate:50px 0; animation:wld-row-in .48s calc(.18s + (var(--row-index) * .08s)) ease-out forwards; }
-        .wld-bell-row.emphasis { background:var(--wld-soft); }
-        .wld-bell-row strong,.wld-bell-preview-row strong { padding-right:clamp(24px,4vw,76px); border-right:4px solid var(--wld-light); font-size:clamp(1.8rem,3.6vw,4.7rem); line-height:1; text-transform:uppercase; }
-        .wld-bell-row span,.wld-bell-preview-row span { padding-left:clamp(24px,4vw,76px); font-size:clamp(2rem,4vw,5.1rem); line-height:1; font-weight:800; letter-spacing:-.04em; }
-        .wld-bell-preview { align-self:center; display:grid; grid-template-rows:repeat(2,minmax(150px,1fr)) auto; width:100%; max-height:68vh; }
-        .wld-bell-preview-row { opacity:0; translate:60px 0; animation:wld-row-in .6s .25s ease-out forwards; }
-        .wld-bell-preview-row:nth-child(2) { animation-delay:.38s; }
-        .wld-bell-preview p { margin:clamp(28px,4vh,54px) 0 0; padding:.62em 1em; background:var(--wld-soft); color:var(--wld-dark); font-size:clamp(1.45rem,2.5vw,3rem); font-weight:800; text-align:center; text-transform:uppercase; }
-        .wld-shapes { position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
-        .wld-shape-circle,.wld-shape-square,.wld-shape-rule { position:absolute; display:block; }
-        .wld-shape-circle { width:clamp(220px,23vw,440px); aspect-ratio:1; right:-8%; top:-16%; border-radius:50%; background:var(--wld-soft); animation:wld-circle-drift 12s ease-in-out infinite alternate; }
-        @keyframes wld-circle-drift { from{ translate:0 0; rotate:0deg; } to{ translate:-12px 14px; rotate:5deg; } }
-        .wld-shape-square { width:clamp(54px,5.4vw,104px); aspect-ratio:1; right:3%; bottom:3%; background:var(--wld-action); animation:wld-square-in .55s .75s cubic-bezier(.16,1,.3,1) both; }
-        @keyframes wld-square-in { from{ opacity:0; transform:scale(.2) rotate(-12deg); } to{ opacity:1; transform:scale(1) rotate(0); } }
-        .wld-shape-rule { left:calc(var(--wld-rail) + 1px); bottom:8.5%; height:clamp(8px,1vw,18px); background:var(--wld-vocab); transform-origin:left; animation:wld-rule-in .72s .7s cubic-bezier(.16,1,.3,1) both; }
-        .wld-shape-rule-main { width:38%; }.wld-shape-rule-echo { width:17%; left:calc(var(--wld-rail) + 16%); bottom:5.2%; opacity:.3; }
-        @keyframes wld-rule-in { from{ transform:scaleX(0); } to{ transform:scaleX(1); } }
-        .wld-screen-success .wld-shape-circle { width:clamp(250px,26vw,500px); top:auto; right:-7%; bottom:-18%; background:var(--wld-vocab); }
-        .wld-screen-success .wld-shape-square { top:5.5%; bottom:auto; left:calc(var(--wld-rail) + 4vw); right:auto; }
-        .wld-screen-success .wld-shape-rule { background:var(--wld-vocab-dark); }
-        .wld-screen-week .wld-shape-square { display:none; }
-        .wld-screen-week .wld-shape-rule { bottom:2.5%; }
-        .wld-screen-bells .wld-shape-circle { top:auto; right:-8%; bottom:-28%; background:var(--wld-vocab); }
-        .wld-screen-bells .wld-shape-square { top:4%; right:3%; bottom:auto; background:var(--wld-dark); }
-        .wld-screen-bells .wld-shape-rule { display:none; }
-        .wld-day-tuesday .wld-shape-circle { top:auto; right:auto; left:-10%; bottom:-20%; }
-        .wld-day-tuesday .wld-shape-square { top:18%; right:4%; bottom:auto; }
-        .wld-day-wednesday .wld-shape-circle { right:auto; left:-10%; top:-18%; }
-        .wld-day-wednesday .wld-shape-square { right:auto; left:4%; bottom:3%; }
-        .wld-day-wednesday .wld-shape-rule { left:4%; }
-        .wld-day-thursday .wld-shape-circle { top:auto; bottom:-20%; right:-8%; }
-        .wld-day-thursday .wld-shape-square { left:4%; right:auto; top:5%; bottom:auto; }
-        .wld-day-thursday .wld-shape-rule { left:4%; bottom:calc(clamp(112px,14vh,150px) + 2%); }
-        .wld-day-friday .wld-shape-circle { top:24%; right:-14%; }
-        .wld-day-friday .wld-shape-square { right:auto; left:calc(var(--wld-rail) + 4vw); }
-        .wld-loading { position:absolute; inset:0; display:grid; place-items:center; background:var(--wld-light); color:var(--wld-ink); font-size:clamp(1.2rem,2vw,2rem); font-weight:800; }
-        .wld-failure { position:absolute; inset:0; display:grid; place-content:center; gap:18px; padding:10vw; background:var(--wld-light); color:var(--wld-ink); text-align:center; }
-        .wld-failure h1 { margin:0; font-size:clamp(3rem,7vw,8rem); line-height:.95; letter-spacing:-.05em; }
-        .wld-failure p { margin:0; font-size:clamp(1.1rem,2vw,2.2rem); font-weight:700; }
-        .wld-hotcorner { position:fixed; z-index:30; right:0; bottom:0; width:min(840px,97vw); min-height:94px; display:flex; justify-content:flex-end; align-items:flex-end; padding:12px; pointer-events:none; }
-        .wld-handle { pointer-events:auto; position:absolute; right:8px; bottom:7px; width:16px; height:16px; padding:0; border:0; border-radius:50%; background:color-mix(in srgb,var(--wld-light) 22%,transparent); color:transparent; cursor:pointer; }
-        .wld-controls { pointer-events:auto; display:flex; align-items:center; justify-content:flex-end; gap:6px; padding:8px; border:1px solid rgba(255,255,255,.17); border-radius:10px; background:rgba(38,27,33,.95); color:#fff8e8; box-shadow:0 16px 40px rgba(45,31,38,.3); opacity:0; transform:translateY(14px); transition:opacity .18s ease,transform .18s ease; }
+        @keyframes wldType { from { clip-path:inset(-0.35em 100% -0.35em -0.15em); } to { clip-path:inset(-900px -900px -900px -0.15em); } }
+        @keyframes wldDrop { from { opacity:1; transform:translateY(0); filter:blur(0); } to { opacity:0; transform:translateY(42px); filter:blur(5px); } }
+        @keyframes wldTravel { from { transform:translate(0,0) scale(1); } to { transform:translate(var(--dx,0px),var(--dy,-180px)) scale(var(--sc,1)); } }
+        @keyframes wldRow { from { opacity:0; transform:translateX(38px); } to { opacity:1; transform:none; } }
+        @keyframes wldEnter { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:none; } }
+        @keyframes wldSlideIn { 0% { opacity:0; transform:translateX(110px) scale(.982); filter:blur(7px); } 55% { filter:blur(0); } 100% { opacity:1; transform:none; filter:blur(0); } }
+        @keyframes wldSlideOut { 0% { opacity:1; transform:none; filter:blur(0); } 100% { opacity:0; transform:translateX(-110px) scale(.982); filter:blur(7px); } }
+        @keyframes wldFill { from { width:0%; } to { width:100%; } }
+        @keyframes wldHi { from { background-size:0% 100%; } to { background-size:100% 100%; } }
+        @keyframes wldInk { from { color:${BOARD_INK}; } to { color:${BOARD_PAPER}; } }
+        @keyframes wldPulse { 0% { transform:translateY(0); opacity:1; } 45% { transform:translateY(-4px); opacity:.72; } 100% { transform:translateY(0); opacity:1; } }
+        @keyframes wldFade { from { opacity:0; } to { opacity:1; } }
+        @keyframes wldLensRise { from { opacity:0; transform:translateY(28px); } to { opacity:1; transform:none; } }
+        .wld-hotcorner { position:fixed; z-index:30; right:0; bottom:0; width:min(880px,97vw); min-height:94px; display:flex; justify-content:flex-end; align-items:flex-end; padding:12px; pointer-events:none; }
+        .wld-handle { pointer-events:auto; position:absolute; right:8px; bottom:7px; width:16px; height:16px; padding:0; border:0; border-radius:50%; background:rgba(32,30,26,.16); color:transparent; cursor:pointer; }
+        .wld-controls { pointer-events:auto; display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:6px; padding:8px; border:1px solid rgba(255,255,255,.17); border-radius:10px; background:rgba(32,30,26,.96); color:${BOARD_PAPER}; box-shadow:0 16px 40px rgba(32,30,26,.3); opacity:0; transform:translateY(14px); transition:opacity .18s ease,transform .18s ease; }
         .wld-hotcorner:hover .wld-controls,.wld-hotcorner:focus-within .wld-controls { opacity:1; transform:translateY(0); }
-        .wld-control { min-height:38px; padding:0 10px; border:1px solid rgba(255,255,255,.2); border-radius:7px; background:#4a3542; color:#fff8e8; font-family:var(--bdb-font); font-size:.75rem; font-weight:800; cursor:pointer; }
-        .wld-control:hover,.wld-control:focus-visible,.wld-control.active { outline:none; border-color:var(--wld-action); background:#5d4353; }
-        .wld-control.active { color:#f7c85c; }
+        .wld-control { min-height:38px; padding:0 10px; border:1px solid rgba(255,255,255,.2); border-radius:7px; background:#3a352e; color:${BOARD_PAPER}; font-family:var(--bdb-font); font-size:.75rem; font-weight:800; cursor:pointer; }
+        .wld-control:hover,.wld-control:focus-visible,.wld-control.active { outline:none; border-color:${palette.accent}; background:#4a443b; }
+        .wld-control.active { color:${palette.accent}; }
         .wld-separator { width:1px; height:30px; background:rgba(255,255,255,.15); }
-        .wld-motion-off *,.wld-motion-off *::before,.wld-motion-off *::after { animation:none !important; }
-        .wld-motion-off .wld-word,.wld-motion-off .wld-week-row,.wld-motion-off .wld-bell-row,.wld-motion-off .wld-bell-preview-row { opacity:1; transform:none; translate:0 0; }
         @media (prefers-reduced-motion:reduce) {
-          .wld-stage *,.wld-stage *::before,.wld-stage *::after { animation:none !important; }
-          .wld-word,.wld-week-row,.wld-bell-row,.wld-bell-preview-row { opacity:1; transform:none; translate:0 0; }
-        }
-        @media (max-width:800px),(max-aspect-ratio:4/3) {
-          .wld-stage { --wld-rail:112px; }
-          .wld-rail,.wld-layout-right .wld-rail,.wld-layout-top .wld-rail,.wld-layout-bottom .wld-rail {
-            inset:0 0 auto 0;
-            width:auto;
-            height:112px;
-            flex-direction:row;
-            justify-content:flex-start;
-            gap:18px;
-            padding:12px 20px;
-            animation-name:wld-rail-top-in;
-          }
-          .wld-rail-day,.wld-rail-date,.wld-layout-top .wld-rail-day,.wld-layout-top .wld-rail-date,.wld-layout-bottom .wld-rail-day,.wld-layout-bottom .wld-rail-date { writing-mode:horizontal-tb; transform:none; }
-          .wld-rail-day,.wld-layout-top .wld-rail-day,.wld-layout-bottom .wld-rail-day { font-size:clamp(1.9rem,9vw,3.2rem); }
-          .wld-rail-date,.wld-layout-top .wld-rail-date,.wld-layout-bottom .wld-rail-date { font-size:clamp(1rem,5vw,1.8rem); }
-          .wld-rail-rule,.wld-layout-top .wld-rail-rule,.wld-layout-bottom .wld-rail-rule { width:3px; height:50px; }
-          .wld-content,.wld-layout-right .wld-content,.wld-layout-top .wld-content,.wld-layout-bottom .wld-content { inset:134px 20px 24px; }
-          .wld-standard-block { font-size:clamp(1.55rem,7vw,2.7rem); }
-          .wld-screen-label { margin:72px 0 24px; font-size:clamp(1rem,4.8vw,1.55rem); }
-          .wld-screen-success .wld-target { padding-top:100px; }
-          .wld-screen-success .wld-screen-label { min-width:0; padding:.75em 1em; font-size:clamp(.9rem,4.5vw,1.35rem); }
-          .wld-target-copy { font-size:clamp(2.15rem,9.7vw,4rem) !important; line-height:1.05; }
-          .wld-page-title { font-size:clamp(3rem,13vw,5rem); }
-          .wld-week { gap:18px; }
-          .wld-week-row { grid-template-columns:64px 1fr; gap:12px; padding:0 8px; border-bottom-width:2px; }
-          .wld-week-row strong { font-size:clamp(1.1rem,5.6vw,1.8rem); }
-          .wld-week-row > span:last-child { font-size:clamp(1rem,4.7vw,1.55rem); white-space:normal; line-height:1.08; }
-          .wld-week-marker { display:none; }
-          .wld-bells { gap:18px; }
-          .wld-bell-preview { align-self:stretch; grid-template-rows:repeat(2,1fr) auto; }
-          .wld-bell-preview-row { grid-template-columns:1fr; align-content:center; gap:10px; border-bottom-width:3px; }
-          .wld-bell-preview-row strong { padding:0; border:0; font-size:clamp(1.1rem,5.6vw,1.7rem); }
-          .wld-bell-preview-row span { padding:0; font-size:clamp(2.8rem,13vw,5rem); }
-          .wld-bell-preview p { font-size:clamp(1rem,4.5vw,1.4rem); }
-          .wld-shape-circle { width:220px; opacity:.55; }
-          .wld-shape-square { width:54px; }
-          .wld-shape-rule { display:none; }
-          .wld-controls { max-width:calc(100vw - 20px); flex-wrap:wrap; }
+          .wld-board *,.wld-board *::before,.wld-board *::after { animation:none !important; }
         }
       `}</style>
 
-      {loading && !payload ? (
-        <div className="wld-loading" role="status">Loading this week from Notion.</div>
-      ) : activeDay && payload ? (
-        <div
-          className={`wld-frame wld-screen-${screen} wld-layout-${theme.layout} wld-day-${dayKey}`}
-          key={`${activeDay.date}-${activeLesson?.id ?? "empty"}-${screen}-${animationKey}`}
-        >
-          <DayRail day={activeDay} />
-          <div className="wld-content">
-            {screen === "learning" && <TargetScreen activeLesson={activeLesson} screen="learning" vocabulary={vocabulary} />}
-            {screen === "success" && <TargetScreen activeLesson={activeLesson} screen="success" vocabulary={vocabulary} />}
-            {screen === "week" && <WeekScreen days={payload.days} activeDay={activeDay} track={track} />}
-            {screen === "bells" && <BellScreen />}
+      {/* The outer box is the board's SCALED footprint, so it fits the display
+          and centres cleanly; the inner board keeps its authored 1920x1080 and
+          scales from its top-left corner. Centring the 1920px box directly gets
+          clamped to the start edge once it overflows, which pushed the whole
+          board off the bottom-right of the screen. */}
+      <div style={{ width: STAGE_W * scale, height: STAGE_H * scale, flex: "none" }}>
+      <div
+        className="wld-board"
+        style={{
+          width: STAGE_W,
+          height: STAGE_H,
+          flex: "none",
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
+          padding: "40px 56px 30px",
+          // The ground cuts rather than crossfades. Every colour on the header
+          // and footer switches with the screen, so easing only the background
+          // leaves ~450ms of dark text on a lightening ground - illegible from
+          // the back of a room, every nine seconds.
+          backgroundColor: theme.bg,
+          backgroundImage: theme.dots,
+          backgroundSize: "46px 46px",
+          color: theme.fg,
+        }}
+      >
+        {loading && !payload ? (
+          <div style={{ flex: 1, display: "grid", placeItems: "center", fontSize: 44, fontWeight: 700, color: theme.muted }} role="status">
+            Loading this week from Notion.
           </div>
-          <Shapes />
-        </div>
-      ) : (
-        <section className="wld-failure" role="alert">
-          <h1>The weekly display could not load.</h1>
-          <p>{error || "Reload the page to try again."}</p>
-        </section>
-      )}
+        ) : activeDay && payload ? (
+          <>
+            <div style={{
+              flex: "none", display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+              gap: 40, paddingBottom: 20, borderBottom: `2px solid ${theme.rule}`,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+                <span style={{
+                  display: "inline-flex", alignItems: "center", height: 66, padding: "0 28px",
+                  borderRadius: 999, fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 32,
+                  letterSpacing: ".06em", textTransform: "uppercase",
+                  background: theme.badgeBg, color: theme.badgeFg,
+                }}>{activeDay.weekday}</span>
+                <span style={{ fontSize: 28, fontWeight: 600, color: theme.muted }}>{formatLongDate(activeDay.date)}</span>
+                {unitLabel && (
+                  <>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: theme.rule }} />
+                    <span style={{ fontSize: 26, fontWeight: 600, color: theme.muted }}>{unitLabel}</span>
+                  </>
+                )}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 16, textAlign: "right" }}>
+                <div style={{
+                  fontSize: 26, fontWeight: 700, letterSpacing: ".16em",
+                  textTransform: "uppercase", color: theme.muted,
+                }}>{SCREEN_LABELS[screen]}</div>
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  {SCREEN_KEYS.map((key, index) => {
+                    const filling = index === screenIndex && rotation && motion && phase === "in";
+                    return (
+                      <span style={{
+                        width: 76, height: 9, borderRadius: 999, overflow: "hidden", background: theme.rule,
+                      }} key={key}>
+                        <span style={{
+                          display: "block", height: "100%", borderRadius: 999, background: theme.pipFill,
+                          width: index < screenIndex ? "100%" : index > screenIndex ? "0%" : filling ? "0%" : "100%",
+                          animation: filling ? `wldFill ${hold}s linear forwards` : "none",
+                        }} />
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                flex: 1, minHeight: 0, display: "flex", flexDirection: "column",
+                padding: "20px 0 12px", animation: frameAnimation,
+              }}
+              key={frameKey}
+            >
+              {screen === "learning" && (
+                <LearningScreen
+                  theme={theme}
+                  palette={palette}
+                  stepLabel={stepLabel}
+                  intention={board.intention}
+                  tokens={board.tokens}
+                  maxSize={board.maxSize}
+                  definition={board.keyTerm?.definition ?? ""}
+                  figure={board.figure}
+                  keyTermLabel={board.keyTerm?.term ?? ""}
+                  standard={activeLesson?.standard ?? ""}
+                  focus={focus}
+                  motion={motion}
+                  revealing={revealing}
+                  stageRef={stageRef}
+                  intentionRef={intentionRef}
+                  termRef={termRef}
+                />
+              )}
+              {screen === "success" && (
+                <SuccessScreen
+                  theme={theme}
+                  palette={palette}
+                  stepLabel={stepLabel}
+                  statement={activeLesson?.successCriteria.trim() ?? ""}
+                  standard={activeLesson?.standard ?? ""}
+                  focus={focus}
+                  motion={motion}
+                />
+              )}
+              {screen === "week" && (
+                <WeekScreen
+                  theme={theme}
+                  palette={palette}
+                  days={payload.days}
+                  activeDate={activeDay.date}
+                  track={track}
+                  motion={motion}
+                />
+              )}
+              {screen === "bells" && (
+                <BellsScreen theme={theme} palette={palette} rows={bellRows} motion={motion} />
+              )}
+            </div>
+
+            <div style={{
+              flex: "none", display: "flex", alignItems: "center", justifyContent: "space-between",
+              gap: 40, paddingTop: 18, borderTop: `2px solid ${theme.rule}`,
+              fontSize: 26, fontWeight: 600, letterSpacing: ".04em", color: theme.muted,
+            }}>
+              <span>bigdogmath - {course}</span>
+              <span style={{ fontFeatureSettings: "'tnum' 1", letterSpacing: ".12em" }}>
+                {padTwo(screenIndex + 1)} / {padTwo(SCREEN_KEYS.length)}
+              </span>
+              <span style={{ fontFeatureSettings: "'tnum' 1" }}>{clockLabel}</span>
+            </div>
+          </>
+        ) : (
+          <section style={{ flex: 1, display: "grid", placeContent: "center", gap: 24, textAlign: "center" }} role="alert">
+            <h1 style={{ margin: 0, fontFamily: "var(--bdb-font)", fontWeight: 800, fontSize: 96, lineHeight: 1, letterSpacing: "-.04em" }}>
+              The weekly display could not load.
+            </h1>
+            <p style={{ margin: 0, fontSize: 34, fontWeight: 600, color: theme.muted }}>
+              {error || "Reload the page to try again."}
+            </p>
+          </section>
+        )}
+      </div>
+      </div>
 
       <aside className="wld-hotcorner" aria-label="Weekly display controls">
         <button className="wld-handle" aria-label="Show weekly display controls">Controls</button>
@@ -716,18 +1233,26 @@ export default function WeeklyDisplayPage() {
             </button>
           ))}
           <span className="wld-separator" aria-hidden="true" />
-          {SCREEN_KEYS.map((item, index) => (
+          {SCREEN_KEYS.map((key, index) => (
             <button
               className={`wld-control${screenIndex === index ? " active" : ""}`}
-              onClick={() => chooseScreen(item)}
-              key={item}
+              onClick={() => chooseScreen(key)}
+              key={key}
             >
-              {SCREEN_LABELS[item]}
+              {SCREEN_LABELS[key]}
             </button>
           ))}
           <span className="wld-separator" aria-hidden="true" />
-          <button className="wld-control" onClick={() => setRotation((value) => !value)}>{rotation ? "Pause rotation" : "Start rotation"}</button>
-          <button className="wld-control" onClick={toggleMotion}>{motion ? "Pause motion" : "Play motion"}</button>
+          <button className="wld-control" onClick={() => { setPhase("in"); setCycle((value) => value + 1); }}>Replay</button>
+          <button className={`wld-control${rotation ? " active" : ""}`} onClick={() => setRotation((value) => !value)}>
+            {rotation ? "Pause rotation" : "Start rotation"}
+          </button>
+          <button className={`wld-control${motion ? " active" : ""}`} onClick={() => { setMotion((value) => !value); setCycle((value) => value + 1); }}>
+            {motion ? "Pause motion" : "Play motion"}
+          </button>
+          <button className={`wld-control${reveal ? " active" : ""}`} onClick={() => { setReveal((value) => !value); setCycle((value) => value + 1); }}>
+            Vocab reveal
+          </button>
           <button className="wld-control" onClick={() => void loadWeek(true)}>Refresh</button>
           <button className="wld-control" onClick={() => void toggleFullscreen()}>Fullscreen</button>
         </div>
