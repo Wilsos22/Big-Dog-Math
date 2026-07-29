@@ -681,6 +681,21 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   pile it into the middle - repeated classroom feedback is "too much stuff in the center, I don't know
   where to look." `/divisibility` is the reference implementation; `/ladder-method` followed it
   2026-07-21 (rule rail + Ladder/Factor Trees modes); `/area-model` is still queued.
+- PRINTED WORKSHEETS MUST LEAVE ROOM TO DO THE WORK (Steele, 2026-07-29, on three sheets in a row:
+  "a consistent issue with bunching up all the problems toward the top and not using the space and
+  not leaving room to actually do the work"). The `output/worksheets/*.html` sheets put four problems
+  in a `.set` 2x2 grid on an 11in page, and `.p-body` is a plain top-stacking flex column - so
+  content piles at the top of a tall cell and the bottom third is wasted. Every new sheet needs:
+  `.p-body{justify-content:space-between}` and a distributing `.work`, a label STACKED ABOVE its rule
+  with a writing band (about 34px) rather than sitting beside it, ruled rows at handwriting height
+  not text height, and open work boxes that flex into the slack. Two counter-rules learned the same
+  day: a read-and-pick problem (lists printed for the student, or a finished ladder to read) must NOT
+  distribute - spreading it just orphans the printed lists from each other, so tag it and keep it
+  compact; and a hard `min-height` on a work box will push a page past 11in (four L3 word problems
+  hit 13.9in and silently spilled), so let flex-grow do it and measure. VERIFY BY MEASURING, not by
+  eye: the check that catches this is dead space between a cell's last content and its bottom edge
+  (should be single digits of px) plus every student page at or under 11in. Four word problems with
+  real work space need TWO pages, not one.
 - Copy tone: friendly, playful, second person ("Hey {firstName}!", "Today's plan", "Start the warm-up").
   Teach how to think, not what to think. Still: no emojis.
 
