@@ -940,6 +940,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   the duplicate and rebuild. Drive also re-applies DELETES late: a file git just restored can
   vanish seconds afterward because your earlier `rm` only now synced - if a freshly checked-out
   file is missing, `git checkout -- <path>` again and re-verify before concluding anything.
+- A PANE SCREENSHOT CAN DISAGREE WITH THE LAYOUT. Against a REMOTE origin the capture is composited independently of the live tree: /weekly-display screenshotted as a board filling only the top-left ~60% of the frame while `getBoundingClientRect()` said it filled the viewport exactly. Do not chase a scaling bug off a screenshot - settle it with geometry (`elementFromPoint` at all four viewport corners is decisive, and cheap). The same capture was correct against localhost minutes earlier, so distrust it specifically on remote origins.
 - Verifying in the in-app Browser pane: the preview throttles rendering, so CSS animations sit at
   their first frame and screenshots wait for motion to settle - prove motion with
   `el.getAnimations()` or keyed-remount node identity instead of watching. TRANSITIONS freeze the
