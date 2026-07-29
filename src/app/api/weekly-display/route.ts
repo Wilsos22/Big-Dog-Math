@@ -13,6 +13,7 @@ interface DisplayLesson {
   standard: string;
   learningIntention: string;
   successCriteria: string;
+  selectedSuccessCriterion: string;
   discussionVocabulary: string;
   topic: string;
   module: string;
@@ -65,7 +66,12 @@ function displayLesson(lesson: LessonData): DisplayLesson {
     title: lesson.title,
     standard: lesson.standard,
     learningIntention: lesson.learningIntention,
-    successCriteria: lesson.selectedSuccessCriterion || lesson.successCriteria,
+    // BOTH criteria fields go out. The all-day board shows the PLURAL menu -
+    // the criteria are what a student checks their own work against, and there
+    // is normally more than one - and falls back to the single selected
+    // statement only when the menu is empty. Do not collapse these here.
+    successCriteria: lesson.successCriteria,
+    selectedSuccessCriterion: lesson.selectedSuccessCriterion,
     discussionVocabulary: lesson.discussionVocabulary,
     topic: lesson.topic,
     module: lesson.module,
