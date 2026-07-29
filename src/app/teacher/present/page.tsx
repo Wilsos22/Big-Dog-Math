@@ -6,6 +6,8 @@ import InkBoard from "@/components/InkBoard";
 import LessonVisual from "@/components/LessonVisual";
 import AttentionListener from "@/components/AttentionListener";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
+import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
+import { applyStripOverride, overrideIsLive } from "@/lib/classroomStateStrip";
 import SlideOverlayLayer from "@/components/SlideOverlayLayer";
 import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
 import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson, usesDiscussionProtocol } from "@/lib/classroomPilot";
@@ -135,6 +137,16 @@ function inkOverlayParams() {
     return { room: p.get("room")?.trim() || "main", embed: p.get("embed") === "1" };
   } catch {
     return { room: "main", embed: false };
+  }
+}
+
+// Words under the state-strip glyphs. On for the first weeks, off with
+// ?words=off once the room reads the strip cold. The voice digit is unaffected.
+function stateStripWords() {
+  try {
+    return new URLSearchParams(window.location.search).get("words") !== "off";
+  } catch {
+    return true;
   }
 }
 
@@ -289,6 +301,8 @@ export default function ClassroomStagePage() {
   const [pollAnswers, setPollAnswers] = useState<PollAnswer[]>([]);
   const [previewStage, setPreviewStage] = useState<string | null>(null);
   const [inkOverlay, setInkOverlay] = useState<{ room: string; embed: boolean } | null>(null);
+  const [stripWords, setStripWords] = useState(true);
+  useEffect(() => { setStripWords(stateStripWords()); }, []);
   const [overrideUrl, setOverrideUrl] = useState<string | null>(null);
   const [overrideFrame, setOverrideFrame] = useState<HTMLIFrameElement | null>(null);
   // Room-tunable text size: A- / A+ scale the whole content stage so every
@@ -502,6 +516,14 @@ export default function ClassroomStagePage() {
     })),
     currentStepIndex: flow.sequence?.currentIndex,
   }) : null;
+  // The classroom state strip: authored per step, with the iPad's live override
+  // applied only while it is still stamped to this step.
+  const behaviorStrip = applyStripOverride(
+    presentation?.behaviorStrip ?? null,
+    flow?.behaviorOverride ?? null,
+    flow?.sequence?.currentIndex,
+  );
+  const behaviorOverridden = overrideIsLive(flow?.behaviorOverride ?? null, flow?.sequence?.currentIndex);
   const configuredDiscussionSupports = discussionSupportsForLesson(lesson?.code);
   // Discussion-only fallback. Used as a terminal fallback it put hardcoded
   // supports on the projector during states that never asked for them.
@@ -644,7 +666,11 @@ export default function ClassroomStagePage() {
           background-size:18px 18px;
           color:var(--ink); font-family:var(--bdb-font);
           --stage-ease:cubic-bezier(0.2,0.7,0.2,1); }
-        .stage-frame { position:relative; z-index:1; width:100%; height:100%; display:grid; grid-template-rows:66px minmax(0,1fr); }
+        .stage-frame { position:relative; z-index:1; width:100%; height:100%; display:grid; grid-template-rows:66px minmax(0,1fr) auto; }
+        /* Own grid row, so the strip never overlaps the stage. The row collapses
+           on a step with no authored strip - the component renders null rather
+           than an empty strip, because a sometimes-empty strip stops being read. */
+        .stage-frame > .css-strip { min-height:clamp(58px,6.2vh,80px); }
         /* Scene change: each lesson state enters as its own moment - a calm
            rise-and-fade for the content and a thin sweep of the incoming
            state's accent drawing across the top. Keyed remount restarts both. */
@@ -861,7 +887,7 @@ export default function ClassroomStagePage() {
         .stage-abbie-line { margin:0; color:#f3fffb; font-size:clamp(1rem,2vw,1.45rem); font-weight:820; line-height:1.3; }
         @media (max-width:900px) { .stage-success { width:40vw; } .stage-score-scene, .stage-discussion { grid-template-columns:1fr; overflow:auto; } }
         @media (max-height:650px) {
-          .stage-frame { grid-template-rows:54px minmax(0,1fr); }
+          .stage-frame { grid-template-rows:54px minmax(0,1fr) auto; }
           .stage-topbar { padding:0 18px; }
           .stage-mark { width:28px; height:28px; }
           .stage-title { font-size:0.9rem; }
@@ -1245,6 +1271,7 @@ export default function ClassroomStagePage() {
           </aside>
         ) : null}
 
+        <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} />
       </section>
       {inkOverlay && !inkOverlay.embed && <ScreenInkOverlay room={inkOverlay.room} />}
       {inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && <AttentionListener room={inkOverlay.room} />}

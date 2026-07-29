@@ -18,6 +18,7 @@ import LessonVisual from "@/components/LessonVisual";
 import { requestAbbieLine } from "@/lib/abbieBus";
 import { abbieDirectionForRemoteAction } from "@/lib/remoteDeck";
 import { discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";
+import { missingStripSlots, stripFromStep } from "@/lib/classroomStateStrip";
 import {
   createDiscussionRoundSnapshot,
   normalizeDiscussionPhaseSnapshot,
@@ -103,6 +104,12 @@ interface LineupItem {
   workSpaceAvailable?: boolean;
   publicSurfaceMode?: PublicSurfaceMode;
   routineConfig?: PublicLessonRoutineConfig | null;
+  // The authored classroom state strip, carried through the published sequence
+  // and back out of it on reconnect for the same reason slideOverlay is.
+  eyes?: string;
+  voice?: string;
+  supplies?: string;
+  body?: string;
 }
 
 interface TeacherSessionRow {
@@ -465,6 +472,10 @@ interface TodayLessonStep {
   workSpaceAvailable?: boolean;
   publicSurfaceMode?: PublicSurfaceMode;
   routineConfig?: PublicLessonRoutineConfig | null;
+  eyes?: string;
+  voice?: string;
+  supplies?: string;
+  body?: string;
 }
 
 type TodayLesson = {
@@ -1107,6 +1118,10 @@ export default function ControlPage() {
         slideOverlay: step.slideOverlay || undefined,
         publicSurfaceMode: step.publicSurfaceMode,
         routineConfig: step.routineConfig,
+        eyes: step.eyes,
+        voice: step.voice,
+        supplies: step.supplies,
+        body: step.body,
       })));
     }
 
@@ -1613,6 +1628,10 @@ export default function ControlPage() {
   // untouched or it deletes them.
   const serverInterlude = teacherSession?.live_flow?.interlude ?? null;
   const serverTransition = teacherSession?.live_flow?.transition ?? null;
+  // Same class of field: the iPad's live classroom-state override is written by
+  // /api/control-remote, so Control must hand it back or the strip snaps to the
+  // authored values about a second after the teacher taps Settle.
+  const serverBehaviorOverride = teacherSession?.live_flow?.behaviorOverride ?? null;
 
   const liveFlowSignature = useMemo(() => {
     const activeSemantic = activeState
@@ -1716,6 +1735,7 @@ export default function ControlPage() {
           scoreboardStage: canRevealM2T1L1FinalScore(activeLessonContext?.code, activeState.id, state?.semantic)
             ? scoreboardStage
             : undefined,
+          behaviorStrip: stripFromStep(activeItem),
         }
       : null;
     const timer = poll?.stage === "results"
@@ -1811,6 +1831,10 @@ export default function ControlPage() {
               // and the iPad then degraded to restating the pace directions.
               remoteActions: item.remoteActions || "",
               slideOverlay: item.slideOverlay || undefined,
+              eyes: item.eyes || "",
+              voice: item.voice || "",
+              supplies: item.supplies || "",
+              body: item.body || "",
             };
           }),
         }
@@ -1829,8 +1853,9 @@ export default function ControlPage() {
       version: 2, state, phase, timer, poll, resource, presentation, tool, lesson, sequence, paper,
       interlude: serverInterlude,
       transition: serverTransition,
+      behaviorOverride: serverBehaviorOverride,
     });
-  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, finished, lineup, publishedTool, running, scoreboardStage, secondsLeft, serverInterlude, serverTransition, showDiscussion]);
+  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, finished, lineup, publishedTool, running, scoreboardStage, secondsLeft, serverBehaviorOverride, serverInterlude, serverTransition, showDiscussion]);
 
   const flushLiveFlowUpdates = useCallback(async () => {
     if (liveFlowSyncingRef.current) return;
@@ -2069,6 +2094,18 @@ export default function ControlPage() {
       const parsed = parseStructuredNumericSpec(step.correctAnswer);
       return parsed.ok ? [] : [`${step.title || step.stateId}: ${parsed.errors[0]}`];
     });
+    // Classroom state strip health. A step missing any of the four shows NO
+    // strip rather than a partial one, because a strip that is sometimes empty
+    // is a strip students stop scanning - so the incomplete steps have to be
+    // named here or the strip just quietly is not there. Reported, not blocking:
+    // the properties are new and no lesson is backfilled yet, and a check that
+    // refuses to start a class is worse than a lesson without the strip.
+    const stripGaps = lessonSteps.flatMap((step) => {
+      const missing = missingStripSlots(step);
+      if (!missing.length || missing.length === 4) return [];
+      return [`${step.title || step.stateId} (${missing.join(", ")})`];
+    });
+    const stripCompleteCount = lessonSteps.filter((step) => stripFromStep(step)).length;
     const newLineup: LineupItem[] = lessonSteps.length
       ? lessonSteps.map((step) => ({
           uid: uid(),
@@ -2102,6 +2139,10 @@ export default function ControlPage() {
           slideOverlay: step.slideOverlay || undefined,
           publicSurfaceMode: step.publicSurfaceMode,
           routineConfig: step.routineConfig,
+          eyes: step.eyes,
+          voice: step.voice,
+          supplies: step.supplies,
+          body: step.body,
         }))
       : ["warmup", ...mapped, "exit"].map((stateId) => ({ uid: uid(), stateId }));
     autoOpenedStepRef.current.clear();
@@ -2150,9 +2191,14 @@ export default function ControlPage() {
     if (unmatched.length) parts.push(`couldn't match: ${unmatched.join(", ")}`);
     if (unknownStateIds.length) parts.push(`kept ${unknownStateIds.length} step${unknownStateIds.length === 1 ? "" : "s"} with an unmapped State ID: ${unknownStateIds.join(", ")}`);
     if (structuredNumericProblems.length) parts.push(`ANSWER SPEC WILL NOT PARSE - ${structuredNumericProblems.join("; ")}`);
+    if (lessonSteps.length && stripCompleteCount) {
+      parts.push(`classroom state strip on ${stripCompleteCount} of ${lessonSteps.length} steps`);
+    }
+    if (stripGaps.length) parts.push(`PART-FILLED STATE STRIP, so no strip shows - ${stripGaps.join("; ")}`);
     setTodayMsg(parts.join(" · "));
-    // A broken answer spec has to stay on screen long enough to read and fix.
-    window.setTimeout(() => setTodayMsg(null), structuredNumericProblems.length ? 30000 : 8000);
+    // A broken answer spec, or a part-filled strip, has to stay on screen long
+    // enough to read and fix.
+    window.setTimeout(() => setTodayMsg(null), structuredNumericProblems.length || stripGaps.length ? 30000 : 8000);
     return true;
   }
 

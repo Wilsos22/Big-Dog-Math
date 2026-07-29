@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import type { ClassroomStageId } from "@/lib/classroomPilot";
 import { LIVE_FLOW_MODE, type LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
+import { stripFromStep } from "@/lib/classroomStateStrip";
 
 export const STUDIO_PREVIEW_MESSAGE = "bdm-studio-preview";
 
@@ -28,6 +29,12 @@ export interface StudioPreviewInput {
   slideOverlay?: string;
   discussionStems: string[];
   vocabulary: string[];
+  // The authored classroom state strip. All four or the preview shows no strip,
+  // exactly as the projector will.
+  eyes?: string;
+  voice?: string;
+  supplies?: string;
+  body?: string;
   totalSteps: number;
   currentIndex: number;
   lesson: {
@@ -82,6 +89,10 @@ export function buildStudioPreviewSnapshot(input: StudioPreviewInput): LiveClass
     discussionStems: input.discussionStems,
     vocabulary: input.vocabulary,
     slideOverlay: input.slideOverlay,
+    eyes: input.eyes,
+    voice: input.voice,
+    supplies: input.supplies,
+    body: input.body,
   };
   return {
     version: 2,
@@ -110,6 +121,10 @@ export function buildStudioPreviewSnapshot(input: StudioPreviewInput): LiveClass
       publicSurfaceMode: input.publicSurfaceMode as never,
       discussionStems: input.discussionStems,
       vocabulary: input.vocabulary,
+      // Studio and /demo show the REAL surfaces, so the state strip has to
+      // travel with the previewed step or the preview quietly lies about what
+      // the projector will show.
+      behaviorStrip: stripFromStep(step),
     },
     tool: null,
     lesson: {

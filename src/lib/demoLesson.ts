@@ -8,6 +8,7 @@
 // demo honors the production privacy boundary.
 
 import type { LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
+import type { ClassroomStateStrip } from "@/lib/classroomStateStrip";
 
 export interface DemoPollAnswer {
   id: string;
@@ -46,6 +47,8 @@ interface SceneInput {
   paceDirections: string;
   studentAction: string;
   index: number;
+  // The classroom state strip for this scene, all four or nothing.
+  strip?: ClassroomStateStrip;
   mode?: "board" | "directions" | "poll" | "tool";
   poll?: LiveClassFlowSnapshot["poll"];
   tool?: LiveClassFlowSnapshot["tool"];
@@ -104,6 +107,7 @@ function makeSnapshot(input: SceneInput): LiveClassFlowSnapshot {
       responseMode: step.responseMode,
       discussionStems: LESSON.discussionStems,
       vocabulary: LESSON.discussionVocabulary,
+      behaviorStrip: input.strip ?? null,
     },
     tool: input.tool ?? null,
     lesson: LESSON,
@@ -156,6 +160,7 @@ export const DEMO_SCENES: DemoScene[] = [
       stateId: "warmup", label: "Warm-Up", semantic: "evergreen", color: "#fcaf38", seconds: 300,
       mainDisplay: "", paceDirections: "Sit, log in, start the warm-up. Six questions.",
       studentAction: "Finish the warm-up form.", index: 0,
+      strip: { eyes: "Own paper", voice: "0 silent", supplies: "In your hands", body: "Seated" },
     }),
   },
   {
@@ -168,6 +173,7 @@ export const DEMO_SCENES: DemoScene[] = [
       mainDisplay: "24 hot dogs. 36 buns. What is the LARGEST number of identical picnic tables you can set with nothing left over?",
       paceDirections: "Think alone. No pencils yet - just your brain.",
       studentAction: "Eyes up front. Be ready to share one idea.", index: 1,
+      strip: { eyes: "Teacher", voice: "0 silent", supplies: "In the tray", body: "Seated" },
     }),
   },
   {
@@ -180,6 +186,7 @@ export const DEMO_SCENES: DemoScene[] = [
       mainDisplay: "Factor pairs of 24: 1x24, 2x12, 3x8, 4x6. Factor pairs of 36: 1x36, 2x18, 3x12, 4x9, 6x6. What is the greatest number on BOTH lists?",
       paceDirections: "Copy the two factor lists into your notes as we build them.",
       studentAction: "Notes out. Track the factor pairs.", index: 2,
+      strip: { eyes: "The screen", voice: "1 partner", supplies: "In your hands", body: "Seated" },
     }),
   },
   {
@@ -192,6 +199,7 @@ export const DEMO_SCENES: DemoScene[] = [
       mainDisplay: "Which list shows ALL the factor pairs of 24?",
       paceDirections: "Answer on your own screen. One submission each.",
       studentAction: "Answer the quick check on your device.", index: 3,
+      strip: { eyes: "Own paper", voice: "0 silent", supplies: "In your hands", body: "Seated" },
       poll: FACTOR_POLL,
     }),
     answerScript: [
@@ -216,6 +224,7 @@ export const DEMO_SCENES: DemoScene[] = [
       mainDisplay: "Which list shows ALL the factor pairs of 24?",
       paceDirections: "Look at the spread. Where did 5x5 come from? Talk to your partner for 30 seconds.",
       studentAction: "Discuss: why is 5x5 not a factor pair of 24?", index: 3,
+      strip: { eyes: "The speaker", voice: "2 table", supplies: "Parked flat", body: "Seated" },
       poll: { ...FACTOR_POLL, stage: "results" },
     }),
   },
@@ -229,6 +238,7 @@ export const DEMO_SCENES: DemoScene[] = [
       mainDisplay: "Divisibility Rules: cross off every rule that works for 36, then build its factor family.",
       paceDirections: "Headphones optional. Work the tool - your work feeds your mastery bar.",
       studentAction: "Open Divisibility Rules and work the 36 family.", index: 4,
+      strip: { eyes: "Your build", voice: "1 partner", supplies: "In your hands", body: "Seated" },
       tool: { id: "demo-tool-divisibility", route: "/divisibility", label: "Divisibility Rules", prompt: "Cross off every rule that works for 36, then build the factor family.", config: {} },
     }),
   },
@@ -242,6 +252,7 @@ export const DEMO_SCENES: DemoScene[] = [
       mainDisplay: "How ready do you feel to find a GCF on your own?",
       paceDirections: "Honest answers help me help you. Zero brave, five confident.",
       studentAction: "Rate yourself: fist to five.", index: 5,
+      strip: { eyes: "Own paper", voice: "0 silent", supplies: "Parked flat", body: "Seated" },
       poll: FIST_POLL,
     }),
     answerScript: [
@@ -266,6 +277,7 @@ export const DEMO_SCENES: DemoScene[] = [
       mainDisplay: "Exit ticket: find the GCF of 18 and 30. Explain how you know it is the greatest.",
       paceDirections: "Pack up when your exit ticket is submitted. Push in your chair.",
       studentAction: "Submit your exit ticket, then pack up.", index: 6,
+      strip: { eyes: "Own paper", voice: "0 silent", supplies: "In your hands", body: "Seated" },
     }),
   },
 ];

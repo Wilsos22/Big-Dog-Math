@@ -35,6 +35,13 @@ export function studentSafeLiveFlow(
   return {
     ...publicFlow,
     lesson: publicLiveLessonSnapshot(flow.lesson),
+    // The classroom state strip and its live override deliberately DO cross this
+    // boundary. They are not private data - "voice 0" is announced to the whole
+    // room and painted on two projectors - and a head-down student needs the
+    // same read of the expected state that the room gets, for the same reason
+    // the timer warnings are shared. Nothing here is per-student. Note that this
+    // is a DENY-list for presentation: a genuinely teacher-only field added
+    // there has to be destructured out above, the way remoteActions is.
     presentation,
     // Students see where the lesson IS - position, total, and the name of
     // what's next (the progress strip: position is regulation for an

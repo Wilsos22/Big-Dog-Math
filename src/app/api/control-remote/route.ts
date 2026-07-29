@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { CLOSEOUT_DIRECTIONS, DEFAULT_STATES } from "@/lib/classStates";
 import { discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";
+import { STATE_STRIP_SLOTS, stripFromStep, type ClassroomStateStripOverride, type StateStripSlot } from "@/lib/classroomStateStrip";
 import { discussionRoundCompletesState, normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { getLessonByCode, getPublishedLessonById, type LessonData } from "@/lib/notionLessons";
 import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
@@ -87,6 +88,7 @@ function endInterlude(flow: LiveClassFlowSnapshot): LiveClassFlowSnapshot {
   };
 }
 const DIRECT_BOARD_ACTIONS = new Set<TeacherRemoteAction>(["show-board", "hide-board"]);
+const DIRECT_BEHAVIOR_ACTIONS = new Set<TeacherRemoteAction>(["set-behavior", "clear-behavior"]);
 const CLAIMED_FLOW_ACTIONS = new Set<TeacherRemoteAction>([
   "next",
   "previous",
@@ -192,6 +194,10 @@ function stepsFromLesson(lesson: LessonData): LiveFlowSequenceStep[] {
       slideOverlay: step.slideOverlay || undefined,
       publicSurfaceMode: step.publicSurfaceMode,
       routineConfig: step.routineConfig,
+      eyes: step.eyes || "",
+      voice: step.voice || "",
+      supplies: step.supplies || "",
+      body: step.body || "",
     };
   });
 }
@@ -367,6 +373,11 @@ async function navigateFlow(
       ...flow,
       version: 2,
       interlude: null,
+      // The strip override belongs to the step it was issued at. Cleared here
+      // for the same reason boardOpen is: advancing rebuilds the step's state,
+      // and a stale override is how a student ends up holding rods during the
+      // exit ticket. The atIndex stamp makes this belt and braces.
+      behaviorOverride: null,
       updatedAt: new Date().toISOString(),
       lesson: publicLiveLessonSnapshot(contract.lesson),
       state: {
@@ -404,6 +415,7 @@ async function navigateFlow(
         scoreboardStage: canRevealM2T1L1FinalScore(step.lessonCode, step.stateId, step.semantic)
           ? "halftime"
           : undefined,
+        behaviorStrip: stripFromStep(step),
       },
       tool: null,
       sequence: {
@@ -469,6 +481,38 @@ function updateBoard(flow: LiveClassFlowSnapshot, open: boolean): LiveClassFlowS
     updatedAt: new Date().toISOString(),
     presentation: { ...flow.presentation, boardOpen: open },
   };
+}
+
+/**
+ * Set or clear the live classroom-state override.
+ *
+ * Stamped with the sequence index it was issued at, so it expires on the next
+ * advance without anything having to clear it. Refuses when the step has no
+ * authored strip: an override on a stepless strip would be the only thing on
+ * screen, which is a partial strip by another name.
+ */
+function updateBehaviorOverride(
+  flow: LiveClassFlowSnapshot,
+  patch: Partial<Record<StateStripSlot, string>> | null,
+): LiveClassFlowSnapshot {
+  if (!flow.presentation) throw new Error("Load a lesson state before setting the classroom state.");
+  if (!patch) return { ...flow, updatedAt: new Date().toISOString(), behaviorOverride: null };
+  if (!flow.presentation.behaviorStrip) {
+    throw new Error("This step has no classroom state strip to override. Author Eyes, Voice, Supplies and Body on the step.");
+  }
+  const atIndex = flow.sequence?.currentIndex ?? -1;
+  const next: ClassroomStateStripOverride = { ...(flow.behaviorOverride?.atIndex === atIndex ? flow.behaviorOverride : {}), atIndex };
+  let changed = false;
+  for (const slot of STATE_STRIP_SLOTS) {
+    const raw = patch[slot];
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const resolved = stripFromStep({ ...flow.presentation.behaviorStrip, [slot]: raw })?.[slot];
+    if (!resolved) throw new Error(`"${raw}" is not a ${slot} value on the classroom state strip.`);
+    next[slot] = resolved as never;
+    changed = true;
+  }
+  if (!changed) throw new Error("Name at least one classroom state slot to override.");
+  return { ...flow, updatedAt: new Date().toISOString(), behaviorOverride: next };
 }
 
 function revealPollResults(flow: LiveClassFlowSnapshot): LiveClassFlowSnapshot {
@@ -918,7 +962,17 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  let body: { action?: string; sessionId?: string; lessonCode?: string; notionLessonId?: string; vibe?: string; seconds?: number; expectedStateId?: string; expectedSequenceIndex?: number };
+  let body: {
+    action?: string;
+    sessionId?: string;
+    lessonCode?: string;
+    notionLessonId?: string;
+    vibe?: string;
+    seconds?: number;
+    expectedStateId?: string;
+    expectedSequenceIndex?: number;
+    behavior?: Partial<Record<StateStripSlot, string>>;
+  };
   try {
     body = await request.json();
   } catch {
@@ -1040,6 +1094,10 @@ export async function POST(request: Request) {
     } else if (DIRECT_BOARD_ACTIONS.has(action)) {
       if (!liveFlow) throw new Error("Load a lesson before opening the work space.");
       liveFlow = updateBoard(liveFlow, action === "show-board");
+      handledDirectly = true;
+    } else if (DIRECT_BEHAVIOR_ACTIONS.has(action)) {
+      if (!liveFlow) throw new Error("Load a lesson before setting the classroom state.");
+      liveFlow = updateBehaviorOverride(liveFlow, action === "set-behavior" ? body.behavior || {} : null);
       handledDirectly = true;
     }
   } catch (error) {

@@ -24,7 +24,8 @@ import {
 import type { LessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import type { LessonStepData } from "@/lib/notionLessons";
-import { ABBIE_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
+import { ABBIE_REMOTE_BUTTONS, BEHAVIOR_OVERRIDE_BUTTONS, SOUND_REMOTE_BUTTONS, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
+import { overrideIsLive, stripFromStep } from "@/lib/classroomStateStrip";
 import { speakerNoteItems } from "@/lib/speakerNotes";
 
 const REMOTE_SESSION_KEY = "bdm-remote-session";
@@ -201,8 +202,13 @@ function optimisticNavigation(
       scoreboardStage: canRevealM2T1L1FinalScore(step.lessonCode, step.stateId, step.semantic)
         ? "halftime"
         : undefined,
+      behaviorStrip: stripFromStep(step),
     },
     tool: null,
+    // The override belonged to the step we just left. Dropping it here matches
+    // what the server does on advance, so the iPad does not show a stale
+    // override for the half second before the receipt lands.
+    behaviorOverride: null,
     sequence: {
       ...sequence,
       currentIndex: targetIndex,
@@ -703,6 +709,7 @@ export default function TeacherRemotePage() {
     : null;
   const controlsDisabled = !session || Boolean(busy) || Boolean(pendingCommand);
   const boardIsOpen = Boolean(flow?.presentation?.boardOpen);
+  const behaviorOverridden = overrideIsLive(flow?.behaviorOverride ?? null, flow?.sequence?.currentIndex);
   const isDiscussionState = Boolean(
     flow?.state
     && (
@@ -1209,6 +1216,27 @@ export default function TeacherRemotePage() {
                         />
                       </div>
                     </div>
+                    {/* Only when the step actually authored a strip. The server
+                        refuses an override with nothing to override, and an
+                        override alone would be a partial strip by another name. */}
+                    {flow?.presentation?.behaviorStrip ? (
+                      <div className="remote-control-block">
+                        <h3 className="deck-section-title">
+                          Classroom state{behaviorOverridden ? " - overridden until the next step" : ""}
+                        </h3>
+                        <div className="deck-grid">
+                          {BEHAVIOR_OVERRIDE_BUTTONS.map((button) => (
+                            <DeckKey
+                              key={button.label}
+                              button={button}
+                              busy={busy}
+                              disabled={controlsDisabled || (button.action === "clear-behavior" && !behaviorOverridden)}
+                              onSend={() => { void send(button); }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </section>
 
                   {isDiscussionState ? (

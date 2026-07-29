@@ -1,13 +1,38 @@
 import type { TeacherRemoteAction } from "@/lib/liveClassFlow";
+import type { StateStripSlot } from "@/lib/classroomStateStrip";
+
+// Extra fields sent with the command body. Mostly flat (transition-now's
+// vibe/seconds); `behavior` carries a classroom-state-strip override, which is a
+// nested object because the server applies the named slots and leaves the rest
+// of the authored strip alone.
+export type RemoteDeckPayload = {
+  [key: string]: string | number | Partial<Record<StateStripSlot, string>> | undefined;
+};
 
 export interface RemoteDeckButton {
   action: TeacherRemoteAction;
   label: string;
   detail: string;
   tone: string;
-  // Extra fields sent with the command body (e.g. transition-now vibe/seconds).
-  payload?: Record<string, string | number>;
+  payload?: RemoteDeckPayload;
 }
+
+/**
+ * Live classroom-state overrides, for Settle 30s and the moments the plan did
+ * not predict. Deliberately short: the voice level is what actually breaks
+ * mid-class, and supplies is the other one worth a tap. Everything else stays
+ * authored, because the strip working automatically is the whole point.
+ *
+ * Each override expires when the lesson advances, so none of these needs an
+ * explicit undo - but Back to the plan is there for the teacher who wants it.
+ */
+export const BEHAVIOR_OVERRIDE_BUTTONS: readonly RemoteDeckButton[] = [
+  { action: "set-behavior", label: "Voice 0", detail: "Silent, right now", tone: "orange", payload: { behavior: { voice: "0 silent" } } },
+  { action: "set-behavior", label: "Voice 1", detail: "Partner only", tone: "teal", payload: { behavior: { voice: "1 partner" } } },
+  { action: "set-behavior", label: "Voice 2", detail: "Table talk", tone: "teal", payload: { behavior: { voice: "2 table" } } },
+  { action: "set-behavior", label: "Hands off", detail: "Supplies parked flat", tone: "orange", payload: { behavior: { supplies: "Parked flat" } } },
+  { action: "clear-behavior", label: "Back to the plan", detail: "Drop the override", tone: "green" },
+];
 
 // Ad-hoc movement windows: music plays, the state clock pauses, and the room
 // gets a short countdown before the lesson resumes where it was.

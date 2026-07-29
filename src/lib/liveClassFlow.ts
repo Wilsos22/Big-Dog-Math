@@ -5,6 +5,7 @@ import type { LivePollKind } from "@/lib/liveFlowContract";
 import type { PublicLessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import type { PublicSurfaceMode } from "@/lib/lessonStepMetadata";
 import type { DiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
+import type { ClassroomStateStrip, ClassroomStateStripOverride } from "@/lib/classroomStateStrip";
 
 export {
   LIVE_POLL_KINDS,
@@ -56,6 +57,8 @@ export const TEACHER_REMOTE_ACTIONS = [
   "reset-timer",
   "show-board",
   "hide-board",
+  "set-behavior",
+  "clear-behavior",
   "spin-spinner",
   ...DISCUSSION_REMOTE_ACTIONS,
   "reveal-results",
@@ -209,6 +212,12 @@ export interface LiveFlowSequenceStep {
   publicSurfaceMode?: PublicSurfaceMode;
   routineConfig?: PublicLessonRoutineConfig | null;
   slideOverlay?: string;
+  // The authored classroom state strip. Raw select values, resolved by
+  // lib/classroomStateStrip - all four or the step shows no strip at all.
+  eyes?: string;
+  voice?: string;
+  supplies?: string;
+  body?: string;
 }
 
 export interface LiveClassFlowSnapshot {
@@ -270,6 +279,9 @@ export interface LiveClassFlowSnapshot {
     discussionStems?: string[];
     vocabulary?: string[];
     scoreboardStage?: "halftime" | "final";
+    // The active step's authored strip, so a projector never has to reach into
+    // sequence.steps for it (students do not receive that array at all).
+    behaviorStrip?: ClassroomStateStrip | null;
   } | null;
   tool: LiveToolConfig | null;
   lesson?: {
@@ -315,6 +327,15 @@ export interface LiveClassFlowSnapshot {
   paper?: {
     task: string;
   } | null;
+  // A live classroom-state override from the iPad, for Settle 30s and the
+  // moments the plan did not predict. SERVER-AUTHORED and therefore in the same
+  // class as `interlude` and `transition`: /control rebuilds `presentation`
+  // from the step every tick, so an override living in there would be erased
+  // about a second after the teacher tapped it. It must be carried through the
+  // liveFlowSignature snapshot untouched. It is stamped with the sequence index
+  // it was issued at and expires the moment the lesson advances, so nothing has
+  // to remember to clear it.
+  behaviorOverride?: ClassroomStateStripOverride | null;
 }
 
 export function liveTimerSeconds(

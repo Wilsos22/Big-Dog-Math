@@ -57,6 +57,12 @@ export interface LessonStepData {
   responseMode: string;
   slideOverlay: string;
   workSpaceAvailable?: boolean;
+  // The classroom state strip, authored per step. Raw select values - see
+  // lib/classroomStateStrip for the vocabulary and the all-four-or-nothing rule.
+  eyes: string;
+  voice: string;
+  supplies: string;
+  body: string;
 }
 
 
@@ -503,6 +509,10 @@ async function mapPage(
       workSpaceAvailable: step["Work Space Available"]?.type === "checkbox"
         ? step["Work Space Available"].checkbox
         : undefined,
+      eyes: extractText(step["Eyes"]),
+      voice: extractText(step["Voice"]),
+      supplies: extractText(step["Supplies"]),
+      body: extractText(step["Body"]),
     } satisfies LessonStepData;
   }));
   steps.sort((a, b) => a.order - b.order || a.startMinute - b.startMinute || a.title.localeCompare(b.title));
