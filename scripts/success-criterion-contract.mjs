@@ -52,27 +52,6 @@ assert.equal(
   "not-i-can",
 );
 
-// successCriteriaList is the PLURAL read, for display surfaces that show the
-// whole menu. It must stem every line "I can" and must never print the setup
-// placeholder, which is a prompt to the teacher and not classroom copy.
-assert.deepEqual(
-  criterion.successCriteriaList("I can model a ratio.\n- i can explain a ratio.\n2) Compare two ratios."),
-  ["I can model a ratio.", "I can explain a ratio.", "I can compare two ratios."],
-  "Every line comes back as a normalized I can statement, list markers stripped.",
-);
-assert.deepEqual(criterion.successCriteriaList(""), []);
-assert.deepEqual(criterion.successCriteriaList(null), []);
-assert.deepEqual(
-  criterion.successCriteriaList(`I can find a GCF.\n${criterion.SUCCESS_CRITERION_SETUP_PLACEHOLDER}`),
-  ["I can find a GCF."],
-  "The setup placeholder is a teacher prompt and must never reach a display surface.",
-);
-assert.deepEqual(
-  criterion.successCriteriaList("   \n\n  "),
-  [],
-  "Whitespace-only criteria are empty, not a blank statement.",
-);
-
 const warmupSource = readFileSync(path.join(root, "src", "app", "warmup", "page.tsx"), "utf8");
 assert.doesNotMatch(
   warmupSource,
@@ -83,6 +62,27 @@ assert.doesNotMatch(
   warmupSource,
   />\s*(?:Learning intention|Success criteria)\s*</i,
   "Learning intention and success criterion labels belong on their later lesson state, not the warm-up.",
+);
+
+// The all-day boards show ONE criterion a day, from the chosen Notion property.
+// Reading the Success Criteria menu there would put a whole menu on a classroom
+// TV, so the payload must not even carry it.
+const boardApi = readFileSync(path.join(root, "src", "app", "api", "weekly-display", "route.ts"), "utf8");
+assert.doesNotMatch(
+  boardApi,
+  /successCriteria:\s*lesson\.successCriteria/,
+  "The weekly display payload must carry the selected criterion, never the Success Criteria menu.",
+);
+const boardSource = readFileSync(path.join(root, "src", "app", "weekly-display", "page.tsx"), "utf8");
+assert.doesNotMatch(
+  boardSource,
+  /successCriteriaList/,
+  "The weekly display shows one chosen criterion a day, not a list.",
+);
+assert.match(
+  boardSource,
+  /selectedSuccessCriterion/,
+  "The weekly display must read the chosen criterion property.",
 );
 
 console.log("PASS - exactly one selected I can statement is required on every public lesson surface.");
