@@ -435,6 +435,27 @@ the invariants they protect are easy to break again.
   justify cards, the latter unchanged from warm-up to closeout. `discussionSupportsForLesson` is now
   discussion-only on both `/teacher/present` and `/teacher/pace`. Empty renders as nothing; wrong
   renders on a classroom screen.
+  CORRECTED 2026-07-29: "discussion-only" was keyed on `theme.id`, which is NOT the same test.
+  `inferClassroomStage` maps any step whose title contains "partner" or "group" to the `discussion`
+  theme, so those steps still summoned the catalog cards locally even though `/control` deliberately
+  publishes empty arrays for them. Both surfaces now gate the FALLBACK on
+  `usesDiscussionProtocol(state.id, state.label)` while the theme keeps gating the LAYOUT - a partner
+  step legitimately wants the discussion scene, it just may not invent supports. `/live-flow` had no
+  gate at all: authored stems publish on EVERY state by design, so any lesson carrying
+  `Discussion Stems` put the stems-and-vocabulary panel on every Chromebook from warm-up to closeout.
+  When you add a surface that reads `presentation.discussionStems`, gate it on the protocol, never on
+  "are there stems".
+- **THE `discussion` STATE IS FULLY WIRED AND HAS NEVER RUN.** It is a real `DEFAULT_STATES` entry
+  (so both engines build a real bank entry, not the empty synthesized one), it has its own scene on
+  present, pace, and `/live-flow`, it forces `pollKind` to null, and `/control` reveals a "Run
+  discussion" button driving the Think/Write/Discuss/Revise/Share protocol. What is missing is a
+  `discussion` step in the locked 12-step spine, so every lesson's `Discussion Prompt`,
+  `Discussion Stems`, and `Discussion Vocabulary` have gone unread since they were written. Steele
+  made student talk a STANDING requirement 2026-07-28 (see the `lesson-deployment-builder` skill);
+  adding the step is authoring work, not a code gap. Two traps if you do: `Discussion Prompt` reaches
+  only `/lesson` and never the flow snapshot, so the projector headline must be authored in
+  `Main Display`; and the step-level property is `Vocabulary` while the lesson-level one is
+  `Discussion Vocabulary`.
 - **DO NOT FILTER NOTION LESSON STEPS BY THE STATE CATALOG.** `/control` dropped every step whose
   `State ID` was not in `DEFAULT_STATES` (about thirty real ids in the database) while
   `/api/control-remote` did not filter at all - so the two engines ran different lessons from the same
