@@ -433,8 +433,8 @@ definition and a worked example populate around it), success criteria on ink,
 the week with today's row raised, and a bell schedule that derives "Now" and its
 progress bars from the classroom clock. One accent hue per weekday. The two
 targets are stemmed differently on purpose (Steele, 7/29): the intention reads
-"I am learning to ..." and the success CRITERIA - plural, every line of the
-Notion menu, each with its own check and the type sized to the count - read
+"I am learning to ..." and the day's ONE chosen success criterion - the
+`Selected Success Criterion` property, never the Success Criteria menu - reads
 "I can ...", so the second screen is what you check your work against rather
 than a restatement of the first. The reveal
 reads `Term - definition` out of the existing Notion Discussion Vocabulary and

@@ -12,7 +12,6 @@ interface DisplayLesson {
   title: string;
   standard: string;
   learningIntention: string;
-  successCriteria: string;
   selectedSuccessCriterion: string;
   discussionVocabulary: string;
   topic: string;
@@ -66,11 +65,9 @@ function displayLesson(lesson: LessonData): DisplayLesson {
     title: lesson.title,
     standard: lesson.standard,
     learningIntention: lesson.learningIntention,
-    // BOTH criteria fields go out. The all-day board shows the PLURAL menu -
-    // the criteria are what a student checks their own work against, and there
-    // is normally more than one - and falls back to the single selected
-    // statement only when the menu is empty. Do not collapse these here.
-    successCriteria: lesson.successCriteria,
+    // The board shows ONE criterion a day, from the deliberately chosen Notion
+    // property. The legacy `Success Criteria` menu is NOT sent: a whole menu on
+    // a classroom TV is the failure this shape prevents.
     selectedSuccessCriterion: lesson.selectedSuccessCriterion,
     discussionVocabulary: lesson.discussionVocabulary,
     topic: lesson.topic,

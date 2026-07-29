@@ -202,31 +202,9 @@ bars and live misconception grouping).
     16:9 so nothing letterboxes. Do not convert it back to vw/vh. The size arithmetic that
     follows from the hardware: 1080 stage rows span about 27in of screen, so one stage pixel is
     ~0.025in, and reading at distance D wants a cap height near D/200 - which puts legibility
-    from the far side of a classroom (~25ft) at roughly 85px of font size
-    (`CRITERION_ROOM_LEGIBLE_PX`). Use that number before shrinking anything a student must read.
-  - THE SUCCESS CRITERIA AUTOSIZE BY MEASUREMENT, not by an estimate. `successStartSize` gives a
-    starting size per count and the screen steps DOWN until the rows fit, floor
-    `CRITERION_FLOOR_PX`. Two traps, both found by measuring on 24 count/length combinations:
-    a glyph-width estimate cannot predict where a sentence wraps (it under-shot by 30-80px and
-    clipped), and the fit must sum the rows' `offsetHeight` rather than read `scrollHeight`,
-    because the rows animate in on a translateY and a live transform inflates `scrollHeight` -
-    which silently shrank every list by a step and drove the single-statement hero to the floor.
-    One to six criteria all land at a readable size; more than that clips on purpose.
-  - Rotation is 9s a screen, EXCEPT the learning intention, which holds `max(16, base + 6)`
-    because its own reveal is not finished travelling until 8.6s (`dwellSeconds` enforces this).
-    Cutting the learning screen to the base dwell cuts away mid-definition.
-  - THE VOCABULARY REVEAL NEEDS AN AUTHORED DEFINITION AND IT COMES FROM AN EXISTING FIELD.
-    The board reads Notion `Discussion Vocabulary` and looks for `Term - definition` (the same
-    convention `splitVocab` on /teacher/pace already reads). With bare term lists - which is how
-    that property is authored today - there is nothing to reveal, so the board holds the
-    sentence with the term highlighted and never drops it. That is the designed fallback, not a
-    bug. Authoring one dash per lesson is what turns the reveal on; NO new Notion property.
-  - Splitting that property here is on newlines and semicolons ONLY, never commas the way
-    `splitLiveFlowVocabulary` does - a definition is a sentence and commas would shred it.
-  - An optional worked example rides the SAME property as one more line, prefixed
-    `table:` / `lines:` / `grid:` / `rate:` / `steps:` / `example:` (see `parseBoardFigure` in
-    `src/lib/weeklyDisplayBoard.ts` for the grammar; `*` marks the answer cell in a table row).
-    A line that does not parse is simply not a figure - it never renders as garbage.
+    from the far side of a classroom (~25ft) at roughly 85px of font size. Use that number before
+    shrinking anything a student must read - it is why `successSize` floors the criterion at 88px,
+    and it is the second reason only one criterion is shown: a list of them cannot clear it.
   - THE TWO STEMS ARE FIXED AND THEY ARE DIFFERENT (Steele, 2026-07-29). The learning intention
     reads "I am learning to ..." (`learningIntentionStatement` restems whatever Notion holds,
     which is normally "I can ..."). The success criteria read "I can ...". Never phrase them
@@ -234,14 +212,25 @@ bars and live misconception grouping).
     finished work against, and identical stems make the second screen look like a restatement of
     the first. The board's eyebrows are therefore plain labels ("Today", "You've got it when"),
     not sentence stems - if you reinstate a stem in an eyebrow it will collide with the statement.
-  - IT IS THE SUCCESS CRITERIA, PLURAL. The board reads the Notion `Success Criteria` menu through
-    `successCriteriaList` (in `src/lib/successCriterion.ts`) and renders EVERY line with its own
-    check mark, sizing the type to the count. `selectedSuccessCriterion` - the single statement the
-    lesson flow requires and validates - is only the fallback when the menu is empty. That is the
-    opposite of the rule on the live-lesson surfaces, where the menu must never be used, so do not
-    "fix" this route to match them. `successCriteriaList` also drops
-    SUCCESS_CRITERION_SETUP_PLACEHOLDER, because "Choose one I can statement in Notion." is a
-    prompt to the teacher and must never reach a wall.
+    RESTEMMING IS THE RISKY PART AND IT SHIPPED BROKEN ONCE. Notion is authored in every voice
+    ("I can ...", "We are learning how ...", "Students will be able to ...", a bare imperative), and
+    a version that only knew "are learning to" put "I am learning to we are learning how splitting
+    one side of a rectangle helps us write equivalent expressions" on the live board. Two rules came
+    out of it: "learning how/why/what/that/about" keeps its clause and the stem drops its "to"
+    ("I am learning how splitting ... helps us"), and a sentence with NO recognizable stem that does
+    not open on an action verb is left exactly as the teacher wrote it, because a noun phrase under
+    the eyebrow reads fine and a forced stem does not. Every phrasing is pinned in
+    `npm run test:weekly-display-board` - add a case there before touching the regexes.
+  - ONE SUCCESS CRITERION A DAY, FROM `Selected Success Criterion` (Steele, 2026-07-29, correcting
+    a plural build the same day). That Notion property already exists and already means exactly
+    this: `inspectSelectedSuccessCriterion` enforces one complete "I can" statement on one line.
+    The legacy `Success Criteria` MENU must never reach this surface - `/api/weekly-display` does
+    not even put it in the payload, and `scripts/success-criterion-contract.mjs` asserts both the
+    route and the page stay that way, so the board and the live-lesson surfaces now agree. Read it
+    with `selectedSuccessCriterion()`, NOT `publicSuccessCriterion()`: the latter falls back to
+    SUCCESS_CRITERION_SETUP_PLACEHOLDER, and "Choose one I can statement in Notion." is a prompt
+    to the teacher that must never appear on a classroom TV. Empty renders as
+    "No success criterion chosen for today."
   - The ground CUTS between screens instead of crossfading. The design had a .45s
     background-color transition, but every header/footer colour switches instantly, which left
     ~450ms of dark text on a lightening ground every nine seconds.
@@ -925,7 +914,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 21 golden/contract suites, run with typecheck by
+  2026-07-27 `npm test` - the aggregate of all 24 golden/contract suites, run with typecheck by
   GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.
@@ -970,6 +959,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   the duplicate and rebuild. Drive also re-applies DELETES late: a file git just restored can
   vanish seconds afterward because your earlier `rm` only now synced - if a freshly checked-out
   file is missing, `git checkout -- <path>` again and re-verify before concluding anything.
+- A PANE SCREENSHOT CAN DISAGREE WITH THE LAYOUT. Against a REMOTE origin the capture is composited independently of the live tree: /weekly-display screenshotted as a board filling only the top-left ~60% of the frame while `getBoundingClientRect()` said it filled the viewport exactly. Do not chase a scaling bug off a screenshot - settle it with geometry (`elementFromPoint` at all four viewport corners is decisive, and cheap). The same capture was correct against localhost minutes earlier, so distrust it specifically on remote origins.
 - Verifying in the in-app Browser pane: the preview throttles rendering, so CSS animations sit at
   their first frame and screenshots wait for motion to settle - prove motion with
   `el.getAnimations()` or keyed-remount node identity instead of watching. TRANSITIONS freeze the

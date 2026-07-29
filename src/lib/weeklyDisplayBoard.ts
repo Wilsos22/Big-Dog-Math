@@ -108,19 +108,66 @@ function normalizeWord(value: string): string {
  */
 export const LEARNING_INTENTION_STEM = "I am learning to";
 
+/**
+ * Ordered stem strips. Notion holds the intention in whatever voice it was
+ * written in - "I can ...", "We are learning how ...", "Students will be able
+ * to ..." - and each of those has to come off before the board's own stem goes
+ * on. This list is why: a real published lesson read "We are learning how
+ * splitting one side of a rectangle helps us write equivalent expressions", and
+ * an earlier version that only knew "are learning to" put
+ * "I am learning to we are learning how ..." on the wall.
+ */
+const INTENTION_STEMS: RegExp[] = [
+  /^today[,:]?\s+/i,
+  /^students?\s+will\s+(?:be\s+able\s+to\s+)?/i,
+  /^(?:i|we|you)\s+(?:can|will|could|should)\s+(?:be\s+able\s+to\s+)?/i,
+  /^(?:i|we|you)\s+(?:am|are|is)\s+(?:going\s+to\s+learn\s+|learning\s+)/i,
+  /^learning\s+/i,
+];
+
+/**
+ * Words that keep the sentence a question rather than an infinitive. "learning
+ * how splitting a rectangle helps" is grammatical; "learning TO how ..." is not,
+ * so the stem drops its "to" for these.
+ */
+const INTENTION_CLAUSE_HEADS = new Set(["how", "why", "what", "when", "where", "that", "whether", "about"]);
+
 export function learningIntentionStatement(text: string): string {
   const trimmed = text.trim();
   if (!trimmed) return "";
-  const body = trimmed
-    .replace(/^\s*(?:I|we|you)\s+(?:can|will|could|should|am\s+learning\s+to|are\s+learning\s+to)\s+/i, "")
-    .replace(/^\s*students\s+will\s+(?:be\s+able\s+to\s+)?/i, "")
-    .replace(/^\s*(?:today\s+)?(?:we\s+are\s+)?learning\s+(?:how\s+)?to\s+/i, "")
-    .trim();
+
+  let body = trimmed;
+  let stripped = false;
+  // Peel stems until none match, so "Today we are learning how ..." loses both.
+  for (let pass = 0; pass < INTENTION_STEMS.length; pass += 1) {
+    const hit = INTENTION_STEMS.find((stem) => stem.test(body));
+    if (!hit) break;
+    body = body.replace(hit, "").trim();
+    stripped = true;
+  }
   if (!body) return trimmed;
-  // Only lower-case a leading capital that is there because it started the
-  // sentence - never one that belongs to the word ("I", "GCF", "Pythagoras").
-  const head = /^[A-Z][a-z]/.test(body) ? body.charAt(0).toLocaleLowerCase() + body.slice(1) : body;
-  return `${LEARNING_INTENTION_STEM} ${head}`;
+
+  const firstWord = normalizeWord(body.split(/\s+/)[0] ?? "");
+  // An infinitive already spelled out: "... learning to model ratios".
+  if (/^to\s+/i.test(body)) {
+    const rest = body.replace(/^to\s+/i, "").trim();
+    return rest ? `${LEARNING_INTENTION_STEM} ${lowerLead(rest)}` : trimmed;
+  }
+  if (INTENTION_CLAUSE_HEADS.has(firstWord)) return `I am learning ${lowerLead(body)}`;
+  // Only restem when there is a reason to be confident: either a stem came off,
+  // or the sentence opens on an action verb. Anything else stays exactly as the
+  // teacher wrote it - a noun phrase under the eyebrow reads fine, whereas a
+  // wrong stem on a classroom TV does not.
+  if (!stripped && !BOARD_ACTION_VERBS.has(firstWord)) return trimmed;
+  return `${LEARNING_INTENTION_STEM} ${lowerLead(body)}`;
+}
+
+/**
+ * Lower-case a leading capital that is only there because it started the
+ * sentence - never one that belongs to the word ("I", "GCF", "Pythagoras").
+ */
+function lowerLead(value: string): string {
+  return /^[A-Z][a-z]/.test(value) ? value.charAt(0).toLocaleLowerCase() + value.slice(1) : value;
 }
 
 export interface VocabularyEntry {
@@ -201,8 +248,12 @@ export function parseBoardFigure(line: string): BoardFigure | null {
   }
   if (kind === "grid") {
     const [count, ...rest] = body.split("|");
-    const shaded = Number(count.trim().replace(/[^0-9]/g, ""));
-    if (!Number.isFinite(shaded) || shaded < 0 || shaded > 100) return null;
+    // Require real digits. Stripping non-digits turned "grid: not a number"
+    // into a zero-shaded grid captioned "0 of 100" - a figure made of nothing,
+    // pointed at a classroom.
+    const digits = /^(\d{1,3})\s*%?$/.exec(count.trim());
+    const shaded = digits ? Number(digits[1]) : NaN;
+    if (!Number.isFinite(shaded) || shaded > 100) return null;
     return { kind: "grid", shaded, caption: rest.join("|").trim() || `${shaded} of 100` };
   }
   if (kind === "rate") {
@@ -366,55 +417,20 @@ export function intentionMaxSize(text: string): number {
   return 138;
 }
 
+/**
+ * The single chosen criterion, sized to its length.
+ *
+ * The floor of 88px is deliberate. These boards are 55-inch panels, so the
+ * stage's 1080 rows cover about 27in of screen and one stage pixel is ~0.025in;
+ * reading at a distance D wants a cap height near D/200, which puts the far side
+ * of a classroom (~25ft) at roughly 85px of font size. One criterion always
+ * clears that. A list never could, which is the other reason there is only ever
+ * one.
+ */
 export function successSize(text: string): number {
   if (text.length > 108) return 88;
   if (text.length > 84) return 98;
   return 108;
-}
-
-/**
- * These boards are 55-inch 16:9 panels mounted at the back of the room, so the
- * stage's 1080 rows cover about 27 inches of real screen: one stage pixel is
- * roughly 0.025in. Reading comfortably at a distance D wants a cap height near
- * D/200, and a student on the far side of a classroom is ~25ft away - which
- * works out at about 85 stage px of font size.
- *
- * Only one to three success criteria can be set that large and still fit. That
- * is a CONTENT fact, not a layout bug: fewer, shorter criteria are readable
- * from the whole room, and a longer list is for the students nearer the panel.
- */
-export const CRITERION_ROOM_LEGIBLE_PX = 85;
-
-/**
- * The smallest a criterion may be shrunk to in order to fit. About 1in of type
- * on a 55-inch panel - readable from most of a classroom, not from the far
- * corner. Six long criteria fit at this floor; a longer list than that clips,
- * which is the deliberate end of the line rather than type nobody can read.
- */
-export const CRITERION_FLOOR_PX = 38;
-
-/**
- * The success screen carries however many criteria the lesson authored, so the
- * type and the check marks scale to the count and the longest line. One
- * criterion keeps the design's single hero statement exactly.
- */
-/**
- * The starting type size for a list of criteria. The board then measures the
- * real rendered height and steps DOWN from here until the list fits - the same
- * autosize the learning intention uses, because a glyph-width estimate cannot
- * predict where a sentence wraps and a criterion sliding under the standard
- * chips on a classroom TV is not an acceptable failure.
- */
-export function successStartSize(count: number): number {
-  if (count <= 2) return 96;
-  if (count === 3) return 84;
-  if (count === 4) return 70;
-  if (count === 5) return 60;
-  return 52;
-}
-
-export function successGaps(count: number): { gap: number; rowGap: number } {
-  return count > 4 ? { gap: 22, rowGap: 14 } : { gap: 30, rowGap: 26 };
 }
 
 /** How much the key term grows (or shrinks) once it is alone at the top. */
