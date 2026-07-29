@@ -102,6 +102,19 @@ bars and live misconception grouping).
 - `src/app/**` - App Router pages and API routes (one folder per route, direct `page.tsx`/`route.ts`;
   no route groups, no per-segment layouts except the root `layout.tsx`).
 - `src/components/**` - shared React components (SiteNav, ToolNav, AbbieTalk, the manipulatives, etc.).
+  THE LIVE TOOL IS USUALLY THE `*Board.tsx` FILE. A pre-redesign generation of dark-themed
+  (slate-900, Tailwind, placekitten fallbacks) prototypes still sits beside the real components
+  under a name one suffix away - `FractionBars.tsx` beside `FractionBarsBoard.tsx` (deleted
+  2026-07-29, nothing imported it), `AlgebraTiles.tsx` beside the live `AlgebraTilesBoard.tsx` -
+  so an edit aimed at a tool can land in a file nothing imports, typecheck clean, build clean,
+  and change nothing on screen. Read what the route's `page.tsx` imports before editing a
+  component. Still unimported as of 2026-07-29: `AlgebraTiles.tsx`, `ClassroomTools.tsx`,
+  `DoubleNumberLine.tsx`, `GemsFunnel.tsx` (plus `TeacherGate.tsx`, already documented as legacy
+  under Auth) - deleting those needs Steele's word, not a silent sweep. Inverse trap, and the
+  reason that list is short: to prove a component is dead, grep the BARE NAME, never
+  `@/components/<name>`. Components import each other RELATIVELY (`from "./ToolHeader"`), so a
+  path-shaped grep reports `ToolHeader.tsx` (5 importers) and `useLiveToolConfig.tsx` (19) as
+  dead code.
 - `src/lib/**` - non-UI logic: `supabase.ts`, `supabaseServer.ts`, `notionLessons.ts`, `mastery.ts`,
   `grouping.ts`, `toolEvidence.ts`, `teacherToken.ts`, `classStates.ts`, `liveClassFlow.ts`.
 - `src/proxy.ts` - the real access-control gate (see Auth).
@@ -125,6 +138,21 @@ bars and live misconception grouping).
   Steele's constraint: sixth graders ignore a wall of supports and A LIST IS A WALL. Never turn it
   into a list, and never add an "I am stuck, skip it" exit - an escape hatch cheaper than the work
   gets used instead of the work. Reached from the third `.st-explore` button on the landing page.
+- `/stuck` (added 2026-07-29, from the Claude Design handoff "Distributive Walkthrough", project
+  c5b70077) is the M1.T1.L1 **"Stuck? Walk it through."** worked example: six click-to-advance steps
+  that build `a x b = a ( p + q )` on one 980x560 stage, earlier steps dimming to 0.34 so the whole
+  chain of reasoning stays visible. Public, session-free, no persistence - it is the link that can sit
+  in a Notion `Help Path` line or a handout and still work at 8pm. Carries the problem in the URL
+  (`?a=5&b=14&split=10,4`); no params opens the example the lesson is taught from. The same component
+  mounts as a full-screen OVERLAY from the `Stuck?` chip on `/distributive-area`, so nobody loses a
+  half-placed split by going to look at the example.
+  THE INVARIANT: **the walkthrough must never demonstrate the problem the student is working.**
+  `walkthroughExampleFor()` in `src/lib/distributiveWalkthrough.ts` picks a parallel example and is
+  contract-tested across every problem the tool can produce - a solved copy of the question in front
+  of them replaces the work instead of unblocking it, same reason `/homework-help` has no skip. Any
+  new call site that knows the student's numbers goes through that helper, never through the props.
+  Step 3 ("Which factor is easier to work with?") is the lesson's only DECISION rather than a move;
+  its title stays a question.
 - Manipulative tools (public, no session): `/whiteboard`, `/number-line-plus`, `/number-line`,
   `/fraction-bars`, `/group-bars`, `/percent-bar`, `/algebra-tiles`, `/equation-builder`,
   `/order-of-operations` (GEMS), `/combine-like-terms`, `/proportions`, `/area-model`,
@@ -716,7 +744,17 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   companions `--bdb-teal-deep #3c7d7e`, `--bdb-coral-deep #c93818`, `--bdb-green-deep #1f7a52`
   (also used when teal/coral serve AS text on cream). The bright originals stay for decorative
   fills, borders, and large graphics. GEMS tiles keep the bright fills with INK labels instead
-  (ink passes on coral/amber/teal; only the purple S tile keeps white).
+  (ink passes on coral/amber/teal; only the purple S tile keeps white). Same trap on the design
+  system's ORANGE `#f2820c` (`--orange-500` in the Claude Design `_ds` tokens, no `--bdb-*` token
+  yet): white on it is 2.6:1 and it is only 2.6:1 as text on white, so `/stuck` fills with
+  `#f2820c` and switches to `#c4660a` (`--orange-600`, 4.0:1) for the one numeral a student reads.
+  Design handoffs from the `_ds` bundle carry `#8A8378` (3.75:1) and `#A99F91` (2.5:1) as body and
+  faint text - both FAIL AA; map them to `--bdb-ink-soft` and `--bdb-ink-faint` on the way in.
+- Handwriting: `--bdb-font-hand` (Caveat, loaded in the same `globals.css` @import as Albert Sans, so
+  it costs no extra request and only downloads on pages that use it). Annotations and teacher asides
+  ONLY - anything a student must read stays in `--bdb-font`. Claude Design handoffs specify Geist as
+  the body font; the site's real body font is Albert Sans and that wins (rule: use the site's real
+  equivalents, let the handoff settle what the system does not specify).
 - Pages self-style with a per-page inline `<style>` block using a unique class prefix (`.ls-` lesson,
   `.cx-` control, `.rs-` roster, `.se-` session, `.bx-` builder) reading `var(--bdb-*)`. Follow that
   pattern; there is no shared CSS module beyond `globals.css`.
@@ -728,13 +766,28 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   pile it into the middle - repeated classroom feedback is "too much stuff in the center, I don't know
   where to look." `/divisibility` is the reference implementation; `/ladder-method` followed it
   2026-07-21 (rule rail + Ladder/Factor Trees modes); `/area-model` is still queued.
+- PRINTED WORKSHEETS MUST LEAVE ROOM TO DO THE WORK (Steele, 2026-07-29, on three sheets in a row:
+  "a consistent issue with bunching up all the problems toward the top and not using the space and
+  not leaving room to actually do the work"). The `output/worksheets/*.html` sheets put four problems
+  in a `.set` 2x2 grid on an 11in page, and `.p-body` is a plain top-stacking flex column - so
+  content piles at the top of a tall cell and the bottom third is wasted. Every new sheet needs:
+  `.p-body{justify-content:space-between}` and a distributing `.work`, a label STACKED ABOVE its rule
+  with a writing band (about 34px) rather than sitting beside it, ruled rows at handwriting height
+  not text height, and open work boxes that flex into the slack. Two counter-rules learned the same
+  day: a read-and-pick problem (lists printed for the student, or a finished ladder to read) must NOT
+  distribute - spreading it just orphans the printed lists from each other, so tag it and keep it
+  compact; and a hard `min-height` on a work box will push a page past 11in (four L3 word problems
+  hit 13.9in and silently spilled), so let flex-grow do it and measure. VERIFY BY MEASURING, not by
+  eye: the check that catches this is dead space between a cell's last content and its bottom edge
+  (should be single digits of px) plus every student page at or under 11in. Four word problems with
+  real work space need TWO pages, not one.
 - Copy tone: friendly, playful, second person ("Hey {firstName}!", "Today's plan", "Start the warm-up").
   Teach how to think, not what to think. Still: no emojis.
 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 20 golden/contract suites, run with typecheck by
+  2026-07-27 `npm test` - the aggregate of all 21 golden/contract suites, run with typecheck by
   GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.
@@ -781,7 +834,13 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   file is missing, `git checkout -- <path>` again and re-verify before concluding anything.
 - Verifying in the in-app Browser pane: the preview throttles rendering, so CSS animations sit at
   their first frame and screenshots wait for motion to settle - prove motion with
-  `el.getAnimations()` or keyed-remount node identity instead of watching. `ResizeObserver`
+  `el.getAnimations()` or keyed-remount node identity instead of watching. TRANSITIONS freeze the
+  same way, so a `getComputedStyle` opacity read mid-transition returns the OLD value and reads as a
+  bug that is not there - `el.getAnimations().forEach(a => a.finish())` over the animated nodes
+  (transitions are in that list too) jumps everything to its final state, which both fixes the read
+  and gives you a screenshot of the real settled frame. When asserting on computed values, note that
+  `getComputedStyle(el).strokeDashoffset` is `"0px"`, not `"0"` - `Number()` gives NaN and every
+  drawn path looks undrawn; use `parseFloat`. `ResizeObserver`
   callbacks may never fire there (dispatch a synthetic window `resize` after resizing), and
   synthetic `dispatchEvent` clicks BATCH under React 18 - one state-advancing synthetic click per
   `javascript_tool` call is the reliable rhythm. `window.innerWidth` can report the pane frame

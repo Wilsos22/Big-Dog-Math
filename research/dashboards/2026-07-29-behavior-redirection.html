@@ -1,0 +1,1575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Behavior Redirection — In the Moment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ground:#faf6ee; --card:#ffffff; --ink:#201e1a; --line:#ece4d4;
+    --amber:#fcaf38; --teal:#50a3a4; --brown:#674a40; --coral:#f95335; --green:#2f9e6f;
+    --teal-deep:#2f7d7e; --coral-deep:#d13a1f; --green-deep:#1f7d55;
+    --muted:#6b6259;
+    --font:"Albert Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;padding:20px;background:var(--ground);color:var(--ink);
+    font-family:var(--font);font-size:15px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;}
+
+  header.masthead{margin-bottom:18px;}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600;}
+  h1{font-size:30px;line-height:1.15;margin:6px 0 8px;font-weight:700;letter-spacing:-.02em;}
+  .standards{font-size:13px;color:var(--muted);}
+  .standards code{background:var(--card);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-family:var(--font);font-size:12px;font-weight:600;color:var(--brown);}
+
+  nav.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 18px;border-bottom:2px solid var(--line);padding-bottom:0;}
+  .tab{
+    appearance:none;border:none;background:transparent;font-family:var(--font);
+    font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;
+    padding:9px 14px;border-radius:8px 8px 0 0;margin-bottom:-2px;
+    border-bottom:2px solid transparent;transition:all .12s ease;
+  }
+  .tab:hover{color:var(--ink);background:rgba(255,255,255,.6);}
+  .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--coral);background:var(--card);}
+  .panel{display:none;animation:fade .18s ease;}
+  .panel.active{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:none;}}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:14px;}
+  .card h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;font-weight:700;}
+  .card p{margin:0 0 10px;}
+  .card p:last-child{margin-bottom:0;}
+
+  .lede{font-size:16px;line-height:1.6;}
+  .lede strong{color:var(--coral-deep);}
+
+  .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;}
+  .lev{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:12px;padding:15px 16px;}
+  .lev .num{font-size:26px;font-weight:700;color:var(--teal-deep);line-height:1;letter-spacing:-.03em;}
+  .lev .num small{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:0;}
+  .lev h3{font-size:15px;margin:8px 0 6px;font-weight:700;}
+  .lev p{font-size:13.5px;color:var(--muted);margin:0;line-height:1.45;}
+
+  .costs{background:#fdf6ec;border:1px solid var(--amber);border-radius:12px;padding:14px 16px;font-size:14px;margin-bottom:14px;}
+  .costs b{color:var(--brown);}
+
+  .flag{background:#fdefeb;border:1px solid var(--coral);border-radius:12px;padding:14px 16px;font-size:14px;margin-bottom:14px;}
+  .flag b{color:var(--coral-deep);}
+
+  .say{background:#f2f8f5;border-left:3px solid var(--green);border-radius:0 7px 7px 0;padding:9px 12px;font-style:italic;margin:7px 0 0;font-size:14px;}
+  .say b{font-style:normal;color:var(--green-deep);font-weight:700;letter-spacing:.09em;font-size:10.5px;text-transform:uppercase;display:block;margin-bottom:3px;}
+  .say .beat{display:block;margin-top:6px;}
+
+  .tier{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.07em;color:var(--brown);background:var(--ground);border:1px solid var(--line);border-radius:20px;padding:1px 7px;vertical-align:middle;margin-left:5px;font-style:normal;}
+
+  ol.seq{list-style:none;counter-reset:s -1;margin:0;padding:0;}
+  ol.seq li{counter-increment:s;position:relative;padding:13px 0 13px 44px;border-bottom:1px solid var(--line);}
+  ol.seq li:last-child{border-bottom:none;}
+  ol.seq li::before{
+    content:counter(s);position:absolute;left:0;top:12px;
+    width:28px;height:28px;border-radius:50%;background:var(--ground);border:1.5px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--brown);
+  }
+  ol.seq b{display:block;font-size:14.5px;margin-bottom:2px;}
+  ol.seq span.why{display:block;font-size:13.5px;color:var(--muted);}
+  ol.seq span.why b{display:inline;font-size:inherit;color:var(--ink);}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:0 10px 8px 0;border-bottom:1.5px solid var(--line);font-weight:700;}
+  td{padding:10px 10px 10px 0;border-bottom:1px solid var(--line);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  td code{background:var(--ground);border-radius:4px;padding:1px 5px;font-family:var(--font);font-weight:600;font-size:13px;}
+
+  .mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:14px;}
+  .mis{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;transition:border-color .12s;}
+  .mis:hover{border-color:var(--coral);}
+  .mis summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;align-items:flex-start;gap:11px;}
+  .mis summary::-webkit-details-marker{display:none;}
+  .mis[open] summary{border-bottom:1px solid var(--line);}
+  .chev{flex:none;width:18px;height:18px;margin-top:2px;color:var(--muted);transition:transform .15s;}
+  .mis[open] .chev{transform:rotate(90deg);}
+  .mis .name{font-weight:700;font-size:14.5px;display:block;margin-bottom:3px;}
+  .mis .wrong{font-size:13px;color:var(--coral-deep);font-weight:600;}
+  .mis .ok{font-size:13px;color:var(--teal-deep);font-weight:600;}
+  .mis .body{padding:13px 16px 16px;font-size:13.5px;}
+  .mis .body dt{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:12px;}
+  .mis .body dt:first-child{margin-top:0;}
+  .mis .body dd{margin:3px 0 0;line-height:1.45;}
+  .mis .body dd.say{margin-top:5px;}
+
+  .bigq{font-size:19px;font-weight:700;line-height:1.35;color:var(--coral-deep);font-style:italic;margin:4px 0 0;}
+
+  footer{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);}
+  @media (max-width:560px){
+    body{padding:14px;} h1{font-size:24px;} .tab{padding:8px 10px;font-size:13px;}
+    .mgrid{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Big Dog Math &middot; Research Brief</div>
+    <h1>Behavior Redirection</h1>
+    <div class="standards">
+      <code>6th grade</code> <code>Title 1</code> <code>grade level to ~2 years behind</code>
+      &nbsp;&middot;&nbsp; ~22 Tier 1 &middot; ~20 Tier 2 &middot; ~15 Tier 3/4 &nbsp;&middot;&nbsp; Compiled 2026-07-29
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-p="p1">In the moment</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="p2">The numbers</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="p3">Prevention</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="p4">The harder calls</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="p5">What's oversold</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="p6">Addendum</button>
+  </nav>
+
+  <!-- ============ IN THE MOMENT ============ -->
+  <section class="panel active" id="p1" role="tabpanel">
+
+    <div class="flag">
+      <b>Read this first.</b> The defensible core is small and boring: <b>walk over, say it quietly, one or two
+      sentences, name the replacement behavior, praise the second they comply.</b> Every part of that has evidence.
+      The famous technique layered on top of it mostly doesn't. One honest caveat before you use a single line below:
+      <b>nobody has experimentally tested the wording of a redirection.</b> No retrieved study manipulates private vs.
+      public, question vs. command, or naming-the-behavior vs. naming-the-student and measures compliance or escalation.
+      The <em>ladder</em> is evidenced. The exact sentences are craft.
+    </div>
+
+    <div class="card">
+      <h2>The ladder &mdash; what to do, in order</h2>
+      <ol class="seq">
+
+        <li>
+          <b>Precorrect &mdash; before the moment you already know is coming</b>
+          <span class="why">Name the expectation ahead of the structure, not after the break. Active supervision plus
+          precorrection: 7 of 7 studies met the CEC quality criterion, and one demonstration was literally in a
+          <b>6th grade general education classroom</b>. It costs about eight seconds. <span class="tier">T2</span></span>
+          <div class="say"><b>Say</b>&ldquo;Next four minutes are silent &mdash; just you and the paper. Then you check with your partner.&rdquo;</div>
+        </li>
+
+        <li>
+          <b>Proximity and scan &mdash; the correction is the walk</b>
+          <span class="why">Keep moving. The <em>degree</em> of active supervision &mdash; not the supervisor-to-student
+          ratio &mdash; accounted for the most variance in problem behavior. Most of the time this step is the whole
+          intervention and you never open your mouth. <span class="tier">T2</span></span>
+          <div class="say"><b>Say</b>Nothing. Stand there. Tap the problem number on their paper and keep walking.</div>
+        </li>
+
+        <li>
+          <b>Quiet, brief, specific &mdash; then leave</b>
+          <span class="why">Get close. One or two sentences. Name the behavior and the replacement. O'Leary et al. (1970)
+          ran a reversal across five classes over four months: switching from loud to soft reprimands reduced disruption;
+          switching back to loud produced <b>a consequent increase</b>; switching to soft again reduced it. That is a
+          demonstrated functional relationship, not a correlation. In this literature an &ldquo;explicit reprimand&rdquo;
+          is not harsh &mdash; it means <em>names the behavior, states exactly what to do instead, concisely.</em>
+          <span class="tier">T2</span></span>
+          <div class="say"><b>Say</b>&ldquo;Pencil on number 4.&rdquo;<span class="beat">&ldquo;Voices at a two &mdash; back to your own paper.&rdquo;</span></div>
+        </li>
+
+        <li>
+          <b>Directive, then praise the instant they comply</b>
+          <span class="why">Matheson &amp; Shriver: compliance rose with effective commands, and rose <b>more</b> when
+          praise was added contingent on compliance; academic engagement rose as compliance rose. The praise-on-compliance
+          step is the part most teachers skip, and it is the part that amplified the effect. <span class="tier">T2</span></span>
+          <div class="say"><b>Say</b>&ldquo;That's it. Two seconds and you were back &mdash; that's the try.&rdquo;<span class="beat">Name the effort. Never the ability.</span></div>
+        </li>
+
+        <li>
+          <b>Private conversation, not an office referral</b>
+          <span class="why">Ask why. Solve the thing. In the empathic-mindset field experiment, treatment teachers were
+          less likely to involve an administrator, and year-long official suspension rates were 4.6% vs 9.8%
+          (OR = 0.42, p = .001). Read the attenuation on <em>The harder calls</em> before you lean on that number.
+          <span class="tier">T1</span></span>
+          <div class="say"><b>Say</b>&ldquo;You're not in trouble. What's going on with number 4?&rdquo;<span class="beat">&ldquo;Confused is step one &mdash; that's how I know you're actually in it. Step two: what <em>do</em> you know?&rdquo;</span></div>
+        </li>
+
+        <li>
+          <b>Referral &mdash; last, and logged</b>
+          <span class="why">Log the reason and the period, and log it as subjective or objective. The threshold matters
+          more than the philosophy: schools that <em>fully</em> complied with Philadelphia's suspension ban saw no peer
+          harm; partial compliers saw peer math fall 0.06 SD. Pick a line you will hold every single time.
+          <span class="tier">T2</span></span>
+        </li>
+
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>Situation lookup &mdash; it is happening right now</h2>
+      <p style="font-size:13.5px;color:var(--muted);margin:0;">
+        Open the one that matches. Each is <em>what's actually going on</em> &rarr; <em>the move</em>.
+      </p>
+    </div>
+
+    <div class="mgrid">
+
+      <details class="mis" open>
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Two kids talking to each other</span><span class="wrong">Do not ignore it</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What's actually going on</dt>
+          <dd>The reinforcer is <b>peer attention</b>, not yours. Planned ignoring works only to the degree that
+          <em>your</em> attention is what maintains the behavior. It has never been validated standalone &mdash; the
+          founding study concluded rules alone exerted little effect, that ignoring plus approval <b>in combination</b>
+          was very effective, and that &ldquo;showing Approval for Appropriate Behaviors is probably the key.&rdquo;
+          The standard synthesis only ever lists it as &ldquo;planned ignoring <b>plus</b> contingent praise.&rdquo;
+          <span class="tier">T2</span></dd>
+          <dt>The move</dt>
+          <dd>Proximity first. Then a one-sentence directive with a re-check attached, and praise the first one back on task.</dd>
+          <dd class="say"><b>Say</b>&ldquo;Both of you &mdash; number 4. I'm back in thirty seconds to look at it.&rdquo;</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">The work is too hard and they've checked out</span><span class="wrong">Escape, not defiance</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What's actually going on</dt>
+          <dd>Mismatch generates behavior, and it does so in <em>both</em> directions. Time on task is highest at the
+          <b>instructional</b> level (93&ndash;97% known), lower at frustration <em>and</em> lower at independent. And you
+          cannot incentivize your way out of it &mdash; a math-level mismatch increased inappropriate behavior
+          <b>both with and without</b> a reinforcement contingency on accuracy. <span class="tier">T3</span></dd>
+          <dt>The move</dt>
+          <dd>A <b>high-probability task sequence</b>: three or four problems they can already do at the top of the set,
+          same instruction, then the hard one. That is the classroom-valid form of behavioral momentum &mdash; not the
+          &ldquo;touch your hair, clap your hands&rdquo; request sequence. See <em>What's oversold</em>.</dd>
+          <dd class="say"><b>Say</b>&ldquo;Skip to 7. You can do 7. Do three of those, then come back and we'll fight number 4 together.&rdquo;</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">They finished, and now they are the problem</span><span class="ok">Give harder work, not a consequence</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What's actually going on</dt>
+          <dd>The mirror image of the usual story: in one single case, a 4th grader's disruption occurred <em>after</em>
+          he finished, and assigning <b>harder</b> work fixed it. <span class="tier">T3, n=1</span></dd>
+          <dt>The move</dt>
+          <dd>Have the extension already sitting there. Reversibility (&ldquo;what would the other number have to be?&rdquo;)
+          or error-finding beats another worksheet.</dd>
+          <dd class="say"><b>Say</b>&ldquo;You're done, so you're promoted. Here's the version I couldn't do in my head.&rdquo;</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Same kid, second time today</span><span class="wrong">The bias checkpoint</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>Why this exact moment</dt>
+          <dd>In two randomized experiments with practicing teachers responding to real office-referral records, race
+          manipulated by name only, there was <b>no race difference after the first infraction</b> &mdash; p = .999 on
+          feeling troubled, p = .686 on discipline severity. The difference appeared at the <b>second</b>, and the
+          mediator was <b>pattern perception</b>: whether the teacher perceived &ldquo;a pattern.&rdquo; The national data
+          match the lab &mdash; Black students were 16.7% of enrollment, 33.3% of students suspended once, and
+          <b>44.3% of students suspended multiple times.</b> The disparity widens exactly at the repeat margin the lab
+          result predicts. <span class="tier">T2</span></dd>
+          <dt>The one question</dt>
+          <dd class="bigq">Am I responding to this incident, or to a story I've started telling about this kid?</dd>
+          <dt>Read the effect sizes honestly</dt>
+          <dd>Study 1 (n = 53) gave d &asymp; 0.9. The better-powered Study 2 (n = 191) gave d &asymp; 0.3&ndash;0.5 &mdash;
+          the classic small-sample inflation pattern. Trust Study 2. And these are judgments about paper records, not
+          live referrals.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">You're reaching for a referral and the reason is &ldquo;disrespect&rdquo;</span><span class="wrong">Highest-risk category there is</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What's actually going on</dt>
+          <dd>Racial disparity in discipline originates <b>at the classroom referral</b>, and it lives almost entirely in
+          the <b>subjective</b> categories. Across <b>1,154,686 students in 1,824 schools</b>, disproportionality in
+          subjective office referrals explained the vast majority of variance in total disproportionality. The
+          discriminant analysis found <b>no evidence</b> Black students were referred for more serious or a greater
+          variety of offenses &mdash; a <em>different pattern</em>: White students referred more for smoking, leaving
+          without permission, vandalism, obscene language (documentable); Black students for disrespect, excessive noise,
+          threat, loitering (interpretive). <span class="tier">T2</span></dd>
+          <dt>Why it matters more in your building than in an elementary</dt>
+          <dd>African American students were 2.19&times; as likely to be referred in elementary and <b>3.78&times; in
+          middle school</b>. Middle school is where the multiplier peaks. Disproportionality is also elevated
+          <b>in classrooms</b> rather than other settings, for incidents rated more severe, and it varies substantially
+          <b>by time of day.</b></dd>
+          <dt>The move</dt>
+          <dd>Step 4 instead: the private conversation. And log the reason plus the period, sorted subjective vs.
+          objective. <b>Honest caveat:</b> the &ldquo;vulnerable decision point / neutralizing routine&rdquo; idea &mdash;
+          a pre-committed if&ndash;then delay before acting on a subjective call &mdash; is well motivated by this data,
+          but <b>no experimental test showing it reduces referrals or disproportionality was retrieved.</b> Treat it as
+          theory-motivated, not proven.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">The whole room is off</span><span class="wrong">Not a redirection problem</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What's actually going on</dt>
+          <dd>Individual redirects do not scale. A whole-room problem is a structure problem &mdash; a transition you
+          didn't precorrect, a task nobody can enter, or an independent block you're supervising from your desk.</dd>
+          <dt>The move</dt>
+          <dd>Stop, reset the structure out loud, and precorrect the <em>next</em> transition rather than correcting this
+          one. Then go to <b>Prevention</b>, because otherwise you will be here again tomorrow.</dd>
+          <dd class="say"><b>Say</b>&ldquo;That's on me &mdash; I didn't tell you what this part was supposed to look like. Pencils down. Here's the next four minutes.&rdquo;</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">You want to offer a choice to calm them down</span><span class="wrong">Wrong end of the task</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the evidence says</dt>
+          <dd>A 2026 meta-analysis of <b>34 studies, 89 students, 170 cases, K&ndash;12</b> found instructional choice
+          significantly increased <em>desired</em> classroom behaviors (<b>LRR = .186, 95% CI [.042, .330]</b>) but
+          <b>did not significantly decrease challenging behaviors</b> (LRR = &minus;.468, 95% CI [&minus;1.1, .163] &mdash;
+          the interval crosses zero). The same review group that rated praise, precorrection and active supervision as
+          potentially evidence-based classified instructional choice as <b>&ldquo;insufficient evidence&rdquo;</b> under
+          CEC criteria. <span class="tier">T1</span></dd>
+          <dt>The move</dt>
+          <dd>Keep choice &mdash; move it earlier. Which problem set, which representation, which order, offered at the
+          <em>front</em> of a task. Effects were <b>larger for secondary students</b>, so it is a real lever for your
+          room. Just not after a kid is already off.</dd>
+        </dl></div>
+      </details>
+
+    </div>
+
+    <div class="costs">
+      <b>What this costs you.</b> The ladder only works if steps 0 and 1 are actually happening, which means you are not
+      sitting at your desk during independent work and you are spending eight seconds before the warm-up naming the
+      expectation. That is the price, and there is no version where you skip prevention and buy a better script instead.
+      The one observational study of middle school classrooms found teachers demonstrated <b>low rates of appropriate
+      responses to disruptive behavior</b>, and that those responses had the <b>strongest association</b> with total
+      rates of disruptive and on-task behavior &mdash; stronger than praise rate, stronger than OTR rate. Correlational,
+      but it points squarely at the thing most of us are worst at.
+    </div>
+  </section>
+
+  <!-- ============ THE NUMBERS ============ -->
+  <section class="panel" id="p2" role="tabpanel">
+
+    <div class="card">
+      <h2>The short version</h2>
+      <p class="lede">
+        The evidence is <strong>strong</strong> on prevention architecture and on the <em>costs</em> of exclusion. It is
+        <strong>surprisingly thin</strong> on the exact micro-moves teachers get trained in &mdash; most of the famous
+        numbers are weaker than their reputations. These are the figures that should actually move your defaults.
+      </p>
+    </div>
+
+    <div class="grid3" style="margin-bottom:14px;">
+
+      <div class="lev">
+        <div class="num">1.38<small> summary ES</small></div>
+        <h3>CW-FIT, WWC-rated</h3>
+        <p>30 studies identified, 8 meeting standards, 759 students PreK&ndash;10, 67% FRPL. Student behavior:
+        positive effects, <b>&ldquo;strong evidence,&rdquo;</b> improvement index +42, p&lt;.01. Tested grades
+        6&ndash;9. Materials free at cwfit.ku.edu. <span class="tier">T1</span></p>
+      </div>
+
+      <div class="lev" style="border-left-color:var(--coral);">
+        <div class="num" style="color:var(--coral-deep);">1.3<small> between-case SMD</small></div>
+        <h3>Response cards, middle school math</h3>
+        <p>A-B-A-B with <b>five middle school students with EBD during mathematics instruction</b>, replacing
+        hand-raising with whiteboards. Engagement increased for every participant. The single most directly
+        applicable study in the brief. <span class="tier">T2</span></p>
+      </div>
+
+      <div class="lev" style="border-left-color:var(--brown);">
+        <div class="num" style="color:var(--brown);">3&times;<small> disruption</small></div>
+        <h3>Student-chosen seats</h3>
+        <p>Fifth graders during independent seatwork: disruption ran <b>more than three times</b> as high when students
+        chose their seats rather than the teacher. Twice as high during group seating. Rows for individual tasks &mdash;
+        and disruptive students benefit most. <span class="tier">T2/T3</span></p>
+      </div>
+
+      <div class="lev">
+        <div class="num">1.68 &rarr; 3.50<small> OTRs/min</small></div>
+        <h3>The gap, not the threshold</h3>
+        <p>Baseline vs. intervention rate in studies that worked. <b>None of the 15 reviewed class-wide OTR studies
+        focused on differential effects of specific rates.</b> Descriptive baselines for students with EBD run
+        0.02&ndash;0.16 per minute. Raise yours; there is no line to cross. <span class="tier">T2</span></p>
+      </div>
+
+      <div class="lev">
+        <div class="num">Linear<small> no threshold</small></div>
+        <h3>Praise-to-reprimand ratio</h3>
+        <p><b>28 U.S. middle school classrooms.</b> As the ratio rose, class-wide on-task behavior improved, and on-task
+        behavior <b>and grades</b> rose while disruptive behavior fell for students at risk for EBD. The elementary
+        companion &mdash; 151 classrooms, 19 schools, three states &mdash; found the same straight line and no threshold.
+        <span class="tier">T2</span></p>
+      </div>
+
+      <div class="lev" style="border-left-color:var(--green);">
+        <div class="num" style="color:var(--green-deep);">70.5%<small> reduction</small></div>
+        <h3>Function-based intervention</h3>
+        <p>HLM meta-analysis: 69 studies, 146 subjects, 206 outcome graphs. A separate meta of 83 studies gives median
+        <b>PND 88%</b> overall, <b>93% in general education classrooms</b>, 90% for students with no diagnosed
+        disability, 76% in middle school. <span class="tier">T1</span></p>
+      </div>
+
+      <div class="lev" style="border-left-color:var(--amber);">
+        <div class="num" style="color:var(--brown);">0.27<small> g, middle school</small></div>
+        <h3>Check-In Check-Out</h3>
+        <p>Restricting to <b>group designs only</b> (6 studies, 146 students): overall g = 0.42, with grade level a
+        significant moderator &mdash; elementary 0.70 vs middle school <b>0.27</b> (Q = 3.95, p &lt; .05). The
+        single-case meta reports 1.22. Plan around 0.27. <span class="tier">T1</span></p>
+      </div>
+
+      <div class="lev">
+        <div class="num">&minus;.06<small> race &times; intervention</small></div>
+        <h3>The referral gap, closed</h3>
+        <p>86 secondary classrooms, 1,195 students, two-year video coaching. Control classrooms: student race predicted
+        referral (b = .04, p&lt;.01). Intervention classrooms: <b>no significant Black/non-Black disparity</b>
+        (95% CI [&minus;.107, &minus;.032]), maintained the year after coaching was withdrawn.
+        <span class="tier">T1</span></p>
+      </div>
+
+    </div>
+
+    <div class="card">
+      <h2>The mediator is the whole point</h2>
+      <p>
+        In that coaching RCT, Black students had a low probability of referral specifically with teachers who
+        <b>increased their skill at engaging students in high-level analysis and inquiry.</b> Not with teachers who got
+        better at redirection. That should reorder your priorities: your OTR rate, your instructional match, and your
+        seating chart do more for behavior than anything you say after the fact.
+      </p>
+      <p>
+        Corroborated from an unexpected direction. 570 Belgian children were followed from 2nd to 3rd grade through a
+        Good Behavior Game intervention with observational mediation analysis. The active ingredient was
+        <b>the reduction in teachers' negative remarks</b> &mdash; that predicted increased on-task behavior and
+        decreased talking-out, and those classroom changes in turn <em>mediated</em> the intervention's effect on
+        hyperactive and oppositional behavior development. The game apparatus wasn't the mechanism. The teacher talking
+        less negatively was.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Numbers to stop repeating</h2>
+      <table>
+        <thead><tr><th style="width:26%">The number</th><th>What it actually is</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>5:1</b><br><span style="color:var(--muted);font-size:12.5px;">praise to reprimand</span></td>
+            <td>No study found a threshold. The relationship is a straight line. The review that examined it concluded
+            there is <b>&ldquo;a lack of empirical support for any specific ratio&rdquo;</b> and explicitly
+            <b>argues against using one.</b> The study most often cited <em>for</em> 5:1 had <b>N = 6 teachers.</b>
+            What that study does demonstrate is worth stealing: teachers wore a device prompting on a
+            <code>VI 5-minute</code> schedule plus a self-monitoring chart, and their students showed fewer disruptive
+            behaviors and higher academic engaged time. The mechanism is the prompt and the tally, not the number.</td>
+          </tr>
+          <tr>
+            <td><b>3&ndash;5 OTRs per minute</b></td>
+            <td>A descriptive back-calculation from studies that worked, not a tested rate. Systematic review, verbatim:
+            <b>&ldquo;none of the 15 studies focused on differential effects of specific TD-OTR rates.&rdquo;</b></td>
+          </tr>
+          <tr>
+            <td><b>Tau-U = 0.85</b><br><span style="color:var(--muted);font-size:12.5px;">behavior-specific praise</span></td>
+            <td>That is the effect of <em>training</em> on <b>teacher</b> praise rates &mdash; not on student behavior.
+            The 50-year map of the BSP base (57 studies, 1,947 students) found <b>more than 96% of studies featured BSP
+            itself as an outcome measure.</b> Nearly the whole literature studies whether we can get teachers to praise
+            more, not whether kids then change. Do not let that number get recycled.</td>
+          </tr>
+          <tr>
+            <td><b>&ldquo;20 percentage points&rdquo;</b><br><span style="color:var(--muted);font-size:12.5px;">greeting at the door</span></td>
+            <td>Does not appear in the retrieved abstract, and <b>WWC reviewed that study and rated it &ldquo;Does Not
+            Meet Evidence Standards.&rdquo;</b> Greet kids at the door because it is free and humane. Don't cite a
+            number for it.</td>
+          </tr>
+          <tr>
+            <td><b>ES 3.41</b><br><span style="color:var(--muted);font-size:12.5px;">group contingencies</span></td>
+            <td>Real &mdash; 50 single-subject studies; dependent 3.75 (n=11), independent 3.27 (n=8), interdependent
+            2.88 (n=35). But these are <b>single-case effect-size metrics and are not comparable to Cohen's d
+            benchmarks.</b> An ES of 3.41 here does not mean what an ES of 0.34 would mean in a group design. And the
+            apparent superiority of dependent contingencies rests on 11 studies.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="costs">
+      <b>Two reading rules for every figure on this page.</b> First, the micro-move literature is almost entirely
+      single-case &mdash; PND, Tau-U, LRR and between-case SMD are not Cohen's d and should never be lined up next to it.
+      Second, <b>effect sizes shrink on replication in this literature, repeatedly.</b> The empathic-discipline
+      suspension halving became a non-significant 2.4 percentage points. The referral-bias effect went from
+      d &asymp; 0.9 to d &asymp; 0.3&ndash;0.5. Discount headline numbers accordingly, including the ones above.
+    </div>
+  </section>
+
+  <!-- ============ PREVENTION ============ -->
+  <section class="panel" id="p3" role="tabpanel">
+
+    <div class="card">
+      <h2>The frame</h2>
+      <p class="lede">
+        The strongest classroom-level result in this entire brief is <strong>not a behavior technique.</strong> It is a
+        two-year coaching RCT in 86 secondary classrooms that eliminated the racial referral gap inside intervention
+        classrooms &mdash; and the mediator was teachers getting better at engaging students in high-level analysis and
+        inquiry. Not a script. <strong>The work itself.</strong>
+      </p>
+      <p>
+        Everything below is the version of that finding one teacher can run without a coach, a co-teacher, or an
+        administrator's budget.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Six routines that make the redirect unnecessary</h2>
+      <ol class="seq" style="counter-reset:s 0;">
+
+        <li>
+          <b>Precorrection in the warm-up window</b>
+          <span class="why">Before the warm-up, name the one expectation that matters for today's structure &mdash;
+          &ldquo;this is silent, then partner check&rdquo; &mdash; and name it <em>before</em> anyone breaks it. This is
+          the CEC-rated move, and it was demonstrated in a <b>6th grade general education classroom</b>, where active
+          supervision plus precorrection produced a classroom-wide decrease in minor behavioral incidents. Eight seconds.
+          <span class="tier">T2</span></span>
+        </li>
+
+        <li>
+          <b>Circulate during every independent block. Do not sit.</b>
+          <span class="why">Active supervision went 7-for-7 on CEC quality indicators across 15 cases and 1,686
+          participants. And the study closest to your room complicates the usual difficulty story in a useful way: a
+          multi-element structural analysis with <b>three middle school boys (two 6th grade, one 8th) in honors math</b>,
+          randomizing easy/hard &times; high/low teacher attention daily, found <b>attention, not difficulty, drove
+          off-task behavior</b> &mdash; 10.00% vs 35.67% off-task intervals for one student, 3.06% vs 14.86% for another,
+          6.33% vs 26.83% for the third. Difficulty showed no consistent relationship. The authors flag that
+          &ldquo;high attention&rdquo; also meant proximity and possible direct assistance &mdash; which arguably
+          strengthens the practical read. <span class="tier">T2/T3</span></span>
+        </li>
+
+        <li>
+          <b>Response cards, not hands</b>
+          <span class="why">Under formal CEC criteria, <b>response cards specifically</b> &mdash; not
+          &ldquo;increasing opportunities to respond&rdquo; in general &mdash; earned a rating as a potentially
+          evidence-based practice. Mixed choral-and-individual responding beat either pure format: lowest off-task
+          percentage, lowest disruptive rate, highest active student responding. <span class="tier">T2</span></span>
+        </li>
+
+        <li>
+          <b>Assigned seats, rows for independent work</b>
+          <span class="why">Disruption during independent seatwork ran more than <b>three times higher</b> when students
+          chose their own seats. The narrative synthesis of 8 studies: students display higher levels of appropriate
+          behaviour during individual tasks when seated in rows, <b>with disruptive students benefiting the most.</b>
+          Clusters only when the task is genuinely collaborative. Let the task dictate the arrangement.
+          <span class="tier">T2/T3</span></span>
+        </li>
+
+        <li>
+          <b>A praise tally &mdash; a counter, not a target</b>
+          <span class="why">The most genuinely useful finding in the praise cluster is that <b>coaching educators to
+          increase behavior-specific praise meets CEC guidelines to be considered an evidence-based practice.</b>
+          Self-monitoring your own praise rate has better warrant than most scripts. A silent interval timer and a click
+          counter is the entire intervention. There is no threshold to hit; only a direction.
+          <span class="tier">T2</span></span>
+        </li>
+
+        <li>
+          <b>If you want a points system, make it a group contingency</b>
+          <span class="why">Individual token economies do not clear the bar. Group contingencies do &mdash;
+          &ldquo;particularly for addressing challenging behavior in general education classrooms.&rdquo; See the table
+          below. <span class="tier">T1</span></span>
+        </li>
+
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>Points systems: the one distinction that matters</h2>
+      <table>
+        <thead><tr><th style="width:26%">System</th><th>Verdict</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>Individual token economy</b></td>
+            <td>A systematic evaluation applying WWC single-subject standards plus meta-analysis across four effect-size
+            types to <b>24 studies</b> concluded the research <b>&ldquo;does not provide sufficient evidence to be deemed
+            best-practice based on the WWC criteria.&rdquo;</b> <span class="tier">T1</span></td>
+          </tr>
+          <tr>
+            <td><b>Group contingency</b></td>
+            <td>The same lead author's review found the opposite &mdash; the literature <b>&ldquo;demonstrated sufficient
+            rigor, evidence, and replication to label the intervention as evidence-based,&rdquo;</b> with the honest
+            caveat that reporting was too thin to say for whom and under what conditions. The 2017 update corroborated it
+            and found group contingencies effective <b>&ldquo;particularly for addressing challenging behavior in general
+            education classrooms.&rdquo;</b> <span class="tier">T1</span></td>
+          </tr>
+          <tr>
+            <td><b>Praise and specific positive feedback</b></td>
+            <td>Safe on both sides of the intrinsic-motivation fight. The two famous meta-analyses agree more than the
+            debate suggests. One (128 studies) found engagement-, completion-, and performance-contingent rewards
+            undermined free-choice intrinsic motivation (<code>d = &minus;0.40, &minus;0.36, &minus;0.28</code>) while
+            <b>positive feedback enhanced free-choice behavior (d = 0.33) and self-reported interest (d = 0.31)</b>, with
+            tangible rewards more detrimental for children than college students. The other (96 studies) found
+            <b>&ldquo;verbal praise produces an increase&rdquo;</b> and that the only negative effect appears when
+            expected tangible rewards are given simply for doing a task &mdash; and that effect is
+            <b>&ldquo;minimal.&rdquo;</b> The practice safe on both readings: praise and specific positive feedback,
+            freely; expected tangible rewards for mere participation, sparingly. <span class="tier">T1</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Prevention pieces with thinner warrant than you'd expect</h2>
+      <p style="font-size:13.5px;color:var(--muted);margin:0;">
+        Use them if you like them. Just don't defend them with the evidence, because it isn't there.
+      </p>
+    </div>
+
+    <div class="mgrid">
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Transitions &mdash; the Timely Transitions Game</span><span class="wrong">Mechanism portable, evidence weak</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What it is</dt>
+          <dd>Explicit timing, publicly posted feedback, and an interdependent group contingency with <b>randomly
+          selected</b> transitions and criteria, so students can't predict which one is being scored.</dd>
+          <dt>The catch</dt>
+          <dd>It was developed and evaluated <b>in a sixth-grade classroom</b> &mdash; exactly your band &mdash; but on an
+          <b>A-B design only, no reversal.</b> A later study added experimental control in grade 2. The mechanism is
+          directly portable; the evidence is weak. <span class="tier">T3</span></dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">&ldquo;Brisk pacing&rdquo;</span><span class="wrong">n = 2, grade 1, reading, 1976</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the study did</dt>
+          <dd>An ABABAB comparing slow-rate presentation (delay between student response and next task) vs. fast-rate,
+          <b>holding praise constant via a fixed 90-second prompt</b> to prevent confounding. Fast-rate was accompanied by
+          lower off-task behavior for both subjects, plus more correct answering and participation. Genuinely clean
+          design. <span class="tier">T3</span></dd>
+          <dt>The catch</dt>
+          <dd>It is <b>two low-achieving first-graders in beginning reading.</b> &ldquo;Brisk pacing&rdquo; for 6th grade
+          math is an extrapolation, not a finding.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Instructional match</span><span class="wrong">Contested, in your exact grade band</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>The classic claim</dt>
+          <dd>Off-task behavior spikes when work is at frustration level. Supported: time on task highest at the
+          <b>instructional</b> level (93&ndash;97% known words), lower at frustration <em>and</em> lower at independent;
+          and a math-level mismatch increased inappropriate behavior <b>both with and without</b> a reinforcement
+          contingency on accuracy &mdash; you cannot incentivize your way out of a bad match. <span class="tier">T3</span></dd>
+          <dt>What complicates it</dt>
+          <dd>The structural analysis with three middle school boys in honors math found <b>attention, not difficulty,</b>
+          drove off-task behavior, with no consistent difficulty relationship. And a separate single case found disruption
+          occurring <em>after</em> a student finished, fixed by assigning <b>harder</b> work.</dd>
+          <dt>The defensible synthesis</dt>
+          <dd>Mismatch in <em>either</em> direction generates behavior, with a strong independent effect of teacher
+          proximity and attention during seatwork sitting on top of it. In a mixed-readiness room, the move that serves
+          both is <b>circulating constantly during independent work.</b></dd>
+        </dl></div>
+      </details>
+
+    </div>
+
+    <div class="costs">
+      <b>The most useful null result in the brief.</b> The definitive modern Good Behavior Game trial:
+      <b>77 English primary schools, 3,084 Year 3 pupils, two years,</b> EEF security rating &ldquo;high,&rdquo; 0%
+      school-level attrition. Reading <code>g = 0.03, 95% CI &minus;0.08 to 0.16, p = 0.30</code> &mdash; zero months'
+      progress. No significant impact on concentration problems, disruptive behaviour, or pro-social behaviour; none on
+      teacher stress, self-efficacy, or retention. <b>One quarter of intervention schools stopped before the trial
+      ended.</b> The report's leading explanation for the null: teachers in <em>both</em> arms already reported frequent
+      use of several core GBG components at baseline, so &ldquo;programme differentiation may have been too limited.&rdquo;
+      Translation: a manualized game bolted onto a classroom that already has rules, monitoring, teams and rewards adds
+      nothing. Improve the baseline instead. <span class="tier">T1</span>
+    </div>
+  </section>
+
+  <!-- ============ THE HARDER CALLS ============ -->
+  <section class="panel" id="p4" role="tabpanel">
+
+    <div class="flag">
+      <b>Read this first.</b> Everything on this tab is contested, politically loaded, or cuts both ways. Any summary of
+      this material that runs in one direction is not a summary &mdash; it is an argument. On restorative practices
+      specifically: <b>every RCT that randomized program adoption came back null or negative in middle grades, while the
+      largest positive study is observational.</b>
+    </div>
+
+    <div class="card">
+      <h2>Restorative practices &mdash; what the flagship RCT actually found</h2>
+      <p style="font-size:13.5px;color:var(--muted);margin-bottom:12px;">
+        44 Pittsburgh public schools, 22/22 matched pairs, randomized in front of district staff, whole-school model,
+        two years. About 8,940 students for suspensions, 4,702 for achievement. <span class="tier">T1</span>
+      </p>
+      <table>
+        <thead><tr><th style="width:20%">Result</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b style="color:var(--green-deep);">What improved</b></td>
+            <td>Days of instruction lost to suspension fell 0.103 days against a 0.63 baseline &mdash; a
+            <b>16% reduction, ES &minus;0.060, p &lt; .05.</b> Teacher-rated classroom-conduct management rose
+            <b>ES 0.308, p &lt; .05.</b> Reductions concentrated among African American students, low-income students,
+            and female students, narrowing suspension gaps.</td>
+          </tr>
+          <tr>
+            <td><b>What did not</b></td>
+            <td><b>No suspension reduction in middle grades.</b> None for male students, none for students with IEPs,
+            none in arrests. Suspensions for violence or weapons: not significant.</td>
+          </tr>
+          <tr>
+            <td><b style="color:var(--coral-deep);">What got worse</b></td>
+            <td><b>Students rated their teachers' classroom management significantly lower</b> &mdash; 4.1 points off a
+            51.9 NCE baseline, <b>ES 0.209, p &lt; .01</b> &mdash; along with four of six other Tripod subscales and
+            In-Class Peer Support. RAND notes the pre-existing downward trend but concludes the relative downward trend
+            became <b>more severe</b> rather than less severe during the initiative.</td>
+          </tr>
+          <tr>
+            <td><b>Achievement, precisely</b></td>
+            <td>Combined math + reading, grades 3&ndash;8: ES &minus;0.065, <b>p &lt; .10 only</b> &mdash; the report
+            itself calls this not significant at conventional levels. <b>Math alone, grades 3&ndash;8: ES &minus;0.068,
+            p &lt; .05.</b> Subgroups on the combined measure: African American <b>&minus;0.150 (p&lt;.01)</b>; grade
+            7&ndash;8 students <b>&minus;0.105 (p&lt;.05)</b>; students with IEPs &minus;0.088 (p&lt;.10); grades
+            1&ndash;5 +0.020 (ns).</td>
+          </tr>
+          <tr>
+            <td><b>Two corrections</b></td>
+            <td>Both are usually garbled. <b>First:</b> the negative African American estimate is <b>not a student-race
+            effect</b> &mdash; RAND's supplementary analysis found the effect happened at the school level, negatively
+            affecting <b>both African American and white students at schools predominantly attended by African American
+            students</b>, and attributes it to implementation rather than student attributes. <b>Second:</b> RAND flags a
+            puzzle that breaks the simple causal story &mdash; the suspension gain was in <em>elementary</em> and the
+            achievement loss in <em>middle</em> grades, &ldquo;suggesting that reduced suspensions are not the reason
+            that PERC reduced achievement.&rdquo;</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mgrid">
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Two more middle-school RCTs, both null</span><span class="wrong">Neither found an effect</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>Maine</dt>
+          <dd>Two-year cluster RCT, <b>2,771 students in 13 Maine middle schools</b>, grades 6&ndash;7:
+          <b>&ldquo;The intervention did not yield significant changes in the treatment schools.&rdquo;</b> But student
+          self-reported <em>experience</em> with restorative practices significantly predicted better climate,
+          connectedness, peer attachment, and social skills &mdash; correlational within the trial.
+          <span class="tier">T1</span></dd>
+          <dt>Urban Northeast</dt>
+          <dd>Cluster RCT, <b>18 K&ndash;12 schools, 5,878 students</b>: <b>&ldquo;no differences in the likelihood of
+          suspension,&rdquo;</b> no variation by race, gender, or disability &mdash; but reductions for students who had
+          <em>previously</em> been suspended. The authors note the experimental evidence base is extremely limited.
+          <span class="tier">T1</span></dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">The largest positive study is observational</span><span class="ok">2 million students, no randomization</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What it found</dt>
+          <dd>Practice data from <b>485 middle schools</b> combined with outcomes for roughly <b>2 million middle school
+          students</b>, tracking <em>student exposure</em> rather than program adoption. Increasing exposure across the
+          5th-to-6th transition improved ELA and math and reduced suspension probability, with stronger effects for Black
+          and Latino/a students. It also found exposure was <b>inequitably distributed</b> &mdash; lower in schools
+          serving more Black and low-income students, and lower for those students within schools.
+          <span class="tier">T3</span></dd>
+          <dt>The design limit</dt>
+          <dd>The report's own argument is that prior RCTs evaluated <em>programs</em> that failed to shift practice.
+          That is a coherent argument. It is also the case that <b>exposure is not randomly assigned</b>, and the
+          institute is advocacy-adjacent.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Where the disagreement actually hinges</span><span class="wrong">Nothing adjudicates it</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>Programs vs. practices</dt>
+          <dd>Every study that randomizes <em>adoption</em> returns null or negative in middle grades. Every study that
+          measures <em>exposure</em> returns benefits. Advocates read the gap as implementation failure; skeptics read it
+          as selection. <b>No retrieved study randomizes exposure, so nothing adjudicates it</b> &mdash; though the Maine
+          trial's within-trial dose finding leans toward the advocates on mechanism while leaving the selection problem
+          intact.</dd>
+          <dt>Whose report you believe</dt>
+          <dd>Pittsburgh is the sharpest case: <b>teachers rated climate significantly better (ES +0.31) while students
+          rated classroom management significantly worse (ES &minus;0.21)</b> &mdash; same schools, same years, same
+          randomization. Any summary citing one and not the other isn't summarizing the study. Worth noting: the
+          IES/REL Northwest (2025) practitioner handout &mdash; the only quasi-official federal product located &mdash;
+          cites that RCT for its positive findings and mentions <b>none</b> of the negative ones.</dd>
+          <dt>And the equity result doesn't replicate in one direction</dt>
+          <dd>RAND found Black&ndash;white suspension gaps narrowed. A difference-in-differences study across
+          2008&ndash;2017 found a <b>profound decline in suspension rates during the first 5 years</b> while
+          <b>disciplinary outcomes for Black students were largely unchanged</b> and <b>racial disproportionality
+          widened.</b> LAUSD's interrupted time series found large suspension declines while Black/non-Black and
+          SPED/non-SPED gaps <b>still persist.</b> Reducing referrals is not the same as reducing bias.
+          <span class="tier">T2</span></dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">The call, and what would change it</span><span class="ok">Conversations yes, framework no</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>The call</dt>
+          <dd>Use restorative <em>conversations</em> &mdash; the one-on-one, ask-why, repair-the-thing move &mdash; as
+          your step-4 response. That is the component the empathic-discipline work and the Maine dose analysis both point
+          at, and it is the part a single teacher controls. Do <b>not</b> treat &ldquo;restorative&rdquo; as a substitute
+          for an explicit, enforced behavioral floor in a 6th grade math class: the middle-grades RCT evidence is
+          null-to-negative and the math estimate in the best trial was significantly negative.</dd>
+          <dt>What would flip it</dt>
+          <dd>A middle-grades RCT that randomizes <b>teacher-level</b> restorative conversation practice &mdash; not
+          whole-school adoption &mdash; and reports math achievement. <b>That study does not exist</b> in what was
+          retrievable.</dd>
+        </dl></div>
+      </details>
+
+    </div>
+
+    <div class="card">
+      <h2>Exclusion &mdash; the genuine tradeoff</h2>
+      <p style="font-size:13.5px;color:var(--muted);margin-bottom:12px;">
+        Present both halves or the argument doesn't hold.
+      </p>
+      <table>
+        <thead><tr><th style="width:18%">Side</th><th>Evidence</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b style="color:var(--coral-deep);">The costs</b></td>
+            <td>A suspension <b>decreases the suspended student's math and reading achievement (~0.05 SD)</b>, robust to
+            an instrumental-variables specification; peer spillover from suspensions for serious misconduct was
+            <b>&ldquo;very small&rdquo;</b> and did not change peer absences. Attending a middle school <b>one SD
+            stricter</b> raises dropout 1.7 pp (<b>+15%</b>), lowers 4-year college 2.4 pp (&minus;11%), raises
+            ever-arrested 3.2 pp (<b>+17%</b>), ever incarcerated 2.5 pp (<b>+20%</b>), adult arrests +25%, incarceration
+            spells +29% &mdash; largest for male and minority students, identified off a sudden boundary change comparing
+            neighbors split by a new line. <span class="tier">T1</span></td>
+          </tr>
+          <tr>
+            <td><b>The bystander cost of heavy exclusion</b></td>
+            <td><b>16,897 students in 17 schools, grades 6&ndash;10, 38,062 observations</b>, student- and
+            school-fixed-effects growth curves with placebo regressions: below-mean school suspension levels had almost no
+            effect on non-suspended students; above the mean, and especially more than 1 SD above, non-suspended students'
+            achievement declined. <b>In low-violence schools, predicted reading fell from about the 54th percentile at
+            mean suspension to the 28th at +2 SD.</b> The bystander damage is worst in the schools that are otherwise
+            calm. <span class="tier">T1</span></td>
+          </tr>
+          <tr>
+            <td><b>The other half</b></td>
+            <td>Principals more likely to remove students <b>genuinely do reduce reported rates of minor student
+            misconduct</b> &mdash; and generate more juvenile justice complaints, lower graduation rates for all students
+            in their schools, and additional attendance and test-score declines for students who committed minor
+            infractions. Separately, one additional disruptive classmate <b>in a class of 25</b> throughout elementary
+            school lowers grade 9&ndash;10 math and reading by <b>0.02 SD</b> and earnings at 24&ndash;28 by
+            <b>3 to 4 percent</b>, explaining 5&ndash;6% of the rich-poor earnings gap. <b>Read that carefully:</b> it
+            identifies peer <em>composition</em>, not disciplinary <em>response</em> &mdash; it establishes that
+            disruption is costly, not that removal fixes it. Absorbing disruption is not a neutral choice either.
+            <span class="tier">T1/T2</span></td>
+          </tr>
+          <tr>
+            <td><b>Structure is not the enemy</b></td>
+            <td>Using admissions lotteries in Massachusetts charters: <b>&ldquo;Schools that emphasize discipline and
+            comportment raise achievement in math and ELA by 0.29&sigma; and 0.11&sigma; more than schools that do
+            not.&rdquo;</b> Same paper, same design, on discipline outcomes: urban charter attendance <b>increases
+            suspensions by 0.7 days in middle school</b> and more than a full day in high school. The authors caution
+            these practices &ldquo;are typically implemented as a package rather than in isolation,&rdquo; and a review
+            argues the opposite reading &mdash; little evidence connecting no-excuses <em>disciplinary</em> methods to
+            test performance. <span class="tier">T2</span></td>
+          </tr>
+          <tr>
+            <td><b style="color:var(--teal-deep);">The finding that resolves it</b></td>
+            <td>Philadelphia banned out-of-school suspension for two classroom-disorder infractions. Partitioning schools
+            into full compliers and partial compliers: in full-compliance schools, <b>peer achievement and attendance
+            were unaffected post-reform.</b> In partial-compliance schools, <b>peer math achievement fell about
+            0.06 SD</b> &mdash; large enough to reduce the likelihood those students would achieve proficiency in math
+            &mdash; and <b>peer absences rose 0.45 days (3%), driven by a 0.78-day (8%) rise in unexcused absences.</b>
+            Baseline confound the authors are careful about: full compliers were already 0.17 SD above district peers in
+            math, partial compliers 0.03 SD below. <span class="tier">T2</span></td>
+          </tr>
+          <tr>
+            <td><b>Pointing the same way</b></td>
+            <td>In Chicago, where the share of high schoolers suspended fell from 24% to 16% over four years, reducing
+            suspensions for <b>severe</b> infractions was associated with slightly higher test scores and better
+            attendance; <b>students at the highest estimated risk of suspension felt safer</b>; students at the
+            <b>lowest</b> estimated risk saw the <b>largest test score gains</b>; and there was no evidence overall
+            achievement was harmed. <span class="tier">T2/T3</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="costs">
+      <b>The synthesis, and it is the most actionable line in the brief.</b> The variable that determines whether reduced
+      exclusion helps or hurts bystanders is <b>consistency of implementation, not the philosophy.</b> Half-following a
+      discipline policy is worse for bystanders than either following it or not having it. Write down the two or three
+      things that go to the office, and hold that line every single time.
+    </div>
+
+    <div class="mgrid">
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Bias &mdash; the intervention and its honest attenuation</span><span class="wrong">&ldquo;Cuts suspension in half&rdquo; did not replicate</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>The original</dt>
+          <dd>Placebo-controlled randomized field experiment: <b>31 middle school math teachers across 5 California
+          schools, 1,682 students.</b> One 45-minute empathic-mindset module plus a 25-minute booster. Year-long official
+          suspension records: <b>4.6% treatment vs 9.8% control, OR = 0.42, p = .001.</b> Previously suspended students:
+          <b>51.2% &rarr; 29.4%.</b> (The paper's own abstract prints 9.6%/4.8% while its Results print 9.8%/4.6% &mdash;
+          a small internal inconsistency.) <span class="tier">T1</span></dd>
+          <dt>The preregistered replication</dt>
+          <dd><b>66 randomized middle school math teachers, 5,822 students</b>, a far more diverse sample.
+          <b>The preregistered main effect did not reach significance in the clean randomized sample</b> &mdash; 2.4 pp,
+          95% CI (&minus;0.007 to 0.055), <b>P = 0.130 two-tailed.</b> The effect was <b>entirely on in-school
+          suspension</b> (9.4% vs 14.2%, P = 0.001); out-of-school suspension showed nothing (P = 0.553). A teacher-level
+          analysis the following year found nothing (P = 0.754). <span class="tier">T1</span></dd>
+          <dt>What did replicate, and was preregistered</dt>
+          <dd><b>For Black and Hispanic students, suspension fell 20.8% vs 26.5% (P = 0.005)</b>, with no effect for other
+          students &mdash; narrowing the disparity from 10.6 pp to 5.9 pp, a <b>45% reduction</b>
+          (interaction P = 0.011).</dd>
+          <dt>The defensible claim</dt>
+          <dd>Narrower than the headline and still valuable: an empathic framing changes whether <em>you</em> escalate a
+          lower-stakes exclusion for a student of color. Any use of this literature should say the attenuation out loud.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Function-based thinking</span><span class="ok">Best-evidenced &ldquo;understand the cause&rdquo;</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>The numbers</dt>
+          <dd>Meta-analysis of <b>83 studies, 145 participants</b> in school settings: overall <b>median PND 88%</b>
+          &mdash; reducing problem behavior 80%, increasing appropriate skills 90%, maintenance 100%. By setting:
+          <b>general education classrooms 93%</b>, with no significant differences across settings. By grade: elementary
+          88%, <b>middle school 76%</b>, high school 99%, no significant differences. Students with <b>no diagnosed
+          disability: 90%.</b> A separate HLM meta-analysis of 69 studies found FBA-based interventions <b>reduced problem
+          behavior by an average of 70.5%.</b> <span class="tier">T1</span></dd>
+          <dt>The one process feature that mattered</dt>
+          <dd><b>Team decision-making during intervention planning</b> was the only process feature predicting
+          significantly larger effects.</dd>
+          <dt>The honest ceiling</dt>
+          <dd>WWC rates FBA-based interventions <b>&ldquo;potentially positive effects&rdquo;</b> &mdash; not
+          &ldquo;positive&rdquo; &mdash; on school engagement (15 studies, 32 cases, 74% of single-case experiments
+          positive, 0% negative) and on problem behavior (8 studies, 21 cases, 68% positive, 0% negative). The reason is
+          that the base is <b>entirely single-case.</b> That is the ceiling of this literature, not a knock on the
+          practice. <span class="tier">T1</span></dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Relationship repair after conflict</span><span class="wrong">Pilot promising, scale-up not</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>The pilot</dt>
+          <dd>20 teachers and 190 middle school students randomized to Establish&ndash;Maintain&ndash;Restore:
+          relationships <code>g = .61 [0.21, 1.02]</code>; academically engaged time <code>g = .81 [0.01, 1.63]</code>;
+          disruptive behavior <code>g = 1.07 [0.01, 2.16]</code>. <b>Both behavior confidence intervals bottom out
+          essentially at zero</b>; the authors' own wording is &ldquo;potential promise.&rdquo;
+          <span class="tier">T2</span></dd>
+          <dt>The scale-up</dt>
+          <dd>Cluster RCT, <b>94 teachers, 417 students, 6 high schools</b>: <b>non-significant main effects</b>, targeted
+          benefits for students starting low and for several minoritized groups, and <b>unexpected negative effects for
+          high-performing and advantaged students.</b> That is the honest current state.
+          <span class="tier">T2</span></dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Spillover &mdash; how you correct one kid teaches the room</span><span class="wrong">Origin claim is unverified</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>The famous version</dt>
+          <dd>Kounin &amp; Gump's 1958 &ldquo;ripple effect.&rdquo; The citation is verified but the article text was not
+          retrieved; <b>the familiar claims about task-focused vs. harsh desists come from secondary summaries and are
+          unverified.</b> <span class="tier">T3/T4</span></dd>
+          <dt>The modern, quantified version</dt>
+          <dd>Heavy exclusionary discipline damages non-suspended students' achievement, and damages it <b>most in
+          otherwise-calm schools.</b> That is the spillover claim you can actually defend.</dd>
+        </dl></div>
+      </details>
+
+    </div>
+  </section>
+
+  <!-- ============ OVERSOLD ============ -->
+  <section class="panel" id="p5" role="tabpanel">
+
+    <div class="flag">
+      <b>Read this first.</b> These are the things you will be handed in a PD, an evaluation conference, or a hallway
+      conversation. Each card is <em>what you'll be told</em> &rarr; <em>what the evidence says</em> &rarr; <em>what to do
+      instead.</em> None of this means the practice is harmful. It means the warrant isn't there, so don't spend your
+      limited change budget on it.
+    </div>
+
+    <div class="mgrid">
+
+      <details class="mis" open>
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">&ldquo;Hit five praises for every correction&rdquo;</span><span class="wrong">No threshold exists</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the evidence says</dt>
+          <dd>Verbatim from the review that examined it: <b>&ldquo;Although this rule has good face validity, there is a
+          lack of empirical support for any specific ratio,&rdquo;</b> and the authors <b>&ldquo;argue against the use of
+          any specific ratio.&rdquo;</b> Two large observational studies inside efficacy trials &mdash; 28 middle school
+          classrooms, and 151 elementary classrooms across 19 schools and three states &mdash; found a <b>straight line
+          and no threshold</b> at which behaviour dramatically improved. The study most often cited for 5:1 had
+          <b>N = 6 teachers.</b> <span class="tier">T2/T3</span></dd>
+          <dt>What to do instead</dt>
+          <dd>Raise the ratio continuously and measure the direction, not the level. Steal the mechanism from the N=6
+          study: a prompt on a <b>variable-interval 5-minute schedule</b> plus a self-monitoring chart. That is the whole
+          intervention.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">&ldquo;Give them a choice to de-escalate&rdquo;</span><span class="wrong">Front-end move only</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the evidence says</dt>
+          <dd>Meta-analysis of 34 studies, 89 students, <b>170 cases</b>, K&ndash;12: choice significantly increased
+          desired classroom behaviors (<b>LRR = .186 [.042, .330]</b>) but <b>did not significantly decrease challenging
+          behaviors</b> (LRR = &minus;.468 [&minus;1.1, .163]). A CEC-criteria review of 26 experimental studies
+          classified instructional choice as <b>&ldquo;insufficient evidence&rdquo;</b> &mdash; from the same group that
+          rated praise, precorrection and active supervision as potentially evidence-based.
+          <span class="tier">T1/T2</span></dd>
+          <dt>What to do instead</dt>
+          <dd>Offer choice at the front of the task &mdash; which problem set, which representation, which order. Effects
+          were <b>larger for secondary students</b>, so it earns its place. Just not as a de-escalation move.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">&ldquo;Just ignore it&rdquo;</span><span class="wrong">Never validated standalone</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the evidence says</dt>
+          <dd>The founding study concluded: <b>&ldquo;Rules alone exerted little effect&rdquo;</b> on classroom behavior;
+          ignoring inappropriate behavior and showing approval for appropriate behavior <b>in combination</b> were very
+          effective; and <b>&ldquo;showing Approval for Appropriate Behaviors is probably the key.&rdquo;</b> The standard
+          synthesis lists the practice under the name <b>&ldquo;planned ignoring plus contingent praise and/or instruction
+          of classroom rules&rdquo;</b> &mdash; the qualifier is <em>in the name of the practice</em> &mdash; and notes
+          its effectiveness &ldquo;is directly related to the degree to which teacher attention is a positive reinforcer
+          maintaining undesired behavior.&rdquo; <span class="tier">T2/T3</span></dd>
+          <dt>What to do instead</dt>
+          <dd>Check the function first. For <b>peer-attention-maintained or escape-maintained behavior &mdash; which is
+          most of 6th grade</b> &mdash; ignoring does nothing or makes it worse.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Individual token economies</span><span class="wrong">Does not clear the WWC bar</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the evidence says</dt>
+          <dd>WWC single-subject standards plus meta-analysis across four effect-size types applied to <b>24 studies</b>:
+          <b>&ldquo;the extant research on token economies does not provide sufficient evidence to be deemed
+          best-practice based on the WWC criteria.&rdquo;</b> <span class="tier">T1</span></dd>
+          <dt>What to do instead</dt>
+          <dd>Group contingencies <em>do</em> clear that bar &mdash; and specifically &ldquo;for addressing challenging
+          behavior in general education classrooms.&rdquo; If you want a points system, make it a group contingency.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">High-probability request sequences</span><span class="wrong">&ldquo;Simon Says,&rdquo; with a token economy inside it</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the evidence says</dt>
+          <dd>A CEC review of 22 studies rated HPRS <b>potentially evidence-based</b> (2 met all quality indicators, 16
+          met the 80% criterion). Then a critical review took it apart. It tabulates the actual high-p requests used
+          across that literature &mdash; <em>&ldquo;Touch your hair,&rdquo; &ldquo;Clap your hands,&rdquo; &ldquo;Stomp
+          your feet,&rdquo; &ldquo;Give me a hug,&rdquo; &ldquo;Move your eyebrows&rdquo;</em> &mdash; and comments that
+          <b>&ldquo;a cursory examination of these high-p requests could lead one to believe the game of &lsquo;Simon
+          Says&rsquo; was being used.&rdquo;</b> The one classroom-relevant version is <b>&ldquo;the exception rather
+          than the rule.&rdquo;</b> And the recommended implementation embeds a token economy, so <b>&ldquo;a purportedly
+          low-intensity technique has embedded in it an extremely high-intensity reinforcement delivery
+          system.&rdquo;</b> <span class="tier">T2/T3</span></dd>
+          <dt>What to do instead</dt>
+          <dd>Keep the usable half. <b>High-probability <em>task</em> sequences</b> &mdash; three or four problems the
+          student can already do at the top of the set, same instruction &mdash; are trivially implementable and are the
+          classroom-valid form of behavioral momentum. Do that; skip the request sequences.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Positive greetings at the door</span><span class="wrong">WWC: Does Not Meet Evidence Standards</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the evidence says</dt>
+          <dd>There is an RCT with middle school teachers reporting improvements in academic engaged time and reduced
+          disruption &mdash; and <b>WWC reviewed that study and rated it &ldquo;Does Not Meet Evidence
+          Standards.&rdquo;</b> The circulating &ldquo;20 percentage points&rdquo; and &ldquo;12 minutes per hour&rdquo;
+          figures do not appear in the retrieved abstract. <span class="tier">T3</span></dd>
+          <dt>What to do instead</dt>
+          <dd>Keep doing it. It is free and humane. Just don't cite a number for it.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Trauma-informed practice</span><span class="wrong">Zero studies met inclusion</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the evidence says</dt>
+          <dd>A full Campbell systematic review &mdash; multi-database search, conference proceedings, reference
+          harvesting, author emails, dual independent screening. The finding, verbatim: <b>&ldquo;Although we conducted a
+          comprehensive search to find studies testing trauma-informed approaches in schools, no studies met the
+          inclusion criteria.&rdquo;</b> And: <b>&ldquo;the evidence in this area is completely lacking.&rdquo;</b>
+          <span class="tier">T1</span></dd>
+          <dt>What to do instead</dt>
+          <dd>Treat it as what it is: a values framework and a staff-training market. Say so plainly if it comes up. The
+          humane instincts underneath it are fine; the claim that it is an evidence-based practice is not.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Collaborative &amp; Proactive Solutions in classrooms</span><span class="wrong">Clinical, parent-delivered, and equivalent</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the evidence says</dt>
+          <dd>Two genuine RCTs exist, <b>both clinical and parent-delivered.</b> The 2004 trial (50 clinic-referred
+          children with ODD, CPS vs. parent training): on the primary symptom measure <b>Time &times; Group interactions
+          were non-significant</b> &mdash; CPS did not beat parent training; the between-group wins were on a global
+          clinical impression rating. The largest trial (<b>160 youth with ODD</b> in Australian community clinics,
+          independent diagnostic interviews, equivalence testing): <b>both treatments equivalent, no between-group
+          differences.</b> The school evidence is two uncontrolled studies from one consulting group &mdash; a
+          self-described pilot whose headline outcome was <b>teacher self-reported stress</b>, and a pre-post with no
+          control. <span class="tier">T2 / T3</span></dd>
+          <dt>What to do instead</dt>
+          <dd>CPS is a defensible clinical alternative to parent training. <b>It is not a demonstrated
+          classroom-management method.</b> The ask-why conversation it is built on is already your step 4.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">De-escalation training and the escalation cycle</span><span class="wrong">No rigorous evaluation, in any field</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the evidence says</dt>
+          <dd>The definitive systematic review, from healthcare: <b>&ldquo;All National Health Service staff are trained
+          in de-escalation but there is little to no evidence supporting training's effectiveness,&rdquo;</b> and the
+          earlier review concluded <b>&ldquo;no model of training has demonstrated effectiveness in a sufficiently
+          rigorous evaluation.&rdquo;</b> <b>No controlled trial of de-escalation training for teachers was found at
+          all.</b> <span class="tier">T1 for the review</span></dd>
+          <dt>The seven-phase cycle</dt>
+          <dd>Calm, trigger, agitation, acceleration, peak, de-escalation, recovery. It is a <b>practitioner heuristic
+          with no validation study</b> that could be located; the only school evaluation found is a dissertation with 30
+          volunteer teachers, no student outcomes, no control group. Useful mental map; not evidence.
+          <span class="tier">T4</span></dd>
+          <dt>What to do instead</dt>
+          <dd>The <em>premise</em> &mdash; that lower-intensity precursor behaviors reliably precede severe behavior and
+          share its function &mdash; does have support in the applied-behavior-analysis precursor literature. Use the map
+          for noticing. Don't call it a trained skill.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Bolting on a behavior game</span><span class="wrong">g = 0.03, p = 0.30</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>What the evidence says</dt>
+          <dd>77 English primary schools, 3,084 pupils, two years, EEF security &ldquo;high,&rdquo; 0% school-level
+          attrition. Reading <b>g = 0.03 [&minus;0.08, 0.16], p = 0.30.</b> No significant impact on concentration
+          problems, disruptive behaviour, pro-social behaviour, teacher stress, self-efficacy, or retention.
+          <b>One quarter of intervention schools discontinued.</b> Teachers' stated reasons: setup time wasn't worth it,
+          the game didn't fit all content, and the rule forbidding teacher interaction during the game blocked them from
+          helping students with additional needs. <span class="tier">T1</span></dd>
+          <dt>What to do instead</dt>
+          <dd>The report's leading explanation for the null is that control teachers already used core components at
+          baseline &mdash; <b>&ldquo;programme differentiation may have been too limited.&rdquo;</b> Improve your
+          baseline. A manualized game added to a room that already has rules, monitoring, teams and rewards adds
+          nothing.</dd>
+        </dl></div>
+      </details>
+
+    </div>
+
+    <div class="costs">
+      <b>What does not belong in the classroom OS.</b> An individual token economy, a bolt-on behavior game, a
+      de-escalation flowchart, a trauma-informed poster, or a choice menu offered to a kid who's already off-task. Each
+      of those is either unsupported or has failed in a trial larger than anything you would ever run.
+    </div>
+
+    <div class="card">
+      <h2>Open questions and weak spots &mdash; say these out loud if pressed</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td style="width:30%"><b>Nobody has tested the wording of a redirection</b></td>
+            <td>It was searched for directly. No retrieved study manipulates private vs. public, question vs. command, or
+            naming-the-behavior vs. naming-the-student and measures student compliance or escalation. O'Leary (1970)
+            tests <em>volume</em>; Matheson &amp; Shriver tests <em>command clarity plus praise</em>. Everything else in
+            the &ldquo;what to say&rdquo; space is craft.</td>
+          </tr>
+          <tr>
+            <td><b>The micro-move literature is almost entirely single-case</b></td>
+            <td>PND, Tau-U and LRR are not comparable to Cohen's d. An ES of 3.41 for group contingencies does not mean
+            what an ES of 0.34 would mean in a group design.</td>
+          </tr>
+          <tr>
+            <td><b>Middle grades are systematically under-served</b></td>
+            <td>Restorative RCTs found nothing there. CICO drops from 0.70 to 0.27. FBA drops from 88% to 76% PND. The
+            best micro-move demonstrations are elementary. The exceptions &mdash; the CW-FIT and praise-ratio work in
+            middle school, the response-card study in middle school math, and the 6th grade active supervision
+            demonstration &mdash; are the ones weighted most heavily here for exactly that reason.</td>
+          </tr>
+          <tr>
+            <td><b>Marked unverified in the source brief</b></td>
+            <td>The alpha/beta command distinction; the &ldquo;4&ndash;6 / 8&ndash;12 OTRs per minute&rdquo; figures; the
+            positive-greetings &ldquo;20 percentage point&rdquo; figure; the escalation-cycle validation; the
+            precursor-behavior primaries; the Kounin &amp; Gump ripple-effect claims. <b>None of them carries a
+            recommendation here.</b></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ ADDENDUM ============ -->
+  <section class="panel" id="p6" role="tabpanel">
+
+    <div class="flag">
+      <b>Three follow-up questions, answered separately.</b> Progressive name-on-the-board. Positive family contact for
+      checked-out and behavior students. And the race-and-gender pattern in your own send-outs.
+      <br><br>
+      <b>Retrieval caveat, stated up front.</b> Six research runs died to server errors, so this section is narrower than
+      the rest of the dashboard. Only two items below are verified verbatim from primary text: the GAO Highlights and the
+      &ldquo;Awareness Is Not Enough&rdquo; abstract. Everything else was reached at abstract, ERIC-record, or
+      search-summary level, and is marked. Full accounting in
+      <code>research/2026-07-29-behavior-addendum-name-on-board-family-contact-disparity.md</code>.
+    </div>
+
+    <div class="card">
+      <h2>1. Progressive name-on-the-board</h2>
+      <p class="lede"><strong>Unsupported.</strong> Not proven harmful &mdash; the direct evidence is close to
+      nonexistent, which is itself the finding. But both defining features work against it: it is <b>public</b>, and it
+      <b>accumulates</b>.</p>
+      <table>
+        <tbody>
+          <tr>
+            <td style="width:30%"><b>Where it comes from</b></td>
+            <td>Assertive Discipline (Canter). Render, Padilla &amp; Krank audited it twice in 1989. The
+            <em>Educational Leadership</em> piece summarized <b>12 studies</b> and found &ldquo;no indication that the
+            program is any more effective than any other approach to reducing discipline problems in schools.&rdquo; The
+            <em>Teachers College Record</em> review called it &ldquo;philosophically questionable and unsupported by
+            well-designed research.&rdquo; <span class="tier">T3, summaries only</span></td>
+          </tr>
+          <tr>
+            <td><b>The reply is the tell</b></td>
+            <td>Canter's published response is titled <b>&ldquo;But Practitioners Say It Works!&rdquo;</b> and argues
+            implementation should rest on factors beyond research. Fair position. Not a research defense.</td>
+          </tr>
+          <tr>
+            <td><b>The recurring pattern</b></td>
+            <td>Emmer &amp; Aussiker (1990) reviewed four discipline packages: teachers <em>liked</em> Assertive
+            Discipline and their own behavior was influenced by it, but &ldquo;effects on student behavior are
+            unclear.&rdquo; Same shape as behavior-specific praise, where over 96% of studies measured whether teachers
+            praised more rather than whether students changed. <span class="tier">T3, summary only</span></td>
+          </tr>
+          <tr>
+            <td><b>Clip charts and color systems</b></td>
+            <td><b>No peer-reviewed efficacy literature exists.</b> Searched directly; what returns is teacher-marketplace
+            products, blogs, and theses. The one empirical item locatable is a master's manuscript on student
+            <em>perceptions</em>, reporting most students disliked the chart <em>whether public or hidden</em> &mdash;
+            an acceptability signal, not an effect. <span class="tier">T4, unpublished thesis</span></td>
+          </tr>
+          <tr>
+            <td><b>Public delivery is the part with evidence against it</b></td>
+            <td>O'Leary et al. (1970), four-month reversal design, five classes. At baseline nearly all reprimands were
+            audible to the class. Soft private reprimands reduced disruption; returning to loud produced &ldquo;a
+            consequent increase in disruptive behavior&rdquo;; soft again reduced it. Name-on-the-board is the maximally
+            public version, and it stays visible. <span class="tier">T2</span></td>
+          </tr>
+          <tr>
+            <td><b>And 11&ndash;13 is the worst audience for it</b></td>
+            <td>Somerville et al. (2013), <em>Psychological Science</em>: participants saw cues indicating a camera was
+            off, warming up, or projecting to a peer. <b>Merely believing a peer was watching induced self-conscious
+            emotion that rose from childhood to adolescence and partially subsided into adulthood, with autonomic arousal
+            uniquely heightened in adolescents.</b> Lab study, not classroom. <span class="tier">T2, summaries only</span></td>
+          </tr>
+          <tr>
+            <td><b>The &ldquo;progressive&rdquo; part specifically</b></td>
+            <td><b>No evidence found either way.</b> Nobody appears to have tested whether check-one-check-two-check-three
+            beats a single consistent response. Absent, not negative.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="costs">
+        <b>One inference, labeled as inference.</b> A running public tally is a device for making <em>incident count</em>
+        salient &mdash; to you and to the room. Bias did not appear at incident one; it appeared at incident two, mediated
+        by whether the teacher perceived &ldquo;a pattern.&rdquo; A board of accumulating marks is an instrument for
+        manufacturing that perception and broadcasting it. That connects two separate findings; nobody has tested it.
+      </div>
+      <p class="say"><b>What to do instead</b>Keep the tracking, drop the display. A tally on your clipboard or in the
+      control panel preserves the consistency benefit and removes the public audience and the visible pattern-cue.
+      <span class="beat">If a student needs to know they are on their second redirect, that is a sentence delivered
+      quietly at their desk &mdash; which is the version with the reversal-design evidence behind it.</span></p>
+    </div>
+
+    <div class="card">
+      <h2>2. Positive family contact</h2>
+      <p class="lede">Family contact <strong>works</strong>, with real RCT evidence that includes 6th graders. But
+      <strong>&ldquo;positive&rdquo; is not the active ingredient</strong>, and one trial found improvement-focused
+      framing outperformed positive framing.</p>
+      <div class="grid3" style="margin-bottom:14px;">
+        <div class="lev">
+          <div class="num">42%</div>
+          <h3>Higher odds of homework completion</h3>
+          <p>Kraft &amp; Dougherty (2013), randomized field experiment, <b>6th and 9th graders</b>, daily phone call home
+          plus a written or text message. Same study: teacher redirections <b>down 25%</b>, class participation up
+          roughly 15%. <span class="tier">T1, abstract-level</span></p>
+        </div>
+        <div class="lev" style="border-left-color:var(--coral);">
+          <div class="num" style="color:var(--coral-deep);">41%</div>
+          <h3>Reduction in failing to earn credit</h3>
+          <p>Kraft &amp; Rogers (2015), <b>weekly one-sentence</b> individualized messages to parents. Failure to earn
+          credit fell 15.8% to 9.3%, driven primarily by preventing dropout rather than reducing failure or dismissal.
+          <span class="tier">T1, abstract-level</span></p>
+        </div>
+        <div class="lev" style="border-left-color:var(--brown);">
+          <div class="num" style="color:var(--brown);">1 sentence</div>
+          <h3>The runnable design</h3>
+          <p>Daily calls worked in a summer program and will not survive five sections across a school year. One sentence
+          per kid per week produced the 41% result. That is the transferable version.</p>
+        </div>
+      </div>
+      <div class="costs">
+        <b>The twist, and it cuts against the intuition.</b> Kraft &amp; Rogers ran three arms &mdash; messages with
+        <em>positive</em> information, messages about <em>how the student could improve</em>, and a no-message control.
+        <b>The messages emphasizing what students could improve produced the largest effects</b>, larger than the
+        positive-information messages. So if you get one sentence a week, the evidence says spend it on the one thing to
+        work on, not on the compliment.
+      </div>
+      <table>
+        <tbody>
+          <tr>
+            <td style="width:30%"><b>Do not overcorrect</b></td>
+            <td>Both trials ran in summer or credit-recovery settings with short horizons and high-stakes outcomes &mdash;
+            not your February. And the positive arm was not <em>harmful</em>; it was just not strongest.</td>
+          </tr>
+          <tr>
+            <td><b>The relationship case for positive contact</b></td>
+            <td>Stronger teacher-student relationships was one of Kraft &amp; Dougherty's three named mechanisms, and
+            relationship quality correlates .39 with engagement with the association <em>larger</em> in low-SES and
+            secondary samples. A purely positive first contact is defensible as relationship investment even though the
+            improvement-framed message is what moved work completion.</td>
+          </tr>
+          <tr>
+            <td><b>The honest gap</b></td>
+            <td><b>No controlled study isolates <em>positive</em> contact from contact generally.</b> Anyone citing
+            research for &ldquo;make positive phone calls home&rdquo; as its own practice is probably citing Kraft &amp;
+            Dougherty, which was daily calls covering academics <em>and</em> behavior &mdash; not a positivity
+            intervention.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>3. Your send-out pattern</h2>
+      <p class="lede">The pattern you described is <strong>the best-documented disparity in the field</strong>, and it is
+      documented specifically for Black girls &mdash; the less-covered half of this literature.</p>
+      <table>
+        <tbody>
+          <tr>
+            <td style="width:26%"><b>GAO-24-106787</b><br><span style="color:var(--muted);font-size:12.5px;">Sept 2024, federal civil rights data, SY 2017&ndash;18. Verified verbatim.</span></td>
+            <td>Black girls were <b>15% of all girls in public schools and received almost half of all suspensions and
+            expulsions.</b> They &ldquo;received harsher punishments than White girls <b>even when the infractions that
+            prompted disciplinary action were similar</b> &mdash; for example&hellip; defiance, disrespect, and
+            disruption.&rdquo; <b>In every state</b>, Black girls are disciplined at higher rates; the gap grew larger
+            with a disability. GAO's review named <b>adultification</b> and <b>colorism</b> as contributing mechanisms,
+            and noted many teachers encourage girls &ldquo;to uphold a quiet, docile form of femininity and &lsquo;to act
+            like ladies.&rsquo;&rdquo; Student-side: Black girls more frequently disagreed that teachers treat students
+            with respect and more frequently felt school rules were unfair. <span class="tier">T1</span></td>
+          </tr>
+          <tr>
+            <td><b>Which categories</b></td>
+            <td><b>Defiance, disrespect, disruption</b> &mdash; the subjective ones. Same finding as the bias-checkpoint
+            tab, with gender added.</td>
+          </tr>
+          <tr>
+            <td><b>Girlhood Interrupted</b><br><span style="color:var(--muted);font-size:12.5px;">Epstein, Blake &amp; Gonz&aacute;lez (2017), Georgetown</span></td>
+            <td>Adults view Black girls as <b>less innocent and more adult-like than white peers, especially ages
+            5&ndash;14</b> &mdash; your students sit in the middle of that band. Adults judged Black girls as young as 5 to
+            need less protection and nurturing. <span class="tier">T2</span></td>
+          </tr>
+          <tr>
+            <td><b>The one to read first</b><br><span style="color:var(--muted);font-size:12.5px;">Morris (2007), &ldquo;Ladies&rdquo; or &ldquo;Loudies&rdquo;?, Youth &amp; Society</span></td>
+            <td>Classroom ethnography in a middle school that was <b>roughly 45% African-American</b> &mdash; essentially
+            your building. The Black girls performed well academically but educators persistently questioned their manners:
+            <b>disciplined for assertive behavior read as loud and overbearing, while the same descriptor was not applied
+            to other groups of girls in the same school.</b> Teachers encouraged a &ldquo;docile form of femininity&hellip;
+            the prescription to act like &lsquo;ladies&rsquo;&rdquo; while viewing these girls' femininity as
+            &ldquo;coarse and overly assertive.&rdquo; <span class="tier">T3</span></td>
+          </tr>
+          <tr>
+            <td><b>The variance sits in the adults</b><br><span style="color:var(--muted);font-size:12.5px;">Blake et al. (2022), JEBD</span></td>
+            <td>Experimental design with <b>515 practicing educators</b>: <b>teacher's racial/ethnic background and
+            discipline philosophy were the most salient predictors of discipline severity.</b> Not the described student
+            behavior. <span class="tier">T2</span></td>
+          </tr>
+          <tr>
+            <td><b>Built for your exact question</b><br><span style="color:var(--muted);font-size:12.5px;">Annamma et al. (2019), Urban Education</span></td>
+            <td>Denver district administrative data, mixed methods, examining racial differences in <b>office referral
+            reasons</b> and applying discourse analysis specifically to whether Black girls' referrals were for
+            <b>subjective or objective</b> behaviors. <span class="tier">T2/T3</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="say"><b>So your read is well supported</b>The literature's account is not &ldquo;these students behave
+      worse.&rdquo; It is that adults read assertiveness in Black girls as defiance, and that the reading happens in the
+      categories where judgment has the most room &mdash; which is exactly where a well-intentioned teacher would be
+      affected without noticing.</p>
+    </div>
+
+    <div class="card">
+      <h2>What recollection can and can't tell you</h2>
+      <p>Two things, and they cut both directions. <b>Recollection is a biased sample of itself</b> &mdash; the send-outs
+      you remember are the emotionally charged, conflictual, or recent ones, and there is no reason that sample is
+      representative. It could be overstating the pattern. It could be understating it, because the routine ones don't
+      stick.</p>
+      <p>And <b>a single teacher's annual send-out count is a small number.</b> At fifteen send-outs a year, the
+      difference between disproportionate and chance is a handful of cases. I looked for methodological guidance on
+      interpreting individual-teacher referral counts and <b>could not find any</b> &mdash; a genuine gap, which means
+      nobody can hand you a threshold.</p>
+      <p>The conclusion is not &ldquo;don't worry about it.&rdquo; It is <b>count it instead of recalling it.</b> The
+      count tells you magnitude and location; the recollection only told you where to look.</p>
+    </div>
+
+    <div class="flag">
+      <b>Read this before you build anything.</b>
+      McIntosh, Smolkowski, Gion, Witherspoon, Bastable &amp; Girvan (2020), <em>Educational Researcher</em>,
+      <b>&ldquo;Awareness Is Not Enough&rdquo;</b> &mdash; double-blind RCT, <b>35 schools</b>, half randomly assigned to
+      monthly disciplinary <em>equity</em> reports and half to monthly <em>general</em> discipline reports. Verbatim
+      result: <b>&ldquo;Schools receiving the equity reports had significantly increased rates of viewing equity reports
+      but no meaningful change in disciplinary equity or equity goal setting.&rdquo;</b>
+      <br><br>
+      They looked at the data. Nothing changed. <b>A referral log is necessary and it is not sufficient.</b> If you build
+      the log and stop there, the best available trial predicts a well-maintained spreadsheet and the same distribution.
+      What moved it in the same group's later work was an actual intervention rather than data alone &mdash; and that
+      citation is the least verified thing in this addendum. <span class="tier">T1, abstract verbatim</span>
+    </div>
+
+    <div class="card">
+      <h2>The audit &mdash; six fields, ten seconds</h2>
+      <p>Log every send-out <b>and every near-miss.</b> The near-misses are where the decision actually lives; a referral
+      you almost wrote and didn't is the most informative row in the table, and it will never appear in official data.</p>
+      <table>
+        <thead><tr><th style="width:34%">Field</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td><b>Date and class period</b></td><td>Disproportionality varied substantially <b>by time of day</b> in the 1,666-school analysis. Your vulnerable window is probably specific.</td></tr>
+          <tr><td><b>Student</b></td><td>So you can see the repeat margin, which is where the national gap widens most.</td></tr>
+          <tr><td><b>Race and gender, together</b></td><td>The interaction is the entire point. Either one alone hides it.</td></tr>
+          <tr><td><b>Infraction, in your own words</b></td><td>So you can code it later without contaminating it now.</td></tr>
+          <tr><td><b>Subjective or objective</b></td><td>Subjective referrals carry the vast majority of the disproportionality variance.</td></tr>
+          <tr><td><b>First incident today, or repeat</b></td><td>Bias appeared at incident two, not incident one.</td></tr>
+          <tr><td><b>Sent out, or near-miss</b></td><td>The decision, not just the outcome.</td></tr>
+        </tbody>
+      </table>
+      <p><b>Compare against your roster per section</b> &mdash; not against the school. Fourth period is a different
+      population from first, and a school-level comparison will hide or invent a pattern. <b>Read the subjective column
+      separately</b>: if your objective referrals are proportionate and your subjective ones aren't, that is the specific
+      actionable version, and it is what every large dataset predicts.</p>
+      <p class="say"><b>And pair it with a rule from day one</b>The written send-out threshold, plus the incident-two
+      question: <em>am I responding to this incident, or to a story I've started telling about this kid?</em>
+      <span class="beat">The log tells you whether the rule is working. The rule is what does the work.</span></p>
+      <p><b>Timeline:</b> don't conclude from three weeks, don't wait for a year. A quarter of near-miss-inclusive data
+      across five sections is enough to see whether there's a pattern worth acting on, and short enough that you can still
+      act on it this year.</p>
+    </div>
+
+    <div class="costs">
+      <b>The two teacher-level levers with the best evidence are already in this dashboard.</b> The coaching RCT that
+      <b>eliminated the within-classroom referral gap</b>, mediated by increased skill at engaging students in high-level
+      analysis and inquiry. And the empathic-mindset replication that narrowed the Black and Hispanic disparity by
+      <b>45%</b>, entirely through in-school suspensions. Neither is a discipline technique.
+    </div>
+  </section>
+
+  <footer>
+    Full brief with evidence tiers, effect sizes, and the design/found/used-for triplet for every source:
+    <code>research/2026-07-29-behavior-redirection.md</code> in the Big Dog Math repo.
+    Addendum with the three follow-up questions and the full retrieval accounting:
+    <code>research/2026-07-29-behavior-addendum-name-on-board-family-contact-disparity.md</code>.
+    Evidence at a glance: ~22 Tier 1 &middot; ~20 Tier 2 &middot; ~15 Tier 3/4. Strong on prevention architecture and on
+    the costs of exclusion; thin on the exact micro-moves teachers are trained in; contested on restorative practices.
+  </footer>
+
+</div>
+
+<script>
+  var tabs = document.querySelectorAll('.tab');
+  tabs.forEach(function(t){
+    t.addEventListener('click', function(){
+      tabs.forEach(function(x){ x.setAttribute('aria-selected','false'); });
+      document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+      t.setAttribute('aria-selected','true');
+      document.getElementById(t.dataset.p).classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
