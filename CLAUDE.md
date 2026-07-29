@@ -212,6 +212,15 @@ bars and live misconception grouping).
     finished work against, and identical stems make the second screen look like a restatement of
     the first. The board's eyebrows are therefore plain labels ("Today", "You've got it when"),
     not sentence stems - if you reinstate a stem in an eyebrow it will collide with the statement.
+    RESTEMMING IS THE RISKY PART AND IT SHIPPED BROKEN ONCE. Notion is authored in every voice
+    ("I can ...", "We are learning how ...", "Students will be able to ...", a bare imperative), and
+    a version that only knew "are learning to" put "I am learning to we are learning how splitting
+    one side of a rectangle helps us write equivalent expressions" on the live board. Two rules came
+    out of it: "learning how/why/what/that/about" keeps its clause and the stem drops its "to"
+    ("I am learning how splitting ... helps us"), and a sentence with NO recognizable stem that does
+    not open on an action verb is left exactly as the teacher wrote it, because a noun phrase under
+    the eyebrow reads fine and a forced stem does not. Every phrasing is pinned in
+    `npm run test:weekly-display-board` - add a case there before touching the regexes.
   - ONE SUCCESS CRITERION A DAY, FROM `Selected Success Criterion` (Steele, 2026-07-29, correcting
     a plural build the same day). That Notion property already exists and already means exactly
     this: `inspectSelectedSuccessCriterion` enforces one complete "I can" statement on one line.
@@ -886,7 +895,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 21 golden/contract suites, run with typecheck by
+  2026-07-27 `npm test` - the aggregate of all 24 golden/contract suites, run with typecheck by
   GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.
