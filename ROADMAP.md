@@ -8,6 +8,38 @@ should update BOTH that database and this mirror when a feature ships.
 Snapshot (2026-07-16):
 
 ## Live
+**The classroom state strip — eyes / voice / supplies / body** (7/29, Steele's
+ask). A vertical four-slot group pinned top right of both projectors, modelled
+on a garment care label, authored per Lesson Step from four new Notion selects.
+The mechanism is precorrection: name the expected state before the transition
+that breaks it, which is why it ships with the lesson instead of being another
+thing to drive from the iPad. Three redundant cues carry each slot — fixed
+position, colour, and a monochrome stroke glyph — and the voice digit never
+comes off, even when `?words=off` drops the words. ALL FOUR OR NOTHING: a step
+missing any value shows no strip, because a strip that is sometimes empty stops
+being scanned, and `/control` names the part-filled steps in its load message.
+The iPad can override a slot live for Settle 30s; the override is stamped with
+the sequence index it was issued at and expires on the next advance with no
+clearing code anywhere. It steps aside when the work space opens, because that
+panel is the ink surface. Backfilling the existing lesson steps is authoring and
+is still open — until then every lesson correctly shows nothing.
+
+**Fraction bars: estimate the direction, non-unit divisors, declare the whole**
+(7/29). A fifth mode, "Bigger or smaller?", targets the finding that preservice
+teachers judged the direction of a fraction-division answer with a divisor under
+1 correctly only 29 percent of the time, below chance, while doing the
+arithmetic correctly. One expression, two buttons, nothing scored or tracked —
+a three-minute daily habit. The problem set is built so no shortcut survives:
+of the division items 6 are bigger and 5 smaller, 5 have a divisor above 1, and
+the multiplication items split 2 to 3, so neither "dividing by a fraction makes
+it bigger" nor the operator alone predicts anything. "How many fit?" now takes
+non-unit divisors and leftovers, and LABELS THE LEFTOVER IN UNITS OF THE DIVISOR
+inside a dashed outline of the group it belongs to — 3/4 divided by 2/3 is 1
+group and 1/8 of another, with 1/12 (against the whole bar) and 1/9 (against the
+dividend) named as the two classic misses rather than generically rejected.
+Explore mode can declare which bar is one whole, the Cuisenaire move no digital
+tool does.
+
 **"Stuck? Walk it through." — the M1.T1.L1 worked example** (7/29, from the
 Claude Design handoff "Distributive Walkthrough"). Six click-to-advance steps
 that build `a x b = a ( p + q )` on one stage: rewrite it, draw the box
