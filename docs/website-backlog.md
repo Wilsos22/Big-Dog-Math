@@ -60,8 +60,9 @@ This is the working backlog for the Big Dog Math website and classroom control s
 
 ## 6. Visual Language Cleanup
 
-- [ ] Remove smiley-face-style emoji from the website UI.
-- [ ] Replace smiley-face-style emoji with neutral icons, symbols, or non-face emoji where needed.
+- [x] Remove smiley-face-style emoji from the website UI. Done 2026-07-27: 68 pictographs across 17
+      src/ files went to zero. Plain check/x glyphs and typographic arrows deliberately remain, and
+      icons are not emoji - see rule 1 in CLAUDE.md.
 - [ ] Keep the Big Dog Math style clean, readable, and student-friendly.
 
 ## 7. Student-Facing Website

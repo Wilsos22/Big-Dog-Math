@@ -41,11 +41,21 @@ bars and live misconception grouping).
 ## Hard rules (non-negotiable)
 
 1. NO EMOJIS ANYWHERE. Not in UI copy, component text, button labels, nav labels, headings, console
-   logs, code comments, commit messages, docs, or the Apps Script files. Use plain words or, where a
-   glyph is truly needed, a clean text/SVG affordance - not a pictograph, dingbat, or emoji checkmark
-   or arrow. The legacy emoji debt was PURGED 2026-07-27 (68 pictographs across 17 src/ files
-   went to zero; plain check/x glyphs and typographic arrows deliberately remain). Keep it at
-   zero - the aggregate test suite and this rule are now in agreement with the code.
+   logs, code comments, commit messages, docs, Notion property values, or the Apps Script files. Use
+   plain words or, where a glyph is truly needed, a clean text/SVG affordance - not a pictograph,
+   dingbat, or emoji checkmark or arrow. The legacy emoji debt was PURGED 2026-07-27 (68 pictographs
+   across 17 src/ files went to zero; plain check/x glyphs and typographic arrows deliberately
+   remain). Keep it at zero - the aggregate test suite and this rule are now in agreement with the
+   code.
+   ICONS ARE NOT EMOJI (clarified 2026-07-29, Steele). This rule does NOT restrict icons, glyphs, or
+   pictograms. The rule is about TONE, not about symbols: if it renders in colour from an emoji font
+   and carries a face or a mood, it is out; if it is a monochrome stroke glyph carrying information,
+   it is in. The classroom state strip (eyes / voice / supplies / body) is a deliberate glyph system
+   and is in scope for that reason. The Tabler outline set is the DECLARED house icon library - it is
+   Steele's choice of vocabulary, not yet a dependency (nothing in package.json or src/ imports it as
+   of this writing), so a first use means adding it deliberately rather than assuming it is present.
+   Read as "no icons", this rule would block work Steele has explicitly asked for; that misreading is
+   why this paragraph exists.
 2. Never `git add .` or `git add -A`. A Google AI Studio agent and cloud Claude sessions commit to this
    same repo concurrently - stage only the explicit paths you changed. Always `git fetch` and merge (or
    fast-forward) before pushing; local `main` goes stale fast. Corollary: when a brief cites a commit as
