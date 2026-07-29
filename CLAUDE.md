@@ -139,9 +139,39 @@ bars and live misconception grouping).
   at load and again whenever a call arrives silent, and tapping it plays the call as a speaker
   check. The pulse fires armed or not.
 - /weekly-display is the FIFTH room surface: two all-day TVs in the back rotating
-  learning intention / success criteria / week schedule / bells every 20s, fed by public
-  /api/weekly-display (params ?screen= pins one view, ?day=, ?track=acc). Public route,
-  in DeployRefresh.
+  learning intention / success criteria / week schedule / bells, fed by public
+  /api/weekly-display (params ?screen= pins one view and pauses rotation, ?day=, ?track=acc,
+  ?seconds=, ?course=). Public route, in DeployRefresh. REDESIGNED 2026-07-29 from the Claude
+  Design "Weekly Display" board (Turn 4), and the shape of it is now load-bearing:
+  - It is a FIXED 1920x1080 stage scaled to fit, like the `public/screens/` kit - not a fluid
+    clamp layout. That is deliberate: the key-term reveal MEASURES DOM positions to compute
+    where the term travels, and in stage pixels that measurement is identical on a 4K TV and a
+    laptop. Do not convert it back to vw/vh; the reveal would land differently per display.
+  - Rotation is 9s a screen, EXCEPT the learning intention, which holds `max(16, base + 6)`
+    because its own reveal is not finished travelling until 8.6s (`dwellSeconds` enforces this).
+    Cutting the learning screen to the base dwell cuts away mid-definition.
+  - THE VOCABULARY REVEAL NEEDS AN AUTHORED DEFINITION AND IT COMES FROM AN EXISTING FIELD.
+    The board reads Notion `Discussion Vocabulary` and looks for `Term - definition` (the same
+    convention `splitVocab` on /teacher/pace already reads). With bare term lists - which is how
+    that property is authored today - there is nothing to reveal, so the board holds the
+    sentence with the term highlighted and never drops it. That is the designed fallback, not a
+    bug. Authoring one dash per lesson is what turns the reveal on; NO new Notion property.
+  - Splitting that property here is on newlines and semicolons ONLY, never commas the way
+    `splitLiveFlowVocabulary` does - a definition is a sentence and commas would shred it.
+  - An optional worked example rides the SAME property as one more line, prefixed
+    `table:` / `lines:` / `grid:` / `rate:` / `steps:` / `example:` (see `parseBoardFigure` in
+    `src/lib/weeklyDisplayBoard.ts` for the grammar; `*` marks the answer cell in a table row).
+    A line that does not parse is simply not a figure - it never renders as garbage.
+  - Notion learning intentions are "I can ..." statements and the board's eyebrow already reads
+    "Today we are learning to", so `intentionBody` strips the stem. Do not remove it or the
+    wall reads "Today we are learning to I can ...".
+  - The ground CUTS between screens instead of crossfading. The design had a .45s
+    background-color transition, but every header/footer colour switches instantly, which left
+    ~450ms of dark text on a lightening ground every nine seconds.
+  - The bell schedule lives in `src/lib/bellSchedule.ts` as minutes since midnight, and "Now"
+    plus the progress bars are derived from the classroom clock - there is no hardcoded current
+    period. THE PERIOD LABELS came in with the design and are the one thing in this surface
+    Steele still has to confirm against the master schedule.
 - /demo is the PUBLIC mock run-through (portfolio front door, built 2026-07-27): the REAL
   surfaces embedded in scaled iframes and driven through a scripted fictional GCF lesson
   (src/lib/demoLesson.ts) via the studio-preview bridge. /demo/present and /demo/pace are
@@ -645,7 +675,11 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 - Font: `--bdb-font` = Albert Sans (Google Fonts, weights 400-800), NOT Georgia. Headings are weight
   700 in the sans font. Georgia only survives on ~7 legacy teacher/admin pages (roster, session,
   builder, teacher-login, teacher/mastery, teacher/rightnow, teacher/checkpoint-upload) - treat as
-  legacy, do not spread it.
+  legacy, do not spread it. `--bdb-font-body` = Geist (added 2026-07-29) is the design system's
+  stated body/UI pairing and the face with real tabular numerals; both come from the ONE
+  `@import` at the top of `globals.css` (never add a second font request, and never move that
+  import off line 1 - CSS requires @import first). Only /weekly-display uses the body face so
+  far; Albert Sans remains the default everywhere and the display face everywhere.
 - Palette: CSS variables `--bdb-*` in `src/app/globals.css` `:root`. Canonical tokens: ground (page)
   `#faf6ee`, ground-2 `#f3ecdd`, card `#ffffff`, ink `#201e1a`, ink-soft `#6f675c`, ink-faint `#7a7061`
   (darkened 2026-07-26 from `#a59c8d`, which read at 2.5:1 as text - keep it AA),
