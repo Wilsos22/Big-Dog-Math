@@ -731,7 +731,7 @@ export default function ClassroomStagePage() {
         .stage-closing-main { display:grid; gap:clamp(10px,1.6vw,20px); align-content:center; }
         .stage-closing-kicker { margin:0; color:var(--acc-deep); font-size:clamp(0.82rem,1.4vw,1.1rem); font-weight:900; letter-spacing:0.15em; text-transform:uppercase; }
         .stage-closing-criterion { margin:0; max-width:22ch; color:var(--head); font-size:clamp(2.2rem,4.8vw,4.8rem); line-height:1.06; font-weight:800; letter-spacing:-0.025em; text-wrap:balance; }
-        .stage-closing-directions { margin:0; color:var(--soft); font-size:clamp(1rem,1.9vw,1.5rem); font-weight:700; }
+        .stage-closing-directions { margin:0; color:var(--soft); font-size:clamp(1rem,1.9vw,1.5rem); font-weight:700; white-space:pre-wrap; }
         .stage-closing-reminders { align-self:center; border:1px solid var(--hair); border-left:6px solid var(--acc); border-radius:18px; background:var(--card); padding:clamp(18px,2.4vw,30px); box-shadow:0 12px 32px rgba(40,32,20,0.10); }
         .stage-closing-remind-label { margin:0 0 12px; color:var(--acc-deep); font-size:clamp(0.78rem,1.3vw,1rem); font-weight:900; letter-spacing:0.13em; text-transform:uppercase; }
         .stage-closing-reminders ul { margin:0; padding:0; list-style:none; display:grid; gap:11px; }
@@ -836,7 +836,12 @@ export default function ClassroomStagePage() {
         .stage-share-callout span { color:var(--acc-deep); font-size:0.7rem; font-weight:900; letter-spacing:0.13em; text-transform:uppercase; }
         .stage-share-callout strong { color:var(--head); font-size:clamp(2.2rem,5vw,5rem); line-height:1; font-weight:800; }
         .stage-discussion-main h2 { margin:0 0 6px; color:var(--head); font-size:clamp(2.1rem,4.7vw,4.8rem); line-height:1; font-weight:800; letter-spacing:-0.03em; }
-        .stage-round { margin:0; border-left:6px solid var(--acc); background:var(--card); padding:11px 15px; color:var(--ink); font-size:clamp(1rem,1.65vw,1.35rem); line-height:1.32; font-weight:700; box-shadow:0 2px 10px rgba(40,32,20,0.05); }
+        /* pre-wrap because this renders the authored Main Display verbatim. Seen
+           live on CC.3: a four-step Respectful Difference Routine authored as
+           five lines collapsed into one run-on paragraph on the main wall. The
+           other body renderers here (stage-main-prompt, stage-anchor-note) had
+           it; this one did not. */
+        .stage-round { margin:0; border-left:6px solid var(--acc); background:var(--card); padding:11px 15px; color:var(--ink); font-size:clamp(1rem,1.65vw,1.35rem); line-height:1.32; font-weight:700; white-space:pre-wrap; box-shadow:0 2px 10px rgba(40,32,20,0.05); }
         .stage-supports { min-height:0; display:grid; grid-template-rows:auto auto; align-content:center; gap:14px; }
         .stage-support-card { min-width:0; border:1px solid var(--hair); border-top:4px solid var(--acc); border-radius:16px; background:var(--card); padding:15px 17px; box-shadow:0 2px 10px rgba(40,32,20,0.06); }
         .stage-support-title { margin:0 0 9px; color:var(--acc-deep); font-size:0.68rem; font-weight:900; letter-spacing:0.12em; text-transform:uppercase; }
