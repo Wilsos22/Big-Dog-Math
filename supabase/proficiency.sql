@@ -148,7 +148,35 @@ insert into misconceptions (label, standard_id, description) values
   ('confuses mean and median',                        null,        'Reports the middle value as the mean or vice versa.'),
   ('miscounts frequencies in a data display',         null,        'Misreads dot plots/histograms when tallying frequencies.'),
   ('distributes to first term only',                  '6.EE.A.3',  'Writes a(b + c) = ab + c, distributing to the first term only.'),
-  ('changes the whole',                               '6.EE.A.3',  'Splits a factor into parts that do not add back to the original number, so a(b + c) no longer equals the starting product.')
+  ('changes the whole',                               '6.EE.A.3',  'Splits a factor into parts that do not add back to the original number, so a(b + c) no longer equals the starting product.'),
+  -- Factors, multiples, and the ladder (M1.T1). Added to the live project
+  -- 2026-07-28 and 2026-07-29 while the GCF/LCM and divisibility days were
+  -- built; mirrored here 2026-07-29 so a fresh environment has them too.
+  ('GCF/LCM mix-up',                                  '6.NS.B.4',  'Reports the least common multiple when the situation calls for the greatest common factor, or the reverse.'),
+  ('stops the ladder too early',                      '6.NS.B.4',  'Quits the ladder while both bottom numbers still share a factor greater than 1, so the GCF comes out too small and the LCM too large.'),
+  ('multiplies only the bottom row',                  '6.NS.B.4',  'Computes the LCM from the final bottom row alone and leaves out the left column of pulled divisors.'),
+  ('takes a common factor that is not the greatest',  '6.NS.B.4',  'Circles shared factors correctly but names an early circle instead of the last one, so the answer is a common factor but not the greatest.'),
+  ('records only the tested factors',                 '6.NS.B.4',  'Lists the numbers that were tested but omits their partners, so the factor list is half complete.'),
+  ('confuses the rule for 2 with the rule for 4',     '6.NS.B.4',  'Applies the even-last-digit test to 4, so any even number is claimed divisible by 4.'),
+  ('multiplies both sides of each match',             '6.NS.B.4',  'Takes both copies of a matched prime instead of one. GCF(12,18) becomes 2*2*3*3 = 36, which is larger than either number.'),
+  ('multiplies every prime',                          '6.NS.B.4',  'Multiplies every prime from both factorizations with no matching step at all.'),
+  ('stops at the first shared prime',                  '6.NS.B.4',  'Finds one match and stops searching. GCF(48,72) becomes 2 instead of 24.'),
+  ('leaves a composite in the tree',                   '6.NS.B.4',  'Stops a factor tree branch on a leaf that still has more than two factors, so the piece list is not irreducible.'),
+  ('answers the group size not the count',             '6.NS.B.4',  'Finds the GCF correctly then reports what is inside each group instead of how many groups. Says 3 or 5 instead of 12.'),
+  -- Fraction division (M1.T1.L4-L5). "division always makes smaller" is the
+  -- Fischbein intuitive rule the estimation work targets; it is a belief about
+  -- direction, not an arithmetic slip, so it needs its own tag.
+  ('treats numerator and denominator as separate',     '6.NS.A.1',  'Whole-number bias. Operates component-wise, so 2/3 divided by 1/6 becomes 2/18, or 12/13 + 7/8 is estimated as 19.'),
+  ('division always makes smaller',                    '6.NS.A.1',  'Fischbein intuitive rule. Expects a quotient below the dividend, so estimates 5 / (2/3) < 5 or chooses multiplication on a word problem when the divisor is under 1. True for every division seen in grades 3-5; the rule had a boundary and this is where it is crossed.'),
+  ('inverts the wrong fraction',                       '6.NS.A.1',  'Flips the dividend rather than the divisor, or multiplies straight across with no flip at all. Documented in 55 percent of division answers as imported components from other fraction procedures.'),
+  ('multiplies instead of dividing by the reciprocal', '6.NS.A.1',  'Computes a/b times c/d when the problem asks for a/b divided by c/d.'),
+  ('reverses dividend and divisor',                    '6.NS.A.1',  'Divides the group size by the total instead of the total by the group size, usually because the smaller number was named first in the problem.'),
+  ('leftover measured against the whole not the divisor', '6.NS.A.1', 'Referent-unit confusion. Reports the remainder as a fraction of the original whole rather than of one divisor-sized group, so 5 / (3/5) becomes 8 with 1 left over instead of 8 and 1/3.'),
+  -- Percent and decimal conversion.
+  ('reads the decimal as the percent',                 '6.RP.A.3c', 'Writes 0.25 as 0.25 percent instead of 25 percent.'),
+  ('shifts the decimal the wrong way',                 '6.RP.A.3c', 'Moves the decimal point the wrong number of places when converting between decimals and percents.'),
+  -- Geometry.
+  ('uses the slant side instead of the height',        '6.G.A.1',   'Multiplies the base by the slanted side of a parallelogram or trapezoid instead of the perpendicular height.')
 on conflict (label) do nothing;
 
 -- ---------------------------------------------------------------------------

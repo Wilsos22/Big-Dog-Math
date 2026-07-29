@@ -30,6 +30,30 @@ export const MISCONCEPTION_TAGS = [
   "miscounts frequencies in a data display",
   "distributes to first term only",
   "changes the whole",
+  // Factors, multiples, and the ladder (M1.T1).
+  "GCF/LCM mix-up",
+  "stops the ladder too early",
+  "multiplies only the bottom row",
+  "takes a common factor that is not the greatest",
+  "records only the tested factors",
+  "confuses the rule for 2 with the rule for 4",
+  "multiplies both sides of each match",
+  "multiplies every prime",
+  "stops at the first shared prime",
+  "leaves a composite in the tree",
+  "answers the group size not the count",
+  // Fraction division (M1.T1.L4-L5).
+  "treats numerator and denominator as separate",
+  "division always makes smaller",
+  "inverts the wrong fraction",
+  "multiplies instead of dividing by the reciprocal",
+  "reverses dividend and divisor",
+  "leftover measured against the whole not the divisor",
+  // Percent and decimal conversion.
+  "reads the decimal as the percent",
+  "shifts the decimal the wrong way",
+  // Geometry.
+  "uses the slant side instead of the height",
 ] as const;
 
 export type MisconceptionTag = (typeof MISCONCEPTION_TAGS)[number];
