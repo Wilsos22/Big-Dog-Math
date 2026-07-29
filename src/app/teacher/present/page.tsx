@@ -666,11 +666,7 @@ export default function ClassroomStagePage() {
           background-size:18px 18px;
           color:var(--ink); font-family:var(--bdb-font);
           --stage-ease:cubic-bezier(0.2,0.7,0.2,1); }
-        .stage-frame { position:relative; z-index:1; width:100%; height:100%; display:grid; grid-template-rows:66px minmax(0,1fr) auto; }
-        /* Own grid row, so the strip never overlaps the stage. The row collapses
-           on a step with no authored strip - the component renders null rather
-           than an empty strip, because a sometimes-empty strip stops being read. */
-        .stage-frame > .css-strip { min-height:clamp(58px,6.2vh,80px); }
+        .stage-frame { position:relative; z-index:1; width:100%; height:100%; display:grid; grid-template-rows:66px minmax(0,1fr); }
         /* Scene change: each lesson state enters as its own moment - a calm
            rise-and-fade for the content and a thin sweep of the incoming
            state's accent drawing across the top. Keyed remount restarts both. */
@@ -879,6 +875,12 @@ export default function ClassroomStagePage() {
         .stage-work.board-open .stage-independent-card { grid-column:1; }
         .stage-work.board-open .classroom-spinner { right:42%; }
         .stage-board-panel { position:absolute; z-index:5; inset:0 0 0 auto; width:42%; overflow:hidden; border-left:5px solid var(--acc); background:#fff; box-shadow:-18px 0 40px rgba(40,32,20,0.16); }
+        /* The work space takes the right 42%, which is exactly where the state
+           group sits - and it is the ink surface, so it wins. The group hops to
+           the left instead of covering what the teacher is writing on. Slot ORDER
+           is the cue students read, and that is unchanged; only the group moves,
+           and only when the whole screen reconfigures. */
+        .stage-work.board-open .css-strip { right:auto; left:clamp(12px,1.5vw,26px); }
         .stage-abbie { position:absolute; z-index:12; left:50%; bottom:20px; width:min(88%,860px); box-sizing:border-box; display:grid; grid-template-columns:auto minmax(0,1fr); gap:14px; align-items:center;
           transform:translateX(-50%); border:1px solid #2b5e54; border-left:7px solid #5eead4; border-radius:18px; background:#0d1f1b; padding:16px 20px; box-shadow:0 22px 60px rgba(0,0,0,0.48); }
         .stage-abbie-mark { width:50px; height:50px; display:grid; place-items:center; overflow:hidden; border-radius:50%; background:#14241f; }
@@ -887,7 +889,7 @@ export default function ClassroomStagePage() {
         .stage-abbie-line { margin:0; color:#f3fffb; font-size:clamp(1rem,2vw,1.45rem); font-weight:820; line-height:1.3; }
         @media (max-width:900px) { .stage-success { width:40vw; } .stage-score-scene, .stage-discussion { grid-template-columns:1fr; overflow:auto; } }
         @media (max-height:650px) {
-          .stage-frame { grid-template-rows:54px minmax(0,1fr) auto; }
+          .stage-frame { grid-template-rows:54px minmax(0,1fr); }
           .stage-topbar { padding:0 18px; }
           .stage-mark { width:28px; height:28px; }
           .stage-title { font-size:0.9rem; }
@@ -1256,6 +1258,10 @@ export default function ClassroomStagePage() {
               <InkBoard room={inkOverlay?.room ?? "main"} interactive={false} />
             </aside>
           ) : null}
+          {/* Last child of the work stage, so it paints over the inset-0 scenes.
+              Pinned top right INSIDE the stage rather than in the topbar, where
+              the clock already lives. */}
+          <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} />
         </section>
 
         {session?.abbie?.text ? (
@@ -1270,8 +1276,6 @@ export default function ClassroomStagePage() {
             </span>
           </aside>
         ) : null}
-
-        <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} />
       </section>
       {inkOverlay && !inkOverlay.embed && <ScreenInkOverlay room={inkOverlay.room} />}
       {inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && <AttentionListener room={inkOverlay.room} />}

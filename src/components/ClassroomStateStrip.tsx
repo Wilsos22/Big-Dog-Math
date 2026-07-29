@@ -13,12 +13,17 @@ import {
 /**
  * The four-slot classroom state strip, for the pace and support projector.
  *
- * Fixed slot order forever - eyes, voice, supplies, body - because POSITION is
- * one of the three redundant cues a student reads it by. The other two are the
- * per-slot colour and the glyph. Glyphs are monochrome stroke SVG, not
- * pictographs: see rule 1 in CLAUDE.md, icons are not emoji.
+ * A VERTICAL group pinned to the top right of the stage (Steele, 2026-07-29).
+ * It started as a full-width bottom rail; top right keeps it in the same place
+ * on both projectors, out of the way of the mathematics, and reads as one
+ * object the room can glance at rather than a band across the screen.
  *
- * `showWords` carries the words under the glyphs for the first weeks and comes
+ * Fixed slot order forever - eyes, voice, supplies, body, top to bottom -
+ * because POSITION is one of the three redundant cues a student reads it by. The
+ * other two are the per-slot colour and the glyph. Glyphs are monochrome stroke
+ * SVG, not pictographs: see rule 1 in CLAUDE.md, icons are not emoji.
+ *
+ * `showWords` carries the words beside the glyphs for the first weeks and comes
  * off once the room reads the strip cold. The VOICE DIGIT is never affected by
  * it - the digit is the part that has to survive.
  *
@@ -89,20 +94,26 @@ export function ClassroomStateStrip({
   return (
     <div className={`css-strip${overridden ? " overridden" : ""}${className ? ` ${className}` : ""}`} aria-label="Classroom state">
       <style>{`
-        .css-strip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); align-items:center; gap:clamp(8px,1.4vw,20px);
-          border-top:2px solid var(--bdb-line); background:var(--bdb-ground-2); padding:0 clamp(16px,2.6vw,40px); }
-        .css-strip.overridden { background:var(--bdb-ground); box-shadow:inset 0 3px 0 var(--bdb-amber); }
-        .css-slot { display:flex; align-items:center; justify-content:flex-start; gap:clamp(7px,1vw,12px); min-width:0; color:var(--slot); }
-        .css-slot + .css-slot { border-left:1px solid var(--bdb-line); padding-left:clamp(8px,1.4vw,20px); }
-        .css-glyph { display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
-        .css-text { display:grid; gap:1px; min-width:0; }
-        .css-cap { color:var(--bdb-ink-faint); font-size:clamp(0.56rem,0.8vw,0.7rem); font-weight:800; letter-spacing:0.13em; text-transform:uppercase; }
-        .css-val { color:var(--bdb-ink); font-size:clamp(0.82rem,1.25vw,1.1rem); font-weight:800; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .css-digit { display:flex; align-items:center; justify-content:center; flex:0 0 auto; width:clamp(30px,2.9vw,40px); height:clamp(30px,2.9vw,40px);
-          border-radius:50%; background:var(--slot); color:#fff; font-size:clamp(1rem,1.6vw,1.4rem); font-weight:900; font-variant-numeric:tabular-nums; }
+        .css-strip { position:absolute; z-index:14; top:clamp(10px,1.4vh,20px); right:clamp(12px,1.5vw,26px);
+          display:grid; gap:clamp(5px,0.7vh,9px); width:max-content; max-width:min(30vw,300px);
+          border:1px solid var(--bdb-line); border-radius:14px; background:var(--bdb-ground-2);
+          padding:clamp(8px,1vh,13px) clamp(10px,1.1vw,15px); box-shadow:0 2px 12px rgba(40,32,20,0.07); }
+        /* An override is the one thing on this group that is not the plan, so it
+           gets its own edge rather than a colour change that could read as a
+           different slot value. */
+        .css-strip.overridden { border-color:var(--bdb-amber); box-shadow:inset 3px 0 0 var(--bdb-amber),0 2px 12px rgba(40,32,20,0.07); }
+        .css-slot { display:flex; align-items:center; gap:clamp(7px,0.8vw,11px); min-width:0; color:var(--slot); }
+        .css-slot + .css-slot { border-top:1px solid var(--bdb-line); padding-top:clamp(5px,0.7vh,9px); }
+        .css-glyph { display:flex; align-items:center; justify-content:center; flex:0 0 auto; width:clamp(26px,2.2vw,32px); }
+        .css-text { display:grid; gap:0; min-width:0; }
+        .css-cap { color:var(--bdb-ink-faint); font-size:clamp(0.5rem,0.62vw,0.62rem); font-weight:800; letter-spacing:0.13em; text-transform:uppercase; line-height:1.3; }
+        .css-val { color:var(--bdb-ink); font-size:clamp(0.76rem,0.95vw,1rem); font-weight:800; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .css-digit { display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+          width:clamp(26px,2.2vw,32px); height:clamp(26px,2.2vw,32px);
+          border-radius:50%; background:var(--slot); color:#fff; font-size:clamp(0.88rem,1.1vw,1.15rem); font-weight:900; font-variant-numeric:tabular-nums; }
         @media (max-height:640px) {
           .css-cap { display:none; }
-          .css-val { font-size:0.82rem; }
+          .css-val { font-size:0.76rem; }
         }
       `}</style>
       {STATE_STRIP_SLOTS.map((slot) => {

@@ -315,12 +315,8 @@ export default function PaceSupportPage() {
           background-color:#F3F0E7;
           background-image:radial-gradient(circle,#CBC4B2 1px,transparent 1.3px);
           background-size:18px 18px;
-          color:var(--ink); font-family:var(--bdb-font); display:grid; grid-template-rows:64px minmax(0,1fr) auto;
+          color:var(--ink); font-family:var(--bdb-font); display:grid; grid-template-rows:64px minmax(0,1fr);
           --stage-ease:cubic-bezier(0.2,0.7,0.2,1); }
-        /* The strip is its own grid row so it never overlaps the stage. The row
-           collapses to nothing on a step with no authored strip, because the
-           component renders null rather than an empty strip. */
-        .pace-page > .css-strip { min-height:clamp(58px,6.4vh,80px); }
         /* Scene change, mirroring the Main projector: content re-enters with a
            rise-and-fade and the incoming state's accent sweeps the top. */
         .pw-scene { position:absolute; inset:0; animation:pwSceneEnter 520ms var(--stage-ease) both; }
@@ -409,7 +405,7 @@ export default function PaceSupportPage() {
         .pw-share strong { color:var(--head); font-size:clamp(1.8rem,4vw,3.6rem); line-height:1; font-weight:800; }
         .pw-stems { display:grid; gap:7px; margin:0; padding-left:1.1rem; color:var(--ink); font-size:clamp(0.92rem,1.5vw,1.15rem); line-height:1.3; font-weight:700; }
         @media (max-width:820px) { .pw-cols { grid-template-columns:1fr; overflow:auto; } .pw-lesson { display:none; } }
-        @media (max-height:640px) { .pace-page { grid-template-rows:52px minmax(0,1fr) auto; } .pw-cols { padding:18px 26px; } }
+        @media (max-height:640px) { .pace-page { grid-template-rows:52px minmax(0,1fr); } .pw-cols { padding:18px 26px; } }
       `}</style>
 
       <header className="pw-top">
@@ -615,8 +611,11 @@ export default function PaceSupportPage() {
           </div>
         )}
         </div>
+        {/* Last child of the body stage, so it paints over the inset-0 scene.
+            Pinned top right INSIDE the stage rather than in the topbar, where the
+            clock already lives. */}
+        <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} />
       </section>
-      <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} />
       {/* Write-on-screen was mounted only on /teacher/present, so the support
           projector could never be annotated - the teacher circled something on
           the iPad and half the room's screen never changed. */}

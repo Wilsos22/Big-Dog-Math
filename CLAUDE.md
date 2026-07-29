@@ -515,10 +515,13 @@ the invariants they protect are easy to break again.
   raw ids must be checked against `rawStateId` or they never fire.
 - **THE CLASSROOM STATE STRIP IS ALL FOUR SLOTS OR NOTHING** (added 2026-07-29, Steele's ask). Four
   authored select properties per Lesson Step - `Eyes`, `Voice`, `Supplies`, `Body` - render as a
-  permanent four-slot strip on `/teacher/pace` and `/teacher/present`, modelled on a garment care
-  label. The mechanism is PRECORRECTION: naming the state before the transition that breaks it. Slot
-  ORDER is a cue students read by position and may never be reordered; colour and glyph are the other
-  two. `src/lib/classroomStateStrip.ts` owns the vocabulary and `npm run test:state-strip` guards it.
+  VERTICAL group pinned top right of the stage on `/teacher/pace` and `/teacher/present`, modelled on
+  a garment care label (it was a full-width bottom rail for about an hour; Steele moved it). The
+  mechanism is PRECORRECTION: naming the state before the transition that breaks it. Slot ORDER is a
+  cue students read by position and may never be reordered; colour and glyph are the other two. It
+  mounts as the LAST child of the work stage so it paints over the `inset:0` scenes, and it hops to
+  the left when `board-open` is set, because the work space owns the right 42% and that is the INK
+  SURFACE - never let the group cover what the teacher is writing on. `src/lib/classroomStateStrip.ts` owns the vocabulary and `npm run test:state-strip` guards it.
   A step missing ANY slot renders NO strip - a strip that is sometimes empty stops being scanned, and
   a stale slot is how a student ends up holding rods during the exit ticket - and `/control` names the
   part-filled steps in its load message. An unrecognised value fails rather than snapping to a near
