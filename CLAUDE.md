@@ -549,6 +549,17 @@ the invariants they protect are easy to break again.
   "empty renders as nothing, wrong renders on a classroom screen".
 - One page per teaching day (locked convention) - never a Notion Date range. Ranges are only a
   fallback; single dates are what make `/api/today` and the day-to-day retention chain work.
+- THE LESSON DAY IS 50 MINUTES, not 55 (Steele, 2026-07-28). NOTHING IN CODE VALIDATES THE SUM -
+  verified: no check exists in `scripts/` or `src/lib/liveClassFlow.ts`, and `/control` will happily
+  run a 70-minute lineup into a 50-minute period. It is an AUTHORING contract, so the only thing
+  protecting it is whoever enters the steps: add the `Duration` values up before publishing. The
+  `abbies-classroom` plugin skills (`classroom-os-context` "50-minute spine",
+  `lesson-database-builder`, `lesson-deployment-builder`) carry the canonical breakdown - build days
+  from those, not from an older 55-minute plan. Related trap: an undesigned transition is where a
+  50-minute plan becomes a 55-minute plan, so budget configuration changes explicitly.
+  DO NOT "fix" `MIN_SCHEDULED_MINUTES` (55) in `src/lib/sessionLifecycle.ts` to match. That floor is
+  the stale-session auto-close guardrail and is deliberately LONGER than the real period: a guardrail
+  that can end a class still in progress is worse than none, so its arithmetic only ever errs long.
 - Evidence ingest: `POST /api/evidence` is the single write path for warm-up + tool events (rows into
   `responses`; follow with `POST /api/mastery/recompute`). It auths on the `x-bdm-key` header:
   Vercel env `EVIDENCE_INGEST_KEY` must equal the Apps Script Script Property `BDM_EVIDENCE_KEY` (same
