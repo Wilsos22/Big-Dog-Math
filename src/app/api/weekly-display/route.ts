@@ -15,6 +15,7 @@ interface DisplayLesson {
   successCriteria: string;
   discussionVocabulary: string;
   topic: string;
+  module: string;
   moduleTopic: string;
   classroomMode: string;
 }
@@ -67,6 +68,7 @@ function displayLesson(lesson: LessonData): DisplayLesson {
     successCriteria: lesson.selectedSuccessCriterion || lesson.successCriteria,
     discussionVocabulary: lesson.discussionVocabulary,
     topic: lesson.topic,
+    module: lesson.module,
     moduleTopic: lesson.moduleTopic,
     classroomMode: lesson.classroomMode,
   };
