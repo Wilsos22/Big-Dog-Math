@@ -346,6 +346,48 @@ export const BRUH_PRESETS: BruhPreset[] = [
       { n: 30, topic: "True or false", q: "True or false: 18 - 6 / 3 equals 4", a: "false" },
     ],
   },
+  {
+    // M1.T1 as taught 2026-08: distributive, factor lists and the rainbow,
+    // GCF by stacked lists, LCM by skip counting, the Ladder for both, and
+    // shrink-or-balloon decisions. No prime factorization by design - it was
+    // removed from the sequence on 2026-07-28. Every answer verified
+    // computationally 2026-07-29; word-problem topics stay neutral so the
+    // eyebrow never gives away the classification.
+    key: "m1t1",
+    label: "M1.T1 Factors and Multiples",
+    questions: [
+      { n: 1, topic: "Distributive", q: "Complete it: 7 x 16 = 7 x (6 + what?)", a: "10" },
+      { n: 2, topic: "Distributive", q: "6 x (9 + 4) = 6 x 9 + 6 x what?", a: "4" },
+      { n: 3, topic: "Distributive", q: "Finish it: 8 x 15 = 8 x (10 + 5) = 80 + what?", a: "40" },
+      { n: 4, topic: "Distributive", q: "Use 5 x (10 + 8) to find 5 x 18.", a: "90" },
+      { n: 5, topic: "Distributive", q: "A student writes 4 x 17 = 4 x (10 + 7) = 40 + 7. The 7 is wrong. What should it be?", a: "28" },
+      { n: 6, topic: "Distributive", q: "3 x 23 = 3 x (20 + 3). What is 3 x 23?", a: "69" },
+      { n: 7, topic: "Factors", q: "How many factors does 16 have?", a: "5" },
+      { n: 8, topic: "Factors", q: "What is the largest factor of 28 other than 28 itself?", a: "14" },
+      { n: 9, topic: "Factors", q: "In the factor pairs of 42, what is the partner of 6?", a: "7" },
+      { n: 10, topic: "GCF", q: "What is the GCF of 12 and 20?", a: "4" },
+      { n: 11, topic: "GCF", q: "What is the GCF of 18 and 27?", a: "9" },
+      { n: 12, topic: "GCF", q: "What is the GCF of 11 and 30?", a: "1" },
+      { n: 13, topic: "GCF", q: "What is the GCF of 15 and 45?", a: "15" },
+      { n: 14, topic: "Factor rainbow", q: "The factor rainbow for 49 meets in the middle at one number. Which number?", a: "7" },
+      { n: 15, topic: "Multiples", q: "What is the 4th multiple of 6?", a: "24" },
+      { n: 16, topic: "LCM", q: "What is the LCM of 5 and 6?", a: "30" },
+      { n: 17, topic: "LCM", q: "What is the LCM of 4 and 14?", a: "28" },
+      { n: 18, topic: "LCM", q: "What is the LCM of 9 and 12?", a: "36" },
+      { n: 19, topic: "The Ladder", q: "Run the Ladder on 20 and 28. What is the GCF?", a: "4" },
+      { n: 20, topic: "The Ladder", q: "Run the Ladder on 20 and 28. What is the LCM?", a: "140" },
+      { n: 21, topic: "The Ladder", q: "The ladder for 10 and 21 has no rungs at all. What is the GCF?", a: "1" },
+      { n: 22, topic: "The Ladder", q: "A finished ladder shows 2 and 5 in the left column and 3 and 4 on the bottom. What is the LCM?", a: "120" },
+      { n: 23, topic: "Shrink or balloon?", q: "28 pencils and 42 erasers get split into identical pouches. Shrink or balloon?", a: "shrink" },
+      { n: 24, topic: "Shrink or balloon?", q: "One light blinks every 7 seconds, another every 9 seconds. When do they blink together? Shrink or balloon?", a: "balloon" },
+      { n: 25, topic: "Word problem", q: "28 pencils and 42 erasers, identical pouches, none left over. What is the greatest number of pouches?", a: "14" },
+      { n: 26, topic: "Word problem", q: "Two lights blink every 7 and every 9 seconds. They just blinked together. In how many seconds do they blink together again?", a: "63" },
+      { n: 27, topic: "Word problem", q: "Buses leave every 15 minutes and every 25 minutes. They just left together. In how many minutes do they leave together again?", a: "75" },
+      { n: 28, topic: "Word problem", q: "45 red beads and 60 blue beads make the greatest number of identical bracelets. How many bracelets?", a: "15" },
+      { n: 29, topic: "Sanity check", q: "A shrink answer is always one of these compared to the amounts you started with: bigger or smaller?", a: "smaller" },
+      { n: 30, topic: "The pattern", q: "GCF(9, 12) times LCM(9, 12) equals what number?", a: "108" },
+    ],
+  },
 ];
 
 export function presetByKey(key: string): BruhPreset | null {

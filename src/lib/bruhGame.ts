@@ -276,6 +276,11 @@ export const VOCAB_BANKS: { match: RegExp; words: string[] }[] = [
     words: ["area", "base", "height", "square units", "formula"] },
   { match: /order of operations|gems|grouping|exponent/i,
     words: ["grouping", "exponent", "left to right", "operation", "evaluate"] },
+  // Last on purpose: "factor" and "identical" appear in other decks'
+  // questions too, and first-match-wins means this only catches what no
+  // earlier bank claimed - so existing decks keep their current vocabulary.
+  { match: /factor|multiple|gcf|lcm|ladder|shrink|balloon|identical|together/i,
+    words: ["factor", "multiple", "common", "greatest", "least", "cycle"] },
 ];
 
 export function pickVocab(topic: string, question: string, count = 3): string[] {
