@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decimals — Teach Tomorrow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ground:#faf6ee; --card:#ffffff; --ink:#201e1a; --line:#ece4d4;
+    --amber:#fcaf38; --teal:#50a3a4; --brown:#674a40; --coral:#f95335; --green:#2f9e6f;
+    --teal-deep:#2f7d7e; --coral-deep:#d13a1f; --green-deep:#1f7d55;
+    --muted:#6b6259;
+    --font:"Albert Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;padding:20px;background:var(--ground);color:var(--ink);
+    font-family:var(--font);font-size:15px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;}
+
+  header.masthead{margin-bottom:18px;}
+  .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600;}
+  h1{font-size:30px;line-height:1.15;margin:6px 0 8px;font-weight:700;letter-spacing:-.02em;}
+  .standards{font-size:13px;color:var(--muted);}
+  .standards code{background:var(--card);border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-family:var(--font);font-size:12px;font-weight:600;color:var(--brown);}
+
+  nav.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 18px;border-bottom:2px solid var(--line);padding-bottom:0;}
+  .tab{
+    appearance:none;border:none;background:transparent;font-family:var(--font);
+    font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;
+    padding:9px 14px;border-radius:8px 8px 0 0;margin-bottom:-2px;
+    border-bottom:2px solid transparent;transition:all .12s ease;
+  }
+  .tab:hover{color:var(--ink);background:rgba(255,255,255,.6);}
+  .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--coral);background:var(--card);}
+  .panel{display:none;animation:fade .18s ease;}
+  .panel.active{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:none;}}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:14px;}
+  .card h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;font-weight:700;}
+  .card p{margin:0 0 10px;}
+  .card p:last-child{margin-bottom:0;}
+
+  .lede{font-size:16px;line-height:1.6;}
+  .lede strong{color:var(--coral-deep);}
+
+  .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;}
+  .lev{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:12px;padding:15px 16px;}
+  .lev .num{font-size:26px;font-weight:700;color:var(--teal-deep);line-height:1;letter-spacing:-.03em;}
+  .lev .num small{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:0;}
+  .lev h3{font-size:15px;margin:8px 0 6px;font-weight:700;}
+  .lev p{font-size:13.5px;color:var(--muted);margin:0;line-height:1.45;}
+
+  .costs{background:#fdf6ec;border:1px solid var(--amber);border-radius:12px;padding:14px 16px;font-size:14px;}
+  .costs b{color:var(--brown);}
+
+  ol.seq{list-style:none;counter-reset:s;margin:0;padding:0;}
+  ol.seq li{counter-increment:s;position:relative;padding:11px 0 11px 44px;border-bottom:1px solid var(--line);}
+  ol.seq li:last-child{border-bottom:none;}
+  ol.seq li::before{
+    content:counter(s);position:absolute;left:0;top:10px;
+    width:28px;height:28px;border-radius:50%;background:var(--ground);border:1.5px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--brown);
+  }
+  ol.seq b{display:block;font-size:14.5px;margin-bottom:2px;}
+  ol.seq span{font-size:13.5px;color:var(--muted);}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:0 10px 8px 0;border-bottom:1.5px solid var(--line);font-weight:700;}
+  td{padding:10px 10px 10px 0;border-bottom:1px solid var(--line);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  td code{background:var(--ground);border-radius:4px;padding:1px 5px;font-family:var(--font);font-weight:600;font-size:13px;}
+
+  .mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;}
+  .mis{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;transition:border-color .12s;}
+  .mis:hover{border-color:var(--coral);}
+  .mis summary{
+    list-style:none;cursor:pointer;padding:14px 16px;display:flex;align-items:flex-start;gap:11px;
+  }
+  .mis summary::-webkit-details-marker{display:none;}
+  .mis[open] summary{border-bottom:1px solid var(--line);}
+  .chev{flex:none;width:18px;height:18px;margin-top:2px;color:var(--muted);transition:transform .15s;}
+  .mis[open] .chev{transform:rotate(90deg);}
+  .mis .name{font-weight:700;font-size:14.5px;display:block;margin-bottom:3px;}
+  .mis .wrong{font-size:13px;color:var(--coral-deep);font-weight:600;}
+  .mis .body{padding:13px 16px 16px;font-size:13.5px;}
+  .mis .body dt{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:11px;}
+  .mis .body dt:first-child{margin-top:0;}
+  .mis .body dd{margin:3px 0 0;line-height:1.45;}
+  .mis .body dd.say{background:#f2f8f5;border-left:3px solid var(--green);border-radius:0 7px 7px 0;padding:8px 11px;font-style:italic;}
+
+  .warm{display:grid;grid-template-columns:44px 1fr;gap:0 14px;align-items:start;}
+  .warm .d{grid-column:1;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;padding-top:12px;}
+  .warm .q{grid-column:2;padding:11px 0;border-bottom:1px solid var(--line);}
+  .warm .q:last-child{border-bottom:none;}
+  .warm .item{font-size:15px;font-weight:700;}
+  .warm .tag{display:inline-block;font-size:11px;font-weight:600;color:var(--brown);background:var(--ground);border:1px solid var(--line);border-radius:20px;padding:2px 9px;margin-top:4px;}
+  .warm .note{font-size:12.5px;color:var(--muted);margin-top:3px;}
+
+  .flag{background:#fdefeb;border:1px solid var(--coral);border-radius:12px;padding:14px 16px;font-size:14px;margin-bottom:14px;}
+  .flag b{color:var(--coral-deep);}
+
+  footer{margin-top:22px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);}
+  @media (max-width:560px){
+    body{padding:14px;} h1{font-size:24px;} .tab{padding:8px 10px;font-size:13px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Big Dog Math · Research Brief</div>
+    <h1>6th Grade Decimals</h1>
+    <div class="standards">
+      <code>6.NS.B.2</code> <code>6.NS.B.3</code> <code>6.NS.C.6c/7</code>
+      &nbsp;·&nbsp; Title 1, grade level to ~2 years behind &nbsp;·&nbsp; Compiled 2026-07-29
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-p="p1">Teach tomorrow</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="p2">Misconception lookup</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="p3">Warm-up targets</button>
+    <button class="tab" role="tab" aria-selected="false" data-p="p4">If they're behind</button>
+  </nav>
+
+  <!-- ============ TEACH TOMORROW ============ -->
+  <section class="panel active" id="p1" role="tabpanel">
+
+    <div class="card">
+      <h2>The short version</h2>
+      <p class="lede">
+        Sixth grade adds almost no new decimal <em>concepts</em> — the standards authors position 6.NS.B.3
+        as consolidating algorithms first met in 5th grade, and the genuinely new base-ten content this year
+        is negative numbers. What 6th grade actually inherits is a room where roughly
+        <strong>70% of students do not reliably know which of two decimals is larger.</strong>
+        This is a repair job wearing a fluency unit's clothes.
+      </p>
+      <p class="lede">
+        The thing most likely to go wrong: <strong>your item diet quietly manufactures the misconception.</strong>
+        When every comparison problem has the same number of decimal places, treating decimals as whole numbers
+        always works — so students learn that it works. Both fixes below are free.
+      </p>
+    </div>
+
+    <div class="grid3" style="margin-bottom:14px;">
+      <div class="lev">
+        <div class="num">31%<small> expert</small></div>
+        <h3>Magnitude &amp; ragged comparison</h3>
+        <p>Year 6 data: 33% longer-is-larger, 19% shorter-is-larger. Everything else in the unit sits on this, and the errors persist into adulthood if unaddressed.</p>
+      </div>
+      <div class="lev" style="border-left-color:var(--coral);">
+        <div class="num" style="color:var(--coral-deep);">74&rarr;12%</div>
+        <h3>Ragged &amp; whole-plus-decimal addition</h3>
+        <p>Correct on <code>4.6 + 2.3</code> vs <code>5.3 + 2.42</code>. A single nameable alignment failure. Highest points-per-minute in the unit.</p>
+      </div>
+      <div class="lev" style="border-left-color:var(--brown);">
+        <div class="num" style="color:var(--brown);">29 / 21%</div>
+        <h3>Direction of effect, &times; and &divide; below 1</h3>
+        <p>Below chance on "is <code>0.77 &times; 0.63</code> bigger than 0.77?" And <em>uncorrelated</em> with comparison ability (r = 0.01) — nothing else you teach will fix it.</p>
+      </div>
+    </div>
+
+    <div class="costs">
+      <b>What gets compressed to pay for it.</b> Decimal long division gets the algorithm taught efficiently, then moves
+      into spiral warm-ups rather than owning multiple days — nothing in the literature marks it as a distinct conceptual
+      hurdle beyond whole-number division fluency. Percent waits for the 6.RP unit; here it is only a third name for the
+      same point on the line.
+    </div>
+
+    <div class="card">
+      <h2>The sequence</h2>
+      <ol class="seq">
+        <li><b>Diagnose before you teach anything</b><span>10 min, day one. Ragged comparison test sorts the room into three piles and routes the next four days.</span></li>
+        <li><b>Build magnitude on a length model</b><span>Every later error traces back here, and length is the only attribute students can compare by eye without computing.</span></li>
+        <li><b>Iterate concept and procedure — do not block them</b><span>The one on-point 6th grade decimal experiment found alternating beat teaching all the concepts first.</span></li>
+        <li><b>Addition and subtraction, ragged from the first problem set</b><span>So alignment is the visible issue rather than an occasional exception.</span></li>
+        <li><b>Multiplication via area, before any decimal-point rule</b><span>Derive the rule. Do not issue it.</span></li>
+        <li><b>Direction of effect as its own named target</b><span>"Bigger or smaller, and why" — taught as a sentence that names both the operation and the size of the numbers.</span></li>
+        <li><b>Division last, after whole-number division fluency</b><span>The coherence map makes 6.NS.B.2 a prerequisite of 6.NS.B.3, not a sibling.</span></li>
+        <li><b>Interleave from the midpoint on</b><span>Mixed sets, not blocked. Expect in-class accuracy to drop — that drop is the intervention working.</span></li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>The progression at a glance</h2>
+      <p style="font-size:13.5px;color:var(--muted);margin-bottom:12px;">
+        The evidence does <b>not</b> support a clean C&rarr;R&rarr;A withdrawal schedule for decimals — there is not one
+        concreteness-fading study on decimals, and the CRA evidence-based-practice designation explicitly covers only
+        whole-number computation with regrouping. What it supports: a length model, notation shown alongside from day one,
+        withdrawn per student on demonstrated accuracy.
+      </p>
+      <table>
+        <thead><tr><th style="width:29%">Stage</th><th style="width:40%">Students do</th><th>Move on when</th></tr></thead>
+        <tbody>
+          <tr><td><b>Length model + notation together</b></td><td>Build 0.8, 0.39, 0.478 on deciwire or paper strips; the numeral is written beside the model from the first minute</td><td>Student can <b>predict</b> which is longer before building it</td></tr>
+          <tr><td><b>Drawing that preserves length</b></td><td>Sketch the same comparisons as marked segments on a number line, tenths gradations drawn in, annotated with the deciding digit</td><td>Student marks the deciding place without prompting</td></tr>
+          <tr><td><b>Notation alone</b></td><td>Compare, order, compute from symbols; model available on request</td><td>Exit ticket accurate on <b>ragged-length</b> items — equal-length items pass a student who learned nothing</td></tr>
+          <tr><td><b>Return path</b></td><td>Any student, any day, may pull the strips back out. It is a check, not a demotion.</td><td>&mdash;</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Watch out for</h2>
+      <table>
+        <tbody>
+          <tr><td style="width:24%"><b>Money</b></td><td>A trap, not a shortcut. It permits complete success without any decimal understanding, caps at hundredths, and reading it aloud as "three dollars and seventy-six cents" actively teaches the two-separate-whole-numbers misconception. Application late in the unit, never the entry model.</td></tr>
+          <tr><td><b>Base-ten blocks</b></td><td>Students trained that the unit cube is one now have to hold that the flat is one. The one decimal-specific manipulative comparison found a length model markedly more accessible, partly <em>because</em> of that prior use.</td></tr>
+          <tr><td><b>"Count the decimal places"</b></td><td>Both the rule and estimation have documented failure modes. Estimation cannot place the point in <code>0.023 &times; 0.0045</code>; the rule without meaning produces the 73% of multiplication errors that are correct digits with a misplaced point. Teach the rule as a conclusion students derive; keep estimation as the plausibility check.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ MISCONCEPTIONS ============ -->
+  <section class="panel" id="p2" role="tabpanel">
+    <div class="flag">
+      <b>Read this first.</b> The two common comparison errors need <b>opposite</b> instruction. Longer-is-larger students have
+      broken place value. Shorter-is-larger students have <em>good</em> place value and a <em>correct</em> fraction idea they
+      cannot coordinate with quantity. Reteaching place value to a shorter-is-larger student is wasted time — and that is
+      the error most adults in the building do not know exists.
+    </div>
+
+    <div class="mgrid">
+
+      <details class="mis" open>
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Longer is larger</span><span class="wrong">0.25 &gt; 0.5</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>Why it makes sense to them</dt>
+          <dd>In whole numbers, more digits means bigger — 3 &lt; 30 &lt; 300. And comparing equal-length decimals as whole numbers <b>always works</b>, which is most of what they have practiced. A rule that used to be true, applied one domain too far.</dd>
+          <dt>Also looks like</dt>
+          <dd><code>4.7 &lt; 4.08</code> ("the zero doesn't matter and 8 &gt; 7") · <code>0.21 = 0.0021</code></dd>
+          <dt>Surface it early with</dt>
+          <dd>Ordering sets that <b>mix digit lengths</b>: 0.3, 0.4, 0.38, 0.312. Never 0.34, 0.35, 0.36 — they get those right and you learn nothing.</dd>
+          <dt>When it shows up</dt>
+          <dd class="say">Don't reteach the rule. Send them to the length model, build both, ask which is longer <em>before</em> looking at the numerals. "You built the one with more digits and it came out shorter. So what do you know now?"</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Shorter is larger (denominator-focused)</span><span class="wrong">0.4 &gt; 0.83</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>Why it makes sense to them</dt>
+          <dd>When you cut a whole into more parts, the parts get smaller — a genuinely true and important fraction fact. These students have <b>good place value</b> and a <b>correct fraction idea</b>; they are failing only to coordinate the size of the pieces with how many there are.</dd>
+          <dt>Student wording, verbatim from the research interviews</dt>
+          <dd>"4.7 &gt; 4.08, since this has 8 hundredths and this has 7 tenths." · "7.457 &gt; 4.4502, because hundredths are bigger than ten-thousandths."</dd>
+          <dt>Surface it early with</dt>
+          <dd>0.75 vs 0.5 · 7.942 vs 7.63 · 2.8325 vs 2.516 · 0.426 vs 0.3. A longer-is-larger student gets all of these <em>right</em>.</dd>
+          <dt>When it shows up</dt>
+          <dd class="say">Do not reteach place value — they have it. Make them count as well as size: "You're right that a tenth is bigger than a hundredth. How many hundredths are in 0.83? How many in 0.4?" The reasoning is nearly correct, which makes it worth celebrating out loud.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Reciprocal / negative thinking</span><span class="wrong">0.3 &gt; 0.4 &nbsp;·&nbsp; 0.20 &gt; 0.35</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>Why it makes sense to them</dt>
+          <dd>1/12 &gt; 1/3456 is completely correct fraction reasoning applied to the wrong notation. &minus;12 &gt; &minus;18 is completely correct integer reasoning applied to the wrong notation. Decimals, fractions and negatives all arrive as "the opposite of the big-number operations."</dd>
+          <dt>Why it matters most</dt>
+          <dd>Highest persistence of any non-expert pattern (33% on retest) and it <em>rises</em> with grade. One Year 6 class ran 27%.</dd>
+          <dt>Surface it early with</dt>
+          <dd><b>Equal-length pairs</b> — 0.3 vs 0.4. The original researchers never included these "because it is hard to imagine any student who could answer this incorrectly," which is exactly why this stayed invisible for decades. Plus <b>0.6 vs 0</b>, the only item that separates negative from reciprocal thinking.</dd>
+          <dt>When it shows up</dt>
+          <dd class="say">Physical placement on a line with zero marked. And when you teach negatives later this year, use decimal examples deliberately — the Years 7&ndash;8 spike in this error is attributed to negative-number instruction that never mentions decimals.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Right-edge alignment</span><span class="wrong">6 + 0.32 = 0.38</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>Why it makes sense to them</dt>
+          <dd><em>Right-align, then add</em> is correct for every whole-number addition problem and every equal-decimal-place problem — which is nearly the entire diet they have been fed.</dd>
+          <dt>How common</dt>
+          <dd>42% correct on <code>6 + .32</code>, with the single answer 0.38 accounting for <b>45&ndash;50% of all errors</b> on that item. <code>4 + .3 = 0.7</code> is 48&ndash;51% of errors on that one.</dd>
+          <dt>Surface it early with</dt>
+          <dd>A <b>matched pair on the same page</b>: <code>4.6 + 2.3</code> immediately followed by <code>6 + 0.32</code>. The gap between the two <em>is</em> the diagnosis, and the student sees it too.</dd>
+          <dt>When it shows up</dt>
+          <dd class="say">"Estimate first — is <code>6 + 0.32</code> closer to 6 or closer to 0?" Then: the decimal point marks the ones column, so line up the ones. That motto appears independently in the Melbourne materials and in the CCSS progression document — good sign it belongs on your wall.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Multiplication makes bigger</span><span class="wrong">"0.77 &times; 0.63 &gt; 0.77 — TRUE"</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>Why it makes sense to them</dt>
+          <dd>For every whole number at or above 1, multiplying does make it bigger. Nine years of consistent evidence.</dd>
+          <dt>Why it blocks self-correction</dt>
+          <dd>Because "multiplication makes bigger," a wrong answer like <code>5.5 &times; 0.6 = 33</code> <em>looks right</em> and the correct answer looks wrong. Students reject valid procedures on the strength of it. 49% missed all four below-one items while getting all 12 other items right.</dd>
+          <dt>Surface it early with</dt>
+          <dd>True/false plausibility items with numbers too awkward to compute, paired with <b>"explain why."</b> The explanation is the real diagnostic.</dd>
+          <dt>When it shows up</dt>
+          <dd class="say">Do not correct the answer — get the sentence. Students who succeed name <b>both</b> the operation and the size of the numbers: "Multiplying by a number less than one makes it smaller, because you're taking part of it." Unconditional statements went with under 10% accuracy; operation-plus-magnitude statements with 93%.</dd>
+        </dl></div>
+      </details>
+
+      <details class="mis">
+        <summary>
+          <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3l5 5-5 5"/></svg>
+          <span><span class="name">Discreteness (density)</span><span class="wrong">"Nothing is between 3.14 and 3.15"</span></span>
+        </summary>
+        <div class="body"><dl>
+          <dt>Why it makes sense to them</dt>
+          <dd>Every natural number has a successor and there is nothing between 63 and 64. Also shows as "after 4.9 comes 4.10."</dd>
+          <dt>Why it deserves real time</dt>
+          <dd>Across 1,343 students grades 4&ndash;12, natural-number bias was weakest on size tasks, stronger on operations, and <b>by far strongest on density</b> — and it did not disappear with grade except on size. If you only assess comparison, you will overestimate understanding.</dd>
+          <dt>Surface it early with</dt>
+          <dd>"How many numbers are between 3.14 and 3.15?" <b>Score it three ways, not two</b>: <em>zero</em> (successor principle), <em>exactly nine</em> (bounded by one extra place), <em>infinitely many</em> (correct). The middle category is progress and needs a different next move.</dd>
+          <dt>When it shows up</dt>
+          <dd class="say">Run "Number Between" — two students hold the endpoints and stand at the ends of an imaginary line; a third writes a number in between and stands where it goes. Start with <em>integers</em>, not 0-to-1, so students see decimals live between all integers. Avoid the procedural fix ("write 0.30 and 0.40, now put 0.31 in") — it is documented as meaningless and quickly forgotten without grounding.</dd>
+        </dl></div>
+      </details>
+
+    </div>
+  </section>
+
+  <!-- ============ WARM-UPS ============ -->
+  <section class="panel" id="p3" role="tabpanel">
+    <div class="card">
+      <h2>Third current question, day by day</h2>
+      <p style="font-size:13.5px;color:var(--muted);margin-bottom:16px;">
+        Warm-up shape stays 2 review + 3 current. The two review slots carry the prerequisite diagnostics from the
+        "If they're behind" tab — cheapest diagnostic delivery you have. The third current question is always the
+        misconception item, named below.
+      </p>
+      <div class="warm">
+        <div class="d">Day 1</div><div class="q"><div class="item">Which is larger, 0.25 or 0.5?</div><span class="tag">longer is larger</span></div>
+        <div class="d">Day 2</div><div class="q"><div class="item">Which is larger, 0.4 or 0.83? Explain.</div><span class="tag">shorter is larger</span></div>
+        <div class="d">Day 3</div><div class="q"><div class="item">Which is larger, 0.3 or 0.4?</div><span class="tag">reciprocal thinking</span><div class="note">The item everyone skips because it looks trivial. Do not skip it.</div></div>
+        <div class="d">Day 4</div><div class="q"><div class="item">Which is larger, 0.6 or 0?</div><span class="tag">negative thinking</span><div class="note">The only item that separates negative from reciprocal thinking.</div></div>
+        <div class="d">Day 5</div><div class="q"><div class="item">6 + 0.32 =</div><span class="tag">right-edge alignment</span><div class="note">Place <code>4.6 + 2.3</code> directly above it as review Q2. The gap is the diagnosis.</div></div>
+        <div class="d">Day 6</div><div class="q"><div class="item">How many numbers are between 3.14 and 3.15?</div><span class="tag">discreteness</span><div class="note">Score three ways: zero / exactly nine / infinitely many.</div></div>
+        <div class="d">Day 7</div><div class="q"><div class="item">True or false: 0.77 &times; 0.63 &gt; 0.77. Explain.</div><span class="tag">multiplication makes bigger</span><div class="note">The explanation is the diagnostic, not the answer.</div></div>
+        <div class="d">Day 8</div><div class="q"><div class="item">Which is larger, 4.45 or 4.4502?</div><span class="tag">money thinking</span></div>
+        <div class="d">Day 9</div><div class="q"><div class="item">Write 1/5 as a decimal.</div><span class="tag">decimal&ndash;fraction translation</span><div class="note">Historically 38% of 13-year-olds chose 0.5 — the same share that answered correctly.</div></div>
+        <div class="d">Day 10</div><div class="q"><div class="item">Which is larger, 0.9 or 0.533?</div><span class="tag">digit count ignoring the point</span></div>
+      </div>
+    </div>
+
+    <div class="flag">
+      <b>Before authoring any of these lessons.</b> The proficiency spine uses a finite 18-tag exact-match misconception
+      vocabulary, and <b>adding a tag is a SQL migration</b>. Check whether the <code>misconceptions</code> table already carries
+      tags for longer-is-larger, shorter-is-larger, reciprocal/negative thinking, right-edge alignment,
+      multiplication-makes-bigger, and discreteness. Anything missing needs the migration first, or the tag typed into Notion
+      never clusters and <code>/teacher/rightnow</code> renders a blank prepared move.
+    </div>
+  </section>
+
+  <!-- ============ BEHIND ============ -->
+  <section class="panel" id="p4" role="tabpanel">
+    <div class="card">
+      <h2>Prerequisite diagnostics — use these as warm-up review items</h2>
+      <table>
+        <thead><tr><th style="width:20%">Prerequisite</th><th style="width:26%">Diagnostic item</th><th>What each wrong answer tells you</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>4.NF.C.7</b><br><span style="color:var(--muted);font-size:12.5px;">compare decimals to hundredths</span></td>
+            <td>"Which is larger, 0.4 or 0.83? Explain."</td>
+            <td>"0.83, because 83 &gt; 4" &rarr; passes by luck on a broken rule; will fail 0.5 vs 0.36. <b>"0.4, because tenths are bigger than hundredths" &rarr; shorter-is-larger; place value is intact, do not reteach it.</b> "0.83, because 0.4 is 40 hundredths and 83 &gt; 40" &rarr; secure.</td>
+          </tr>
+          <tr>
+            <td><b>5.NBT.A.1</b><br><span style="color:var(--muted);font-size:12.5px;">each place is 1/10 the place to its left</span></td>
+            <td>"3 tenths is how many hundredths?"</td>
+            <td>Blank or "3" &rarr; no re-unitizing between adjacent columns. <b>Only 39% of 6th graders answer this correctly.</b> This is the item that most often explains an alignment failure.</td>
+          </tr>
+          <tr>
+            <td><b>5.NBT.A.3</b><br><span style="color:var(--muted);font-size:12.5px;">compare decimals to thousandths</span></td>
+            <td>"Order: 0.3, 0.4, 0.38, 0.312"</td>
+            <td>Any ordering that tracks digit count. Ragged by design — an equal-length set diagnoses nothing.</td>
+          </tr>
+          <tr>
+            <td><b>4.NF.C.6</b><br><span style="color:var(--muted);font-size:12.5px;">decimal notation for fractions</span></td>
+            <td>"Write 1/5 as a decimal."</td>
+            <td>"0.5" &rarr; the classic. "1.5" &rarr; documented in over 25% of 7th graders in a US national survey.</td>
+          </tr>
+          <tr>
+            <td><b>5.NBT.B.5 / B.6</b><br><span style="color:var(--muted);font-size:12.5px;">whole-number &times; and &divide; fluency</span></td>
+            <td>"48 &times; 7" and "852 &divide; 4"</td>
+            <td>Slow-but-correct is a <b>fluency bottleneck</b>, not a conceptual gap. Different response — see below.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Three gap types, three different responses</h2>
+      <table>
+        <tbody>
+          <tr><td style="width:22%"><b>Conceptual</b><br><span style="color:var(--muted);font-size:12.5px;">the model was never built</span></td><td>Longer-is-larger and density errors live here. Cannot be scaffolded around; requires the length model. <b>Budget days, not minutes.</b></td></tr>
+          <tr><td><b>Procedural</b><br><span style="color:var(--muted);font-size:12.5px;">model exists, routine is slow or error-prone</span></td><td>Alignment errors in a student who <em>can</em> answer "3 tenths is how many hundredths." Responds to worked examples, correct/incorrect example pairs, practice structure. <b>Budget minutes.</b></td></tr>
+          <tr><td><b>Fluency bottleneck</b><br><span style="color:var(--muted);font-size:12.5px;">can do it, but working memory is consumed</span></td><td>A student who can reason about <code>2.4 &times; 0.6</code> but stalls on 24 &times; 6 is not having a decimal problem. <b>Give them the multiplication chart</b> so the load lands on the decimal placement. That is a cognitive-load argument, not lowered expectations — worth framing that way for anyone reviewing the plan.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Just-in-time, not a two-week re-teach</h2>
+      <p>
+        Do not run a place-value unit before touching 6.NS. Re-anchor <b>"the decimal point marks the ones column"</b> for
+        five minutes immediately before the alignment lesson, and let the length model carry the students who need it
+        through grade-level problems.
+      </p>
+      <p>
+        <b>Differentiation that is not three lessons.</b> The number choices do the differentiating — within one problem set,
+        <code>4.6 + 2.3</code> and <code>6 + 0.32</code> are the same task at very different difficulties. Correct/incorrect
+        example pairs give a model to students who need one before attempting, and the evidence says low-prior-knowledge
+        students benefit <em>as much</em> as high-prior-knowledge students.
+      </p>
+      <p>
+        <b>Above grade level, deepen rather than accelerate.</b> Reversibility: "What would the second number have to be for
+        the answer to be exactly 1?" Generalization: describe the whole solution set for a digit-box inequality.
+        Error-finding: hand them the wrong work and ask which <em>rule</em> the fictional student was using — the extension
+        that most directly serves the culture, because it makes a student think about how someone else was thinking.
+      </p>
+    </div>
+
+    <div class="costs">
+      <b>The dose is small, which is the most encouraging finding here.</b> The Melbourne group ran a one-hour teacher PD
+      plus targeted lesson plans. Classes that did no decimal work showed no change; classes that used the length model on
+      <b>one to four occasions</b> saw "about one half of the children who had a misconception move to expertise," still
+      holding four months later. Small sample, no randomization, teacher self-selection — but the effective dose in this
+      literature is four well-targeted lessons on a diagnosed misconception, not a rebuilt unit.
+    </div>
+  </section>
+
+  <footer>
+    Full brief with evidence tiers, effect sizes, and the design/found/used-for triplet for every source:
+    <code>research/2026-07-29-decimals-6th-grade.md</code> in the Big Dog Math repo.
+    Evidence at a glance: 14 Tier 1 · 15 Tier 2 · 6 Tier 3. Strong on where students fail and on practice scheduling;
+    thin on the concrete-to-abstract question specifically for decimals.
+  </footer>
+
+</div>
+
+<script>
+  var tabs = document.querySelectorAll('.tab');
+  tabs.forEach(function(t){
+    t.addEventListener('click', function(){
+      tabs.forEach(function(x){ x.setAttribute('aria-selected','false'); });
+      document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+      t.setAttribute('aria-selected','true');
+      document.getElementById(t.dataset.p).classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>
