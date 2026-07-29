@@ -1,10 +1,16 @@
 // The bell schedule for the all-day boards (/weekly-display).
 //
-// These rows came in with the Claude Design "Weekly Display" board and match
-// the 7:30 AM start and 1:41 PM end the surface already carried. The period
-// LABELS are the part to check against the real master schedule before the
-// boards go up in front of a room - a wrong period name on a TV that runs all
-// day is worse than no bell screen at all.
+// These are Steele's REAL 2026-27 times, read off the district roster export
+// (the `Period` column carries them, e.g. "01 07:30AM-08:23AM(1, I)") and
+// confirmed by him on 2026-07-29: lunch sits between period 4 and period 5, and
+// he does not teach a period 6. The day ends at 1:41.
+//
+// Two things the district data also contains that this deliberately does NOT
+// model: the exam-week blocks (the E1/E2/E3 variants, ~105-minute periods) and
+// the alternate "I" bell (period 4 ends 11:10 and period 5 runs 11:10-12:44
+// with lunch inside it). The board renders the REGULAR day only, so on a finals
+// day or an alternate bell the Now row will be wrong - it is a display, not the
+// master schedule, and a second variant needs a way to say which day it is.
 //
 // Times are stored as minutes since midnight so nothing has to parse a clock
 // string twice, and so "what is happening right now" is plain arithmetic.
@@ -16,6 +22,8 @@ export interface BellPeriod {
   startMinute: number;
   endMinute: number;
   kind: BellKind;
+  /** The school's own period number. Absent for lunch. */
+  period?: number;
 }
 
 function at(hour: number, minute: number): number {
@@ -23,19 +31,22 @@ function at(hour: number, minute: number): number {
 }
 
 export const BELL_SCHEDULE: BellPeriod[] = [
-  { label: "Math 6 - Core", startMinute: at(7, 30), endMinute: at(8, 22), kind: "Class" },
-  { label: "Math 6 - Core", startMinute: at(8, 26), endMinute: at(9, 18), kind: "Class" },
-  { label: "Math 6 - Support", startMinute: at(9, 22), endMinute: at(10, 14), kind: "Class" },
-  { label: "Lunch", startMinute: at(10, 14), endMinute: at(10, 44), kind: "Break" },
-  { label: "Planning", startMinute: at(10, 48), endMinute: at(11, 40), kind: "Prep" },
-  { label: "Math 6 - Core", startMinute: at(11, 44), endMinute: at(12, 36), kind: "Class" },
-  { label: "Math 6 - Honors", startMinute: at(12, 40), endMinute: at(13, 41), kind: "Class" },
+  { period: 1, label: "Math 6", startMinute: at(7, 30), endMinute: at(8, 23), kind: "Class" },
+  { period: 2, label: "Math 6", startMinute: at(8, 27), endMinute: at(9, 17), kind: "Class" },
+  { period: 3, label: "Math 6", startMinute: at(9, 21), endMinute: at(10, 11), kind: "Class" },
+  { period: 4, label: "Math Acc 6", startMinute: at(10, 15), endMinute: at(11, 17), kind: "Class" },
+  { label: "Lunch", startMinute: at(11, 17), endMinute: at(11, 54), kind: "Break" },
+  { period: 5, label: "Math 6", startMinute: at(11, 54), endMinute: at(12, 44), kind: "Class" },
+  // Steele does not teach period 6. It stays on the board because the board runs
+  // all day and the school day does not end at 12:44 - a schedule that stopped
+  // there would read as broken.
+  { period: 6, label: "Prep", startMinute: at(12, 48), endMinute: at(13, 41), kind: "Prep" },
 ];
 
 export interface BellRowState {
   label: string;
   kind: BellKind;
-  /** Sequential period number over the teaching blocks only; "" for a break or prep. */
+  /** The school's period number, zero-padded; "" for lunch. */
   periodLabel: string;
   timeLabel: string;
   minutesLabel: string;
@@ -45,7 +56,7 @@ export interface BellRowState {
   progress: number;
 }
 
-/** 450 -> "7:30", 760 -> "12:40", 821 -> "1:41". No meridiem: the board shows a range. */
+/** 450 -> "7:30", 764 -> "12:44", 821 -> "1:41". No meridiem: the board shows a range. */
 export function formatBellClock(minute: number): string {
   const hour24 = Math.floor(minute / 60) % 24;
   const hour = hour24 % 12 === 0 ? 12 : hour24 % 12;
@@ -53,16 +64,14 @@ export function formatBellClock(minute: number): string {
 }
 
 export function bellRowStates(nowMinute: number | null, periods: BellPeriod[] = BELL_SCHEDULE): BellRowState[] {
-  let teachingBlock = 0;
   return periods.map((period) => {
     const span = Math.max(1, period.endMinute - period.startMinute);
-    if (period.kind === "Class") teachingBlock += 1;
     const isNow = nowMinute !== null && nowMinute >= period.startMinute && nowMinute < period.endMinute;
     const isPast = nowMinute !== null && nowMinute >= period.endMinute;
     return {
       label: period.label,
       kind: period.kind,
-      periodLabel: period.kind === "Class" ? String(teachingBlock).padStart(2, "0") : "",
+      periodLabel: period.period === undefined ? "" : String(period.period).padStart(2, "0"),
       timeLabel: `${formatBellClock(period.startMinute)} - ${formatBellClock(period.endMinute)}`,
       minutesLabel: `${period.endMinute - period.startMinute} min`,
       now: isNow,
