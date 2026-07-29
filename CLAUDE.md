@@ -538,11 +538,31 @@ the invariants they protect are easy to break again.
   that EVERY phase has its own timer and its own single clear direction: when to think, when to write,
   when to talk, when to listen, in whatever order that discussion needs. The current code is the
   opposite of that - `DISCUSSION_ROUNDS` hardcodes three 120-second rounds with fixed labels, so the
-  sequence cannot vary and the durations cannot either. Making the phase list authorable per step is
-  the open work item; note that a phase is the SAME primitive as a classroom state strip entry plus a
-  timer (think and write are voice 0 on your own paper, talk is voice 1 or 2, listen is voice 0 on the
-  speaker), so build the two together rather than twice. Steele made student talk a STANDING
-  requirement 2026-07-28 (see the `lesson-deployment-builder` skill). Two traps when authoring:
+  sequence cannot vary and the durations cannot either.
+  THE AUTHORING FORMAT IS DECIDED AND TESTED; THE RUNTIME DOES NOT HONOUR IT YET.
+  `src/lib/discussionPhases.ts` + `npm run test:discussion-phases` (18 checks) own it. One beat per
+  line, `<mode> <duration> | <direction>`, mode one of think / write / talk / listen, duration in
+  seconds or `90s` or `2m`, and the direction after the pipe is REQUIRED because the mode word alone
+  does not tell a student what to do about this problem. Any order, any count up to 8, repeats allowed.
+  A beat drives the state strip's `eyes` and `voice` only (think and write are silent on your own
+  paper, talk is voice 2, listen is silent on the speaker) and leaves `supplies`/`body` as the step
+  authored them - a discussion does not change what is in their hands. A phase IS a strip entry plus a
+  timer plus a direction, which is why `stripForPhase` lives in that module and the two must not be
+  built twice.
+  **DO NOT ADD THE `Discussion Phases` NOTION PROPERTY UNTIL THE OVERLAY READS IT.** An authorable
+  property the runtime ignores is this repo's most repeated failure - see the `Discussion Prompt` trap,
+  the hyphenated misconception tags, and the missing `Structured Numeric` option. The remaining wiring,
+  in order: widen `DiscussionPhaseSnapshot` off `roundNumber?: 1|2|3` / `roundCount?: 3`; replace the
+  four files' direct `DISCUSSION_ROUNDS` imports with a `discussionRoundsFor(authoredPhases)` that
+  falls back to the constant (`DiscussionProtocol.tsx` ~12 sites, `teacher/remote` 3,
+  `teacher/studio` 3); give N phases a generic advance action, since `discussionRoundForAction` maps
+  only the three fixed `discussion-think`/`-discuss`/`-share`; carry the phases on
+  `LiveFlowSequenceStep` through BOTH engines and Control's three mapping sites; validate in the
+  `/control` load message against the step's `Duration`; then add the Notion property last. Verifying
+  the overlay needs a teacher session with an open live session and a discussion step - it is not
+  reachable from `/demo`, which is why this was not finished blind.
+  Steele made student talk a STANDING requirement 2026-07-28 (see the `lesson-deployment-builder`
+  skill). Two traps when authoring:
   `Discussion Prompt` reaches only `/lesson` and never the flow snapshot, so the projector headline
   must be authored in `Main Display`; and the step-level property is `Vocabulary` while the
   lesson-level one is `Discussion Vocabulary`.
