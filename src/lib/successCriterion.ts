@@ -77,3 +77,28 @@ export function selectedSuccessCriterionValidationMessage(
 ): string | null {
   return inspectSelectedSuccessCriterion(value).message;
 }
+
+/**
+ * The success CRITERIA - the plural field - as a list of normalized "I can"
+ * statements, one per line.
+ *
+ * This is the opposite job from `selectedSuccessCriterion`, which deliberately
+ * refuses a menu because the lesson flow needs exactly one target. A display
+ * surface wants all of them: the criteria are what a student checks their own
+ * work against, and there is normally more than one.
+ *
+ * Every line comes back stemmed "I can ..." - that is the classroom convention
+ * and the whole point of the field - and the setup placeholder is dropped,
+ * because prompting the teacher to go author something belongs on a teacher
+ * surface and never on a wall.
+ */
+export function successCriteriaList(value: string | null | undefined): string[] {
+  return (value || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map(normalizeCriterionLine)
+    .filter((line) => line && line !== SUCCESS_CRITERION_SETUP_PLACEHOLDER)
+    .map((line) => (/^I can(?:\s|$)/.test(line)
+      ? line
+      : `I can ${line.charAt(0).toLocaleLowerCase()}${line.slice(1)}`));
+}

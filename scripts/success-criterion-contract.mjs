@@ -52,6 +52,27 @@ assert.equal(
   "not-i-can",
 );
 
+// successCriteriaList is the PLURAL read, for display surfaces that show the
+// whole menu. It must stem every line "I can" and must never print the setup
+// placeholder, which is a prompt to the teacher and not classroom copy.
+assert.deepEqual(
+  criterion.successCriteriaList("I can model a ratio.\n- i can explain a ratio.\n2) Compare two ratios."),
+  ["I can model a ratio.", "I can explain a ratio.", "I can compare two ratios."],
+  "Every line comes back as a normalized I can statement, list markers stripped.",
+);
+assert.deepEqual(criterion.successCriteriaList(""), []);
+assert.deepEqual(criterion.successCriteriaList(null), []);
+assert.deepEqual(
+  criterion.successCriteriaList(`I can find a GCF.\n${criterion.SUCCESS_CRITERION_SETUP_PLACEHOLDER}`),
+  ["I can find a GCF."],
+  "The setup placeholder is a teacher prompt and must never reach a display surface.",
+);
+assert.deepEqual(
+  criterion.successCriteriaList("   \n\n  "),
+  [],
+  "Whitespace-only criteria are empty, not a blank statement.",
+);
+
 const warmupSource = readFileSync(path.join(root, "src", "app", "warmup", "page.tsx"), "utf8");
 assert.doesNotMatch(
   warmupSource,

@@ -96,16 +96,31 @@ function normalizeWord(value: string): string {
 }
 
 /**
- * Notion learning intentions are authored as "I can ..." statements, but the
- * board's eyebrow already reads "Today we are learning to". Stripping the stem
- * is what keeps the sentence grammatical on the wall.
+ * THE FRAMING IS FIXED (Steele, 2026-07-29): the learning intention reads
+ * "I am learning to ...", the success criteria read "I can ...". That is the
+ * standard pairing - the intention names what we are working toward, the
+ * criteria are what a student checks their own finished work against - and the
+ * two must not be phrased alike or the second screen looks like a restatement
+ * of the first.
+ *
+ * Notion authors the intention as "I can ...", so this restems it. Anything
+ * already stemmed correctly is left alone.
  */
-export function intentionBody(text: string): string {
-  return text
-    .trim()
-    .replace(/^\s*(?:I|we|you)\s+(?:can|will|am\s+learning\s+to|are\s+learning\s+to)\s+/i, "")
+export const LEARNING_INTENTION_STEM = "I am learning to";
+
+export function learningIntentionStatement(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  const body = trimmed
+    .replace(/^\s*(?:I|we|you)\s+(?:can|will|could|should|am\s+learning\s+to|are\s+learning\s+to)\s+/i, "")
     .replace(/^\s*students\s+will\s+(?:be\s+able\s+to\s+)?/i, "")
+    .replace(/^\s*(?:today\s+)?(?:we\s+are\s+)?learning\s+(?:how\s+)?to\s+/i, "")
     .trim();
+  if (!body) return trimmed;
+  // Only lower-case a leading capital that is there because it started the
+  // sentence - never one that belongs to the word ("I", "GCF", "Pythagoras").
+  const head = /^[A-Z][a-z]/.test(body) ? body.charAt(0).toLocaleLowerCase() + body.slice(1) : body;
+  return `${LEARNING_INTENTION_STEM} ${head}`;
 }
 
 export interface VocabularyEntry {
@@ -355,6 +370,51 @@ export function successSize(text: string): number {
   if (text.length > 108) return 88;
   if (text.length > 84) return 98;
   return 108;
+}
+
+/**
+ * These boards are 55-inch 16:9 panels mounted at the back of the room, so the
+ * stage's 1080 rows cover about 27 inches of real screen: one stage pixel is
+ * roughly 0.025in. Reading comfortably at a distance D wants a cap height near
+ * D/200, and a student on the far side of a classroom is ~25ft away - which
+ * works out at about 85 stage px of font size.
+ *
+ * Only one to three success criteria can be set that large and still fit. That
+ * is a CONTENT fact, not a layout bug: fewer, shorter criteria are readable
+ * from the whole room, and a longer list is for the students nearer the panel.
+ */
+export const CRITERION_ROOM_LEGIBLE_PX = 85;
+
+/**
+ * The smallest a criterion may be shrunk to in order to fit. About 1in of type
+ * on a 55-inch panel - readable from most of a classroom, not from the far
+ * corner. Six long criteria fit at this floor; a longer list than that clips,
+ * which is the deliberate end of the line rather than type nobody can read.
+ */
+export const CRITERION_FLOOR_PX = 38;
+
+/**
+ * The success screen carries however many criteria the lesson authored, so the
+ * type and the check marks scale to the count and the longest line. One
+ * criterion keeps the design's single hero statement exactly.
+ */
+/**
+ * The starting type size for a list of criteria. The board then measures the
+ * real rendered height and steps DOWN from here until the list fits - the same
+ * autosize the learning intention uses, because a glyph-width estimate cannot
+ * predict where a sentence wraps and a criterion sliding under the standard
+ * chips on a classroom TV is not an acceptable failure.
+ */
+export function successStartSize(count: number): number {
+  if (count <= 2) return 96;
+  if (count === 3) return 84;
+  if (count === 4) return 70;
+  if (count === 5) return 60;
+  return 52;
+}
+
+export function successGaps(count: number): { gap: number; rowGap: number } {
+  return count > 4 ? { gap: 22, rowGap: 14 } : { gap: 30, rowGap: 26 };
 }
 
 /** How much the key term grows (or shrinks) once it is alone at the top. */
