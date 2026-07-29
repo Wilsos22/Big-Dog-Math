@@ -714,6 +714,39 @@ to complaining-teen, less Red Bull, shorter replies)
 - Warm-up → spine bridge — live and verified (Evidence post 200, 7/4)
 
 ## Planned
+- **Run the lesson without a control panel** (Steele, 2026-07-29: "needing to go
+  to the control is not intuitive... I don't need a center control panel running
+  on my laptop just to make the rest run"). He is not mirroring screens; he runs
+  the lesson off the screens it is already on, so a laptop-bound conductor
+  surface is dead weight. He wants to drive from a Screen-Studio-style wireframe.
+  **Most of this already exists.** `/api/control-remote` executes server-side
+  today: `start-lesson` (builds the sequence from Notion, flips broadcast, arms
+  step zero), next/previous, all four timer actions, show/hide-board,
+  set/clear-behavior, transition-now, reveal-results, reveal-final-score,
+  spin-spinner, the sound and Abbie cues, and lazy automatic pacing on any GET.
+  Pacing advances as long as ANY surface is polling.
+  **Four things still require `/control` to be open:**
+  1. **Discussion rounds.** The phase snapshot is authored by `DiscussionProtocol`'s
+     local React state and published through Control's snapshot; the `discussion-*`
+     remote actions are only requests the overlay interprets. Close the laptop
+     mid-discussion and the rounds stop. This is the big one.
+  2. **Tool publishing** — `publishToolSetup` builds `flow.tool` from Control's form.
+  3. **The exit-ticket / challenge / checkpoint launch UI.** The writes themselves
+     already go through service-role APIs (verified: `isTeacherSurface()` routes
+     them), so only the configuring UI is Control-bound.
+  4. **Lineup editing and reordering.**
+  **The structural prize:** Control's once-a-second FULL REPLACE publish loop is
+  both why it must stay open and the source of the two worst documented bug
+  classes - fields erased on reconnect, and a second tab clobbering the lineup
+  with its own local skeleton. Server-authored state removes that whole class.
+  **The renderer is already built.** `/demo` shows the real Main projector,
+  Support projector, student page and all-day boards in scaled iframes with a
+  "Next - advance the room" button acting as the teacher's remote, and Screen
+  Studio already embeds the real surfaces. A runner is `/demo`'s structure
+  pointed at the live session with Next wired to `/api/control-remote` - and the
+  surfaces poll the session themselves, so it needs no posting at all.
+  **Sequencing note:** doing the authored discussion phases SERVER-SIDE kills
+  blocker 1 as a side effect, so build that first rather than twice.
 - **Abbie everywhere** — DONE (Area=Abbie): console + mic, student-screen
   broadcast, Ask-Abbie queue, contextual reactions, and bits all shipped 7/7-8.
   Later, optional: server-side cross-day memory (auto-summarized) instead of the
