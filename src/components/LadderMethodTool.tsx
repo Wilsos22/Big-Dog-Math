@@ -163,6 +163,13 @@ function MultiplyOut({ factors, tone, onDone, doneText }: {
 export default function LadderMethodTool() {
   const liveTool = useLiveToolConfig("/ladder-method");
   const [mode, setMode] = useState<Mode>("ladder");
+  // A pushed Factor Trees set pins the tool to that mode and takes the toggle
+  // away. Tuesday's lesson is prime factorization and Wednesday's is the
+  // Ladder; left tappable, D3's method is one tap away for the whole room on
+  // the day it is supposed to be new. The teacher can unpin it (control-panel
+  // checkbox, or &modes=both on a handout link) for the day the Ladder is the
+  // point, or to demo the two side by side.
+  const [modePinned, setModePinned] = useState(false);
   const [note, setNote] = useState<{ text: string; kind: NoteKind }>({ text: START_MSG, kind: "info" });
   const setFeedback = useCallback((text: string, kind: NoteKind = "info") => setNote({ text, kind }), []);
   const [guided, setGuided] = useState(false);
@@ -301,10 +308,12 @@ export default function LadderMethodTool() {
 
   // Teacher sequence arrives via ?set= (link/handout) once on mount...
   useEffect(() => {
-    const ns = parseFactorTreeSet(new URLSearchParams(window.location.search).get("set"));
+    const params = new URLSearchParams(window.location.search);
+    const ns = parseFactorTreeSet(params.get("set"));
     if (!ns.length) return;
     const sig = `url:${serializeFactorTreeSet(ns)}`;
     setMode("trees");
+    setModePinned(params.get("modes") !== "both");
     loadTreeProblem(ns, sig, resumeIdx(sig, ns.length));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -318,12 +327,13 @@ export default function LadderMethodTool() {
     if (!ns.length) return;
     const sig = `live:${serializeFactorTreeSet(ns)}`;
     setMode("trees");
+    setModePinned(!liveTool.config.bothModes);
     loadTreeProblem(ns, sig, resumeIdx(sig, ns.length));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveToolId]);
 
   function switchMode(m: Mode) {
-    if (m === mode) return;
+    if (m === mode || modePinned) return;
     setMode(m);
     if (m === "ladder") {
       setFeedback(phase === "divide" ? START_MSG : "Pick up where you left off, or start fresh.");
@@ -591,6 +601,7 @@ export default function LadderMethodTool() {
         .lm-seg { display:inline-flex; border:2px solid var(--bdb-line); border-radius:22px; overflow:hidden; background:var(--bdb-card); }
         .lm-seg button { font:inherit; font-weight:800; font-size:0.86rem; min-height:44px; padding:0 18px; border:none; background:transparent; color:var(--bdb-ink-soft); cursor:pointer; }
         .lm-seg button.on { background:var(--bdb-ink); color:#fff; }
+        .lm-pinned { display:inline-flex; align-items:center; min-height:44px; padding:0 18px; border:2px solid var(--bdb-line); border-radius:22px; background:var(--bdb-ink); color:#fff; font-weight:800; font-size:0.86rem; }
         .lm-pill { font:inherit; font-weight:800; font-size:0.85rem; min-height:40px; padding:0 13px; border-radius:999px; border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
         .lm-pill.on { background:var(--bdb-ink); color:#fff; border-color:var(--bdb-ink); }
         .lm-feedback { text-align:center; min-height:46px; margin:0 auto 12px; max-width:780px; border:1px solid var(--bdb-line); border-radius:12px; background:var(--bdb-card); color:var(--bdb-ink-soft); font-weight:680; font-size:1.02rem; line-height:1.35; padding:11px 16px; transition:background .2s, border-color .2s, color .2s; }
@@ -762,10 +773,14 @@ export default function LadderMethodTool() {
       <LiveToolBanner tool={liveTool} />
 
       <div className="lm-top">
-        <div className="lm-seg" role="tablist" aria-label="tool mode">
-          <button className={mode === "ladder" ? "on" : ""} onClick={() => switchMode("ladder")}>Ladder - GCF and LCM</button>
-          <button className={mode === "trees" ? "on" : ""} onClick={() => switchMode("trees")}>Factor Trees</button>
-        </div>
+        {modePinned ? (
+          <div className="lm-pinned">{mode === "ladder" ? "Ladder - GCF and LCM" : "Factor Trees"}</div>
+        ) : (
+          <div className="lm-seg" role="tablist" aria-label="tool mode">
+            <button className={mode === "ladder" ? "on" : ""} onClick={() => switchMode("ladder")}>Ladder - GCF and LCM</button>
+            <button className={mode === "trees" ? "on" : ""} onClick={() => switchMode("trees")}>Factor Trees</button>
+          </div>
+        )}
       </div>
 
       {treesActive && treePhase !== "wrap" && (

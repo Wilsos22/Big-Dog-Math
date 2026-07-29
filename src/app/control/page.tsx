@@ -174,6 +174,7 @@ interface ToolSetupValues {
   algebraExpression: string;
   distributiveSet: string;
   ladderTreeSet: string;
+  ladderBothModes: boolean;
   gameSkill: string;
   gameLevel: string;
   gameDuration: string;
@@ -244,6 +245,7 @@ const DEFAULT_TOOL_SETUP: ToolSetupValues = {
   algebraExpression: "2x + 3 = 11",
   distributiveSet: "14x6, 18x5, 24x7",
   ladderTreeSet: "24, 36, 60",
+  ladderBothModes: false,
   gameSkill: SKILLS[0].key,
   gameLevel: "1",
   gameDuration: "180",
@@ -363,7 +365,11 @@ function buildLiveToolConfig(stateId: ToolStateId, values: ToolSetupValues): Liv
       return { ...base, route: "/combine-like-terms", config: {} };
     case "tool-ladder":
       // Empty set is meaningful: the tool runs its built-in tree sequence.
-      return { ...base, route: "/ladder-method", config: { set: normalizeFactorTreeSet(values.ladderTreeSet) } };
+      return {
+        ...base,
+        route: "/ladder-method",
+        config: { set: normalizeFactorTreeSet(values.ladderTreeSet), bothModes: values.ladderBothModes },
+      };
     case "tool-proportions":
       return { ...base, route: "/proportions", config: {} };
     case "tool-group-bars":
@@ -1502,8 +1508,11 @@ export default function ControlPage() {
     requestAbbieLine(`The class just voted on "${controlPoll.question}". Results: ${tally}. React to that in one line for the room - call out the split or the surprise and nudge them toward the reasoning. Do NOT reveal which answer is correct.`);
   }
 
-  function updateToolSetup(key: keyof ToolSetupValues, value: string) {
-    setToolSetup((current) => ({ ...current, [key]: value } as ToolSetupValues));
+  // Keyed to the field's own type, not `string`. The old signature took a
+  // string and cast the result, so a non-string field (the ladder mode
+  // override is the first) would have accepted a string silently.
+  function updateToolSetup<K extends keyof ToolSetupValues>(key: K, value: ToolSetupValues[K]) {
+    setToolSetup((current) => ({ ...current, [key]: value }));
   }
 
   async function publishToolSetup() {
@@ -2934,6 +2943,8 @@ export default function ControlPage() {
         .cx-tool-field { display:grid; gap:5px; color:#c8e3f6; font-size:0.78rem; font-weight:900; }
         .cx-tool-field.wide { grid-column:1 / -1; }
         .cx-tool-hint { color:#8fb4cf; font-size:0.76rem; font-weight:700; line-height:1.4; text-transform:none; letter-spacing:0; }
+        .cx-tool-check { display:flex; align-items:center; gap:8px; min-height:42px; color:#c8e3f6; font-size:0.78rem; font-weight:900; cursor:pointer; }
+        .cx-tool-check input { width:20px; height:20px; accent-color:#fcaf38; cursor:pointer; }
         .cx-tool-input, .cx-tool-select { width:100%; min-height:42px; box-sizing:border-box; border:1px solid #3f3725; border-radius:8px; background:#120f0a; color:#fff; padding:9px 10px; font:inherit; font-weight:750; }
         .cx-tool-status { color:#a7f3d0; font-size:0.82rem; font-weight:800; }
         .cx-leader { display:grid; gap:8px; border:1px solid #3a3322; border-radius:10px; background:#120f0a; padding:12px; }
@@ -3281,7 +3292,7 @@ export default function ControlPage() {
                           <input id="percent-part" className="cx-tool-input" inputMode="decimal" value={toolSetup.percentPart} onChange={(event) => updateToolSetup("percentPart", event.target.value)} />
                         </label>
                         <label className="cx-tool-field" htmlFor="percent-unknown">Students solve for
-                          <select id="percent-unknown" className="cx-tool-select" value={toolSetup.percentUnknown} onChange={(event) => updateToolSetup("percentUnknown", event.target.value)}>
+                          <select id="percent-unknown" className="cx-tool-select" value={toolSetup.percentUnknown} onChange={(event) => updateToolSetup("percentUnknown", event.target.value as ToolSetupValues["percentUnknown"])}>
                             <option value="part">the part</option>
                             <option value="whole">the whole</option>
                             <option value="percent">the percent</option>
@@ -3343,6 +3354,20 @@ export default function ControlPage() {
                             return `${seq.length} number${seq.length === 1 ? "" : "s"}: ${seq.join(", ")}`;
                           })()}
                         </span>
+                        <label className="cx-tool-check" htmlFor="ladder-both-modes">
+                          <input
+                            id="ladder-both-modes"
+                            type="checkbox"
+                            checked={toolSetup.ladderBothModes}
+                            onChange={(event) => updateToolSetup("ladderBothModes", event.target.checked)}
+                          />
+                          Let students switch to the Ladder
+                        </label>
+                        <span className="cx-tool-hint">
+                          {toolSetup.ladderBothModes
+                            ? "Both modes stay tappable. Use this on the day the Ladder is the point, or to demo the two side by side."
+                            : "Off: publishing a sequence locks the tool to Factor Trees and hides the mode toggle, so the Ladder is not one tap away on prime-factorization day."}
+                        </span>
                       </label>
                     )}
 
@@ -3376,7 +3401,7 @@ export default function ControlPage() {
                           <input id="exit-prompt" className="cx-tool-input" value={toolSetup.exitPrompt} onChange={(event) => updateToolSetup("exitPrompt", event.target.value)} placeholder="Solve 3x + 4 = 19, then explain your first step." />
                         </label>
                         <label className="cx-tool-field" htmlFor="exit-kind">Answer type
-                          <select id="exit-kind" className="cx-tool-select" value={toolSetup.exitKind} onChange={(event) => updateToolSetup("exitKind", event.target.value)}>
+                          <select id="exit-kind" className="cx-tool-select" value={toolSetup.exitKind} onChange={(event) => updateToolSetup("exitKind", event.target.value as ExitKind)}>
                             <option value="short-answer">Short answer</option>
                             <option value="multiple-choice">Multiple choice</option>
                             <option value="fist-to-five">Fist to five (0–5)</option>

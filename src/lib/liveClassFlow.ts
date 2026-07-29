@@ -168,10 +168,17 @@ export type LiveToolConfig =
       // `set` is a "24,36,60" number sequence for the Factor Trees mode (see
       // lib/factorTreeSet). Empty means free play - the tool's built-in
       // sequence, same as visiting the route directly.
+      //
+      // `bothModes` is the teacher override for the mode lock. Publishing a
+      // sequence puts the tool in Factor Trees mode and HIDES the mode toggle:
+      // on prime-factorization day the Ladder is the next day's method, and a
+      // student-reachable toggle hands it to the whole room. Set this when the
+      // lesson genuinely wants both side by side. Optional, so snapshots
+      // written before it existed still parse.
       route: "/ladder-method";
       label: string;
       prompt: string;
-      config: { set: string };
+      config: { set: string; bothModes?: boolean };
     };
 
 export interface LiveFlowSequenceStep {
