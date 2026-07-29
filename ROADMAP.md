@@ -40,24 +40,25 @@ dividend) named as the two classic misses rather than generically rejected.
 Explore mode can declare which bar is one whole, the Cuisenaire move no digital
 tool does.
 
-**"Stuck? Walk it through." — the M1.T1.L1 worked example** (7/29, from the
-Claude Design handoff "Distributive Walkthrough"). Six click-to-advance steps
-that build `a x b = a ( p + q )` on one stage: rewrite it, draw the box
-template, pick the friendly factor, split the other one, then multiply and add
-— with the target answer parked to the side from step 1 and filled green at the
-end so the student sees both routes agree. Earlier steps stay up and dim to
-0.34, so the whole chain of reasoning is still on screen; step 3 is deliberately
-a question ("which factor is easier to work with?") because that is the only
-step in the method that is a decision rather than a move. Reachable two ways:
-a `Stuck?` chip on `/distributive-area` that opens it as a full-screen overlay
-so no half-placed split is lost, and the public `/stuck` route, which takes the
-problem in the URL and needs no session — so it can sit in a Notion `Help Path`
-line and still work at 8pm. It never demonstrates the problem the student is
-working on: `walkthroughExampleFor()` hands back a parallel example, contract-
-tested across every problem the tool can generate, because a solved copy of the
-question in front of them replaces the work instead of unblocking it. Reflows
-on a phone (answer panel leaves the stage, no sideways scroll) and honours
-`prefers-reduced-motion` by rendering each step finished. ·
+**"Stuck? Walk it through." — the Help Path, animated** (7/29, from the Claude
+Design handoff "Distributive Walkthrough"). The Stuck button on the student
+homepage now draws the method instead of only listing it. Behind
+`/homework-help`: six click-to-advance steps that build `a x b = a ( p + q )` on
+one stage — rewrite it, draw the box template, circle the friendly factor, split
+the other one, then multiply and add — with the target answer parked to the side
+from step 1 and filled green at the end so the student sees both routes agree.
+Earlier steps stay up and dim to 0.34, so the whole chain of reasoning is still
+on screen; step 3 is deliberately a question because that is the only step in
+the method that is a decision rather than a move. **The words are Notion's**: the
+lesson's authored `Help Path` supplies every sentence, so editing that property
+changes what the student reads and no code moves. A path that is not six steps
+refuses to animate and falls back to the existing plain one-step-per-screen
+list, because the stage draws six specific things and illustrating some other
+routine with a distributive picture would be worse than not animating. This is
+absence and homework support, not a lesson surface — no session, no join, works
+at 8pm from a kitchen table. Reflows on a phone (answer panel leaves the stage,
+no sideways scroll) and honours `prefers-reduced-motion` by rendering each step
+finished. ·
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·

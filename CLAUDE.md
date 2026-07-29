@@ -138,21 +138,27 @@ bars and live misconception grouping).
   Steele's constraint: sixth graders ignore a wall of supports and A LIST IS A WALL. Never turn it
   into a list, and never add an "I am stuck, skip it" exit - an escape hatch cheaper than the work
   gets used instead of the work. Reached from the third `.st-explore` button on the landing page.
-- `/stuck` (added 2026-07-29, from the Claude Design handoff "Distributive Walkthrough", project
-  c5b70077) is the M1.T1.L1 **"Stuck? Walk it through."** worked example: six click-to-advance steps
-  that build `a x b = a ( p + q )` on one 980x560 stage, earlier steps dimming to 0.34 so the whole
-  chain of reasoning stays visible. Public, session-free, no persistence - it is the link that can sit
-  in a Notion `Help Path` line or a handout and still work at 8pm. Carries the problem in the URL
-  (`?a=5&b=14&split=10,4`); no params opens the example the lesson is taught from. The same component
-  mounts as a full-screen OVERLAY from the `Stuck?` chip on `/distributive-area`, so nobody loses a
-  half-placed split by going to look at the example.
-  THE INVARIANT: **the walkthrough must never demonstrate the problem the student is working.**
-  `walkthroughExampleFor()` in `src/lib/distributiveWalkthrough.ts` picks a parallel example and is
-  contract-tested across every problem the tool can produce - a solved copy of the question in front
-  of them replaces the work instead of unblocking it, same reason `/homework-help` has no skip. Any
-  new call site that knows the student's numbers goes through that helper, never through the props.
-  Step 3 ("Which factor is easier to work with?") is the lesson's only DECISION rather than a move;
-  its title stays a question.
+  THE STUCK BUTTON IS THIS ROUTE AND ONLY THIS ROUTE (Steele, 2026-07-29): the walkthrough belongs
+  behind the homepage `Stuck on the assignment?` chip, NOT on a lesson or tool surface. A `Stuck?`
+  chip was briefly added to `/distributive-area` and removed the same day - "not part of the lesson.
+  its for absent kids and kids doing homework."
+- `/homework-help` ANIMATES the Help Path when it can (2026-07-29, from the Claude Design handoff
+  "Distributive Walkthrough", project c5b70077). When the lesson's `Tools` resolve to
+  `/distributive-area` AND the authored path parses to exactly six steps, the SAME authored steps go
+  to `DistributiveWalkthrough`, which draws `a x b = a ( p + q )` on one 980x560 stage as the student
+  advances - earlier steps dimming to 0.34 so the whole chain of reasoning stays visible. Anything
+  else falls back to the plain list. **NOTION OWNS THE WORDS**: `walkthroughStepsFromHelpPath` puts
+  each authored line in as the sentence and supplies only the rail label, the heading, and a spoken
+  description of the picture, so editing `Help Path` changes what the student reads and no code moves.
+  It returns null on any path that is not six steps, and that null is load-bearing - the stage draws
+  six specific things in a fixed order, so animating a seven-step fraction routine with a
+  distributive picture would be worse than not animating. M1.T1.L1's authored path happens to be
+  exactly the six steps the stage draws; that is why this lesson animates and others do not (yet).
+  Step 3 ("which factor is easier for me to work with?") is the lesson's only DECISION rather than a
+  move; its built-in title stays a question. `parseHelpPath` lives in
+  `src/lib/distributiveWalkthrough.ts` and is shared with the plain view - one parser, and it strips
+  Notion's markdown escaping (`\[` arrives from some read paths and the student would otherwise read
+  the backslashes).
 - Manipulative tools (public, no session): `/whiteboard`, `/number-line-plus`, `/number-line`,
   `/fraction-bars`, `/group-bars`, `/percent-bar`, `/algebra-tiles`, `/equation-builder`,
   `/order-of-operations` (GEMS), `/combine-like-terms`, `/proportions`, `/area-model`,
@@ -794,8 +800,8 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   fills, borders, and large graphics. GEMS tiles keep the bright fills with INK labels instead
   (ink passes on coral/amber/teal; only the purple S tile keeps white). Same trap on the design
   system's ORANGE `#f2820c` (`--orange-500` in the Claude Design `_ds` tokens, no `--bdb-*` token
-  yet): white on it is 2.6:1 and it is only 2.6:1 as text on white, so `/stuck` fills with
-  `#f2820c` and switches to `#c4660a` (`--orange-600`, 4.0:1) for the one numeral a student reads.
+  yet): white on it is 2.6:1 and it is only 2.6:1 as text on white, so the walkthrough fills
+  with `#f2820c` and switches to `#c4660a` (`--orange-600`, 4.0:1) for the one numeral a student reads.
   Design handoffs from the `_ds` bundle carry `#8A8378` (3.75:1) and `#A99F91` (2.5:1) as body and
   faint text - both FAIL AA; map them to `--bdb-ink-soft` and `--bdb-ink-faint` on the way in.
 - Handwriting: `--bdb-font-hand` (Caveat, loaded in the same `globals.css` @import as Albert Sans, so

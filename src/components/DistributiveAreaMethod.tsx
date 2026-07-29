@@ -26,8 +26,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { reportToolResult } from "@/lib/toolEvidence";
 import { useLiveToolConfig } from "./useLiveToolConfig";
-import DistributiveWalkthrough from "./DistributiveWalkthrough";
-import { walkthroughExampleFor, type WalkthroughProblem } from "@/lib/distributiveWalkthrough";
 import {
   parseDistributiveSet,
   serializeDistributiveSet,
@@ -157,10 +155,6 @@ export default function DistributiveAreaMethod() {
   const [results, setResults] = useState<Result[]>([]);
   const [draft, setDraft] = useState<Problem[]>(DEFAULT_SET);
   const [copied, setCopied] = useState(false);
-
-  // The "Stuck?" walkthrough, open over the tool so nobody loses a half-placed
-  // split by going to look at the worked example.
-  const [walkthrough, setWalkthrough] = useState<WalkthroughProblem | null>(null);
 
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const rectRef = useRef<HTMLDivElement | null>(null);
@@ -486,16 +480,6 @@ export default function DistributiveAreaMethod() {
 
   const restartProblem = useCallback(() => beginProblem(top, side), [beginProblem, top, side]);
 
-  // Deliberately NOT this student's numbers - walkthroughExampleFor picks a
-  // parallel problem. A worked copy of the question in front of them would
-  // replace the work instead of unblocking it.
-  const openWalkthrough = useCallback(() => {
-    // The tool's answer slots are live inputs; leaving one focused under the
-    // overlay would send Enter to checkStep instead of to the walkthrough.
-    (document.activeElement as HTMLElement | null)?.blur?.();
-    setWalkthrough(walkthroughExampleFor({ top, side }));
-  }, [top, side]);
-
   const nextInLesson = useCallback(() => {
     if (!lesson) return;
     const n = lIdx + 1;
@@ -616,8 +600,6 @@ export default function DistributiveAreaMethod() {
         .da-tbtn { font:inherit; font-weight:700; font-size:0.82rem; padding:6px 13px; border-radius:999px; border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
         .da-tbtn:active, .da-tbtn:focus-visible { color:var(--bdb-ink); }
         .da-tbtn:disabled { opacity:0.4; cursor:not-allowed; }
-        /* Findable without being louder than the work itself. */
-        .da-tbtn.stuck { border-color:var(--bdb-amber); color:var(--bdb-ink); font-weight:800; }
         .da-bar { display:flex; gap:8px; justify-content:center; align-items:center; margin-top:10px; flex-wrap:wrap; }
         .da-btn { font:inherit; font-weight:700; font-size:0.9rem; padding:9px 16px; border-radius:11px; border:1px solid var(--bdb-line); background:var(--bdb-ink); color:#fff; cursor:pointer; }
         .da-btn.ghost { background:var(--bdb-card); color:var(--bdb-ink); }
@@ -793,7 +775,6 @@ export default function DistributiveAreaMethod() {
             <button className="da-tbtn" onClick={restartProblem}>Start this one over</button>
             {!lesson && <button className="da-tbtn" onClick={randomProblem}>Random</button>}
             {!lesson && <button className="da-tbtn" onClick={() => setPhase("enter")}>New numbers</button>}
-            <button className="da-tbtn stuck" onClick={openWalkthrough}>Stuck?</button>
           </div>
 
           <div className="da-stage">
@@ -982,15 +963,6 @@ export default function DistributiveAreaMethod() {
             <button className="da-btn ghost" onClick={() => { setLesson(null); setResults([]); setPhase("enter"); }}>Pick my own numbers</button>
           </div>
         </>
-      )}
-
-      {walkthrough && (
-        <DistributiveWalkthrough
-          problem={walkthrough}
-          variant="overlay"
-          closeLabel="Back to my problem"
-          onClose={() => setWalkthrough(null)}
-        />
       )}
     </div>
   );
