@@ -503,17 +503,27 @@ the invariants they protect are easy to break again.
   `Discussion Stems` put the stems-and-vocabulary panel on every Chromebook from warm-up to closeout.
   When you add a surface that reads `presentation.discussionStems`, gate it on the protocol, never on
   "are there stems".
-- **THE `discussion` STATE IS FULLY WIRED AND HAS NEVER RUN.** It is a real `DEFAULT_STATES` entry
-  (so both engines build a real bank entry, not the empty synthesized one), it has its own scene on
-  present, pace, and `/live-flow`, it forces `pollKind` to null, and `/control` reveals a "Run
-  discussion" button driving the Think/Write/Discuss/Revise/Share protocol. What is missing is a
-  `discussion` step in the locked 12-step spine, so every lesson's `Discussion Prompt`,
-  `Discussion Stems`, and `Discussion Vocabulary` have gone unread since they were written. Steele
-  made student talk a STANDING requirement 2026-07-28 (see the `lesson-deployment-builder` skill);
-  adding the step is authoring work, not a code gap. Two traps if you do: `Discussion Prompt` reaches
-  only `/lesson` and never the flow snapshot, so the projector headline must be authored in
-  `Main Display`; and the step-level property is `Vocabulary` while the lesson-level one is
-  `Discussion Vocabulary`.
+- **THE `discussion` STATE IS FULLY WIRED AND FULLY AUTHORED. THE GAP IS PUBLISHING.** (Corrected
+  2026-07-29 by querying Notion - an earlier version of this line, and the work order it came from,
+  both claimed the state had never rendered "on any lesson". That is FALSE, and it is the kind of
+  claim to check against the database before repeating.) It is a real `DEFAULT_STATES` entry (so both
+  engines build a real bank entry, not the empty synthesized one), it has its own scene on present,
+  pace, and `/live-flow`, it forces `pollKind` to null, and `/control` reveals a "Run discussion"
+  button driving the three-round protocol in `src/lib/discussionProtocol.ts` (Think + Write, Discuss +
+  Revise, Share with the spinner - note the CATALOG COPY promises five phases, "Think, write, discuss,
+  revise, then share", while `DISCUSSION_ROUNDS` has three; the rounds are the truth).
+  THIRTY-FOUR Lesson Steps carry `State ID: discussion`, most with their own authored
+  `Discussion Stems` rather than the catalog fallback - Error Clinic, Misconception Discussion,
+  Structured Whiteboard Discussion, BRUH Error-Repair, and so on, usually at order 8 or 9 for 3 to 6
+  minutes. So the 12-step spine having no discussion slot did NOT stop lessons from including one.
+  What stopped them running is `Publish Workflow`: nearly every lesson carrying a discussion step sits
+  at `Ready for Review`, and `/api/today` serves only `Published` + today's `Date`. M1.T1.L3, the
+  consolidation day Steele wants to pilot discussion on, ALREADY HAS one - "9. What the Wall Says", 8
+  minutes, stems authored - and needs publishing, not building. Steele made student talk a STANDING
+  requirement 2026-07-28 (see the `lesson-deployment-builder` skill). Two traps when authoring:
+  `Discussion Prompt` reaches only `/lesson` and never the flow snapshot, so the projector headline
+  must be authored in `Main Display`; and the step-level property is `Vocabulary` while the
+  lesson-level one is `Discussion Vocabulary`.
 - **DO NOT FILTER NOTION LESSON STEPS BY THE STATE CATALOG.** `/control` dropped every step whose
   `State ID` was not in `DEFAULT_STATES` (about thirty real ids in the database) while
   `/api/control-remote` did not filter at all - so the two engines ran different lessons from the same
