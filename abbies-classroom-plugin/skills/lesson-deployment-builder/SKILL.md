@@ -211,6 +211,49 @@ It also cuts the other way: a student reporting 5 who missed both gate items nee
 
 M1.T1.L2-D2 has no Fist-to-Five. That is the one clear defect in the best-designed lesson in the database, not a variant to copy.
 
+### Every lesson has student talk
+
+Standing rule, raised by Steele on 2026-07-28, and it applies to lessons already built rather than
+only to new ones. A lesson is not finished unless students get to talk to each other **on purpose**.
+
+Two acceptable forms, either or both:
+
+1. **A structured turn-and-talk placed inside an existing step**, where it makes sense. This means a
+   named beat on the `Pace Directions` with its own timer phase — not "discuss with your partner"
+   tacked onto a slide. If it has no minutes and no name, it does not happen.
+2. **A dedicated `discussion` state**, typically 3 minutes after independent work and before the
+   exit. The likely shape is 43-46, taking independent work from 13 down to 10. Run it on the days
+   that earn it; M1.T1.L3, the consolidation day, is where Steele wants it piloted.
+
+**The runtime is ready and always has been — the gap is authoring, not code.** Verified 2026-07-29:
+`discussion` is a full entry in the state catalog (`src/lib/classStates.ts`), so both lesson engines
+give it a real bank entry rather than the empty synthesized one unknown ids get. It routes through
+`universalStateTitle()`, gets its own accent, forces `pollKind` to null so no poll can steal the
+projector, and has a dedicated two-column scene on the main projector, the support projector, and the
+Chromebook. `/control` reveals a "Run discussion" button on it that drives the Think / Write /
+Discuss / Revise / Share protocol.
+
+The reason none of that has ever appeared in class is that the locked 12-step CRA spine contains no
+`discussion` step, so every lesson's `Discussion Prompt`, `Discussion Stems`, and
+`Discussion Vocabulary` have sat unread since they were written. Adding the step is the whole fix.
+
+Three authoring traps, all verified in the code:
+
+- **`Discussion Prompt` does not reach the runtime.** It is read from the lesson, but only
+  `/lesson` consumes it — it is not in the flow snapshot either engine builds, so it reaches no
+  projector, no Chromebook, and no iPad. On a discussion step the projector headline comes from
+  **`Main Display`**. Author the prompt there, or it is invisible.
+- **The step-level vocabulary property is named `Vocabulary`, not `Discussion Vocabulary`.** The
+  lesson-level one is `Discussion Vocabulary`. A per-step column named "Discussion Vocabulary" is
+  silently dropped.
+- **The support projector bounds what it shows**: six sentence stems and three vocabulary cards. Its
+  column is absolutely positioned with no overflow, so a seventh stem is clipped with nothing on
+  screen to say so. Author within that, or accept that the tail is invisible.
+
+Leave the three properties EMPTY on a step that runs no discussion. Authored stems publish on every
+state, and the surfaces only show them on a genuine discussion step — but "empty renders as nothing,
+wrong renders on a classroom screen" applies here as everywhere.
+
 ### The release block has two shapes, and the shape decides where the assignment lands
 
 This is one coupled decision, not two. Pick the release shape and the homework answer follows.
