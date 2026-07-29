@@ -225,29 +225,31 @@ Two acceptable forms, either or both:
    exit. The likely shape is 43-46, taking independent work from 13 down to 10. Run it on the days
    that earn it; M1.T1.L3, the consolidation day, is where Steele wants it piloted.
 
-**The runtime is ready, and so is most of the authoring. The gap is PUBLISHING.** Verified against
-both the code and the Notion database on 2026-07-29 - and note what the check overturned, because the
-brief this rule came from asserted the opposite twice.
+**The deployable lessons genuinely do not use it.** Verified against the Notion database on
+2026-07-29: `M1.T1.L1-D1` (the only Published lesson), `M1.T1.L2-D1`, and `M1.T1.L2-D2` each have NO
+`discussion` step. That is the gap Steele named, and it is real.
 
-The runtime: `discussion` is a full entry in the state catalog (`src/lib/classStates.ts`), so both
-lesson engines give it a real bank entry rather than the empty synthesized one unknown ids get. It
-routes through `universalStateTitle()`, gets its own accent, forces `pollKind` to null so no poll can
-steal the projector, and has a dedicated two-column scene on the main projector, the support
-projector, and the Chromebook. `/control` reveals a "Run discussion" button that drives the protocol
-in `src/lib/discussionProtocol.ts` - **three** rounds of two minutes each (Think + Write, Discuss +
-Revise, Share with the spinner). The catalog's own description says "Think, write, discuss, revise,
-then share", which reads as five; the three rounds are what actually runs.
+Do not be fooled by the raw count. Thirty-four Lesson Steps carry `State ID: discussion` across the
+database, but they sit in the older stubs and sketches, the CC culture lessons, and the M1.T2/M1.T3
+shapes - none of which run. `M1.T1-P1` (the BRUH deck) and `M1.T1.L3` each have one, but both are
+`Ready for Review`, and `/api/today` serves only `Published` pages dated today. **When auditing this,
+count the deployable lessons, not the whole database** - the database-wide number says the opposite of
+the truth. Before writing a new discussion step, check whether that particular lesson already has one.
 
-The authoring: **thirty-four Lesson Steps already carry `State ID: discussion`**, most with their own
-authored `Discussion Stems` rather than the generic fallback - Error Clinic, Misconception Discussion,
-Structured Whiteboard Discussion, BRUH Error-Repair - typically at order 8 or 9 for 3 to 6 minutes.
-The 12-step spine having no discussion slot did not stop lessons from adding one.
+The runtime is ready: `discussion` is a full entry in the state catalog (`src/lib/classStates.ts`), so
+both lesson engines give it a real bank entry rather than the empty synthesized one unknown ids get.
+It routes through `universalStateTitle()`, gets its own accent, forces `pollKind` to null so no poll
+can steal the projector, and has a dedicated two-column scene on all three surfaces. `/control`
+reveals a "Run discussion" button that drives `src/lib/discussionProtocol.ts`.
 
-So the reason no class has seen it is neither design nor code: nearly every lesson carrying a
-discussion step sits at `Publish Workflow: Ready for Review`, and `/api/today` serves only
-`Published` pages dated today. **M1.T1.L3 already has its discussion step** - "9. What the Wall Says",
-8 minutes, stems authored - so piloting discussion there is a publish, not a build. Before writing a
-new discussion step into a lesson, check whether that lesson already has one.
+**But the protocol is not universal, and must not be forced to be** (Steele, 2026-07-29). Error
+analysis, respectful difference, whiteboard consensus, and share-out are genuinely different shapes,
+so one fixed sequence is the wrong abstraction. What is invariant is that every phase gets **its own
+timer and one clear direction** - when to think, when to write, when to talk, when to listen, in
+whatever order that discussion needs. The current code is the opposite: `DISCUSSION_ROUNDS` hardcodes
+three 120-second rounds with fixed labels, so neither the sequence nor the durations can vary, and the
+catalog description promises five phases while three run. Until the phase list is authorable, design a
+discussion around three equal beats or expect to fight the tool.
 
 Three authoring traps, all verified in the code:
 

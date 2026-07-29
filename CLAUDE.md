@@ -509,23 +509,31 @@ the invariants they protect are easy to break again.
   `Discussion Stems` put the stems-and-vocabulary panel on every Chromebook from warm-up to closeout.
   When you add a surface that reads `presentation.discussionStems`, gate it on the protocol, never on
   "are there stems".
-- **THE `discussion` STATE IS FULLY WIRED AND FULLY AUTHORED. THE GAP IS PUBLISHING.** (Corrected
-  2026-07-29 by querying Notion - an earlier version of this line, and the work order it came from,
-  both claimed the state had never rendered "on any lesson". That is FALSE, and it is the kind of
-  claim to check against the database before repeating.) It is a real `DEFAULT_STATES` entry (so both
+- **THE `discussion` STATE IS WIRED, AND THE LESSONS THAT ACTUALLY RUN DO NOT USE IT.** (Settled
+  2026-07-29 after two wrong versions of this line. Steele's own statement - "none of our lessons up
+  to that point had used it" - is CORRECT about the lessons he teaches from: `M1.T1.L1-D1` (the only
+  Published one), `M1.T1.L2-D1`, and `M1.T1.L2-D2` each have NO discussion step. The database-wide
+  count of 34 discussion steps is real but lives in the older stubs and sketches, the CC culture
+  lessons, and the M1.T2/M1.T3 shapes - none of which run. `M1.T1-P1`, the BRUH deck, does have one
+  ("5. BRUH Error-Repair Discussion", 3 min), and `M1.T1.L3` has "9. What the Wall Says" (8 min), but
+  both sit at `Ready for Review` and `/api/today` serves only `Published` pages dated today. So when
+  auditing this, count the DEPLOYABLE lessons, not the whole database - the raw count says the
+  opposite of the truth.) It is a real `DEFAULT_STATES` entry (so both
   engines build a real bank entry, not the empty synthesized one), it has its own scene on present,
   pace, and `/live-flow`, it forces `pollKind` to null, and `/control` reveals a "Run discussion"
   button driving the three-round protocol in `src/lib/discussionProtocol.ts` (Think + Write, Discuss +
   Revise, Share with the spinner - note the CATALOG COPY promises five phases, "Think, write, discuss,
   revise, then share", while `DISCUSSION_ROUNDS` has three; the rounds are the truth).
-  THIRTY-FOUR Lesson Steps carry `State ID: discussion`, most with their own authored
-  `Discussion Stems` rather than the catalog fallback - Error Clinic, Misconception Discussion,
-  Structured Whiteboard Discussion, BRUH Error-Repair, and so on, usually at order 8 or 9 for 3 to 6
-  minutes. So the 12-step spine having no discussion slot did NOT stop lessons from including one.
-  What stopped them running is `Publish Workflow`: nearly every lesson carrying a discussion step sits
-  at `Ready for Review`, and `/api/today` serves only `Published` + today's `Date`. M1.T1.L3, the
-  consolidation day Steele wants to pilot discussion on, ALREADY HAS one - "9. What the Wall Says", 8
-  minutes, stems authored - and needs publishing, not building. Steele made student talk a STANDING
+  THE PROTOCOL IS NOT UNIVERSAL AND MUST NOT BE FORCED TO BE (Steele, 2026-07-29). Different
+  discussions are genuinely different shapes - error analysis, respectful difference, whiteboard
+  consensus, share-out - so a single fixed sequence is the wrong abstraction. What is invariant is
+  that EVERY phase has its own timer and its own single clear direction: when to think, when to write,
+  when to talk, when to listen, in whatever order that discussion needs. The current code is the
+  opposite of that - `DISCUSSION_ROUNDS` hardcodes three 120-second rounds with fixed labels, so the
+  sequence cannot vary and the durations cannot either. Making the phase list authorable per step is
+  the open work item; note that a phase is the SAME primitive as a classroom state strip entry plus a
+  timer (think and write are voice 0 on your own paper, talk is voice 1 or 2, listen is voice 0 on the
+  speaker), so build the two together rather than twice. Steele made student talk a STANDING
   requirement 2026-07-28 (see the `lesson-deployment-builder` skill). Two traps when authoring:
   `Discussion Prompt` reaches only `/lesson` and never the flow snapshot, so the projector headline
   must be authored in `Main Display`; and the step-level property is `Vocabulary` while the
