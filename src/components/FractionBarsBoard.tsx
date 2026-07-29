@@ -1,20 +1,36 @@
 "use client";
 
 // Fraction Bars — M1.T1.L5 support (6.NS.1: dividing fractions).
-// Four modes, all optional support (no scoring):
-//   "How many fit?"    — the Count-Draw-Verify loop: BUILD the dividend, TILE
-//                        unit-fraction groups under it, COUNT the tiles (not
-//                        the tick marks), VERIFY with quotient x divisor.
-//   "Mixed numbers"    — convert a mixed number to an improper fraction by
-//                        splitting the wholes into unit pieces and counting.
-//   "Keep Change Flip" — the reciprocal algorithm, walked one badge at a time
-//                        with the division sign morphing and the second
-//                        fraction physically flipping. (For L5-D3 — the
-//                        algorithm is EARNED after the models, not before.)
-//   "Explore"          — fraction wall: one whole on top, rows of tapped-in
-//                        pieces laid end to end beneath it for comparison.
+// Five modes, all optional support (no scoring):
+//   "How many fit?"      — the Count-Draw-Verify loop: BUILD the dividend, TILE
+//                          divisor-sized groups under it, COUNT the groups (not
+//                          the tick marks), VERIFY with quotient x divisor. The
+//                          divisor may be a NON-UNIT fraction, and a problem may
+//                          leave part of a group over. A leftover is always named
+//                          as a fraction of ONE GROUP ("1/8 of a group") — never
+//                          as a fraction of the whole bar and never as a fraction
+//                          of the total, which are the two errors the drawing has
+//                          to rule out. A dashed outline shows the group the
+//                          leftover sits inside, so the referent unit is visible.
+//   "Bigger or smaller?" — estimation only: judge the DIRECTION of the answer
+//                          with no arithmetic. Two variants (compare to the
+//                          starting amount, or division head to head against
+//                          multiplication). Nothing is scored, counted, or
+//                          stored — it is a three-minute daily habit, and the
+//                          feedback names the reasoning, not the result.
+//   "Mixed numbers"      — convert a mixed number to an improper fraction by
+//                          splitting the wholes into unit pieces and counting.
+//   "Keep Change Flip"   — the reciprocal algorithm, walked one badge at a time
+//                          with the division sign morphing and the second
+//                          fraction physically flipping. (For L5-D3 — the
+//                          algorithm is EARNED after the models, not before.)
+//   "Explore"            — fraction wall: rows of tapped-in pieces laid end to
+//                          end under one whole. The student DECLARES which bar
+//                          counts as one whole (the Cuisenaire move: the rods
+//                          carry no printed names), and every other name re-bases
+//                          live off that choice.
 
-import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useState } from "react";
 import { LiveToolBanner, useLiveToolConfig } from "./useLiveToolConfig";
 
 const C_TEAL = "#50a3a4";
@@ -22,15 +38,116 @@ const C_AMBER = "#fcaf38";
 const C_CORAL = "#f95335";
 const C_GREEN = "#2f9e6f";
 
+// ── Exact fraction arithmetic (shared by every mode — never float compare) ───
+const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+const reduceFrac = (n: number, d: number): [number, number] => {
+  const g = gcd(n, d) || 1;
+  return [n / g, d / g];
+};
+// Exact sum of a row of unit fractions, reduced: [numerator, denominator].
+const rowSum = (row: number[]): [number, number] => {
+  let n = 0, d = 1;
+  for (const den of row) {
+    n = n * den + d;
+    d = d * den;
+    const g = gcd(n, d);
+    n /= g; d /= g;
+  }
+  return [n, d];
+};
+const sumLabel = ([n, d]: [number, number]) => (d === 1 ? `${n}` : `${n}/${d}`);
+// The name of a 1/den bar when the 1/wholeDen bar has been declared to be one
+// whole: (1/den) / (1/wholeDen) = wholeDen/den. With wholeDen = 1 this gives
+// back the printed names, so nothing moves until the student re-declares.
+const labelFor = (den: number, wholeDen: number) => sumLabel(reduceFrac(wholeDen, den));
+// A wall row's value, measured in declared wholes.
+const rowValue = (row: number[], wholeDen: number): [number, number] => {
+  const [n, d] = rowSum(row);
+  return reduceFrac(n * wholeDen, d);
+};
+
 // ── "How many fit?" problems (from the lesson's paper set) ──────────────────
-interface DivProblem { n: number; d: number; d2: number } // n/d divided by 1/d2
+interface DivProblem { n: number; d: number; n2: number; d2: number } // n/d divided by n2/d2
 const DIV_PROBLEMS: DivProblem[] = [
-  { n: 3, d: 4, d2: 8 },
-  { n: 2, d: 3, d2: 6 },
-  { n: 5, d: 8, d2: 16 },
-  { n: 3, d: 5, d2: 10 },
+  { n: 3, d: 4, n2: 1, d2: 8 },   // 6 groups, exact
+  { n: 2, d: 3, n2: 1, d2: 6 },   // 4 groups, exact
+  { n: 5, d: 8, n2: 1, d2: 16 },  // 10 groups, exact
+  { n: 3, d: 5, n2: 1, d2: 10 },  // 6 groups, exact
+  { n: 2, d: 3, n2: 1, d2: 2 },   // 1 group and 1/3 of another (leftover 1/6 of the bar)
+  { n: 7, d: 8, n2: 1, d2: 2 },   // 1 group and 3/4 of another (leftover 3/8 of the bar)
+  { n: 4, d: 5, n2: 2, d2: 5 },   // 2 groups, exact, non-unit divisor
+  { n: 3, d: 4, n2: 3, d2: 8 },   // 2 groups, exact, non-unit divisor
+  { n: 3, d: 4, n2: 2, d2: 3 },   // 1 group and 1/8 of another — NOT 1/9, NOT 1/12
 ];
-const quotientOf = (p: DivProblem) => (p.n * p.d2) / p.d;
+// Everything the drawing and the checking need for one problem. This replaces the
+// old integer quotientOf: with a non-unit divisor the quotient is a fraction, and
+// every consumer needs the whole part and the leftover separately.
+//   The leftover is carried THREE ways on purpose. remN/remD is the answer — the
+// leftover measured in GROUPS. The other two are the named wrong answers: the
+// leftover measured against the whole bar, and against the total the student
+// started with. In-service teachers asked for 3/4 ÷ 2/3 answer 1/9 (the leftover
+// as a part of the total) when it is 1/8 of a group, so the tool has to be able
+// to say which unit each of those answers is measured in.
+interface DivInfo {
+  whole: number;                        // full groups that fit
+  exact: boolean;
+  remN: number; remD: number;           // leftover as a fraction of ONE GROUP
+  ofWholeN: number; ofWholeD: number;   // leftover as a fraction of the whole bar
+  ofTotalN: number; ofTotalD: number;   // leftover as a fraction of the dividend
+  pieces: number;                       // group pieces to lay down (full groups + a partial)
+}
+const divInfo = (p: DivProblem): DivInfo => {
+  const [qn, qd] = reduceFrac(p.n * p.d2, p.d * p.n2);
+  const whole = Math.floor(qn / qd);
+  const remN = qn - whole * qd;
+  const [ofWholeN, ofWholeD] = reduceFrac(p.n * p.d2 - whole * p.n2 * p.d, p.d * p.d2);
+  const [ofTotalN, ofTotalD] = reduceFrac(ofWholeN * p.d, ofWholeD * p.n);
+  return {
+    whole, exact: remN === 0, remN, remD: qd,
+    ofWholeN, ofWholeD, ofTotalN, ofTotalD,
+    pieces: whole + (remN === 0 ? 0 : 1),
+  };
+};
+
+// ── "Bigger or smaller?" problems (estimation, nothing scored) ──────────────
+// an/ad OP bn/bd. The list mixes divisors and multipliers on BOTH sides of one
+// whole on purpose: if every divisor were under 1, "dividing by a fraction makes
+// it bigger" just becomes the next wrong rule. Division is deliberately split
+// close to evenly between bigger and smaller so the operator alone predicts
+// nothing. `why` says the idea in one sentence — how many groups fit, never
+// "correct".
+interface EstProblem {
+  an: number; ad: number;
+  op: "div" | "mul";
+  bn: number; bd: number;
+  why: string;
+}
+const EST_PROBLEMS: EstProblem[] = [
+  { an: 5, ad: 1, op: "div", bn: 2, bd: 3, why: "Two thirds is less than one whole, so more than one of those groups fits inside each of the 5 wholes." },
+  { an: 6, ad: 1, op: "div", bn: 3, bd: 2, why: "Three halves is more than one whole, so each group takes more than 1 of the 6 and fewer groups fit." },
+  { an: 4, ad: 1, op: "mul", bn: 3, bd: 4, why: "Multiplying keeps only three fourths of each whole, so what you end up holding is less than 4." },
+  { an: 3, ad: 1, op: "mul", bn: 5, bd: 2, why: "Five halves is two and a half wholes, so three of them stacks up to more than 3." },
+  { an: 3, ad: 4, op: "div", bn: 1, bd: 8, why: "Eighths are much smaller than three fourths, so a lot of them fit inside it." },
+  // Careful one: only 2/3 of a group fits, and 2/3 is still MORE than the 1/2 we
+  // started with. "Fewer than one group fits" is true and is not the question, so
+  // the reason has to be about the size of the measuring unit.
+  { an: 1, ad: 2, op: "div", bn: 3, bd: 4, why: "Three fourths is less than one whole, so you are measuring the 1/2 with a unit smaller than a whole — and a smaller unit always gives a bigger count." },
+  { an: 10, ad: 1, op: "div", bn: 5, bd: 4, why: "Five fourths is more than one whole, so every group covers more than 1 and fewer than 10 of them fit." },
+  { an: 2, ad: 1, op: "mul", bn: 7, bd: 8, why: "Seven eighths of each whole is just short of a whole, so two of them land just short of 2." },
+  { an: 6, ad: 1, op: "div", bn: 3, bd: 4, why: "Three fourths is less than one whole, so more than one group fits in every whole and the count passes 6." },
+  { an: 4, ad: 1, op: "mul", bn: 4, bd: 3, why: "Four thirds is more than one whole, so four of them is more than 4." },
+  { an: 9, ad: 1, op: "div", bn: 9, bd: 8, why: "Nine eighths is a little more than one whole, so each group takes a little more than 1 and fewer than 9 fit." },
+  { an: 3, ad: 5, op: "div", bn: 1, bd: 10, why: "Tenths are smaller than three fifths, so several of them fit inside it." },
+  { an: 5, ad: 1, op: "div", bn: 6, bd: 5, why: "Six fifths is more than one whole, so each group swallows more than one of the 5." },
+  { an: 8, ad: 1, op: "mul", bn: 1, bd: 2, why: "Half of each whole keeps only part of it, so 8 halves is less than 8." },
+  { an: 2, ad: 3, op: "div", bn: 1, bd: 4, why: "Fourths are smaller than two thirds, so more than one of them fits inside it." },
+  { an: 4, ad: 1, op: "div", bn: 8, bd: 5, why: "Eight fifths is more than one and a half wholes, so each group eats up more than one of the 4 and fewer than 4 fit." },
+];
+// Direction of the answer against the starting amount.
+const estBigger = (p: EstProblem) => (p.op === "div" ? p.bn < p.bd : p.bn > p.bd);
+// Head to head, a divided by b against a times b: for a positive b, dividing
+// wins whenever b is under one whole, and multiplying wins whenever it is over.
+const estDivWins = (p: EstProblem) => p.bn < p.bd;
 
 // ── Mixed-number problems ───────────────────────────────────────────────────
 interface MixedProblem { w: number; n: number; d: number } // w n/d
@@ -70,19 +187,6 @@ const EX_PIECES = [
   { den: 10, label: "1/10", color: "#c25588" },
   { den: 12, label: "1/12", color: "#a06b2a" },
 ];
-const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
-// Exact sum of a row of unit fractions, reduced: [numerator, denominator].
-const rowSum = (row: number[]): [number, number] => {
-  let n = 0, d = 1;
-  for (const den of row) {
-    n = n * den + d;
-    d = d * den;
-    const g = gcd(n, d);
-    n /= g; d /= g;
-  }
-  return [n, d];
-};
-const sumLabel = ([n, d]: [number, number]) => (d === 1 ? `${n}` : `${n}/${d}`);
 
 // Stacked fraction, written the way it looks in a problem. `flipped` swaps the
 // numerator and denominator with a sliding animation (Keep-Change-Flip).
@@ -96,27 +200,56 @@ function Frac({ n, d, color, flipped }: { n: ReactNode; d: ReactNode; color?: st
   );
 }
 
+// One term of an expression: a plain number when the denominator is 1, a stacked
+// fraction otherwise. (Estimation problems can start from either.)
+function NumTerm({ n, d, color }: { n: number; d: number; color?: string }) {
+  if (d === 1) return <span style={color ? { color } : undefined}>{n}</span>;
+  return <Frac n={n} d={d} color={color} />;
+}
+
 export function FractionBarsBoard() {
   const liveTool = useLiveToolConfig("/fraction-bars");
-  const [mode, setModeRaw] = useState<"divide" | "mixed" | "kcf" | "explore">("divide");
+  const [mode, setModeRaw] = useState<"divide" | "estimate" | "mixed" | "kcf" | "explore">("divide");
   const [note, setNote] = useState<string | null>(null);
   const setMode = (m: typeof mode) => { setModeRaw(m); setNote(null); };
 
   // ── divide state ───────────────────────────────────────────────────────────
   const [pIdx, setPIdx] = useState(0);
   const prob = DIV_PROBLEMS[pIdx];
-  const q = quotientOf(prob);
+  const di = divInfo(prob);
+  const divisorText = sumLabel([prob.n2, prob.d2]);
+  const totalText = `${prob.n}/${prob.d}`;
+  const groupPct = (prob.n2 / prob.d2) * 100;          // one group, as a share of the strip
+  const goalPct = (prob.n / prob.d) * 100;             // where the total ends
+  const partialPct = goalPct - di.whole * groupPct;    // the leftover, as a share of the strip
+  const leftoverText = `${di.remN}/${di.remD}`;        // the leftover IN GROUPS
+  const groupsWord = (k: number) => `${k} group${k === 1 ? "" : "s"}`;
+  const quotientText = di.exact ? `${di.whole}` : `${groupsWord(di.whole)} and ${leftoverText} of another group`;
+  const verifyTarget = di.whole * prob.n2;             // numerator of whole x divisor, over d2
+  // The widest thing this problem can draw: an overshoot group laid past the end
+  // of the total, or the full-size dashed outline of the leftover's group, either
+  // of which can reach past the strip (3/4 ÷ 2/3 reaches 133% of it). Shrink the
+  // whole stage to make room rather than letting a bar run off the page — every
+  // row shrinks together, so lengths stay comparable inside the problem.
+  const maxExtentPct = (di.pieces + (di.exact ? 1 : 0)) * groupPct;
+  const stageShrink = Math.max(1, maxExtentPct / 100);
+  const stageStyle = stageShrink > 1
+    ? { width: `min(${Math.round(620 / stageShrink)}px, ${(100 / stageShrink).toFixed(1)}%)` }
+    : undefined;
   const [phase, setPhase] = useState<"build" | "tile" | "count" | "verify" | "done">("build");
   const [built, setBuilt] = useState(0);
   const [tiles, setTiles] = useState(0);
   const [countIn, setCountIn] = useState("");
+  const [leftNIn, setLeftNIn] = useState("");
+  const [leftDIn, setLeftDIn] = useState("");
   const [verifyIn, setVerifyIn] = useState("");
   const [showTileNums, setShowTileNums] = useState(false);
+  const showPartial = !di.exact && tiles > di.whole;
 
   const startProblem = useCallback((idx: number) => {
     setPIdx(idx);
     setPhase("build"); setBuilt(0); setTiles(0);
-    setCountIn(""); setVerifyIn(""); setNote(null); setShowTileNums(false);
+    setCountIn(""); setLeftNIn(""); setLeftDIn(""); setVerifyIn(""); setNote(null); setShowTileNums(false);
   }, []);
 
   useEffect(() => {
@@ -126,45 +259,110 @@ export function FractionBarsBoard() {
   }, [phase, built, prob]);
 
   useEffect(() => {
-    if (phase !== "tile" || tiles !== q) return;
+    if (phase !== "tile" || tiles !== di.pieces) return;
     const t = window.setTimeout(() => { setNote(null); setPhase("count"); }, 650);
     return () => window.clearTimeout(t);
-  }, [phase, tiles, q]);
+  }, [phase, tiles, di.pieces]);
 
   const addBuilt = () => {
     if (phase !== "build") return;
     const next = built + 1;
     setBuilt(next);
-    if (next > prob.n) setNote(`That is more than ${prob.n}/${prob.d} now — take some off.`);
-    else if (next === prob.n) setNote(`That is ${prob.n}/${prob.d}.`);
+    if (next > prob.n) setNote(`That is more than ${totalText} now — take some off.`);
+    else if (next === prob.n) setNote(`That is ${totalText}.`);
     else setNote(null);
   };
   const removeBuilt = () => { if (phase === "build" && built > 0) { setBuilt(built - 1); setNote(null); } };
   const addTile = () => {
     if (phase !== "tile") return;
     const next = tiles + 1;
+    // ONE overshoot group is allowed on an exact problem: watching a group hang
+    // past the total is the coral signal, and it is worth seeing. Once a leftover
+    // is already drawn there is nothing left to learn from another whole group and
+    // it would only run off the strip, so refuse it.
+    if (next > di.pieces + (di.exact ? 1 : 0)) {
+      setNote(`No more groups fit in ${totalText}.`);
+      return;
+    }
     setTiles(next);
-    if (next > q) setNote(`That group went PAST ${prob.n}/${prob.d} — take it off.`);
-    else if (next === q) setNote("The groups fill it exactly.");
-    else setNote(null);
+    if (next > di.pieces) setNote(`That group went PAST ${totalText} — take it off.`);
+    else if (next === di.pieces) {
+      setNote(di.exact
+        ? "The groups fill it exactly."
+        : "The dashed outline is one whole group. The leftover fills only part of it.");
+    } else if (!di.exact && next === di.whole) {
+      setNote("Another whole group will not fit. Add just the leftover piece.");
+    } else setNote(null);
   };
   const removeTile = () => { if (phase === "tile" && tiles > 0) { setTiles(tiles - 1); setNote(null); } };
 
   const submitCount = () => {
     const v = Number(countIn.trim());
     if (!countIn.trim() || !Number.isFinite(v)) return;
-    if (v === q) { setNote(null); setShowTileNums(false); setPhase("verify"); return; }
-    if (v === q + 1) setNote("You counted the tick MARKS. Count the tiles — each tile is one group.");
-    else setNote(`Count the tiles one at a time — each tile is one group of 1/${prob.d2}.`);
-    setShowTileNums(true);
-    setCountIn("");
+    if (v !== di.whole) {
+      if (di.exact && v === di.whole + 1) setNote("You counted the tick MARKS. Count the tiles — each tile is one group.");
+      else if (!di.exact && v === di.whole + 1) setNote("That last piece does not fill a whole group. Count the FULL groups, then say how much of another group is left.");
+      else setNote(`Count the tiles one at a time — each tile is one group of ${divisorText}.`);
+      setShowTileNums(true);
+      setCountIn("");
+      return;
+    }
+    if (di.exact) { setNote(null); setShowTileNums(false); setPhase("verify"); return; }
+    const ln = Number(leftNIn.trim()), ld = Number(leftDIn.trim());
+    if (!leftNIn.trim() || !leftDIn.trim() || ld === 0) {
+      setNote(`${groupsWord(di.whole)} fit. Now say how much of ANOTHER group the leftover fills.`);
+      return;
+    }
+    if (!Number.isFinite(ln) || !Number.isFinite(ld)) return;
+    // The leftover is judged in GROUPS. Equivalent fractions pass; the two
+    // classic wrong referents get named instead of a generic "try again".
+    if (ln * di.remD === di.remN * ld) { setNote(null); setShowTileNums(false); setPhase("verify"); return; }
+    if (ln * di.ofWholeD === di.ofWholeN * ld) {
+      setNote(`That leftover IS ${sumLabel([di.ofWholeN, di.ofWholeD])} of the whole bar — but you are counting GROUPS. Hold it against ONE ${divisorText} group: how much of that group does it cover?`);
+    } else if (ln * di.ofTotalD === di.ofTotalN * ld) {
+      setNote(`That is ${sumLabel([di.ofTotalN, di.ofTotalD])} of the ${totalText} you started with. Measure the leftover against ONE group, not against the total.`);
+    } else {
+      setNote(`Compare the leftover to the dashed outline of one whole ${divisorText} group: how much of that group is filled?`);
+    }
+    setLeftNIn(""); setLeftDIn("");
   };
   const submitVerify = () => {
     const v = Number(verifyIn.trim());
     if (!verifyIn.trim() || !Number.isFinite(v)) return;
-    if (v === q) { setNote(null); setPhase("done"); return; }
-    setNote(`${q} groups of 1/${prob.d2} makes how many ${nths(prob.d2)} in all?`);
+    if (v === verifyTarget) { setNote(null); setPhase("done"); return; }
+    setNote(`${groupsWord(di.whole)} of ${divisorText} makes how many ${nths(prob.d2)} in all?`);
     setVerifyIn("");
+  };
+
+  // ── estimation state (nothing counted, nothing stored) ─────────────────────
+  const [eIdx, setEIdx] = useState(0);
+  const [eVariant, setEVariant] = useState<"start" | "head">("start");
+  const [ePick, setEPick] = useState<"bigger" | "smaller" | "div" | "mul" | null>(null);
+  const ep = EST_PROBLEMS[eIdx];
+  const eStartText = sumLabel([ep.an, ep.ad]);
+  const eDivisorText = sumLabel([ep.bn, ep.bd]);
+  const eBigger = estBigger(ep);
+  const eDivWins = estDivWins(ep);
+  const eRight = eVariant === "start"
+    ? ePick === (eBigger ? "bigger" : "smaller")
+    : ePick === (eDivWins ? "div" : "mul");
+  const eVerdictTail = eVariant === "start"
+    ? `it is ${eBigger ? "bigger" : "smaller"} than ${eStartText}.`
+    : `${eDivWins ? "dividing" : "multiplying"} gives the bigger answer.`;
+  // Head to head is one idea every time, so its reason is stated the same way
+  // every time. The per-problem `why` belongs to the compare-to-the-start round.
+  const eWhy = eVariant === "start"
+    ? ep.why
+    : eDivWins
+      ? `${eDivisorText} is less than one whole: dividing counts how many of those pieces fit inside ${eStartText}, while multiplying keeps only part of ${eStartText}.`
+      : `${eDivisorText} is more than one whole: multiplying stretches ${eStartText}, while dividing breaks it into groups bigger than a whole.`;
+  const nextEstimate = () => {
+    setEPick(null);
+    setNote(null);
+    if (EST_PROBLEMS.length < 2) return;
+    let next = eIdx;
+    while (next === eIdx) next = Math.floor(Math.random() * EST_PROBLEMS.length);
+    setEIdx(next);
   };
 
   // ── mixed-number state ─────────────────────────────────────────────────────
@@ -240,16 +438,31 @@ export function FractionBarsBoard() {
   // ── explore state (fraction wall) ──────────────────────────────────────────
   const [exRows, setExRows] = useState<number[][]>([[], []]);
   const [exSel, setExSel] = useState(0);
+  // Which bar the student has declared to be one whole. 1 is the printed strip,
+  // which is the default and reproduces the original wall exactly.
+  const [exWhole, setExWhole] = useState(1);
+  const exWholeColor = EX_PIECES.find((p) => p.den === exWhole)?.color ?? EX_PIECES[0].color;
 
   const exAdd = (den: number) => {
     const row = exRows[exSel] ?? [];
     const [n, d] = rowSum(row);
+    // The cap is the STRIP, not the declared whole: once a smaller bar is called
+    // one whole, a row running past one whole is the whole point (it reads 3/2),
+    // so only the physical strip may stop it.
     if (n * den + d > d * den) {
-      setNote("That row already makes one whole. Add a row to keep comparing.");
+      setNote(exWhole === 1
+        ? "That row already makes one whole. Add a row to keep comparing."
+        : "That row already fills the strip. Add a row to keep comparing.");
       return;
     }
     setNote(null);
     setExRows((rs) => rs.map((r, i) => (i === exSel ? [...r, den] : r)));
+  };
+  const exDeclareWhole = (den: number) => {
+    setExWhole(den);
+    setNote(den === 1
+      ? "The strip is one whole again — every name is back to where it started."
+      : "Every bar just got a new name, measured against the bar you called 1.");
   };
   const exRemovePiece = (ri: number, pi: number) => {
     setExSel(ri);
@@ -317,12 +530,28 @@ export function FractionBarsBoard() {
         .fb-note { text-align:center; min-height:26px; margin-top:12px; }
         .fb-note-in { display:inline-block; color:var(--bdb-coral); font-weight:800; font-size:clamp(1rem,3vw,1.3rem); line-height:1.35; padding:8px 16px; border-radius:12px; background:color-mix(in srgb, var(--bdb-coral) 12%, transparent); }
         .fb-done { text-align:center; font-size:clamp(1.2rem,3.6vw,1.8rem); font-weight:900; margin-top:12px; }
-        .fb-palette { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:10px; }
+        .fb-palette { display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
         .fb-pal { font:inherit; font-weight:900; font-size:1rem; min-height:44px; padding:0 16px; border:2px solid var(--bdb-ink); background:var(--bdb-card); color:var(--bdb-ink); cursor:pointer; }
         .fb-track.exsel { border-style:solid; border-color:var(--bdb-ink); box-shadow:0 0 0 3px color-mix(in srgb, var(--bdb-amber) 55%, transparent); }
         button.fb-piece { border-top:none; border-bottom:none; border-left:none; font:inherit; font-weight:900; font-size:0.95rem; padding:0; cursor:pointer; }
         .fb-rowsum { font-weight:900; color:var(--bdb-ink); text-transform:none; letter-spacing:0; font-size:0.9rem; margin-left:6px; }
         .fb-tilenum { position:absolute; inset:0; display:grid; place-items:center; color:var(--bdb-ink); font-weight:900; }
+        .fb-ghost { position:absolute; top:0; height:100%; box-sizing:border-box; background:transparent; border:2px dashed color-mix(in srgb, var(--bdb-ink) 40%, transparent); }
+        .fb-partlbl { position:absolute; top:100%; margin-top:5px; transform:translateX(-50%); white-space:nowrap; font-size:0.74rem; font-weight:900; color:var(--bdb-ink); }
+        .fb-grouprow { padding-bottom:24px; }
+        .fb-big { display:grid; grid-template-columns:1fr 1fr; gap:12px; width:min(560px,100%); margin:18px auto 0; }
+        .fb-bigbtn { font:inherit; font-weight:900; font-size:clamp(1rem,3.2vw,1.35rem); min-height:104px; padding:12px 14px; display:flex; align-items:center; justify-content:center; gap:10px; text-align:center; border:3px solid var(--bdb-ink); border-radius:16px; background:var(--bdb-card); color:var(--bdb-ink); cursor:pointer; }
+        .fb-bigbtn:disabled { cursor:default; }
+        .fb-bigbtn.win { border-color:var(--bdb-green-deep); box-shadow:0 0 0 4px color-mix(in srgb, var(--bdb-green-deep) 22%, transparent); }
+        .fb-bigbtn.lose { opacity:0.45; }
+        @media (max-width:520px) { .fb-big { grid-template-columns:1fr; } }
+        .fb-verdict { text-align:center; font-weight:900; font-size:clamp(1.05rem,3vw,1.35rem); margin-top:18px; }
+        .fb-why { max-width:44ch; margin:6px auto 0; text-align:center; color:var(--bdb-ink-soft); font-size:0.98rem; line-height:1.45; }
+        .fb-wbar { display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+        .fb-wlbl { font-size:0.72rem; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; color:var(--bdb-ink-faint); }
+        .fb-wbtn { font:inherit; font-weight:800; font-size:0.86rem; min-height:44px; padding:0 13px; border-radius:999px; border:2px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
+        .fb-wbtn.on { background:var(--bdb-ink); color:#fff; border-color:var(--bdb-ink); }
+        .fb-wline { position:absolute; top:-4px; bottom:-4px; width:2px; background:color-mix(in srgb, var(--bdb-ink) 45%, transparent); }
         @media (prefers-reduced-motion: reduce) { .fb-piece.pop { animation:none; } .fb-fn, .fb-fd, .fb-op span, .fb-badge { transition:none; } }
       `}</style>
 
@@ -331,6 +560,7 @@ export function FractionBarsBoard() {
       <div className="fb-modebar">
         <div className="fb-modeseg">
           <button className={mode === "divide" ? "on" : ""} onClick={() => { setMode("divide"); setNote(null); }}>How many fit?</button>
+          <button className={mode === "estimate" ? "on" : ""} onClick={() => { setMode("estimate"); setNote(null); }}>Bigger or smaller?</button>
           <button className={mode === "mixed" ? "on" : ""} onClick={() => { setMode("mixed"); setNote(null); }}>Mixed numbers</button>
           <button className={mode === "kcf" ? "on" : ""} onClick={() => { setMode("kcf"); setNote(null); }}>Keep Change Flip</button>
           <button className={mode === "explore" ? "on" : ""} onClick={() => { setMode("explore"); setNote(null); }}>Explore</button>
@@ -340,30 +570,38 @@ export function FractionBarsBoard() {
       {mode === "divide" && (
         <>
           <div className="fb-prompt">
-            {phase === "build" && `Build the total: ${prob.n}/${prob.d}`}
-            {phase === "tile" && `How many 1/${prob.d2} groups fit in ${prob.n}/${prob.d}?`}
-            {phase === "count" && "Count the groups"}
-            {phase === "verify" && "Verify it with multiplication"}
-            {phase === "done" && `${prob.n}/${prob.d} ÷ 1/${prob.d2} = ${q}`}
+            {phase === "build" && `Build the total: ${totalText}`}
+            {phase === "tile" && `How many ${divisorText} groups fit in ${totalText}?`}
+            {phase === "count" && (di.exact ? "Count the groups" : "Count the groups and the leftover")}
+            {phase === "verify" && (di.exact ? "Verify it with multiplication" : "Check the full groups")}
+            {phase === "done" && `${totalText} ÷ ${divisorText} = ${quotientText}`}
           </div>
           <div className="fb-sub">
-            {phase === "build" && `Tap to add ${nths(prob.d)} until the bar shows ${prob.n}/${prob.d}.`}
-            {phase === "tile" && `Tile 1/${prob.d2} pieces under it until they fill the SAME length.`}
-            {phase === "count" && "Count the tiles — the groups — not the tick marks."}
-            {phase === "verify" && "The quotient counts groups, so the groups must multiply back to the total."}
-            {phase === "done" && "Counted, drawn, and verified."}
+            {phase === "build" && `Tap to add ${nths(prob.d)} until the bar shows ${totalText}.`}
+            {phase === "tile" && (di.exact
+              ? `Tile ${divisorText} pieces under it until they fill the SAME length.`
+              : `Tile ${divisorText} pieces under it until no more whole groups fit.`)}
+            {phase === "count" && (di.exact
+              ? "Count the tiles — the groups — not the tick marks."
+              : "Say the leftover as a fraction of ONE GROUP. Hold it against the dashed outline.")}
+            {phase === "verify" && (di.exact
+              ? "The quotient counts groups, so the groups must multiply back to the total."
+              : `The ${groupsWord(di.whole)} plus the leftover have to cover ${totalText} exactly.`)}
+            {phase === "done" && (di.exact
+              ? "Counted, drawn, and verified."
+              : "The leftover is measured in GROUPS, not in pieces of the bar.")}
           </div>
 
           <div className="fb-probs">
             {DIV_PROBLEMS.map((pr, i) => (
               <button key={i} className={`fb-tbtn ${i === pIdx ? "on" : ""}`} onClick={() => startProblem(i)}>
-                {pr.n}/{pr.d} ÷ 1/{pr.d2}
+                {pr.n}/{pr.d} ÷ {sumLabel([pr.n2, pr.d2])}
               </button>
             ))}
             <button className="fb-tbtn" onClick={() => startProblem(pIdx)}>Reset</button>
           </div>
 
-          <div className="fb-stage">
+          <div className="fb-stage" style={stageStyle}>
             <div>
               <div className="fb-rowlbl">The whole</div>
               <div className="fb-track solid">
@@ -373,26 +611,49 @@ export function FractionBarsBoard() {
               </div>
             </div>
             <div>
-              <div className="fb-rowlbl">The total: {prob.n}/{prob.d}</div>
+              <div className="fb-rowlbl">The total: {totalText}</div>
               <div className="fb-track">
                 {Array.from({ length: built }).map((_, i) => (
                   <div key={i} className="fb-piece pop" style={{ left: `${(i / prob.d) * 100}%`, width: `${100 / prob.d}%`, background: C_TEAL }}>
                     1/{prob.d}
                   </div>
                 ))}
-                {phase !== "build" && <div className="fb-goal" style={{ left: `${(prob.n / prob.d) * 100}%` }} />}
+                {phase !== "build" && <div className="fb-goal" style={{ left: `${goalPct}%` }} />}
               </div>
             </div>
             {phase !== "build" && (
-              <div>
-                <div className="fb-rowlbl">Groups of 1/{prob.d2}</div>
+              <div className={showPartial ? "fb-grouprow" : undefined}>
+                <div className="fb-rowlbl">Groups of {divisorText}</div>
                 <div className="fb-track">
-                  {Array.from({ length: tiles }).map((_, i) => (
-                    <div key={i} className="fb-piece pop" style={{ left: `${(i / prob.d2) * 100}%`, width: `${100 / prob.d2}%`, background: i < q ? C_AMBER : C_CORAL, color: "var(--bdb-ink)" }}>
-                      {showTileNums && i < q ? <span className="fb-tilenum">{i + 1}</span> : `1/${prob.d2}`}
-                    </div>
-                  ))}
-                  <div className="fb-goal" style={{ left: `${(prob.n / prob.d) * 100}%` }} />
+                  {/* The group the leftover sits inside, drawn full size. Without it
+                      the leftover has no referent unit on screen and 1/8 of a group
+                      looks exactly like 1/12 of the bar. */}
+                  {showPartial && <div className="fb-ghost" style={{ left: `${di.whole * groupPct}%`, width: `${groupPct}%` }} />}
+                  {Array.from({ length: tiles }).map((_, i) => {
+                    if (!di.exact && i === di.whole) {
+                      return (
+                        <div key={i} className="fb-piece pop" aria-hidden="true"
+                          style={{
+                            left: `${di.whole * groupPct}%`, width: `${partialPct}%`, borderRight: "none",
+                            background: `repeating-linear-gradient(45deg, ${C_AMBER} 0 7px, color-mix(in srgb, ${C_AMBER} 38%, var(--bdb-card)) 7px 14px)`,
+                          }} />
+                      );
+                    }
+                    // Coral stays the ONE meaning it already had: this group ran past
+                    // the total. The leftover is striped, never coral.
+                    const over = i >= di.pieces;
+                    return (
+                      <div key={i} className="fb-piece pop" style={{ left: `${i * groupPct}%`, width: `${groupPct}%`, background: over ? C_CORAL : C_AMBER, color: "var(--bdb-ink)" }}>
+                        {showTileNums && !over ? <span className="fb-tilenum">{i + 1}</span> : divisorText}
+                      </div>
+                    );
+                  })}
+                  <div className="fb-goal" style={{ left: `${goalPct}%` }} />
+                  {showPartial && (
+                    <span className="fb-partlbl" style={{ left: `${di.whole * groupPct + partialPct / 2}%` }}>
+                      {phase === "tile" || phase === "count" ? "? of a group" : `${leftoverText} of a group`}
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -406,7 +667,9 @@ export function FractionBarsBoard() {
           )}
           {phase === "tile" && (
             <div className="fb-bar">
-              <button className="fb-btn" onClick={addTile}>Add a 1/{prob.d2} group</button>
+              <button className="fb-btn" onClick={addTile}>
+                {!di.exact && tiles === di.whole ? "Add the leftover piece" : `Add a ${divisorText} group`}
+              </button>
               <button className="fb-btn ghost" disabled={tiles === 0} onClick={removeTile}>Take one off</button>
             </div>
           )}
@@ -414,18 +677,33 @@ export function FractionBarsBoard() {
             <div className="fb-formula">
               <Frac n={prob.n} d={prob.d} color={C_TEAL} />
               <span>÷</span>
-              <Frac n={1} d={prob.d2} color="var(--bdb-ink)" />
+              <Frac n={prob.n2} d={prob.d2} color="var(--bdb-ink)" />
               <span>=</span>
-              <input className="fb-in" value={countIn} inputMode="numeric" autoFocus aria-label="how many groups fit"
+              <input className="fb-in" style={di.exact ? undefined : { width: 66 }} value={countIn} inputMode="numeric" autoFocus
+                aria-label={di.exact ? "how many groups fit" : "how many whole groups fit"}
                 onChange={(e) => { setCountIn(e.target.value.replace(/\D/g, "")); setNote(null); }}
                 onKeyDown={(e) => e.key === "Enter" && submitCount()} />
-              <button className="fb-btn" disabled={!countIn.trim()} onClick={submitCount}>Enter</button>
+              {!di.exact && (
+                <>
+                  <span style={{ fontSize: "0.62em" }}>groups and</span>
+                  <span className="fb-kcol" style={{ gap: 2 }}>
+                    <input className="fb-in" style={{ width: 62 }} value={leftNIn} inputMode="numeric" aria-label="leftover numerator, in groups"
+                      onChange={(e) => { setLeftNIn(e.target.value.replace(/\D/g, "")); setNote(null); }}
+                      onKeyDown={(e) => e.key === "Enter" && submitCount()} />
+                    <input className="fb-in" style={{ width: 62 }} value={leftDIn} inputMode="numeric" aria-label="leftover denominator, in groups"
+                      onChange={(e) => { setLeftDIn(e.target.value.replace(/\D/g, "")); setNote(null); }}
+                      onKeyDown={(e) => e.key === "Enter" && submitCount()} />
+                  </span>
+                  <span style={{ fontSize: "0.62em" }}>of a group</span>
+                </>
+              )}
+              <button className="fb-btn" disabled={!countIn.trim() || (!di.exact && (!leftNIn.trim() || !leftDIn.trim()))} onClick={submitCount}>Enter</button>
             </div>
           )}
           {phase === "verify" && (
             <div className="fb-formula">
-              <span>{q} ×</span>
-              <Frac n={1} d={prob.d2} />
+              <span>{di.whole} ×</span>
+              <Frac n={prob.n2} d={prob.d2} />
               <span>=</span>
               <input className="fb-in" value={verifyIn} inputMode="numeric" autoFocus aria-label="numerator of the product"
                 onChange={(e) => { setVerifyIn(e.target.value.replace(/\D/g, "")); setNote(null); }}
@@ -436,9 +714,83 @@ export function FractionBarsBoard() {
           )}
           {phase === "done" && (
             <>
-              <div className="fb-done">{q} × 1/{prob.d2} = {q}/{prob.d2} = {prob.n}/{prob.d}</div>
+              <div className="fb-done">
+                {di.exact
+                  ? `${di.whole} × ${divisorText} = ${verifyTarget}/${prob.d2} = ${totalText}`
+                  : `${di.whole} × ${divisorText} = ${verifyTarget}/${prob.d2}, and ${sumLabel([di.ofWholeN, di.ofWholeD])} of the bar is left over — that leftover is ${leftoverText} of one ${divisorText} group.`}
+              </div>
               <div className="fb-bar">
                 <button className="fb-btn" onClick={() => startProblem((pIdx + 1) % DIV_PROBLEMS.length)}>Next problem</button>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {mode === "estimate" && (
+        <>
+          <div className="fb-prompt">
+            {eVariant === "start" ? `Will the answer be bigger or smaller than ${eStartText}?` : "Which one is bigger?"}
+          </div>
+          <div className="fb-sub">
+            {eVariant === "start"
+              ? "No arithmetic. Pick the direction, read why, keep going."
+              : "No arithmetic. Tap the one with the bigger answer, read why, keep going."}
+          </div>
+
+          <div className="fb-probs">
+            <button className={`fb-tbtn ${eVariant === "start" ? "on" : ""}`}
+              onClick={() => { setEVariant("start"); setEPick(null); setNote(null); }}>Compare to the start</button>
+            <button className={`fb-tbtn ${eVariant === "head" ? "on" : ""}`}
+              onClick={() => { setEVariant("head"); setEPick(null); setNote(null); }}>Head to head</button>
+          </div>
+
+          {eVariant === "start" && (
+            <div className="fb-formula" style={{ fontSize: "clamp(1.7rem,6vw,2.6rem)", marginTop: 18 }}>
+              <NumTerm n={ep.an} d={ep.ad} color={C_TEAL} />
+              <span>{ep.op === "div" ? "÷" : "×"}</span>
+              <NumTerm n={ep.bn} d={ep.bd} color="var(--bdb-ink)" />
+            </div>
+          )}
+
+          <div className="fb-big">
+            {eVariant === "start" ? (
+              <>
+                <button className={`fb-bigbtn ${ePick ? (eBigger ? "win" : "lose") : ""}`} disabled={ePick !== null}
+                  aria-label={`the answer is bigger than ${eStartText}`} onClick={() => setEPick("bigger")}>
+                  Bigger than {eStartText}
+                </button>
+                <button className={`fb-bigbtn ${ePick ? (eBigger ? "lose" : "win") : ""}`} disabled={ePick !== null}
+                  aria-label={`the answer is smaller than ${eStartText}`} onClick={() => setEPick("smaller")}>
+                  Smaller than {eStartText}
+                </button>
+              </>
+            ) : (
+              <>
+                <button className={`fb-bigbtn ${ePick ? (eDivWins ? "win" : "lose") : ""}`} disabled={ePick !== null}
+                  aria-label={`${eStartText} divided by ${eDivisorText} is bigger`} onClick={() => setEPick("div")}>
+                  <NumTerm n={ep.an} d={ep.ad} color={C_TEAL} />
+                  <span>÷</span>
+                  <NumTerm n={ep.bn} d={ep.bd} />
+                </button>
+                <button className={`fb-bigbtn ${ePick ? (eDivWins ? "lose" : "win") : ""}`} disabled={ePick !== null}
+                  aria-label={`${eStartText} times ${eDivisorText} is bigger`} onClick={() => setEPick("mul")}>
+                  <NumTerm n={ep.an} d={ep.ad} color={C_TEAL} />
+                  <span>×</span>
+                  <NumTerm n={ep.bn} d={ep.bd} />
+                </button>
+              </>
+            )}
+          </div>
+
+          {ePick !== null && (
+            <>
+              <div className="fb-verdict" style={{ color: eRight ? "var(--bdb-green-deep)" : "var(--bdb-coral-deep)" }}>
+                {eRight ? "Yes — " : "Not this time — "}{eVerdictTail}
+              </div>
+              <div className="fb-why">{eWhy}</div>
+              <div className="fb-bar">
+                <button className="fb-btn" onClick={nextEstimate}>Next one</button>
               </div>
             </>
           )}
@@ -622,11 +974,36 @@ export function FractionBarsBoard() {
       {mode === "explore" && (
         <>
           <div className="fb-prompt">Compare fractions to one whole</div>
-          <div className="fb-sub">Tap a row to pick it, then tap fractions to lay pieces under the whole. Tap a piece to take it off.</div>
+          <div className="fb-sub">
+            Tap a row to pick it, then tap fractions to lay pieces under the whole. Tap a piece to take it off.
+            Change which bar is one whole and every name changes with it.
+          </div>
+
+          {/* Cuisenaire rods carry no printed fractions — you declare which rod is
+              one, and every other name follows from that. Declaring the whole is
+              the referent-unit lesson, so it is a control, not a setting. */}
+          <div className="fb-wbar">
+            <span className="fb-wlbl">Which bar is one whole?</span>
+            {EX_PIECES.map((t) => (
+              <button key={t.den} className={`fb-wbtn ${t.den === exWhole ? "on" : ""}`}
+                style={t.den === exWhole ? undefined : { borderColor: t.color, color: t.color }}
+                aria-pressed={t.den === exWhole}
+                aria-label={t.den === exWhole
+                  ? "this bar is one whole right now"
+                  : `call the ${labelFor(t.den, exWhole)} bar one whole`}
+                onClick={() => exDeclareWhole(t.den)}>
+                {labelFor(t.den, exWhole)}
+              </button>
+            ))}
+          </div>
 
           <div className="fb-palette">
+            <span className="fb-wlbl">Lay a piece</span>
             {EX_PIECES.map((t) => (
-              <button key={t.den} className="fb-pal" style={{ borderColor: t.color, color: t.color }} onClick={() => exAdd(t.den)}>{t.label}</button>
+              <button key={t.den} className="fb-pal" style={{ borderColor: t.color, color: t.color }}
+                aria-label={`add ${labelFor(t.den, exWhole)} to the row`} onClick={() => exAdd(t.den)}>
+                {labelFor(t.den, exWhole)}
+              </button>
             ))}
           </div>
           <div className="fb-probs">
@@ -637,9 +1014,13 @@ export function FractionBarsBoard() {
 
           <div className="fb-stage">
             <div>
-              <div className="fb-rowlbl">One whole</div>
+              <div className="fb-rowlbl">
+                One whole
+                {exWhole !== 1 && <span className="fb-rowsum">= the bar you called 1</span>}
+              </div>
               <div className="fb-track solid">
-                <div className="fb-piece" style={{ left: 0, width: "100%", background: "#674a40" }}>1</div>
+                <div className="fb-piece" style={{ left: 0, width: `${100 / exWhole}%`, background: exWholeColor, boxShadow: exWhole === 1 ? undefined : "inset 0 0 0 3px var(--bdb-ink)" }}>1</div>
+                {exWhole !== 1 && <span className="fb-endlbl" style={{ right: 0 }}>{labelFor(1, exWhole)}</span>}
               </div>
             </div>
             {exRows.map((row, ri) => {
@@ -648,7 +1029,7 @@ export function FractionBarsBoard() {
                 <div key={ri}>
                   <div className="fb-rowlbl">
                     Row {ri + 1}
-                    {row.length > 0 && <span className="fb-rowsum">= {sumLabel(rowSum(row))}</span>}
+                    {row.length > 0 && <span className="fb-rowsum">= {sumLabel(rowValue(row, exWhole))}</span>}
                   </div>
                   <div className={`fb-track ${exSel === ri ? "exsel" : ""}`} onClick={() => setExSel(ri)}>
                     {row.map((den, pi) => {
@@ -656,13 +1037,14 @@ export function FractionBarsBoard() {
                       acc += 1 / den;
                       const t = EX_PIECES.find((p) => p.den === den);
                       return (
-                        <button key={`${pi}-${den}`} className="fb-piece pop" aria-label={`remove 1/${den}`}
+                        <button key={`${pi}-${den}`} className="fb-piece pop" aria-label={`remove ${labelFor(den, exWhole)}`}
                           style={{ left: `${left * 100}%`, width: `${100 / den}%`, background: t?.color }}
                           onClick={(e) => { e.stopPropagation(); exRemovePiece(ri, pi); }}>
-                          {t?.label}
+                          {labelFor(den, exWhole)}
                         </button>
                       );
                     })}
+                    {exWhole !== 1 && <div className="fb-wline" style={{ left: `${100 / exWhole}%` }} />}
                   </div>
                 </div>
               );
