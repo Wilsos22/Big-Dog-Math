@@ -424,6 +424,22 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   works from home with no live session. `assignments` / `assignment_problems` / `problems` have full RLS
   policies in `student-data-security.sql` but ZERO application code - schema without a UI, so assigning
   a manipulative is not a capability yet.
+  THE BIG ONE (found 2026-07-29): **`poll_answers` NEVER REACHES `responses`, SO THE EXIT TICKET MOVES
+  NO MASTERY BAR.** Steele moved the exit ticket on-site specifically for data retention and mid-lesson
+  deployment - no Google Form to click into - and the rows do persist. But every exit step in the
+  deployable lessons carries a `Response Mode` + `Question`, so `navigateFlow` creates a POLL and the
+  answer lands in `poll_answers`. There are exactly TWO writers into `responses`: `/api/evidence` (the
+  warm-up and Apps Script ingest) and `/api/student/tool-evidence` (+`toolEvidence.ts`). Nothing copies
+  a poll answer across. `recompute.ts` reads only `iready_scores`, `responses`, and
+  `checkpoint_results`, so the day's ONLY conceptual evidence contributes nothing to the EWMA bars, no
+  per-standard stage gate, and nothing to the misconception clustering in `/api/live/groups`. It is not
+  wasted - `readinessEvidence.ts` reads it for the visit list and the readiness tallies, and
+  `/api/submissions` and `/api/teacher/poll` show it live - but it stops at the session. This is the
+  THIRD instance of the same gap (see `practice_assignment_attempts` below and the tool-evidence
+  limits), and it is the most consequential, because the exit ticket is the evidence the day is
+  designed around. Bridging it means writing a `responses` row per graded poll answer with a real
+  `standard_id` and a seeded misconception tag; do not claim the spine sees exit tickets until that
+  exists.
   TRAP (verified 2026-07-26): assignment attempts write ONLY to `practice_assignment_attempts` and
   NEVER to `responses`, so they move no mastery bar, no per-standard stage gate, and no archetype
   grouping - nothing on `/teacher/mastery` or `/teacher/rightnow` sees them. `formative.sql`'s header

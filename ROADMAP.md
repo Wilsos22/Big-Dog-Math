@@ -785,17 +785,20 @@ to complaining-teen, less Red Bull, shorter replies)
   the bank, lineup editor and tool forms belong on a setup surface, not in the
   view that is open while a class runs.
   **WHAT ACTUALLY BREAKS IF CONTROL GOES AWAY - the two real objections.**
-  1. **The exit ticket, which is the day's only conceptual evidence.** There are
-     TWO parallel exit mechanisms and only one is Control-free. `launchExitTicket`
-     is called from exactly one place in the UI - `/control:1578` - and it writes
-     the `exit_tickets` row that `/exit-ticket` reads via `getOpenExitTicket`. No
-     Control, no row, no exit ticket, silently. The OTHER path is server-side and
-     Notion-authored: `navigateFlow` creates a `poll` for any step with a
-     `Question` and a resolvable poll kind, so an exit step with
-     `Response Mode: Structured Numeric` collects into `poll_answers` with no
-     Control at all. Decide which path the day actually uses BEFORE removing
-     Control, and if it is the poll path, say so in the lesson-building skill,
-     because the two are indistinguishable while Control is still open.
+  1. ~~The exit ticket~~ **RESOLVED 2026-07-29 - not a blocker.** Checked every
+     exit step in the deployable lessons: L1-D1 "The Concert Floor", L2-D1 "The
+     Taki Miracle", L2-D2 "Abbie and the Neighbor Dog" and P1-BRUH all carry a
+     `Response Mode` and a `Question`, so `navigateFlow` creates a POLL and the
+     evidence lands in `poll_answers` through `/live-flow`. That path is entirely
+     server-side and needs no Control. Exit tickets are local to the site, not a
+     Google Form (Steele confirmed).
+     KNOWN DRIFT worth a decision, though: the `exit_tickets` table, the
+     `/exit-ticket` route, and Control's exit form are a SECOND on-site exit
+     mechanism that the authored lessons do not use - `launchExitTicket` has one
+     UI call site, `/control:1578`. The docs still describe `/exit-ticket` as
+     where the day's evidence is collected (it even backs drafts to localStorage
+     for it), so the two paths disagree about which is real. Pick one and retire
+     or re-point the other before it surprises someone mid-period.
   2. **Tool configs are not authorable anywhere.** All four `buildLiveToolConfig`
      call sites are in `/control`, so `flow.tool` and its payload - the Factor
      Trees number set, the distributive problem set, the GEMS expression - can
