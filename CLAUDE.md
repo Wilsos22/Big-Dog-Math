@@ -236,8 +236,17 @@ bars and live misconception grouping).
     ~450ms of dark text on a lightening ground every nine seconds.
   - The bell schedule lives in `src/lib/bellSchedule.ts` as minutes since midnight, and "Now"
     plus the progress bars are derived from the classroom clock - there is no hardcoded current
-    period. THE PERIOD LABELS came in with the design and are the one thing in this surface
-    Steele still has to confirm against the master schedule.
+    period. THE TIMES ARE REAL as of 2026-07-29, read off the district roster export (its `Period`
+    column carries them, e.g. "01 07:30AM-08:23AM(1, I)") and confirmed by Steele: periods 1-5 with
+    lunch 11:17-11:54 between 4 and 5, period 6 is his prep, and the day ends 1:41. PERIOD 4 IS `Math Acc 6`, which is what the
+    board's `?track=acc` param is for. Pinned in `npm run test:weekly-display-board`.
+    The board renders the REGULAR day ONLY. The district data also holds exam-week blocks (the
+    E1/E2/E3 variants, ~105 minutes) and an alternate "I" bell where period 4 ends 11:10 and period
+    5 runs 11:10-12:44 with lunch inside it - on those days the Now row is wrong, and fixing it
+    needs a way to tell the board which bell is running, not a second hardcoded table.
+    THAT ROSTER EXPORT IS FULL OF REAL STUDENT PII (names, DOB, student numbers, health conditions,
+    IEP/PLP flags, guardian contacts and addresses). Read the schedule columns and nothing else, and
+    never copy a row of it into this repo - see rule 8.
 - /demo is the PUBLIC mock run-through (portfolio front door, built 2026-07-27): the REAL
   surfaces embedded in scaled iframes and driven through a scripted fictional GCF lesson
   (src/lib/demoLesson.ts) via the studio-preview bridge. /demo/present and /demo/pace are
