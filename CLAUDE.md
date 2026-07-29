@@ -181,10 +181,23 @@ bars and live misconception grouping).
   /api/weekly-display (params ?screen= pins one view and pauses rotation, ?day=, ?track=acc,
   ?seconds=, ?course=). Public route, in DeployRefresh. REDESIGNED 2026-07-29 from the Claude
   Design "Weekly Display" board (Turn 4), and the shape of it is now load-bearing:
-  - It is a FIXED 1920x1080 stage scaled to fit, like the `public/screens/` kit - not a fluid
-    clamp layout. That is deliberate: the key-term reveal MEASURES DOM positions to compute
-    where the term travels, and in stage pixels that measurement is identical on a 4K TV and a
-    laptop. Do not convert it back to vw/vh; the reveal would land differently per display.
+  - THE TARGET HARDWARE IS 55-INCH TVs AND ONLY THAT (Steele, 2026-07-29). It is a FIXED
+    1920x1080 stage scaled to fit, like the `public/screens/` kit - not a fluid clamp layout.
+    That is deliberate twice over: the key-term reveal MEASURES DOM positions to compute where
+    the term travels, so stage pixels make it identical on every panel, and the aspect is always
+    16:9 so nothing letterboxes. Do not convert it back to vw/vh. The size arithmetic that
+    follows from the hardware: 1080 stage rows span about 27in of screen, so one stage pixel is
+    ~0.025in, and reading at distance D wants a cap height near D/200 - which puts legibility
+    from the far side of a classroom (~25ft) at roughly 85px of font size
+    (`CRITERION_ROOM_LEGIBLE_PX`). Use that number before shrinking anything a student must read.
+  - THE SUCCESS CRITERIA AUTOSIZE BY MEASUREMENT, not by an estimate. `successStartSize` gives a
+    starting size per count and the screen steps DOWN until the rows fit, floor
+    `CRITERION_FLOOR_PX`. Two traps, both found by measuring on 24 count/length combinations:
+    a glyph-width estimate cannot predict where a sentence wraps (it under-shot by 30-80px and
+    clipped), and the fit must sum the rows' `offsetHeight` rather than read `scrollHeight`,
+    because the rows animate in on a translateY and a live transform inflates `scrollHeight` -
+    which silently shrank every list by a step and drove the single-statement hero to the floor.
+    One to six criteria all land at a readable size; more than that clips on purpose.
   - Rotation is 9s a screen, EXCEPT the learning intention, which holds `max(16, base + 6)`
     because its own reveal is not finished travelling until 8.6s (`dwellSeconds` enforces this).
     Cutting the learning screen to the base dwell cuts away mid-definition.
@@ -200,9 +213,21 @@ bars and live misconception grouping).
     `table:` / `lines:` / `grid:` / `rate:` / `steps:` / `example:` (see `parseBoardFigure` in
     `src/lib/weeklyDisplayBoard.ts` for the grammar; `*` marks the answer cell in a table row).
     A line that does not parse is simply not a figure - it never renders as garbage.
-  - Notion learning intentions are "I can ..." statements and the board's eyebrow already reads
-    "Today we are learning to", so `intentionBody` strips the stem. Do not remove it or the
-    wall reads "Today we are learning to I can ...".
+  - THE TWO STEMS ARE FIXED AND THEY ARE DIFFERENT (Steele, 2026-07-29). The learning intention
+    reads "I am learning to ..." (`learningIntentionStatement` restems whatever Notion holds,
+    which is normally "I can ..."). The success criteria read "I can ...". Never phrase them
+    alike: the intention names what we are working toward, the criteria are what a student checks
+    finished work against, and identical stems make the second screen look like a restatement of
+    the first. The board's eyebrows are therefore plain labels ("Today", "You've got it when"),
+    not sentence stems - if you reinstate a stem in an eyebrow it will collide with the statement.
+  - IT IS THE SUCCESS CRITERIA, PLURAL. The board reads the Notion `Success Criteria` menu through
+    `successCriteriaList` (in `src/lib/successCriterion.ts`) and renders EVERY line with its own
+    check mark, sizing the type to the count. `selectedSuccessCriterion` - the single statement the
+    lesson flow requires and validates - is only the fallback when the menu is empty. That is the
+    opposite of the rule on the live-lesson surfaces, where the menu must never be used, so do not
+    "fix" this route to match them. `successCriteriaList` also drops
+    SUCCESS_CRITERION_SETUP_PLACEHOLDER, because "Choose one I can statement in Notion." is a
+    prompt to the teacher and must never reach a wall.
   - The ground CUTS between screens instead of crossfading. The design had a .45s
     background-color transition, but every header/footer colour switches instantly, which left
     ~450ms of dark text on a lightening ground every nine seconds.
@@ -791,10 +816,12 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 - Handwriting: `--bdb-font-hand` (Caveat, loaded in the same `globals.css` @import as Albert Sans, so
   it costs no extra request and only downloads on pages that use it). Annotations and teacher asides
   ONLY - anything a student must read stays in `--bdb-font`. Claude Design handoffs specify Geist as
-  the body font. The general rule still holds - use the site's real equivalents and let the handoff
-  settle only what the system does not specify - but it is not absolute: Steele asked for Geist on
-  the /weekly-display board on 2026-07-29, so `--bdb-font-body` exists and that surface uses it.
-  Take a handoff's body face only where he has said so; do not spread Geist on your own.
+  the body font. The general rule still holds for the LESSON surfaces - use the site's real
+  equivalents and let the handoff settle only what the system does not specify - but it is not
+  absolute. Steele's reasoning, 2026-07-29: the all-day boards "are kind of a separate display
+  system so its fine". So Geist is right on /weekly-display and `--bdb-font-body` exists for it.
+  The test is whether the surface is part of the lesson system or a standalone display; on the
+  lesson surfaces Albert Sans still wins. Do not spread Geist beyond a surface he has named.
 - Pages self-style with a per-page inline `<style>` block using a unique class prefix (`.ls-` lesson,
   `.cx-` control, `.rs-` roster, `.se-` session, `.bx-` builder) reading `var(--bdb-*)`. Follow that
   pattern; there is no shared CSS module beyond `globals.css`.

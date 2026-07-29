@@ -18,12 +18,15 @@ import {
   SCREEN_LABELS,
   WEEKDAY_KEYS,
   dwellSeconds,
-  intentionBody,
   intentionMaxSize,
+  learningIntentionStatement,
   padTwo,
   readBoardVocabulary,
   selectKeyTerm,
+  CRITERION_FLOOR_PX,
+  successGaps,
   successSize,
+  successStartSize,
   termTravelScale,
   tokenizeIntention,
   weekdayKeyFor,
@@ -33,6 +36,7 @@ import {
   type ScreenKey,
   type WeekdayKey,
 } from "@/lib/weeklyDisplayBoard";
+import { successCriteriaList } from "@/lib/successCriterion";
 
 // The board is authored at one size and scaled to whatever display it lands on.
 // That is what makes the vocabulary reveal deterministic: every measurement the
@@ -48,6 +52,7 @@ interface DisplayLesson {
   standard: string;
   learningIntention: string;
   successCriteria: string;
+  selectedSuccessCriterion?: string;
   discussionVocabulary: string;
   topic: string;
   module?: string;
@@ -374,7 +379,7 @@ function LearningScreen(props: LearningScreenProps) {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 22, animation: drop }}>
           <StepChip label={stepLabel} theme={theme} />
-          <span style={{ ...EYEBROW, color: theme.muted }}>Today we are learning to</span>
+          <span style={{ ...EYEBROW, color: theme.muted }}>Today</span>
           <span style={{ flex: 1, height: 2, background: theme.rule }} />
         </div>
 
@@ -491,17 +496,65 @@ function MissingCopy({ label, theme }: { label: string; theme: BoardTheme }) {
 /* --------------------------------------------------------- success criteria */
 
 function SuccessScreen({
-  theme, palette, stepLabel, statement, standard, focus, motion,
+  theme, palette, stepLabel, statements, standard, focus, motion,
 }: {
   theme: BoardTheme;
   palette: DayPalette;
   stepLabel: string;
-  statement: string;
+  statements: string[];
   standard: string;
   focus: string;
   motion: boolean;
 }) {
   const t = BOARD_TIMING;
+  const single = statements.length === 1;
+  const { gap, rowGap } = successGaps(statements.length);
+  const startSize = single ? successSize(statements[0] ?? "") : successStartSize(statements.length);
+  const listRef = useRef<HTMLDivElement | null>(null);
+
+  // Fit the criteria to the band by MEASURING, exactly as the learning
+  // intention does. Every size on the row - the check mark, its glyph, its
+  // radius - derives from one custom property, so stepping the type down keeps
+  // the row proportioned. A glyph-width estimate was tried first and could not
+  // predict real wrapping; a criterion sliding under the chips on a classroom
+  // TV is not an acceptable failure mode.
+  useLayoutEffect(() => {
+    // One criterion is the hero statement; successSize already sizes it and the
+    // row is flex:1, so there is nothing to fit.
+    if (single) return;
+    let cancelled = false;
+    const fit = (): boolean => {
+      const list = listRef.current;
+      if (!list || !list.clientHeight) return false;
+      const rows = Array.from(list.children) as HTMLElement[];
+      if (!rows.length) return true;
+      // Sum offsetHeight rather than reading scrollHeight: the rows animate in
+      // on a translateY, and a transform inflates scrollHeight while it runs -
+      // measuring that shrank every list by one step for no reason.
+      const contentHeight = () => rows.reduce((sum, row) => sum + row.offsetHeight, 0)
+        + (rows.length - 1) * rowGap;
+      let size = startSize;
+      list.style.setProperty("--wld-sc", `${size}px`);
+      let guard = 0;
+      while (contentHeight() > list.clientHeight && size > CRITERION_FLOOR_PX && guard++ < 60) {
+        size -= 2;
+        list.style.setProperty("--wld-sc", `${size}px`);
+      }
+      return true;
+    };
+    const settled = fit();
+    if (document.fonts?.ready) void document.fonts.ready.then(() => { if (!cancelled) fit(); });
+    if (settled) return () => { cancelled = true; };
+    let attempts = 0;
+    const retry = window.setInterval(() => {
+      if (cancelled || attempts++ > 40 || fit()) window.clearInterval(retry);
+    }, 120);
+    return () => {
+      cancelled = true;
+      window.clearInterval(retry);
+    };
+  }, [single, startSize, rowGap, statements]);
+
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 26 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
@@ -509,26 +562,51 @@ function SuccessScreen({
         <span style={{ ...EYEBROW, color: theme.muted }}>You&apos;ve got it when</span>
         <span style={{ flex: 1, height: 2, background: theme.rule }} />
       </div>
-      <div style={{
-        flex: 1, minHeight: 0, display: "flex", alignItems: "center", gap: 40,
-        animation: motion ? "wldEnter .6s .18s cubic-bezier(.16,1,.3,1) both" : "none",
-      }}>
-        {statement ? (
-          <>
+      <div
+        ref={listRef}
+        style={{
+          flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center",
+          gap: rowGap,
+          // Last-resort containment: the autosize above is what keeps the list
+          // legible, but nothing may ever spill into the chips row below.
+          overflow: "hidden",
+          ["--wld-sc" as string]: `${startSize}px`,
+        }}
+      >
+        {statements.length ? statements.map((statement, index) => (
+          <div
+            style={{
+              display: "flex", alignItems: single ? "center" : "flex-start", gap,
+              flex: single ? 1 : "none", minHeight: 0,
+              // Each criterion arrives on its own beat, so the list reads as
+              // several things to check rather than one wall of text.
+              animation: motion
+                ? `wldEnter .6s ${(0.18 + index * 0.14).toFixed(2)}s cubic-bezier(.16,1,.3,1) both`
+                : "none",
+            }}
+            key={`${index}-${statement}`}
+          >
             <span style={{
               flex: "none", display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 112, height: 112, borderRadius: 32,
-              fontSize: 60, fontWeight: 700, background: palette.accent, color: BOARD_INK,
+              width: single ? 112 : "calc(var(--wld-sc) * 1.05)",
+              height: single ? 112 : "calc(var(--wld-sc) * 1.05)",
+              borderRadius: single ? 32 : "calc(var(--wld-sc) * 0.3)",
+              fontSize: single ? 60 : "calc(var(--wld-sc) * 0.56)",
+              fontWeight: 700, background: palette.accent, color: BOARD_INK,
             }} aria-hidden="true">&#10003;</span>
             <p style={{
               margin: 0, flex: 1,
-              fontFamily: "var(--bdb-font)", fontWeight: 800, lineHeight: 1.1, letterSpacing: "-.03em",
-              textWrap: "pretty", fontSize: successSize(statement),
-              animation: motion ? `wldType ${t.typeDuration}s .4s cubic-bezier(.62,0,.2,1) both` : "none",
+              fontFamily: "var(--bdb-font)", fontWeight: 800, lineHeight: 1.12, letterSpacing: "-.03em",
+              textWrap: "pretty", fontSize: "var(--wld-sc)",
+              // The typewriter wipe is the design's single-statement treatment.
+              // Across a list it would stagger twice over and read as a stutter.
+              animation: single && motion
+                ? `wldType ${t.typeDuration}s .4s cubic-bezier(.62,0,.2,1) both`
+                : "none",
             }}>{statement}</p>
-          </>
-        ) : (
-          <MissingCopy label="No success criterion published for today." theme={theme} />
+          </div>
+        )) : (
+          <MissingCopy label="No success criteria published for today." theme={theme} />
         )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -570,7 +648,7 @@ function WeekScreen({
         const lesson = lessonForTrack(day, track);
         const active = day.date === activeDate;
         const vocabulary = readBoardVocabulary(lesson?.discussionVocabulary ?? "");
-        const keyTerm = selectKeyTerm(vocabulary.entries, intentionBody(lesson?.learningIntention ?? ""));
+        const keyTerm = selectKeyTerm(vocabulary.entries, learningIntentionStatement(lesson?.learningIntention ?? ""));
         return (
           <div
             style={{
@@ -865,10 +943,13 @@ export default function WeeklyDisplayPage() {
   const theme = themeFor(screen, palette);
 
   const board = useMemo(() => {
-    const intention = intentionBody(activeLesson?.learningIntention ?? "");
+    const intention = learningIntentionStatement(activeLesson?.learningIntention ?? "");
     const vocabulary = readBoardVocabulary(activeLesson?.discussionVocabulary ?? "");
     const keyTerm = selectKeyTerm(vocabulary.entries, intention);
     const hasReveal = Boolean(keyTerm?.phrase && (keyTerm.definition || vocabulary.figure));
+    // The PLURAL criteria menu is what the wall shows; the single selected
+    // statement is the fallback when the menu was never filled in.
+    const criteria = successCriteriaList(activeLesson?.successCriteria);
     return {
       intention,
       tokens: tokenizeIntention(intention, keyTerm?.phrase ?? null),
@@ -876,6 +957,7 @@ export default function WeeklyDisplayPage() {
       keyTerm,
       figure: vocabulary.figure,
       hasReveal,
+      criteria: criteria.length ? criteria : successCriteriaList(activeLesson?.selectedSuccessCriterion),
     };
   }, [activeLesson]);
 
@@ -1173,7 +1255,7 @@ export default function WeeklyDisplayPage() {
                   theme={theme}
                   palette={palette}
                   stepLabel={stepLabel}
-                  statement={activeLesson?.successCriteria.trim() ?? ""}
+                  statements={board.criteria}
                   standard={activeLesson?.standard ?? ""}
                   focus={focus}
                   motion={motion}

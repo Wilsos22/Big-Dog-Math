@@ -398,7 +398,12 @@ display: the learning intention resolves into its key term (highlighter sweep,
 then every other word drops away while the highlighted term pans up and its
 definition and a worked example populate around it), success criteria on ink,
 the week with today's row raised, and a bell schedule that derives "Now" and its
-progress bars from the classroom clock. One accent hue per weekday. The reveal
+progress bars from the classroom clock. One accent hue per weekday. The two
+targets are stemmed differently on purpose (Steele, 7/29): the intention reads
+"I am learning to ..." and the success CRITERIA - plural, every line of the
+Notion menu, each with its own check and the type sized to the count - read
+"I can ...", so the second screen is what you check your work against rather
+than a restatement of the first. The reveal
 reads `Term - definition` out of the existing Notion Discussion Vocabulary and
 holds the sentence unchanged when no definition is authored, so nothing new is
 required to ship it and one dash per lesson turns it on) ·
