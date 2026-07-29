@@ -747,6 +747,73 @@ to complaining-teen, less Red Bull, shorter replies)
   surfaces poll the session themselves, so it needs no posting at all.
   **Sequencing note:** doing the authored discussion phases SERVER-SIDE kills
   blocker 1 as a side effect, so build that first rather than twice.
+  **"What role is Control playing anymore?" (his question, 2026-07-29 - and the
+  honest answer is almost none).** The iPad deck already carries Pacing, Timer,
+  Transition now, This slide (board + classroom state), Discussion routine,
+  Private response data, Abbie and Sound effects. `/session` has "Start today's
+  lesson" and `/teacher`'s live-session card has the same, both firing the
+  complete server-side `start-lesson`. So Control's only genuinely unique jobs
+  are: (a) **being the interpreter for the iPad's own discussion buttons** - the
+  rounds live in `DiscussionProtocol`'s React state, so the iPad's Discussion
+  routine section is a remote pointed at a program running on the laptop; (b)
+  holding the tool-publish and formative-launch FORMS, which are pre-class setup,
+  not running work; (c) the bank and lineup editor, which he does not use because
+  he builds in Notion and Screen Studio. Everything else is the publish loop,
+  which exists only to serve (a)-(c).
+  **HIS ACTUAL SETUP (clarified 2026-07-29): everything is browser tabs.** Start
+  the session from the interactive panel, then open the main projector view in one
+  tab and the pacing screen in another - both projectors are just browser
+  windows, and the iPad is the remote. There is no dedicated control machine in
+  the picture at all, which is why Control reads as vestigial to him: it is a
+  third surface whose only job is to exist.
+  So the starting surface must be FIRE AND FORGET - it cannot need to stay open,
+  foregrounded, or even mounted. That is a hard requirement, not a preference, and
+  it breaks two ways today:
+  - Navigate that tab off `/control` and the discussion rounds die with it, since
+    the rounds are Control's local state. Publishing stops too.
+  - LEAVE it open in a background tab and Chrome throttles its timers - hidden
+    tabs drop to about 1/s, and after roughly five minutes hidden, intensive
+    throttling can take them to about once a MINUTE. Control's publish loop runs
+    at 1/s, so a backgrounded Control would fall behind and the projector's state
+    and timer would lag. Worth measuring rather than assuming (playing audio can
+    exempt a tab), but it is the wrong shape either way.
+  `start-lesson` is ALREADY fire-and-forget - one POST arms the whole lesson
+  server-side, and `/session` plus `/teacher` both have that button. So his
+  workflow already works for everything EXCEPT the discussion rounds and the
+  tool/formative forms. Those two are the entire gap.
+  A stripped Control is then just join code, current step, Start/Back/Next/Pause;
+  the bank, lineup editor and tool forms belong on a setup surface, not in the
+  view that is open while a class runs.
+  **WHAT ACTUALLY BREAKS IF CONTROL GOES AWAY - the two real objections.**
+  1. **The exit ticket, which is the day's only conceptual evidence.** There are
+     TWO parallel exit mechanisms and only one is Control-free. `launchExitTicket`
+     is called from exactly one place in the UI - `/control:1578` - and it writes
+     the `exit_tickets` row that `/exit-ticket` reads via `getOpenExitTicket`. No
+     Control, no row, no exit ticket, silently. The OTHER path is server-side and
+     Notion-authored: `navigateFlow` creates a `poll` for any step with a
+     `Question` and a resolvable poll kind, so an exit step with
+     `Response Mode: Structured Numeric` collects into `poll_answers` with no
+     Control at all. Decide which path the day actually uses BEFORE removing
+     Control, and if it is the poll path, say so in the lesson-building skill,
+     because the two are indistinguishable while Control is still open.
+  2. **Tool configs are not authorable anywhere.** All four `buildLiveToolConfig`
+     call sites are in `/control`, so `flow.tool` and its payload - the Factor
+     Trees number set, the distributive problem set, the GEMS expression - can
+     only be published from Control's form. A Control-free run cannot push a
+     teacher-set sequence, which also disables the `/ladder-method` mode lock,
+     since that triggers on a pushed set. The fix is to make the config authorable
+     (a `Tool Config` text property, or honour a `?set=` query string on the step's
+     `Link`), which removes Control from the tool path entirely.
+  **What works BETTER than expected, and is worth not re-engineering.** The timer
+  needs no ticker: `flow.timer.endsAt` is an absolute timestamp and
+  `liveTimerSeconds()` computes the remaining seconds locally, so read-only
+  projector tabs keep perfect time with nothing publishing to them. And automatic
+  pacing is applied lazily on any GET, so two polling projector tabs advance the
+  lesson between them without a driver. The read-only-projectors design is sound.
+  **One resilience regression to accept deliberately:** the iPad becomes the only
+  way to drive, where today Control is the fallback. `/session` already carries a
+  minimal Start / Back / Pause / Next toolbar for exactly that - keep it, and know
+  it is there.
 - **Abbie everywhere** — DONE (Area=Abbie): console + mic, student-screen
   broadcast, Ask-Abbie queue, contextual reactions, and bits all shipped 7/7-8.
   Later, optional: server-side cross-day memory (auto-summarized) instead of the
