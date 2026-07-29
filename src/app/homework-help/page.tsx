@@ -3,6 +3,11 @@
 /**
  * Homework help - the assignment's Help Path, ONE STEP AT A TIME.
  *
+ * Reached from the Stuck button on the student homepage. This is the surface for
+ * a student who was ABSENT or who is doing homework - no live session, no join,
+ * 8pm at a kitchen table. It reads the lesson's existing `Help Path` property
+ * through the public /api/today, so a new assignment needs zero new authoring.
+ *
  * Steele's constraint, stated directly: sixth graders ignore a wall of
  * supports, and a list is a wall. So this is one step per screen and one
  * button, never a list, and there is deliberately NO "I am stuck, skip it"
@@ -10,35 +15,45 @@
  * Every step is a concrete action; none asks a tired student to assess their
  * own understanding.
  *
- * Public route with no live session and no join: this runs at 8pm from a
- * kitchen table. It reads the lesson's existing `Help Path` property through
- * the public /api/today, so a new assignment needs zero new authoring.
+ * When the lesson's tool is the Distributive Area Method AND the authored help
+ * path is the six-step shape that method has, the SAME authored steps are handed
+ * to DistributiveWalkthrough, which draws the method as the student advances.
+ * The words are still Notion's; the animation is what this page adds. Anything
+ * else - a different tool, a path of another length - renders as the plain
+ * one-step-per-screen list below, because the stage draws six specific things
+ * and illustrating some other routine with a distributive picture would be
+ * worse than not animating at all.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import DistributiveWalkthrough from "@/components/DistributiveWalkthrough";
+import { liveAssignedToolRoute } from "@/lib/liveFlowContract";
+import {
+  DEFAULT_WALKTHROUGH,
+  parseHelpPath,
+  walkthroughStepsFromHelpPath,
+} from "@/lib/distributiveWalkthrough";
 
 type TodayLesson = {
   id?: string;
   title?: string;
   lessonCode?: string;
   helpPath?: string;
+  tools?: string;
 };
 
-type LoadState = "loading" | "ready" | "empty" | "error";
-
 /**
- * Split the authored Help Path into steps.
- *
- * The property is one step per line. Leading "1." / "1)" / "-" numbering is
- * stripped because the screen supplies its own step counter, and a teacher
- * writes the list either way.
+ * Does tonight's lesson use the tool this walkthrough animates? Read off the
+ * lesson's authored `Tools` list through the shared resolver, so "Distributive
+ * Area", "Distributive Area Method" and "... - optional support" all count.
  */
-function parseHelpPath(helpPath: string | undefined | null): string[] {
-  return (helpPath || "")
+function usesDistributiveTool(tools: string | undefined): boolean {
+  return (tools || "")
     .split(/\r?\n/)
-    .map((line) => line.replace(/^\s*(?:\d+\s*[.)]|[-*•])\s*/, "").trim())
-    .filter(Boolean);
+    .some((line) => liveAssignedToolRoute(line.trim()) === "/distributive-area");
 }
+
+type LoadState = "loading" | "ready" | "empty" | "error";
 
 function progressKey(lessonId: string) {
   return `bdm-help-path:${lessonId}`;
@@ -89,6 +104,25 @@ export default function HomeworkHelpPage() {
       if (next > previous) localStorage.setItem(progressKey(lesson.id), String(next));
     } catch { /* ignore */ }
   }, [lesson?.id]);
+
+  // The authored steps, animated - null whenever this lesson is not the one the
+  // stage can draw, which is the signal to fall through to the plain list.
+  const animated = useMemo(() => {
+    if (state !== "ready" || !usesDistributiveTool(lesson?.tools)) return null;
+    return walkthroughStepsFromHelpPath(DEFAULT_WALKTHROUGH, lesson?.helpPath);
+  }, [state, lesson?.tools, lesson?.helpPath]);
+
+  if (animated) {
+    return (
+      <DistributiveWalkthrough
+        problem={DEFAULT_WALKTHROUGH}
+        steps={animated}
+        closeLabel="Home"
+        onClose={() => { window.location.href = "/"; }}
+        onComplete={() => remember(steps.length)}
+      />
+    );
+  }
 
   function goNext() {
     if (index + 1 >= steps.length) {

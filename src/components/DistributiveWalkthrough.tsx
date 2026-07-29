@@ -1,13 +1,19 @@
 "use client";
 
 /**
- * "Stuck? Walk it through." - the M1.T1.L1 distributive-property walkthrough.
+ * "Stuck? Walk it through." - the animated Help Path for M1.T1.L1.
  *
  * Six click-to-advance steps that build one worked example on a single stage:
  * rewrite the problem, draw the box template, pick the friendly factor, split
  * the other one, then multiply and add. Earlier steps stay on the stage and dim
  * to 0.34 so the current step pops but the whole chain of reasoning is still
  * there - the point is that the student sees where the number came from.
+ *
+ * This is a RENDERER, not an author. The words come from the lesson's Notion
+ * `Help Path` via walkthroughStepsFromHelpPath and arrive as the `steps` prop;
+ * the only thing this file decides is the picture. It is reached from the Stuck
+ * button on the student homepage through /homework-help - absence and homework
+ * support, never a lesson surface.
  *
  * Built from the Claude Design handoff "Distributive Walkthrough" (project
  * c5b70077, design_handoff_distributive_walkthrough/README.md). The stage is a
@@ -39,17 +45,21 @@ import {
   walkthroughSteps,
   walkthroughValues,
   type WalkthroughProblem,
+  type WalkthroughStep,
 } from "@/lib/distributiveWalkthrough";
 
 export interface DistributiveWalkthroughProps {
-  /** Which example to walk through. Never the student's own problem - see walkthroughExampleFor. */
+  /** Which example the stage draws. Not the student's own homework problem. */
   problem: WalkthroughProblem;
+  /**
+   * The six steps to read out, normally the lesson's authored Help Path via
+   * walkthroughStepsFromHelpPath. Omitted, the built-in copy stands in.
+   */
+  steps?: WalkthroughStep[];
   /** Badge, circle, spot-1 numeral, card strip. Defaults to the design's orange. */
   accent?: string;
   /** Completed steps fade to 0.34. Off keeps every step at full strength. */
   dimPast?: boolean;
-  /** "page" fills the viewport; "overlay" floats over whatever opened it. */
-  variant?: "page" | "overlay";
   /** Rendered as the way out. Omit and no exit control appears. */
   onClose?: () => void;
   closeLabel?: string;
@@ -192,9 +202,9 @@ function TemplateBox({ left, delay }: { left: number; delay: number }) {
 
 export default function DistributiveWalkthrough({
   problem,
+  steps: authoredSteps,
   accent = ACCENT,
   dimPast = true,
-  variant = "page",
   onClose,
   closeLabel = "Close",
   onComplete,
@@ -211,9 +221,11 @@ export default function DistributiveWalkthrough({
   const completed = useRef(false);
 
   const { a, b, p, q, firstProduct, secondProduct, total } = walkthroughValues(problem);
+  // Authored steps win. Only the built-in copy needs to know where the answer
+  // panel ended up, because only it says so out loud.
   const steps = useMemo(
-    () => walkthroughSteps(problem, { answerLocation: narrow ? "above" : "right" }),
-    [problem, narrow],
+    () => authoredSteps ?? walkthroughSteps(problem, { answerLocation: narrow ? "above" : "right" }),
+    [authoredSteps, problem, narrow],
   );
   const current = steps[step - 1];
   const stageWidth = narrow ? STAGE_W_NARROW : STAGE_W;
@@ -289,14 +301,6 @@ export default function DistributiveWalkthrough({
     return () => window.removeEventListener("keydown", onKey);
   }, [advance, retreat, onClose]);
 
-  // An overlay owns the viewport while it is up.
-  useEffect(() => {
-    if (variant !== "overlay") return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = previous; };
-  }, [variant]);
-
   const live = (n: number) => !blank && step >= n;
   const layer = (n: number): React.CSSProperties => ({
     position: "absolute",
@@ -306,7 +310,7 @@ export default function DistributiveWalkthrough({
   });
 
   return (
-    <div className={`dw-root${variant === "overlay" ? " dw-overlay" : ""}`}>
+    <div className="dw-root">
       <style>{`
         .dw-root { --dw-accent:${accent}; --dw-accent-text:#c4660a; --dw-violet:#845bc9;
           --dw-teal:#50a3a4; --dw-teal-text:var(--bdb-teal-deep); --dw-green:#2e9e5a;
@@ -316,7 +320,6 @@ export default function DistributiveWalkthrough({
           --dw-sunk:#ece7dd; --dw-panel:#faf8f3; --dw-hand:var(--bdb-font-hand);
           box-sizing:border-box; min-height:100dvh; background:#ece8e0; color:var(--dw-ink);
           font-family:var(--bdb-font); padding:26px 24px 40px; }
-        .dw-root.dw-overlay { position:fixed; inset:0; z-index:90; overflow:auto; }
         .dw-root *, .dw-root *::before, .dw-root *::after { box-sizing:border-box; }
 
         .dw-shell { width:min(1032px,100%); margin:0 auto; display:flex; flex-direction:column; gap:14px; }

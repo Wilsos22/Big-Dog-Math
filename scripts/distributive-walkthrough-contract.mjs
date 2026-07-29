@@ -1,10 +1,10 @@
 // Contract for the "Stuck?" distributive walkthrough (M1.T1.L1).
 //
-// The one that matters in the room: the walkthrough NEVER demonstrates the
-// problem the student is currently working. A helper that solves the question in
-// front of them replaces the work instead of unblocking it, which is the same
-// reason /homework-help has no skip button. Everything else here protects the
-// step copy (those titles are the words said at the board) and the number ranges
+// The one that matters in the room: THE WORDS COME FROM NOTION. The student is
+// meant to read the same six help steps their teacher authored on the lesson
+// page, animated - so the authored path drives the copy, and a path that is not
+// six steps must refuse to animate rather than illustrate the wrong routine.
+// Everything else here protects the built-in fallback copy and the number ranges
 // the stage's hand-tuned geometry can actually draw.
 //
 // Run: npm run test:distributive-walkthrough
@@ -12,15 +12,13 @@
 import assert from "node:assert/strict";
 import {
   DEFAULT_WALKTHROUGH,
-  WALKTHROUGH_EXAMPLES,
   WALKTHROUGH_STEP_COUNT,
   friendlySplit,
   normalizeWalkthrough,
-  parseWalkthroughParams,
+  parseHelpPath,
   walkthroughEquation,
-  walkthroughExampleFor,
-  walkthroughHref,
   walkthroughSteps,
+  walkthroughStepsFromHelpPath,
   walkthroughValues,
 } from "../.tmp-mastery/distributiveWalkthrough.js";
 
@@ -123,48 +121,7 @@ check("normalizeWalkthrough clamps to numbers the stage can draw", () => {
   assert.ok(String(walkthroughValues(huge).total).length <= 3);
 });
 
-check("the walkthrough never demonstrates the student's own problem", () => {
-  // The tool splits `top` and keeps `side` out front, so 14 x 5 in tool terms is
-  // exactly the default example. A stuck student on that problem must be shown
-  // a different one.
-  const shown = walkthroughExampleFor({ top: 14, side: 5 });
-  assert.notEqual(`${shown.a}x${shown.b}`, "5x14");
-  assert.deepEqual(shown, { a: 6, b: 13, split: [10, 3] });
 
-  // And every other problem still gets the example the lesson is taught from.
-  assert.deepEqual(walkthroughExampleFor({ top: 24, side: 7 }), DEFAULT_WALKTHROUGH);
-  assert.deepEqual(walkthroughExampleFor(null), DEFAULT_WALKTHROUGH);
-  assert.deepEqual(walkthroughExampleFor(), DEFAULT_WALKTHROUGH);
-
-  // No matter which problem is on screen, something openable comes back and it
-  // is never that problem.
-  for (let top = 3; top <= 40; top += 1) {
-    for (let side = 2; side <= 20; side += 1) {
-      const example = walkthroughExampleFor({ top, side });
-      assert.ok(example, `no example for ${top}x${side}`);
-      assert.ok(
-        !(example.a === side && example.b === top),
-        `walkthrough would solve the student's own ${top}x${side}`,
-      );
-    }
-  }
-});
-
-check("every curated example is drawable and has a friendly split", () => {
-  assert.ok(WALKTHROUGH_EXAMPLES.length >= 2, "one example cannot avoid itself");
-  for (const example of WALKTHROUGH_EXAMPLES) {
-    const [p, q] = example.split;
-    assert.equal(p + q, example.b, `${example.a}x${example.b} split does not add back`);
-    // A ten to pull out is the whole strategy the lesson teaches.
-    assert.ok(p % 10 === 0 || q % 10 === 0, `${example.a}x${example.b} has no ten in its split`);
-    // Same clamp the stage geometry depends on.
-    assert.deepEqual(normalizeWalkthrough(example), example);
-    const values = walkthroughValues(example);
-    for (const n of [values.firstProduct, values.secondProduct, values.total]) {
-      assert.ok(String(n).length <= 3, `${n} is too wide for the stage`);
-    }
-  }
-});
 
 check("values derive the products and the total from the split", () => {
   const values = walkthroughValues({ a: 5, b: 14, split: [10, 4] });
@@ -173,24 +130,63 @@ check("values derive the products and the total from the split", () => {
   assert.equal(values.firstProduct + values.secondProduct, values.total);
 });
 
-check("query params open the problem they name", () => {
-  const parse = (query) => parseWalkthroughParams(new URLSearchParams(query));
-  assert.deepEqual(parse("a=6&b=13&split=10,3"), { a: 6, b: 13, split: [10, 3] });
-  assert.deepEqual(parse("a=6&b=13&split=10+3"), { a: 6, b: 13, split: [10, 3] });
-  assert.deepEqual(parse("a=6&b=13"), { a: 6, b: 13, split: [10, 3] });
-  // A mistyped link still opens a working walkthrough rather than an error.
-  assert.deepEqual(parse(""), DEFAULT_WALKTHROUGH);
-  assert.deepEqual(parse("a=abc&b=&split=nonsense"), DEFAULT_WALKTHROUGH);
-  assert.deepEqual(parse("a=5&b=14&split=3"), DEFAULT_WALKTHROUGH);
+
+
+// The real M1.T1.L1 `Help Path` property, verbatim from the lesson page.
+const M1T1L1_HELP_PATH = [
+  "1. Rewrite the problem.",
+  "2. Draw the template:  [   ] ( [   ] + [   ] )",
+  "3. Ask: which factor is easier for me to work with? That one goes out front. Split the other one.",
+  "4. Spots 2 and 3: two numbers that add to the factor you are splitting.",
+  "5. Multiply spot 1 by spot 2.",
+  "6. Multiply spot 1 by spot 3. Add them. Does it match step 1?",
+].join("\n");
+
+check("the Help Path parses to one step per line, numbering stripped", () => {
+  const steps = parseHelpPath(M1T1L1_HELP_PATH);
+  assert.equal(steps.length, 6);
+  assert.equal(steps[0], "Rewrite the problem.");
+  assert.match(steps[2], /^Ask: which factor/);
+  // The screen supplies its own counter, so no step may still carry one.
+  for (const step of steps) assert.doesNotMatch(step, /^\s*(?:\d+\s*[.)]|[-*•])/);
 });
 
-check("the href round-trips through the parser", () => {
-  for (const example of WALKTHROUGH_EXAMPLES) {
-    const href = walkthroughHref(example);
-    assert.ok(href.startsWith("/stuck?"), href);
-    const parsed = parseWalkthroughParams(new URLSearchParams(href.slice(href.indexOf("?") + 1)));
-    assert.deepEqual(parsed, example);
+check("Notion's escaped brackets are unescaped before a student reads them", () => {
+  // Notion escapes markdown punctuation in text properties. Left alone the
+  // student reads the backslashes.
+  const steps = parseHelpPath("1. Draw the template:  \\[   \\] ( \\[   \\] + \\[   \\] )");
+  assert.equal(steps[0], "Draw the template:  [   ] ( [   ] + [   ] )");
+  assert.doesNotMatch(steps[0], /\\/);
+});
+
+check("the authored Help Path becomes the words the student reads", () => {
+  const steps = walkthroughStepsFromHelpPath(DEFAULT_WALKTHROUGH, M1T1L1_HELP_PATH);
+  assert.ok(steps, "the real M1.T1.L1 help path must animate");
+  assert.equal(steps.length, 6);
+  const authored = parseHelpPath(M1T1L1_HELP_PATH);
+  assert.deepEqual(steps.map((s) => s.sentence), authored);
+  // The built-in copy is replaced, not appended to.
+  const builtIn = walkthroughSteps(DEFAULT_WALKTHROUGH);
+  for (let i = 0; i < steps.length; i += 1) {
+    assert.notEqual(steps[i].sentence, builtIn[i].sentence);
+    // The rail label, heading and spoken picture still come from here.
+    assert.equal(steps[i].label, builtIn[i].label);
+    assert.equal(steps[i].title, builtIn[i].title);
+    assert.equal(steps[i].summary, builtIn[i].summary);
   }
+});
+
+check("a Help Path that is not six steps refuses to animate", () => {
+  // The stage draws six specific things in a fixed order. Illustrating some
+  // other routine with a distributive picture is worse than not animating, so
+  // the caller has to be told to fall back to the plain list.
+  assert.equal(walkthroughStepsFromHelpPath(DEFAULT_WALKTHROUGH, ""), null);
+  assert.equal(walkthroughStepsFromHelpPath(DEFAULT_WALKTHROUGH, null), null);
+  assert.equal(walkthroughStepsFromHelpPath(DEFAULT_WALKTHROUGH, "1. Only one step."), null);
+  const sevenSteps = Array.from({ length: 7 }, (_, i) => `${i + 1}. Step ${i + 1}.`).join("\n");
+  assert.equal(walkthroughStepsFromHelpPath(DEFAULT_WALKTHROUGH, sevenSteps), null);
+  // Blank lines in the property are not steps and must not break the match.
+  assert.ok(walkthroughStepsFromHelpPath(DEFAULT_WALKTHROUGH, `\n${M1T1L1_HELP_PATH}\n\n`));
 });
 
 check("the spoken equation says the whole method out loud", () => {
