@@ -120,6 +120,7 @@ export default function VisitListPanel({ sessionId }: { sessionId: string }) {
         .vlp-tier { font-size:0.58rem; font-weight:900; letter-spacing:0.1em; text-transform:uppercase; color:var(--vlp-accent); }
         .vlp-names { margin:0; font-size:0.95rem; font-weight:900; color:#28241e; }
         .vlp-headline { margin:0; color:#5e534c; font-size:0.75rem; font-weight:750; line-height:1.4; }
+        .vlp-tool { margin:0; color:#7b6b64; font-size:0.68rem; font-weight:800; font-style:italic; }
         .vlp-taps { display:flex; gap:6px; flex-wrap:wrap; }
         .vlp-tap { font:inherit; font-size:0.7rem; font-weight:850; min-height:40px; padding:0 12px; border-radius:9px; border:1px solid #c9c1b2; background:#fff; color:#28241e; cursor:pointer; }
         .vlp-tap:hover:not(:disabled) { border-color:#c93818; }
@@ -183,6 +184,15 @@ export default function VisitListPanel({ sessionId }: { sessionId: string }) {
                 <p className="vlp-names">{row.students.map((student) => student.name).join(", ")}</p>
               </div>
               <p className="vlp-headline">{row.headline}</p>
+              {/* A row that is not where the answers alone would put it has to
+                  explain itself, or a moved tier is a mystery mid-walk. */}
+              {row.toolInfluence ? (
+                <p className="vlp-tool">
+                  {row.toolInfluence === "eased"
+                    ? "Eased a step - their tool work today was strong."
+                    : "Moved up a step - their tool work today was weak."}
+                </p>
+              ) : null}
               {row.grouped ? (
                 /* One stop, but each student still clears individually - the
                    teacher rarely reaches all nine in one pass. */

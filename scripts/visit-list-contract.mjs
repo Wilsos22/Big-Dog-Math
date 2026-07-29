@@ -7,7 +7,13 @@
 // Run: npm run test:visit-list
 
 import assert from "node:assert/strict";
-import { buildVisitList, RETEACH_SHARE, VISIT_TIER_LABELS } from "../.tmp-mastery/visitList.js";
+import {
+  buildVisitList,
+  RETEACH_SHARE,
+  TOOL_STRONG,
+  TOOL_WEAK,
+  VISIT_TIER_LABELS,
+} from "../.tmp-mastery/visitList.js";
 
 let checks = 0;
 function check(name, fn) {
@@ -170,6 +176,86 @@ check("most urgent first, and the order is stable between polls", () => {
     student({ studentKey: "a", name: "Ana", correct: [false, false] }),
   ]);
   assert.deepEqual(reordered.rows.map((row) => row.id), list.rows.map((row) => row.id));
+});
+
+check("strong tool work eases a tier by one step, and says why", () => {
+  // Correct but shaky (tier 3). Strong tool work corroborates them off the list.
+  const cleared = buildVisitList([student({
+    studentKey: "q", name: "Quiet", correct: [true, true], fist: 1, toolScore: TOOL_STRONG,
+  })]);
+  assert.equal(cleared.rows.length, 0);
+  assert.equal(cleared.leaveAlone[0].name, "Quiet");
+
+  // One wrong (tier 2) with strong tool work becomes a lighter Check.
+  const eased = buildVisitList([student({
+    studentKey: "b", name: "Ben", correct: [true, false], error: "Only multiplied one part", toolScore: 4.5,
+  })]);
+  assert.equal(eased.rows[0].tier, 3);
+  assert.equal(eased.rows[0].toolInfluence, "eased", "a moved tier must explain itself");
+});
+
+check("weak tool work escalates a tier by one step", () => {
+  const escalated = buildVisitList([student({
+    studentKey: "b", name: "Ben", correct: [true, false], error: "Only multiplied one part", toolScore: 1,
+  })]);
+  assert.equal(escalated.rows[0].tier, 1, "weak tool work turns a visit into a call");
+  assert.equal(escalated.rows[0].toolInfluence, "escalated");
+  assert.ok(TOOL_WEAK > 1);
+});
+
+check("tool work between the thresholds stays silent", () => {
+  const middling = buildVisitList([student({
+    studentKey: "b", name: "Ben", correct: [true, false], error: "Only multiplied one part", toolScore: 3,
+  })]);
+  assert.equal(middling.rows[0].tier, 2, "no tool work signal means the old behavior exactly");
+  assert.equal(middling.rows[0].toolInfluence, null);
+
+  const none = buildVisitList([student({
+    studentKey: "c", name: "Cy", correct: [true, false], error: "Only multiplied one part", toolScore: null,
+  })]);
+  assert.equal(none.rows[0].tier, 2);
+  assert.equal(none.rows[0].toolInfluence, null);
+});
+
+check("all correct and confident is never lowered by weak tool work", () => {
+  // Their own answers are better evidence than an average; lowering them here
+  // would manufacture a visit nobody needs.
+  const list = buildVisitList([student({
+    studentKey: "s", name: "Sure", correct: [true, true], fist: 5, toolScore: 0.5,
+  })]);
+  assert.equal(list.rows.length, 0);
+  assert.equal(list.leaveAlone[0].name, "Sure");
+});
+
+check("a grouped stop claims a tool influence only when its students agree", () => {
+  const mixed = buildVisitList([
+    student({ studentKey: "a", name: "Ana", correct: [true, false], error: "Only multiplied one part", toolScore: 3 }),
+    student({ studentKey: "b", name: "Ben", correct: [true, false], error: "Only multiplied one part", toolScore: 3 }),
+  ]);
+  assert.equal(mixed.rows[0].students.length, 2);
+  assert.equal(mixed.rows[0].toolInfluence, null);
+
+  // One eased and one not would describe some of the group and mislead about
+  // the rest, so the row claims nothing.
+  const disagreeing = buildVisitList([
+    student({ studentKey: "a", name: "Ana", correct: [true, false], error: "Same error", toolScore: 3 }),
+    student({ studentKey: "b", name: "Ben", correct: [true, false], error: "Same error", toolScore: 1 }),
+  ]);
+  const stop = disagreeing.rows.find((row) => row.students.length > 1);
+  if (stop) assert.equal(stop.toolInfluence, null);
+});
+
+check("a tier 1 call can be eased but never escalated past 1", () => {
+  const eased = buildVisitList([student({
+    studentKey: "a", name: "Ana", correct: [false, false], toolScore: 5,
+  })]);
+  assert.equal(eased.rows[0].tier, 2);
+
+  const floored = buildVisitList([student({
+    studentKey: "z", name: "Zed", correct: [false, false], toolScore: 0,
+  })]);
+  assert.equal(floored.rows[0].tier, 1, "tier 1 is already the top of the list");
+  assert.equal(floored.rows[0].toolInfluence, null);
 });
 
 console.log(`\n${checks} visit-list checks passed`);

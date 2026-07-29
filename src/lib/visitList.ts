@@ -45,6 +45,19 @@ export const VISIT_TIER_LABELS: Record<VisitTier, string> = {
 /** Above this share of the class sharing one error, reteach beats routing. */
 export const RETEACH_SHARE = 0.4;
 
+/**
+ * Tool-evidence thresholds on the 0-5 scale: strong corroborates readiness
+ * (80%+), weak corroborates struggle (below 50%). Between the two the tool
+ * evidence stays silent. Carried over from the retired City Routes routing so
+ * the manipulative work students actually produce keeps influencing something
+ * instead of being collected and ignored.
+ */
+export const TOOL_STRONG = 4;
+export const TOOL_WEAK = 2.5;
+
+/** Why a tier moved, so a changed row is never a mystery mid-walk. */
+export type VisitToolInfluence = "eased" | "escalated";
+
 export type VisitStudent = {
   studentKey: string;
   name: string;
@@ -69,6 +82,11 @@ export type VisitStudent = {
    * choice could not make, and the reason the response kind changed.
    */
   conceptIntact?: boolean;
+  /**
+   * This session's manipulative-tool average (0-5), or null when they produced
+   * no tool work. Resolves BOUNDARY cases only - see toolAdjustedTier.
+   */
+  toolScore?: number | null;
   /** Latest check-in, when the teacher has already reached them. */
   checkIn?: { status: VisitCheckInStatus; at: string } | null;
 };
@@ -85,6 +103,11 @@ export type VisitRow = {
   students: { studentKey: string; name: string }[];
   /** True when several students collapsed into this one stop. */
   grouped: boolean;
+  /**
+   * Set when this session's tool work moved the tier, so a row that is not
+   * where the answers alone would put it explains itself.
+   */
+  toolInfluence?: VisitToolInfluence | null;
 };
 
 export type VisitList = {
@@ -103,7 +126,28 @@ export type VisitList = {
   reteach: { error: string; count: number; total: number } | null;
 };
 
-function tierFor(student: VisitStudent): VisitTier {
+/**
+ * Let this session's tool work move a tier by ONE step, and only at the
+ * boundary - the same rule the retired City Routes routing used.
+ *
+ * Strong work eases (a shaky-confidence Check drops off the list entirely);
+ * weak work escalates (a Visit becomes a Call). Tier 4 is immune: a student
+ * who answered everything correctly and believes it has already given better
+ * evidence than an average, and lowering them on it would manufacture a visit.
+ * No tool work at all means exactly the old behavior.
+ */
+function toolAdjustedTier(
+  base: VisitTier,
+  toolScore: number | null | undefined,
+): { tier: VisitTier; influence: VisitToolInfluence | null } {
+  const score = typeof toolScore === "number" && Number.isFinite(toolScore) ? toolScore : null;
+  if (score === null || base === 4) return { tier: base, influence: null };
+  if (score >= TOOL_STRONG) return { tier: (base + 1) as VisitTier, influence: "eased" };
+  if (score < TOOL_WEAK && base > 1) return { tier: (base - 1) as VisitTier, influence: "escalated" };
+  return { tier: base, influence: null };
+}
+
+function baseTierFor(student: VisitStudent): VisitTier {
   const answered = student.correct.filter((value) => value !== null);
   const wrong = answered.filter((value) => value === false).length;
 
@@ -144,6 +188,7 @@ export function buildVisitList(students: readonly VisitStudent[]): VisitList {
   const cleared: VisitList["cleared"] = [];
   const leaveAlone: VisitList["leaveAlone"] = [];
   const pending: { student: VisitStudent; tier: VisitTier }[] = [];
+  const toolInfluences = new Map<string, VisitToolInfluence | null>();
 
   for (const student of students) {
     if (student.checkIn) {
@@ -155,7 +200,8 @@ export function buildVisitList(students: readonly VisitStudent[]): VisitList {
       });
       continue;
     }
-    const tier = tierFor(student);
+    const { tier, influence } = toolAdjustedTier(baseTierFor(student), student.toolScore);
+    toolInfluences.set(student.studentKey, influence);
     if (tier === 4) {
       leaveAlone.push({ studentKey: student.studentKey, name: student.name });
       continue;
@@ -171,10 +217,15 @@ export function buildVisitList(students: readonly VisitStudent[]): VisitList {
     const error = student.error?.trim() || null;
     const entry = { studentKey: student.studentKey, name: student.name };
     if (tier === 2 && error) {
+      const influence = toolInfluences.get(student.studentKey) || null;
       const existing = groupedTwo.get(error);
       if (existing) {
         existing.students.push(entry);
         existing.grouped = true;
+        // Students in one stop may have arrived there differently. Claim a
+        // tool influence for the group only while they all agree; otherwise
+        // the line would describe some of them and mislead about the rest.
+        if (existing.toolInfluence !== influence) existing.toolInfluence = null;
         continue;
       }
       const row: VisitRow = {
@@ -185,6 +236,7 @@ export function buildVisitList(students: readonly VisitStudent[]): VisitList {
         error,
         students: [entry],
         grouped: false,
+        toolInfluence: influence,
       };
       groupedTwo.set(error, row);
       rows.push(row);
@@ -198,6 +250,7 @@ export function buildVisitList(students: readonly VisitStudent[]): VisitList {
       error,
       students: [entry],
       grouped: false,
+      toolInfluence: toolInfluences.get(student.studentKey) || null,
     });
   }
 

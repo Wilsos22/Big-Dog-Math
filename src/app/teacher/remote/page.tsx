@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import CityRoutesPanel from "@/components/CityRoutesPanel";
 import VisitListPanel from "@/components/VisitListPanel";
 import LiveScreenPreview from "@/components/LiveScreenPreview";
 import {
@@ -1334,8 +1333,6 @@ export default function TeacherRemotePage() {
                 ) : null}
 
                 <VisitListPanel sessionId={session.id} />
-
-                <CityRoutesPanel sessionId={session.id} />
 
                 <details
                   className="remote-utilities"

@@ -374,20 +374,19 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   tuned to fill the mastery bars and form four misconception clusters - run it, then Recompute on
   `/teacher/mastery`. `supabase/mock-live-session-seed.sql` (run second) stands up an OPEN live-flow
   session (join code MOCKLV, live_flow type-checked against `LiveClassFlowSnapshot` v2) with the roster
-  joined and readiness answers set so City Routes shows a full three-route spread on `/teacher/remote`.
+  joined and readiness answers set so the VISIT LIST fills on `/teacher/remote`.
   Both idempotent and scoped to the mock period; wipe lines at each file's bottom. KEY DISTINCTION that
-  shaped the split: City Routes (park routes) computes from the CURRENT session's `poll_answers` +
-  `session_joins` - plus, since 2026-07-26, the session's OWN `source='tool'` aggregate `responses`
-  as a boundary tie-breaker in `recommendRoute` (mixed answers move one step on strong >=4 / weak
-  <2.5 tool averages, none-correct can rise to partner but never independent, strong work clears
-  the low-confidence flag; no tool work means the old behavior exactly - the 2026-07-27
+  shaped the split: the visit list computes from the CURRENT session's `poll_answers` +
+  `session_joins` - plus the session's OWN `source='tool'` aggregate `responses`
+  as a boundary tie-breaker (strong >=4 eases a tier one step, weak <2.5 escalates one step, tier 4
+  is never lowered; no tool work means the old behavior exactly - the 2026-07-27
   launch audit found the secure `/api/student/tool-evidence` path had dropped the daily 0-5
   aggregate row, so the tie-breaker never fired; FIXED same day: the device's day tally rides the
   report body and the route upserts the legacy-keyed aggregate, with per-problem rows written only
   when a seeded standard applies) - but NEVER the `responses`
   warm-up history, so it only populates inside a live session, while `/teacher/mastery` and
   `/teacher/rightnow` (`/api/live/groups`) replay `responses`. Seeding warm-up `responses` alone
-  can never make City Routes light up (roster and readiness still come from joins + polls). Any new mock roster MUST stay fully fictional
+  can never make the visit list light up (roster and readiness still come from joins + polls). Any new mock roster MUST stay fully fictional
   (see the July 2026 real-names-in-a-public-repo incident) and have Steele eyeball the names first.
 
 ## Live sessions - the failure modes that cost a class period
@@ -476,7 +475,7 @@ the invariants they protect are easy to break again.
   four-form rule spec parsed by `src/lib/structuredNumeric.ts` (`boxes: N`, `sum(a,b)=N`, `a=K*b`,
   `a=N`); ANY valid split passes, so there is no single correct string. `poll_answers.answer` keeps
   the final box and the boxes go in the new `values` column, because `answer` is exact-matched by
-  City Routes and the readiness tallies. THE TRAP: `/api/live/city-routes` looked polls up by the
+  the readiness tallies. THE TRAP (found while City Routes still existed): its readiness lookup keyed on the
   `multiple-choice` key only and compared `answer === correctAnswer` - against a structured step that
   finds no poll at all, or compares "168" to four lines of rules, marking EVERY student incorrect and
   routing the whole class to the teacher table. Confidently wrong is worse than blank. Both City
@@ -495,6 +494,21 @@ the invariants they protect are easy to break again.
   the system; the assignment can go home unfinished, so it is never exit evidence. Requires
   `supabase/visit-check-ins.sql` (RLS on, NO policies - teacher routes only). Nothing here may reach
   a student device or a public projector; do not widen `studentSafeLiveFlow` to carry any of it.
+  THE TAPS ARE STEELE'S OWN RECORD (clarified 2026-07-28): who he got time with and whether it felt
+  productive. They are NOT a mechanism that acts on students - do NOT wire "promote on Got it"
+  (release the Big Dog Challenge, bump a drill level). The `promoted` column exists and the POST
+  accepts it, but nothing sends it and nothing should without his word.
+- **CITY ROUTES IS DELETED** (Steele, 2026-07-28): "moot now that we aren't moving around." Nobody
+  moves, so three named work stations with staged movement had no job left, and the visit list
+  replaced it. Removed: `src/lib/cityRoutes.ts`, `CityRoutesPanel.tsx`, `CityRouteCard.tsx` (the
+  student-facing city card on /live-flow), `/api/live/city-routes`, `/api/student/city-route`. DO NOT
+  REBUILD ANY OF IT. What deliberately SURVIVED the cut, because it was the genuinely useful part:
+  `src/lib/readinessEvidence.ts` (the shared per-student readiness read) and the tool-evidence
+  tie-breaker, which now moves a VISIT TIER one step at the boundary instead of a route
+  (`TOOL_STRONG`/`TOOL_WEAK` in `src/lib/visitList.ts`; a moved tier renders its reason so it is
+  never a mystery mid-walk). `supabase/city-routes.sql` and the `city_route_runs` /
+  `city_route_assignments` tables were left in place ON PURPOSE - dropping them is destructive and
+  needs Steele's word, and leaving them costs nothing.
 - **`/api/teacher/poll` VALIDATED KINDS AGAINST A HAND-COPIED ARRAY** that omitted
   `multiple-choice-explain`, so every one of those polls was stored as `short-answer` (the student
   surface still rendered right from the flow snapshot, so nothing surfaced it). It now reads the
@@ -742,7 +756,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   masks transport differences - ink realtime broadcast was first proven live this way 2026-07-22.
 - Student digital responses: Response Mode on a Lesson Step drives the Chromebook input.
   "Multiple Choice + Explain" (added 2026-07-21) shows tappable choices plus a required written
-  explanation; the choice stays in `poll_answers.answer` (tallies, correctness, and City Routes
+  explanation; the choice stays in `poll_answers.answer` (tallies, correctness, and readiness
   exact-match it) and the explanation lives in `poll_answers.explanation`
   (`supabase/poll-explanations.sql`). An unknown/blank Response Mode falls back to `Poll Kind`, then
   to state-id defaults (`question` short-answer, `learning-check` fist-to-five); `exit` has NO

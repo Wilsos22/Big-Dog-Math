@@ -12,7 +12,21 @@
  */
 
 import { diagnoseStructuredNumeric, parseStructuredNumericSpec } from "./structuredNumeric";
-import type { ReadinessEvidence } from "./cityRoutes";
+
+export interface ReadinessEvidence {
+  studentKey: string;
+  name: string;
+  /** One entry per readiness question, in lesson order. null = no answer. */
+  correct: (boolean | null)[];
+  /** Private Fist-to-Five rating 0-5, or null if not submitted. */
+  fist: number | null;
+  /**
+   * Average manipulative-tool evidence score for THIS session (the 0-5
+   * aggregate rows the tools write), or null when the student produced no
+   * tool work. Constructed evidence that was being collected and ignored.
+   */
+  toolScore?: number | null;
+}
 
 export interface ReadinessStepLite {
   stateId?: string;

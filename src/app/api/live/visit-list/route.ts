@@ -72,6 +72,9 @@ export async function GET(request: Request) {
       // A student whose only wrong box was the final total understands the
       // property; the arithmetic is the visit, not the concept.
       conceptIntact: readiness.arithmeticOnly.has(entry.studentKey),
+      // This session's manipulative work, the boundary tie-breaker inherited
+      // from the retired City Routes routing.
+      toolScore: entry.toolScore,
       checkIn: checkIns?.get(entry.studentKey) || null,
     }));
 

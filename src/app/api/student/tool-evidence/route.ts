@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     }
 
     // The daily aggregate (score 0-5, standard-less) - the row recompute's
-    // bars and city-routes' tool tie-breaker actually read. Updates in place
+    // bars and the visit list's tool tie-breaker actually read. Updates in place
     // all period long, exactly like the legacy client wrote it.
     const { error: aggError } = await db.from("responses").upsert(
       {
