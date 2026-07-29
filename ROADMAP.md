@@ -8,6 +8,24 @@ should update BOTH that database and this mirror when a feature ships.
 Snapshot (2026-07-16):
 
 ## Live
+**"Stuck? Walk it through." — the M1.T1.L1 worked example** (7/29, from the
+Claude Design handoff "Distributive Walkthrough"). Six click-to-advance steps
+that build `a x b = a ( p + q )` on one stage: rewrite it, draw the box
+template, pick the friendly factor, split the other one, then multiply and add
+— with the target answer parked to the side from step 1 and filled green at the
+end so the student sees both routes agree. Earlier steps stay up and dim to
+0.34, so the whole chain of reasoning is still on screen; step 3 is deliberately
+a question ("which factor is easier to work with?") because that is the only
+step in the method that is a decision rather than a move. Reachable two ways:
+a `Stuck?` chip on `/distributive-area` that opens it as a full-screen overlay
+so no half-placed split is lost, and the public `/stuck` route, which takes the
+problem in the URL and needs no session — so it can sit in a Notion `Help Path`
+line and still work at 8pm. It never demonstrates the problem the student is
+working on: `walkthroughExampleFor()` hands back a parallel example, contract-
+tested across every problem the tool can generate, because a solved copy of the
+question in front of them replaces the work instead of unblocking it. Reflows
+on a phone (answer panel leaves the stage, no sideways scroll) and honours
+`prefers-reduced-motion` by rendering each step finished. ·
 Student home/join · Lesson page (Notion-fed) · Manipulative tools suite ·
 Live polls (stuck-poll trap fixed) · Class mode broadcast · Challenge games ·
 Today's boards · Control panel · Session controls · Rosters ·

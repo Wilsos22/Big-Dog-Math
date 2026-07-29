@@ -1,5 +1,9 @@
-/* Big Dog Board design-system font (Albert Sans). Must stay at the top of the file. */
-@import url("https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&display=swap");
+/* Big Dog Board design-system fonts. Must stay at the top of the file.
+   Albert Sans is everything a student reads; Caveat is the handwritten voice the
+   design system reserves for teacher asides and hand annotations on a worked
+   example. One request either way - a browser only downloads the faces a page
+   actually uses, so pages with no handwriting pay nothing for Caveat. */
+@import url("https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&family=Caveat:wght@500;600;700&display=swap");
 
 * {
   box-sizing: border-box;
@@ -52,6 +56,9 @@
   --bdb-r-lg: 22px;
   --bdb-r-pill: 999px;
   --bdb-font: "Albert Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+  /* Handwritten voice - annotations and teacher asides ONLY. Anything a student
+     has to read stays in --bdb-font. */
+  --bdb-font-hand: "Caveat", "Bradley Hand", cursive;
 }
 
 html,
