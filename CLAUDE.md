@@ -159,6 +159,14 @@ bars and live misconception grouping).
   `src/lib/distributiveWalkthrough.ts` and is shared with the plain view - one parser, and it strips
   Notion's markdown escaping (`\[` arrives from some read paths and the student would otherwise read
   the backslashes).
+  THE PLAN IS ONE ANIMATION PER LESSON (Steele, 2026-07-29 - "I will eventually create animation for
+  each lesson, this is just a test run"). So the `usesDistributiveTool` branch in
+  `src/app/homework-help/page.tsx` is the EXTENSION POINT, not a special case: a second animation adds
+  its own component plus one more arm there, and the plain list stays the terminal fallback for every
+  lesson without one. Deliberately NOT generalised yet - each animation will have its own step count
+  and its own stage, so `WALKTHROUGH_STEP_COUNT` is per-animation and the shared part is only
+  `parseHelpPath` plus the "authored steps in, picture out" contract. Do not build a registry until
+  there are two real animations to read the shape off.
 - Manipulative tools (public, no session): `/whiteboard`, `/number-line-plus`, `/number-line`,
   `/fraction-bars`, `/group-bars`, `/percent-bar`, `/algebra-tiles`, `/equation-builder`,
   `/order-of-operations` (GEMS), `/combine-like-terms`, `/proportions`, `/area-model`,
