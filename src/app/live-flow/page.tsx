@@ -9,7 +9,7 @@ import { fetchSharedSessionState } from "@/lib/studentSessionShared";
 import { studentSafeLiveFlow } from "@/lib/liveFlowPrivacy";
 import { useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
-import { classroomStageTheme } from "@/lib/classroomPilot";
+import { classroomStageTheme, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { TIMER_URGENCY_CSS, TIMER_URGENT_SECONDS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
@@ -667,7 +667,14 @@ export default function LiveFlowPage() {
       : discussion?.keyVocabulary ?? [])
     .map((word) => word.trim())
     .filter(Boolean);
-  const showDiscussionSupports = !activePoll && (sentenceStems.length > 0 || keyVocabulary.length > 0);
+  // Gated on the step actually running a discussion, not just on having stems
+  // to show. /control publishes the lesson-level Discussion Stems on EVERY
+  // state deliberately, so an ungated check put the stems-and-vocabulary panel
+  // on every Chromebook for every non-poll state from warm-up to closeout.
+  const runsDiscussionProtocol = Boolean(phase) || usesDiscussionProtocol(flow?.state?.id, flow?.state?.label);
+  const showDiscussionSupports = !activePoll
+    && runsDiscussionProtocol
+    && (sentenceStems.length > 0 || keyVocabulary.length > 0);
   const resource = flow?.resource ?? null;
   const linkedSpinnerMode = !activePoll && !resource && publicSurfacesLinked && flow?.state?.id === "learning-target-readers"
     ? "readers"

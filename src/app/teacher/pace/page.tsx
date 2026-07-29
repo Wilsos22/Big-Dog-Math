@@ -5,7 +5,7 @@ import ClassroomSpinner from "@/components/ClassroomSpinner";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
 import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
-import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson } from "@/lib/classroomPilot";
+import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { teacherApiRequest } from "@/lib/teacherApi";
@@ -201,6 +201,11 @@ export default function PaceSupportPage() {
   const phase = normalizeDiscussionPhaseSnapshot(flow?.phase);
   const isLearningCheck = theme.id === "learning-check";
   const isDiscussion = theme.id === "discussion" || Boolean(phase);
+  // The theme gates the LAYOUT; it must not gate the catalog fallback.
+  // inferClassroomStage sends any "partner" or "group" step to the discussion
+  // theme, and /control deliberately publishes empty arrays for those - so the
+  // theme-gated fallback filled them in locally with catalog copy.
+  const runsDiscussionProtocol = Boolean(phase) || usesDiscussionProtocol(state?.id, state?.label);
   const configuredDiscussionSupports = discussionSupportsForLesson(flow?.lesson?.code);
   const discussionStems = flow?.presentation?.discussionStems?.filter(Boolean).length
     ? flow.presentation.discussionStems
@@ -208,7 +213,7 @@ export default function PaceSupportPage() {
       ? phase.sentenceStems
       : flow?.lesson?.discussionStems?.filter(Boolean).length
         ? flow.lesson.discussionStems
-        : isDiscussion ? configuredDiscussionSupports.sentenceStems : [];
+        : runsDiscussionProtocol ? configuredDiscussionSupports.sentenceStems : [];
   // The configured supports are a DISCUSSION fallback, never a general one.
   // As a terminal fallback they rendered the hardcoded strategy / evidence /
   // justify table on the support screen for the entire lesson, unchanged from
@@ -219,7 +224,7 @@ export default function PaceSupportPage() {
       ? phase.keyVocabulary
       : flow?.lesson?.discussionVocabulary?.filter(Boolean).length
         ? flow.lesson.discussionVocabulary
-        : isDiscussion ? configuredDiscussionSupports.keyVocabulary : [];
+        : runsDiscussionProtocol ? configuredDiscussionSupports.keyVocabulary : [];
   const paceDirections = state?.id === "closeout"
     ? CLOSEOUT_DIRECTIONS
     : publicSurfacesLinked
@@ -253,6 +258,10 @@ export default function PaceSupportPage() {
   const paceAction = directionLines[0] || "";
   const paceSteps = directionLines.slice(1, 7);
 
+  // Both caps are real: .pw-cols is inset-0 with no overflow, so anything past
+  // the column height is clipped with nothing on screen to say so. Six covers
+  // every authored stem set today (the default has four, the ratio lesson six);
+  // vocabulary cards carry a definition each, so three is what fits the column.
   const vocabCards = discussionVocabulary.slice(0, 3).map(splitVocab);
 
   // The hook question shows on BOTH projector panels during warm-up. Here it
@@ -533,7 +542,7 @@ export default function PaceSupportPage() {
               {discussionStems.length ? (
                 <div className="pw-callout">
                   <p className="pw-callout-label">Sentence stems</p>
-                  <ul className="pw-stems">{discussionStems.slice(0, 3).map((stem) => <li key={stem}>{stem}</li>)}</ul>
+                  <ul className="pw-stems">{discussionStems.slice(0, 6).map((stem) => <li key={stem}>{stem}</li>)}</ul>
                 </div>
               ) : null}
               {timer ? (

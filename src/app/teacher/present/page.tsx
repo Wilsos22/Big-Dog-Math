@@ -8,7 +8,7 @@ import AttentionListener from "@/components/AttentionListener";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
 import SlideOverlayLayer from "@/components/SlideOverlayLayer";
 import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
-import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson } from "@/lib/classroomPilot";
+import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { resolveLessonVisual } from "@/lib/lessonVisuals";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
@@ -505,21 +505,29 @@ export default function ClassroomStagePage() {
   const configuredDiscussionSupports = discussionSupportsForLesson(lesson?.code);
   // Discussion-only fallback. Used as a terminal fallback it put hardcoded
   // supports on the projector during states that never asked for them.
+  //
+  // The LAYOUT gate is the theme; the FALLBACK gate is not. inferClassroomStage
+  // maps any step whose title contains "partner" or "group" to the discussion
+  // theme, while /control deliberately sends empty arrays for those steps - so
+  // keying the fallback on the theme let a partner step summon the catalog's
+  // strategy / evidence / justify cards locally, which is catalog copy standing
+  // in for authored content on a classroom screen.
   const supportsDiscussion = theme.id === "discussion" || Boolean(phase);
+  const runsDiscussionProtocol = Boolean(phase) || usesDiscussionProtocol(state?.id, state?.label);
   const sentenceStems = presentation?.discussionStems?.filter(Boolean).length
     ? presentation.discussionStems
     : lesson?.discussionStems?.filter(Boolean).length
       ? lesson.discussionStems
       : phase?.sentenceStems?.filter(Boolean).length
         ? phase.sentenceStems
-        : supportsDiscussion ? configuredDiscussionSupports.sentenceStems : [];
+        : runsDiscussionProtocol ? configuredDiscussionSupports.sentenceStems : [];
   const keyVocabulary = presentation?.vocabulary?.filter(Boolean).length
     ? presentation.vocabulary
     : lesson?.discussionVocabulary?.filter(Boolean).length
       ? lesson.discussionVocabulary
       : phase?.keyVocabulary?.filter(Boolean).length
         ? phase.keyVocabulary
-        : supportsDiscussion ? configuredDiscussionSupports.keyVocabulary : [];
+        : runsDiscussionProtocol ? configuredDiscussionSupports.keyVocabulary : [];
   const structuredSections = structuredWorkSections(lesson);
   const paperSections = theme.id === "independent"
     ? structuredSections.length ? structuredSections : independentSections(slideBody)
