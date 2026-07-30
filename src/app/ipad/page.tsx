@@ -19,6 +19,7 @@ import { useEffect, useRef, useState } from "react";
 import InkBoard, { type InkTool } from "@/components/InkBoard";
 import { joinInkRoom, type InkChannel, type InkConnectionStatus } from "@/lib/inkSync";
 import { BOARD_TEMPLATES } from "@/lib/boardTemplates";
+import UpdateReadyChip from "@/components/UpdateReadyChip";
 
 function classroomDate(): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -324,7 +325,11 @@ export default function IpadPage() {
         .ip-wb-panel { position:absolute; z-index:5; inset:0 auto 0 0; width:42%; overflow:hidden; border-right:5px solid var(--bdb-amber); background:#fff; box-shadow:18px 0 40px rgba(0,0,0,0.22); }
         /* Above the panel on purpose - the pen is never fenced into the white
            area, it just gains a clean place to land. */
-        .ip-ink-layer { position:absolute; inset:0; z-index:6; }
+        /* The LAYER never captures; the ink canvas inside opts back in when it
+           is the pen (a pointer-events:none parent still lets an auto child
+           receive events). Without this the div itself swallowed the stroke
+           in whiteboard mode even with the board passing through. */
+        .ip-ink-layer { position:absolute; inset:0; z-index:6; pointer-events:none; }
         .ip-scratch { position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; background:#fff; }
         .ip-scratch-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; padding-left:210px; background:var(--bdb-card); border-bottom:1px solid var(--bdb-line); }
         .ip-scratch-title { font-weight:800; color:var(--bdb-ink); }
@@ -514,18 +519,33 @@ export default function IpadPage() {
                   redoSignal={p.redo}
                   exportSignal={p.exportSig}
                   onExport={handleExport}
-                  onHistoryChange={(undo, redo) => { historiesRef.current[i] = { undo, redo }; }}
+                  onHistoryChange={(undo, redo) => {
+                    historiesRef.current[i] = { undo, redo };
+                    if (surfaceRef.current === "whiteboard" && i === activePageRef.current) setHistory({ undo, redo });
+                  }}
                   onConnectionChange={i === 0 ? setBoardStatus : undefined}
                 />
               ))}
             </div>
-            {/* LAST and highest, so it takes every pointer event and the panel
-                below can never steal a stroke. This is the pen in both modes. */}
+            {/* LAST and highest so that in Board mode it takes every pointer
+                event and the panel below can never steal a stroke.
+                  BUT NOT IN WHITEBOARD MODE. Sitting on top unconditionally
+                meant the whiteboard panel could never receive a stroke at all:
+                every mark went to <room>__over, the annotate room, so the
+                projector's work space - which listens on <room> - stayed empty
+                no matter how long you wrote, and switching modes changed
+                nothing you could feel. That is exactly what "the whiteboard /
+                board buttons havent changed" and "it doesnt show up on the
+                projector screen" were (Steele, 2026-07-30).
+                  passThrough rather than hidden: the sheet stops taking the pen
+                but its existing annotations stay on screen, so opening the
+                whiteboard does not appear to wipe what you just wrote. */}
             <div className="ip-ink-layer">
               <InkBoard
                 room={`${room}__over`}
                 interactive
                 transparent
+                passThrough={onWhiteboard}
                 color={color}
                 tool={tool}
                 penWidth={penWidth}
@@ -535,7 +555,8 @@ export default function IpadPage() {
                 redoSignal={redoSignal}
                 onHistoryChange={(undo, redo) => {
                   screenHistoryRef.current = { undo, redo };
-                  setHistory({ undo, redo });
+                  // Undo/Redo belong to whichever surface is taking the pen.
+                  if (!surfaceRef.current || surfaceRef.current === "annotate") setHistory({ undo, redo });
                 }}
               />
             </div>
@@ -545,6 +566,11 @@ export default function IpadPage() {
           </div>
         </div>
       </div>
+
+      {/* The pen surface never reloads itself - it holds the room's ink - so it
+          has to SAY when a new build is waiting, or it silently runs old code
+          and a shipped fix looks like it never landed. */}
+      <UpdateReadyChip />
 
       {toast && (
         <div
