@@ -867,19 +867,29 @@ the invariants they protect are easy to break again.
   carrying the same latent hazard: `useLiveToolConfig.tsx` (`live-tool-<route>-<session>`) and
   `classroomSpinnerSync.ts` (`classroom-spinner-<room>`) still open and remove channels per
   call. Their topics happen to be unique per page today, which is the only reason they work.
-- **THE PEN BELONGS TO WHICHEVER SURFACE IS OPEN, AND A WRAPPER DIV CAN STEAL IT** (2026-07-30).
-  /ipad mounts the glass sheet (`<room>__over`) LAST and highest so that in Board mode nothing below
-  can take a stroke. Mounted that way UNCONDITIONALLY it also covered the Whiteboard panel, so the
-  panel could never be written on at all: every mark went to the annotate room, the projector's work
-  space (which reads `<room>`) stayed empty however long he wrote, and switching modes changed
-  nothing he could feel. That is what "it doesnt show up on the projector screen and the
-  whiteboard/board buttons havent changed" was. The sheet now takes `passThrough={onWhiteboard}`.
-  TWO THINGS TO KEEP. Use `passThrough`, NOT `hidden` - the sheet must stop taking the pen while its
-  annotations stay on screen, or opening the whiteboard looks like it wiped what you just wrote. And
-  `.ip-ink-layer` itself carries `pointer-events:none`: a plain wrapper div defaults to `auto` and
-  swallowed the stroke even with the board passing through. A `pointer-events:none` parent still lets
-  the ink canvas inside opt back in with `auto`, which is exactly the behaviour wanted.
-  Undo/Redo follow whichever surface owns the pen; before this only one of them ever did.
+- **ONE PEN SURFACE, ONE ROOM** (2026-07-30, Steele: "we can even simplify it"). `/ipad` writes to
+  `<room>__over` and nothing else, and every display renders that room UNCONDITIONALLY -
+  `/teacher/present` and `/teacher/pace` via `ScreenInkOverlay`, `/board` directly. No mode, no live
+  session, nothing to open first: what the hand writes is on the wall.
+  THIS REPLACED THE TWO-SURFACE DESIGN THAT CAUSED EVERY INK REPORT IN THIS FILE. "Board" annotated
+  the screen; "Whiteboard" was a 42% panel on a SECOND room the projector only showed when a session
+  was running with the work space open. Two buttons that looked alike, behaved differently, and
+  reached the wall on different conditions - so "it doesn't show up on the projector" was true half
+  the time and indistinguishable from a bug. Do not reintroduce a second writing room.
+  PAPER IS A BACKGROUND, NOT A SURFACE. The toggle makes the one board opaque (dotted paper instead
+  of the live slide behind the same ink) and announces `{t:"paper"}` on `<room>__ctrl`; displays
+  mirror it and ASK on mount, so a projector switched on mid-lesson never sits on the slide while the
+  teacher is already on paper. Same room, same strokes, same undo history.
+  DELETED with the modes: the eight `__p` pages, the `__scratch` overlay, templates, imported
+  backgrounds, problem cards, the `pageflip`/`scratch` messages, `boardTemplates.ts`, and the
+  work-space panel on `/teacher/present` (which could only render blank afterwards) plus the layout
+  shift that reserved room for it. The board SCENE on present KEEPS its board - that one is the paper
+  carrying `Main Display`, with the writing arriving on the sheet above it.
+  `boardOpen` now changes nothing on the projector; whether "Open work space" stays on the Remote is
+  Steele's call.
+  Still true and still load-bearing: `.ip-ink-layer` carries `pointer-events:none` so the wrapper div
+  cannot swallow a stroke before it reaches the canvas (a plain div defaults to `auto`; that cost a
+  whole debugging round when the sheet sat over the old whiteboard panel).
 - **THE PEN SURFACE SAYS WHEN A NEW BUILD IS WAITING** (2026-07-30). `/ipad` is deliberately absent
   from `DeployRefresh` - it holds the authoritative ink, so an automatic reload would wipe the room's
   boards mid-lesson - and the cost of that correct decision is that it can sit on a build from days
