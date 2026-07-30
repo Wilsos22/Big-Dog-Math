@@ -145,10 +145,10 @@ export default function IpadPage() {
     flipTo(pages.length);
   }
   function switchSurface(next: Surface) {
+    // History belongs to the glass sheet in both modes now, so switching does
+    // not swap it - the strokes on screen are the same strokes either way.
     setSurface(next);
-    setHistory(next === "whiteboard"
-      ? historiesRef.current[activePage] ?? { undo: false, redo: false }
-      : screenHistoryRef.current);
+    setHistory(screenHistoryRef.current);
   }
 
   function flashToast(message: string) {
@@ -322,6 +322,9 @@ export default function IpadPage() {
            white, accent edge on the content side. If that panel ever moves,
            this moves with it or the pen stops matching the wall. */
         .ip-wb-panel { position:absolute; z-index:5; inset:0 auto 0 0; width:42%; overflow:hidden; border-right:5px solid var(--bdb-amber); background:#fff; box-shadow:18px 0 40px rgba(0,0,0,0.22); }
+        /* Above the panel on purpose - the pen is never fenced into the white
+           area, it just gains a clean place to land. */
+        .ip-ink-layer { position:absolute; inset:0; z-index:6; }
         .ip-scratch { position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; background:#fff; }
         .ip-scratch-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; padding-left:210px; background:var(--bdb-card); border-bottom:1px solid var(--bdb-line); }
         .ip-scratch-title { font-weight:800; color:var(--bdb-ink); }
@@ -388,12 +391,16 @@ export default function IpadPage() {
           </div>
 
           <div className="ip-row">
-            <button className="ip-btn" disabled={!history.undo} style={!history.undo ? { opacity: 0.4 } : undefined} onClick={() => { if (onWhiteboard) bumpPage("undo"); else setUndoSignal((n) => n + 1); }}>Undo</button>
-            <button className="ip-btn" disabled={!history.redo} style={!history.redo ? { opacity: 0.4 } : undefined} onClick={() => { if (onWhiteboard) bumpPage("redo"); else setRedoSignal((n) => n + 1); }}>Redo</button>
+            {/* All ink is the glass sheet now, in both modes, so these act on it
+                unconditionally. Routing Undo to the page under the panel put the
+                button on a surface the pen no longer writes to. */}
+            <button className="ip-btn" disabled={!history.undo} style={!history.undo ? { opacity: 0.4 } : undefined} onClick={() => setUndoSignal((n) => n + 1)}>Undo</button>
+            <button className="ip-btn" disabled={!history.redo} style={!history.redo ? { opacity: 0.4 } : undefined} onClick={() => setRedoSignal((n) => n + 1)}>Redo</button>
             <span className="ip-divider" />
             {onWhiteboard ? (
               <>
-                <button className="ip-btn warn" onClick={() => bumpPage("clear")}>Clear</button>
+                <button className="ip-btn warn" onClick={() => setScreenClearSignal((n) => n + 1)}>Clear ink</button>
+                <button className="ip-btn warn" onClick={() => bumpPage("clear")}>Clear paper</button>
                 <button className={`ip-btn${scratchOpen ? " on" : ""}`} onClick={toggleScratch}>Scratch</button>
               </>
             ) : (
@@ -467,39 +474,25 @@ export default function IpadPage() {
             </div>
           </div>
         )}
-        {/* ONE stage for both modes, always letterboxed to the projector's own
-            aspect ratio, so what the hand sees is what the wall shows.
-              Board      - the glass sheet: transparent ink over the whole live
-                           screen, so the pen annotates what is already there.
-              Whiteboard - the LEFT 42%, the exact geometry /teacher/present
-                           gives .stage-board-panel, with the lesson content
-                           filling the remaining 58% behind the iframe.
-            The iframe keeps rendering in whiteboard mode: with boardOpen set it
-            already draws its own panel from the same room, so the interactive
-            board simply lands on top of its own strokes. Nothing doubles. */}
+        {/* ONE writing surface for both modes. THE PEN IS ALWAYS THE GLASS
+            SHEET - transparent ink over the entire live screen - so the teacher
+            writes wherever he wants, always. The Whiteboard button does not
+            move the pen or fence it in; it only ADDS a clean white area on the
+            left 42%, the exact geometry /teacher/present gives
+            .stage-board-panel, to write on instead of over the lesson content.
+            Getting this wrong once already: confining the pen to the panel is
+            NOT what "half whiteboard half screen" means.
+            The panel stays an ink-room member rather than a plain white div so
+            Background, Template and the file import keep syncing to the wall on
+            room <room> with no new wire protocol - it carries the paper, the
+            glass sheet on top carries the writing. The stage is letterboxed to
+            the projector's own aspect ratio, so hand and wall always match. */}
         <div className="ip-screen-stage">
           <div className="ip-screen-box" style={{ aspectRatio: String(screenAr) }}>
             <iframe
               className="ip-screen-frame"
               src={`/teacher/present?embed=1${room !== "main" ? `&room=${encodeURIComponent(room)}` : ""}`}
               title="Live class screen"
-            />
-            <InkBoard
-              room={`${room}__over`}
-              interactive
-              transparent
-              hidden={onWhiteboard}
-              color={color}
-              tool={tool}
-              penWidth={penWidth}
-              fingerDraws={fingerDraws}
-              clearSignal={screenClearSignal}
-              undoSignal={undoSignal}
-              redoSignal={redoSignal}
-              onHistoryChange={(undo, redo) => {
-                screenHistoryRef.current = { undo, redo };
-                if (surfaceRef.current === "annotate") setHistory({ undo, redo });
-              }}
             />
             <div className="ip-wb-panel" style={onWhiteboard ? undefined : { display: "none" }}>
               {pages.map((p, i) => (
@@ -521,16 +514,33 @@ export default function IpadPage() {
                   redoSignal={p.redo}
                   exportSignal={p.exportSig}
                   onExport={handleExport}
-                  onHistoryChange={(undo, redo) => {
-                    historiesRef.current[i] = { undo, redo };
-                    if (surfaceRef.current === "whiteboard" && i === activePageRef.current) setHistory({ undo, redo });
-                  }}
+                  onHistoryChange={(undo, redo) => { historiesRef.current[i] = { undo, redo }; }}
                   onConnectionChange={i === 0 ? setBoardStatus : undefined}
                 />
               ))}
             </div>
+            {/* LAST and highest, so it takes every pointer event and the panel
+                below can never steal a stroke. This is the pen in both modes. */}
+            <div className="ip-ink-layer">
+              <InkBoard
+                room={`${room}__over`}
+                interactive
+                transparent
+                color={color}
+                tool={tool}
+                penWidth={penWidth}
+                fingerDraws={fingerDraws}
+                clearSignal={screenClearSignal}
+                undoSignal={undoSignal}
+                redoSignal={redoSignal}
+                onHistoryChange={(undo, redo) => {
+                  screenHistoryRef.current = { undo, redo };
+                  setHistory({ undo, redo });
+                }}
+              />
+            </div>
             <span className="ip-screen-note">
-              {onWhiteboard ? "Whiteboard - the room sees this half" : "Writing over the class screen"}
+              {onWhiteboard ? "Whiteboard open - write anywhere" : "Writing over the class screen"}
             </span>
           </div>
         </div>
