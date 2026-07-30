@@ -14,6 +14,7 @@ import path from "node:path";
 const require = createRequire(import.meta.url);
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const board = require(path.join(root, ".tmp-mastery", "weeklyDisplayBoard.js"));
+const bells = require(path.join(root, ".tmp-mastery", "bellSchedule.js"));
 
 let checks = 0;
 const ok = (label, actual, expected) => {
@@ -107,6 +108,39 @@ console.log("the single criterion always clears room legibility");
 // 55-inch panel, ~85px of type readable from the far side of a classroom.
 for (const text of ["I can find a GCF.", "x".repeat(90), "x".repeat(200)]) {
   ok(`successSize(${text.length} chars) >= 88`, board.successSize(text) >= 88, true);
+}
+
+console.log("bell schedule: Steele's real 2026-27 day");
+{
+  const S = bells.BELL_SCHEDULE;
+  const at = (h, m) => h * 60 + m;
+  ok("seven blocks", S.length, 7);
+  ok("periods run 1-6 with lunch unnumbered",
+    S.map((p) => p.period ?? null), [1, 2, 3, 4, null, 5, 6]);
+  // The thing Steele specifically corrected: lunch is between 4 and 5.
+  const lunch = S.findIndex((p) => p.kind === "Break");
+  ok("lunch sits between period 4 and period 5",
+    [S[lunch - 1].period, S[lunch + 1].period], [4, 5]);
+  ok("the day starts at 7:30", S[0].startMinute, at(7, 30));
+  ok("and ends at 1:41", S[S.length - 1].endMinute, at(13, 41));
+  ok("period 4 is the accelerated section", S[3].label, "Math Acc 6");
+  ok("no block ends before it starts", S.every((p) => p.endMinute > p.startMinute), true);
+  ok("blocks never overlap",
+    S.every((p, i) => i === 0 || p.startMinute >= S[i - 1].endMinute), true);
+  ok("12-hour clock, no meridiem",
+    [at(7, 30), at(12, 44), at(13, 41)].map(bells.formatBellClock), ["7:30", "12:44", "1:41"]);
+
+  const at940 = bells.bellRowStates(at(9, 40));
+  ok("mid-period 3 is the only Now", at940.filter((r) => r.now).map((r) => r.periodLabel), ["03"]);
+  ok("earlier blocks read finished", at940.slice(0, 2).map((r) => r.progress), [1, 1]);
+  ok("later blocks read untouched", at940.slice(3).map((r) => r.progress), [0, 0, 0, 0]);
+  ok("lunch is the Now at 11:30", bells.bellRowStates(at(11, 30)).find((r) => r.now).label, "Lunch");
+  ok("prep is the Now at 1:00", bells.bellRowStates(at(13, 0)).find((r) => r.now).label, "Prep");
+  ok("nothing is Now before school", bells.bellRowStates(at(6, 0)).some((r) => r.now), false);
+  ok("nothing is Now after school", bells.bellRowStates(at(15, 0)).some((r) => r.now), false);
+  ok("and everything reads finished after school",
+    bells.bellRowStates(at(15, 0)).every((r) => r.past), true);
+  ok("no clock means no Now row at all", bells.bellRowStates(null).some((r) => r.now), false);
 }
 
 console.log(`\nPASS - ${checks} weekly-display board checks passed.`);

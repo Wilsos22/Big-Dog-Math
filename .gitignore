@@ -24,3 +24,11 @@ Codex Downloads/
 Claude Design Wireframe/*.zip
 Claude Design Wireframe/*-handoff*
 output/
+
+# Roster and student-data files must never be committable. The only CSV that
+# belongs in this repo is scripts/fixtures/*.csv, which is fully fictional
+# (mock.bigdogmath.example). See rule 8.
+*.csv
+!scripts/fixtures/*.csv
+*roster*.csv
+*.roster.json
