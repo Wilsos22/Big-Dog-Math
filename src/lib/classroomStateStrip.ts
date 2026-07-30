@@ -8,10 +8,18 @@
  * the values are authored per step and ship with the lesson instead of being
  * one more thing to manage from the iPad mid-class.
  *
- * Three redundant cues carry each slot: fixed position, colour, and glyph. A
- * student who cannot recall the glyph still reads the state from where it sits.
- * The voice DIGIT is part of the label and never comes off, even after the
- * words under the other glyphs do.
+ * Three redundant cues carry each slot (State Strip Icons v3, 2026-07-29):
+ *   - POSITION tells you which slot - the four rows never reorder.
+ *   - GLYPH tells you the value - one glyph PER VALUE now, not one per slot, so
+ *     "The speaker" and "The screen" are two different silhouettes a student
+ *     reads at 25 feet rather than the same eye plus different words.
+ *   - COLOUR tells you how much is happening in the room - a single hue at four
+ *     lightness steps (the ramp), monotonic so it survives greyscale and colour
+ *     vision deficiency both. Colour no longer distinguishes slots; that job
+ *     moved to the glyph.
+ * The word stays UNDER/beside each glyph permanently (Steele, 2026-07-29: "it
+ * can say what it means under it no problem"), so nothing depends on a student
+ * memorising a symbol.
  *
  * ALL FOUR OR NOTHING. A step missing any value renders no strip at all rather
  * than a partial one: a strip that is sometimes empty is a strip students stop
@@ -27,8 +35,14 @@
 export const STATE_STRIP_SLOTS = ["eyes", "voice", "supplies", "body"] as const;
 export type StateStripSlot = (typeof STATE_STRIP_SLOTS)[number];
 
-export const EYES_VALUES = ["Teacher", "Own paper", "Your build", "The speaker", "The screen"] as const;
-export const VOICE_VALUES = ["0 silent", "1 partner", "2 table", "3 presenting"] as const;
+// THREE PER SLOT (Steele, 2026-07-29: "no 3 for all"). v3 draws one glyph per
+// value and made exactly three per slot, so the vocabulary matches it: Eyes drops
+// "Teacher" and "Your build" (both fold into "Own paper" - eyes on your own
+// surface), and Voice drops "3 presenting" (a table-group voice aimed at the
+// room, which the ramp shows as "2 table" one shade darker rather than a fourth
+// glyph). No lesson had these authored yet, so the reduction breaks no data.
+export const EYES_VALUES = ["Own paper", "The speaker", "The screen"] as const;
+export const VOICE_VALUES = ["0 silent", "1 partner", "2 table"] as const;
 export const SUPPLIES_VALUES = ["In the tray", "In your hands", "Parked flat"] as const;
 export const BODY_VALUES = ["Seated", "Standing to talk", "Moving"] as const;
 
@@ -66,17 +80,47 @@ export const STATE_STRIP_SLOT_LABELS: Record<StateStripSlot, string> = {
   body: "Body",
 };
 
+export const STATE_STRIP_RAMP_STEPS = [0, 1, 2, 3] as const;
+export type RampStep = (typeof STATE_STRIP_RAMP_STEPS)[number];
+
 /**
- * Per-slot colour, the second of the three redundant cues. These are the
- * `--bdb-*` palette values rather than new hexes, and each is a token that
- * passes AA against the cream ground as text.
+ * Room-activity intensity per value - the ramp step each glyph's tile is filled
+ * at. One hue, four lightness steps, monotonic so a student reads "louder /
+ * busier" straight up the strip and greyscale keeps the ordering. All four steps
+ * stay in the darker half so they hold against the cream pace screen.
+ *
+ * Voice and supplies top out at step 2: at a full-room moment the supplies slot
+ * holds at "Parked flat" and voice at "2 table" one shade down, so the strip is
+ * never short a glyph. Only eyes and body reach step 3.
  */
-export const STATE_STRIP_SLOT_COLORS: Record<StateStripSlot, string> = {
-  eyes: "var(--bdb-teal-deep)",
-  voice: "var(--bdb-coral-deep)",
-  supplies: "var(--bdb-brown)",
-  body: "var(--bdb-green-deep)",
+const STATE_STRIP_INTENSITY: Record<StateStripSlot, Record<string, RampStep>> = {
+  eyes: { "Own paper": 0, "The speaker": 2, "The screen": 3 },
+  voice: { "0 silent": 0, "1 partner": 1, "2 table": 2 },
+  supplies: { "In the tray": 0, "In your hands": 1, "Parked flat": 2 },
+  body: { "Seated": 0, "Standing to talk": 2, "Moving": 3 },
 };
+
+export function stripIntensity(slot: StateStripSlot, value: string): RampStep {
+  return STATE_STRIP_INTENSITY[slot][value] ?? 0;
+}
+
+/**
+ * Which of the twelve v3 glyphs a value draws. The glyph is the cue that tells
+ * two values in the same slot apart at room distance, which is why there is one
+ * per value. The SVG path data lives in `ClassroomStateStrip.tsx`; this is only
+ * the id, so the lib stays free of pixels and the contract can assert every
+ * value has one.
+ */
+const STATE_STRIP_GLYPH: Record<StateStripSlot, Record<string, string>> = {
+  eyes: { "Own paper": "eyes-own-work", "The speaker": "eyes-speaker", "The screen": "eyes-board" },
+  voice: { "0 silent": "voice-0", "1 partner": "voice-1", "2 table": "voice-2" },
+  supplies: { "In the tray": "supplies-away", "In your hands": "supplies-using", "Parked flat": "supplies-flat" },
+  body: { "Seated": "body-seated", "Standing to talk": "body-standing", "Moving": "body-moving" },
+};
+
+export function stripGlyphId(slot: StateStripSlot, value: string): string {
+  return STATE_STRIP_GLYPH[slot][value] ?? "";
+}
 
 /**
  * Match a Notion select value to the vocabulary, tolerantly.

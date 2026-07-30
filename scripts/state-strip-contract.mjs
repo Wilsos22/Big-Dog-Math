@@ -33,6 +33,9 @@ import {
   overrideIsLive,
   voiceDigit,
   voiceWords,
+  stripGlyphId,
+  stripIntensity,
+  STATE_STRIP_RAMP_STEPS,
 } from "../.tmp-mastery/classroomStateStrip.js";
 
 console.log("classroom state strip contract");
@@ -45,13 +48,19 @@ console.log("  ok  the four slots are in the fixed order eyes, voice, supplies, 
 
 // 2. The authored vocabulary. These strings are the Notion select options; a
 //    change here without a change there means a step can never resolve.
-assert.deepEqual([...EYES_VALUES], ["Teacher", "Own paper", "Your build", "The speaker", "The screen"]);
-assert.deepEqual([...VOICE_VALUES], ["0 silent", "1 partner", "2 table", "3 presenting"]);
+// THREE PER SLOT (Steele, "no 3 for all", 2026-07-29). v3 draws one glyph per
+// value and made exactly three, so the vocabulary is three each. Eyes dropped
+// "Teacher" and "Your build"; Voice dropped "3 presenting".
+assert.deepEqual([...EYES_VALUES], ["Own paper", "The speaker", "The screen"]);
+assert.deepEqual([...VOICE_VALUES], ["0 silent", "1 partner", "2 table"]);
 assert.deepEqual([...SUPPLIES_VALUES], ["In the tray", "In your hands", "Parked flat"]);
 assert.deepEqual([...BODY_VALUES], ["Seated", "Standing to talk", "Moving"]);
-console.log("  ok  the vocabulary matches the Notion select options");
+for (const values of [EYES_VALUES, VOICE_VALUES, SUPPLIES_VALUES, BODY_VALUES]) {
+  assert.equal(values.length, 3, "every slot is exactly three values - v3 draws one glyph per value");
+}
+console.log("  ok  the vocabulary is three per slot and matches the Notion select options");
 
-const full = { eyes: "Teacher", voice: "0 silent", supplies: "In the tray", body: "Seated" };
+const full = { eyes: "Own paper", voice: "0 silent", supplies: "In the tray", body: "Seated" };
 
 // 3. A complete step resolves.
 assert.deepEqual(stripFromStep(full), full);
@@ -78,8 +87,8 @@ console.log("  ok  an unrecognised value fails loudly instead of snapping to a n
 
 // 6. Tolerant where it is safe to be: case, whitespace, and the bare voice digit
 //    a teacher actually types.
-assert.deepEqual(stripFromStep({ eyes: "  teacher ", voice: "2", supplies: "PARKED FLAT", body: "moving" }), {
-  eyes: "Teacher", voice: "2 table", supplies: "Parked flat", body: "Moving",
+assert.deepEqual(stripFromStep({ eyes: "  own paper ", voice: "2", supplies: "PARKED FLAT", body: "moving" }), {
+  eyes: "Own paper", voice: "2 table", supplies: "Parked flat", body: "Moving",
 });
 console.log("  ok  case, padding, and a bare voice digit all resolve");
 
@@ -87,7 +96,7 @@ console.log("  ok  case, padding, and a bare voice digit all resolve");
 //    that never leaves.
 assert.equal(voiceDigit("0 silent"), "0");
 assert.equal(voiceWords("1 partner"), "partner");
-assert.equal(voiceDigit("3 presenting"), "3");
+assert.equal(voiceDigit("2 table"), "2");
 console.log("  ok  the voice digit and its words split cleanly");
 
 // 8. An override applies only to the step it was stamped at, and only to the
@@ -114,5 +123,24 @@ assert.equal(applyStripOverride(null, override, 4), null,
   "no authored strip means no strip, override or not");
 assert.deepEqual(applyStripOverride(authored, null, 4), authored);
 console.log("  ok  an override cannot invent a strip on a step that authored none");
+
+// 11. EVERY value has a glyph and an in-range intensity. v3 is one glyph per
+//     value, so a value with no glyph would render an empty tile on a projector,
+//     and an out-of-range step would index past the ramp. The pair of maps must
+//     stay total over the vocabulary.
+const SLOT_VALUES = { eyes: EYES_VALUES, voice: VOICE_VALUES, supplies: SUPPLIES_VALUES, body: BODY_VALUES };
+const glyphIds = new Set();
+for (const slot of STATE_STRIP_SLOTS) {
+  for (const value of SLOT_VALUES[slot]) {
+    const glyph = stripGlyphId(slot, value);
+    assert.ok(glyph, `${slot} "${value}" has no glyph id - it would render an empty tile`);
+    assert.equal(glyphIds.has(glyph), false, `glyph id "${glyph}" is used twice`);
+    glyphIds.add(glyph);
+    const step = stripIntensity(slot, value);
+    assert.ok(STATE_STRIP_RAMP_STEPS.includes(step), `${slot} "${value}" intensity ${step} is off the ramp`);
+  }
+}
+assert.equal(glyphIds.size, 12, "twelve distinct glyphs, one per value");
+console.log("  ok  every value maps to a distinct glyph and an on-ramp intensity");
 
 console.log("\nPASS - all four or nothing, no silent coercion, and no override outlives its step.");

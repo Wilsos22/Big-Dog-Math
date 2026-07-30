@@ -160,7 +160,7 @@ check("the minute total is exact and rounds up, for the step Duration check", ()
 });
 
 check("a beat drives the behaviour cue, and leaves the rest of the strip alone", () => {
-  const authored = { eyes: "Teacher", voice: "3 presenting", supplies: "Parked flat", body: "Standing to talk" };
+  const authored = { eyes: "The screen", voice: "2 table", supplies: "Parked flat", body: "Standing to talk" };
   const thinking = stripForPhase(authored, { mode: "think", seconds: 60, direction: "x" });
   assert.equal(thinking.voice, "0 silent", "thinking is silent");
   assert.equal(thinking.eyes, "Own paper");
@@ -168,7 +168,7 @@ check("a beat drives the behaviour cue, and leaves the rest of the strip alone",
   assert.equal(thinking.body, "Standing to talk");
   const talking = stripForPhase(authored, { mode: "talk", seconds: 60, direction: "x" });
   assert.equal(talking.voice, "2 table");
-  assert.equal(stripForPhase(authored, null).voice, "3 presenting", "no beat leaves the strip authored");
+  assert.equal(stripForPhase(authored, null).voice, "2 table", "no beat leaves the strip authored");
   assert.equal(stripForPhase(null, { mode: "talk", seconds: 60, direction: "x" }), null,
     "no authored strip means no strip, beat or not");
 });
