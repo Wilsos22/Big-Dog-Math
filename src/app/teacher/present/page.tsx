@@ -1101,10 +1101,18 @@ export default function ClassroomStagePage() {
               <div className="stage-board-wrap">
                 {slideOverlayData ? <SlideOverlayLayer overlay={slideOverlayData} /> : null}
                 {/* Main Display first: the mathematics stays visible BEHIND the
-                    ink instead of being discarded the moment the board opens. */}
+                    ink instead of being discarded the moment the board opens.
+                    A DISPLAY, NOT A WRITER. Nobody touches the projector - the
+                    pen is the iPad - and `interactive` made this mount the
+                    second author on the shared room: it broadcast `bg: null`
+                    (wiping the template the iPad had set), pushed the slide
+                    text over as the room's `problem`, and answered a display's
+                    `hello` with its own copy of the board. As a display it asks
+                    for state on mount instead, so opening the board scene
+                    mid-lesson fills in everything already written. */}
                 <InkBoard
                   room={inkOverlay?.room ?? "main"}
-                  interactive
+                  interactive={false}
                   problem={stripSlideTitlePrefix(presentation.mainDisplay || presentation.body, slideTitle, state?.label)}
                 />
                 {lessonVisual?.kind === "area-model" ? (

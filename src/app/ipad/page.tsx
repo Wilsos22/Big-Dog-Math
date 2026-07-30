@@ -201,14 +201,18 @@ export default function IpadPage() {
   }, [activePage, pages.length]);
 
   // The projector overlay announces its aspect ratio; letterbox to match so
-  // strokes land on the wall exactly where the pen put them.
+  // strokes land on the wall exactly where the pen put them. Held for the whole
+  // room, not only while Write on screen is showing: the projector announces on
+  // ITS mount, so a listener that only exists while the surface is up misses the
+  // announcement and letterboxes to a guessed 16:9 until the display happens to
+  // reconnect. (Joining for the room's lifetime is also one less subscribe /
+  // unsubscribe cycle on the topic the glass sheet itself is using.)
   useEffect(() => {
-    if (surface !== "screen") return;
     const view = joinInkRoom(`${room}__over`, (m) => {
       if (m.t === "view" && Number.isFinite(m.ar) && m.ar > 0.5 && m.ar < 4) setScreenAr(m.ar);
     });
     return () => view.close();
-  }, [room, surface]);
+  }, [room]);
 
   // The attention call: one tap booms the room sound + Eyes-up pulse on the
   // board and main projector, and flashes the same pulse (visual only, no
