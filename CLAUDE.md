@@ -480,7 +480,13 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   anon auth) as transient and retries silently, so ALL of them present identically as "the student
   screen just stays put" - check the class-mode selector on /session and the joins list before
   suspecting the follower itself.
-
+  LATENT HAZARD, NOT YET SEEN IN CLASS (noticed 2026-07-30): `ClassSync`'s `TEACHER_ROUTE_PREFIXES`
+  is `["/teacher", "/control", "/session", "/roster"]` - **`/ipad` and `/board` are NOT in it**, even
+  though the proxy gates them as teacher surfaces. Two guards normally keep it inert there (a stored
+  teacher session on the device, or no stored student session at all), but an iPad that ever typed a
+  class code and never held a teacher session would be navigated OFF the pen surface mid-lesson by
+  `router.push(target)`, mid-stroke, with the room's board still up. Do not fix this silently: adding
+  the two prefixes is a one-line change but it is classroom-orchestration core, so get Steele's word.
 ## Data layer (Supabase)
 
 - Browser client: `getSupabase()` in `src/lib/supabase.ts` (`NEXT_PUBLIC_SUPABASE_URL` +
@@ -727,6 +733,35 @@ the invariants they protect are easy to break again.
   `session.id` for its two `InkBoard` mounts while `/ipad` and `/board` broadcast on `ink-main`, so
   the projector board was permanently blank. `ScreenInkOverlay` is now mounted on `/teacher/pace`
   too - it was on `/present` only, so the support projector could never be annotated.
+- **INK ROOMS ARE SHARED AND REFERENCE COUNTED - `joinInkRoom` OWNS THAT NOW** (rewritten
+  2026-07-30, and it is what "the iPad writing tool doesn't work at all" turned out to be).
+  supabase-js dedupes realtime channels BY TOPIC: `supabase.channel("ink-main")` returns the
+  EXISTING channel object, `subscribe()` on an already-joined channel is a NO-OP (so that holder
+  never hears SUBSCRIBED and queues every stroke forever), and `removeChannel()` tears the channel
+  down for EVERY holder - asynchronously, so a mount arriving in the same commit adopts the channel
+  that is on its way out. The old `joinInkRoom` created and removed a channel per CALL, so two joins
+  of one room in one page silently destroyed each other. Two places do exactly that, and both were
+  broken in class: `/ipad` joins `<room>__over` twice (the glass-sheet `InkBoard` plus the page's
+  aspect-ratio listener), so ONE Board <-> Write-on-screen round trip silenced the glass sheet for
+  the rest of the lesson; and `/teacher/present` alternates two `InkBoard`s on `<room>` (the board
+  scene and the work-space panel - mutually exclusive, but the handoff is one commit), so the
+  projector's work space went permanently blank after the first scene change. Reproduced and fixed
+  live, before/after, on 2026-07-30. `joinInkRoom` now keeps one channel per topic with a subscriber
+  set, fans messages out to every holder, shares one send queue, and removes the channel only when
+  the LAST holder closes - after a 4s grace window that absorbs React remounts and surface switches
+  - with a join that lands mid-teardown waiting for it and opening a fresh channel. `npm run
+  test:ink-sync` drives the real compiled `joinInkRoom` against a fake client that reproduces the
+  dedupe, and it FAILS on the old implementation. Duplicate joins are now safe, so do not "fix" one
+  by hunting call sites; the rule to keep is that nothing outside `src/lib/inkSync.ts` may call
+  `supabase.channel("ink-...")` directly, and the contract asserts that too.
+- **THE PROJECTOR IS A DISPLAY ON THE INK ROOM, NEVER A WRITER** (2026-07-30). `/teacher/present`'s
+  board-scene `InkBoard` was mounted `interactive`, which made the projector the SECOND author on
+  the shared room: `InkBoard`'s interactive-only effects broadcast `{t:"bg", url:null}` (wiping the
+  grid template the iPad had set on every display), pushed the slide's `Main Display` over the wire
+  as the room's `problem`, and answered a display's `hello` with the projector's own copy of the
+  board, racing the iPad's. It is `interactive={false}` now, which also means it ASKS for state on
+  mount - so opening the board scene mid-lesson fills in everything already written instead of
+  starting blank. The pen is the iPad; nobody touches the projector.
 - **CONTROL'S SNAPSHOT IS A FULL REPLACE.** Any field Control does not carry through is DELETED.
   `interlude` and `transition` are owned by `/api/control-remote`, and omitting them erased a Hustle
   or Settle about one second after it started, then auto-advanced past it. Same class of bug wiped
@@ -782,6 +817,25 @@ the invariants they protect are easy to break again.
   which risks orphaning the values on every existing step, so it is a UI change and Steele's call.
   Nothing in code can catch this class of drift: the vocabulary contracts deliberately do not claim
   the Notion half, because it needs a token.
+- **A RESPONSE KIND WITH NO QUESTION IS A STALLED ROOM - `liveStepPollQuestion` IS THE ONE ANSWER**
+  (found 2026-07-30, from Steele: "the lesson screens go off track once we get to the fist to 5").
+  `resolveLiveStepPollKind` calls a `learning-check` or `poll` step a **fist to five even with an
+  empty `Question`** - that fallback is deliberate. `/live-flow` believes it: `expectedPollKind`
+  without an `activePoll` sets `waitingForPoll`, and the Chromebook reads "Get ready to respond -
+  your response box is opening." But THREE independent places demanded an authored Question before
+  opening anything: `navigateFlow`'s `if (step.question && pollKind)`, `/control`'s auto-open guard
+  `if (!activeItem?.question ...)`, and `openControlPoll`. So a Learning Check with a blank Question
+  opened NO poll on either engine, the projector fell to `mode: "directions"`, and every student
+  screen sat on "your response box is opening" for the rest of the period. Only Control's manual
+  "Open to students" knew the default question, as a hardcoded copy of the string. A fist to five
+  never needs an authored question - the 0-to-5 scale IS the question - so
+  `liveStepPollQuestion(question, kind)` in `src/lib/liveFlowContract.ts` now supplies
+  `FIST_TO_FIVE_DEFAULT_QUESTION` for that kind and an empty string for every other (a short answer
+  with nothing to answer is a blank box, not a check). All three sites read it, `npm run
+  test:live-flow-contract` pins the behaviour AND asserts neither engine hardcodes the string again.
+  Explicit opt-out is unchanged: `Response Mode: None` or `Paper` still resolves to no kind at all.
+  NOT VERIFIED IN A LIVE SESSION - the teacher write path needs `SUPABASE_SERVICE_ROLE_KEY`, so this
+  was fixed from the code path, not from a running lesson. Watch it on the next real fist to five.
 - **A STRUCTURED-NUMERIC STEP CAN NEVER BE JUDGED BY STRING EQUALITY** (added 2026-07-28).
   Learning checks and the exit ticket moved from multiple choice to N numeric boxes
   (`Response Mode: Structured Numeric`), because multiple choice cannot separate a student who
@@ -1026,7 +1080,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 25 golden/contract suites, run with typecheck by
+  2026-07-27 `npm test` - the aggregate of all 26 golden/contract suites, run with typecheck by
   GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.
