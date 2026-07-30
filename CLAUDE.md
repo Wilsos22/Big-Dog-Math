@@ -865,6 +865,29 @@ the invariants they protect are easy to break again.
   board, racing the iPad's. It is `interactive={false}` now, which also means it ASKS for state on
   mount - so opening the board scene mid-lesson fills in everything already written instead of
   starting blank. The pen is the iPad; nobody touches the projector.
+- **/ipad HAS EXACTLY TWO MODES AND THE WORK SPACE IS ON THE LEFT** (Steele, 2026-07-30 - "the board
+  button should just allow me to annotate with the pencil whats already on the screen no whiteboard.
+  the whiteboard feature should show the half whiteboard half screen both should be visible on the
+  main projector screen"). **Board** = the glass sheet, transparent ink on `<room>__over` over the
+  whole live screen. **Whiteboard** = the LEFT 42% on `<room>`, lesson content in the right 58%. The
+  old names are GONE: "Board" used to mean a full-page blank whiteboard and "Write on screen" was the
+  glass sheet, so every pre-2026-07-30 note here (including the `joinInkRoom` story above) uses the
+  INVERTED vocabulary - read those as history, not as the current UI. Internally the surface union is
+  `"annotate" | "whiteboard"` precisely so the flip cannot be misread again.
+  THE 42% IS A MIRROR, NOT A STYLE CHOICE. `.ip-wb-panel` on /ipad and `.stage-board-panel` on
+  /teacher/present must hold the same side and the same width, because the iPad writes inside a stage
+  letterboxed to the projector's aspect ratio and the whole point is that the hand matches the wall.
+  Moving one means moving the other AND the board-open rules that dodge it - the scenes, `.stage-tool`
+  and `.stage-resource`, `.classroom-spinner`, `.stage-success`, and the state strip (see the strip
+  section). The iframe keeps rendering under the whiteboard on purpose: with `boardOpen` set it draws
+  its own panel from the SAME room, so the interactive board lands on its own strokes and nothing
+  doubles.
+  Switching modes on /ipad POSTs `show-board`/`hide-board` to `/api/control-remote` itself, so the
+  room follows the pen. The Remote IS the iPad - they are two routes on one device - so requiring a
+  trip to /teacher/remote to press "Open work space" was a round trip through nothing. It never
+  force-closes the room's panel on mount, only on a real switch.
+  NOT VERIFIED ON A PROJECTOR as of this writing - it typechecks, tests and builds, and the browser
+  pane timed out on every render attempt. The state strip is the most likely thing to be wrong.
 - **SCREENS ARE PUSHED, NOT JUST POLLED** (added 2026-07-30, Steele: "is there a way to have the
   screens polled more frequently to reduce the lag in screen changes?"). Measured first: the
   projectors were about 1-1.8s behind the teacher's tap (1500ms poll) and the Chromebooks 2-3s
@@ -930,9 +953,12 @@ the invariants they protect are easy to break again.
   fails to resolve and renders no strip. `stripGlyphId`/`stripIntensity` in the lib map each value to
   its glyph id and ramp step; the twelve SVG paths live in `ClassroomStateStrip.tsx` as true knockouts
   (the glyph is a hole, so the ground reads through it). It
-  mounts as the LAST child of the work stage so it paints over the `inset:0` scenes, and it hops to
-  the left when `board-open` is set, because the work space owns the right 42% and that is the INK
-  SURFACE - never let the group cover what the teacher is writing on. `src/lib/classroomStateStrip.ts` owns the vocabulary and `npm run test:state-strip` guards it.
+  mounts as the LAST child of the work stage so it paints over the `inset:0` scenes, and it stays in
+  its top-right home under `board-open`. It used to HOP LEFT there, because the work space owned the
+  right 42%; the work space moved to the LEFT 42% on 2026-07-30 (Steele is left-handed), so the hop
+  was deleted rather than mirrored. The invariant is the thing to keep, not the direction: never let
+  the group cover what the teacher is writing on. If the panel ever moves back to the right, the hop
+  comes back with it. `src/lib/classroomStateStrip.ts` owns the vocabulary and `npm run test:state-strip` guards it.
   A step missing ANY slot renders NO strip - a strip that is sometimes empty stops being scanned, and
   a stale slot is how a student ends up holding rods during the exit ticket - and `/control` names the
   part-filled steps in its load message. An unrecognised value fails rather than snapping to a near
