@@ -35,7 +35,7 @@ const WIDTHS: { label: string; px: number }[] = [
   { label: "L", px: 12 },
 ];
 
-type Surface = "board" | "screen";
+type Surface = "annotate" | "whiteboard";
 
 // Per-page controls: each board page carries its own signals and furniture,
 // so Undo, Clear, Background, and Problem always act on the page in view.
@@ -53,7 +53,7 @@ const MAX_PAGES = 8;
 
 export default function IpadPage() {
   const [room, setRoom] = useState("main");
-  const [surface, setSurface] = useState<Surface>("board");
+  const [surface, setSurface] = useState<Surface>("annotate");
   const [color, setColor] = useState(COLORS[0]);
   const [tool, setTool] = useState<InkTool>("pen");
   const [penWidth, setPenWidth] = useState(6);
@@ -87,10 +87,45 @@ export default function IpadPage() {
   useEffect(() => { pageCountRef.current = pages.length; }, [pages.length]);
   const scratchOpenRef = useRef(false);
   useEffect(() => { scratchOpenRef.current = scratchOpen; }, [scratchOpen]);
-  const surfaceRef = useRef<Surface>("board");
+  const surfaceRef = useRef<Surface>("annotate");
   useEffect(() => { surfaceRef.current = surface; }, [surface]);
   const historiesRef = useRef<Record<number, { undo: boolean; redo: boolean }>>({});
   const screenHistoryRef = useRef({ undo: false, redo: false });
+
+  // The Remote and the pen surface are the same iPad, so switching here opens
+  // and closes the ROOM's work space too. Otherwise the teacher would leave the
+  // pen surface, load /teacher/remote on the same device, press Open work space,
+  // and come back - and until they did, the wall and the hand would disagree
+  // about which half is the whiteboard. Board closes it on purpose: the glass
+  // sheet annotates the whole screen, and a 42% panel would cover the very
+  // thing being annotated.
+  const liveSessionRef = useRef<string | null>(null);
+  const lastBoardModeRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    let stopped = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/control-remote", { cache: "no-store" });
+        const data = await response.json() as { session?: { id?: string } | null };
+        if (!stopped) liveSessionRef.current = data.session?.id || null;
+      } catch { /* No session is normal - the pen works without one. */ }
+    })();
+    return () => { stopped = true; };
+  }, []);
+  useEffect(() => {
+    const sessionId = liveSessionRef.current;
+    // No session yet means nothing to tell; never force the room's panel shut
+    // on mount just because this surface booted in Board.
+    if (!sessionId) return;
+    const open = surface === "whiteboard";
+    if (lastBoardModeRef.current === open) return;
+    lastBoardModeRef.current = open;
+    void fetch("/api/control-remote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: open ? "show-board" : "hide-board", sessionId }),
+    }).catch(() => { /* The room keeps its current panel; the pen still writes. */ });
+  }, [surface]);
 
   const page = pages[activePage] ?? pages[0];
 
@@ -111,7 +146,7 @@ export default function IpadPage() {
   }
   function switchSurface(next: Surface) {
     setSurface(next);
-    setHistory(next === "board"
+    setHistory(next === "whiteboard"
       ? historiesRef.current[activePage] ?? { undo: false, redo: false }
       : screenHistoryRef.current);
   }
@@ -251,7 +286,7 @@ export default function IpadPage() {
     } catch { /* ignore */ }
   }
 
-  const onBoard = surface === "board";
+  const onWhiteboard = surface === "whiteboard";
 
   return (
     <main className="ip-page">
@@ -283,6 +318,10 @@ export default function IpadPage() {
         .ip-screen-box { position:relative; width:100%; max-height:100%; }
         .ip-screen-frame { position:absolute; inset:0; width:100%; height:100%; border:0; pointer-events:none; background:#fff; }
         .ip-screen-note { position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:6; background:rgba(32,30,26,0.78); color:#fff; font-size:0.72rem; font-weight:800; padding:5px 12px; border-radius:999px; pointer-events:none; }
+        /* Mirrors .stage-board-panel on /teacher/present exactly - left 42%,
+           white, accent edge on the content side. If that panel ever moves,
+           this moves with it or the pen stops matching the wall. */
+        .ip-wb-panel { position:absolute; z-index:5; inset:0 auto 0 0; width:42%; overflow:hidden; border-right:5px solid var(--bdb-amber); background:#fff; box-shadow:18px 0 40px rgba(0,0,0,0.22); }
         .ip-scratch { position:absolute; inset:0; z-index:5; display:flex; flex-direction:column; background:#fff; }
         .ip-scratch-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; padding-left:210px; background:var(--bdb-card); border-bottom:1px solid var(--bdb-line); }
         .ip-scratch-title { font-weight:800; color:var(--bdb-ink); }
@@ -304,10 +343,10 @@ export default function IpadPage() {
         <div className="ip-palette" role="toolbar" aria-label="Writing tools">
           <div className="ip-row">
             <div className="ip-seg" role="group" aria-label="Writing surface">
-              <button className={onBoard ? "on" : ""} onClick={() => switchSurface("board")}>Board</button>
-              <button className={!onBoard ? "on" : ""} onClick={() => switchSurface("screen")}>Write on screen</button>
+              <button className={!onWhiteboard ? "on" : ""} onClick={() => switchSurface("annotate")}>Board</button>
+              <button className={onWhiteboard ? "on" : ""} onClick={() => switchSurface("whiteboard")}>Whiteboard</button>
             </div>
-            {onBoard && (
+            {onWhiteboard && (
               <div className="ip-group" role="group" aria-label="Pages">
                 {pages.map((_, i) => (
                   <button key={i} className={`ip-btn${i === activePage ? " on" : ""}`} onClick={() => flipTo(i)}>{i + 1}</button>
@@ -349,10 +388,10 @@ export default function IpadPage() {
           </div>
 
           <div className="ip-row">
-            <button className="ip-btn" disabled={!history.undo} style={!history.undo ? { opacity: 0.4 } : undefined} onClick={() => { if (onBoard) bumpPage("undo"); else setUndoSignal((n) => n + 1); }}>Undo</button>
-            <button className="ip-btn" disabled={!history.redo} style={!history.redo ? { opacity: 0.4 } : undefined} onClick={() => { if (onBoard) bumpPage("redo"); else setRedoSignal((n) => n + 1); }}>Redo</button>
+            <button className="ip-btn" disabled={!history.undo} style={!history.undo ? { opacity: 0.4 } : undefined} onClick={() => { if (onWhiteboard) bumpPage("undo"); else setUndoSignal((n) => n + 1); }}>Undo</button>
+            <button className="ip-btn" disabled={!history.redo} style={!history.redo ? { opacity: 0.4 } : undefined} onClick={() => { if (onWhiteboard) bumpPage("redo"); else setRedoSignal((n) => n + 1); }}>Redo</button>
             <span className="ip-divider" />
-            {onBoard ? (
+            {onWhiteboard ? (
               <>
                 <button className="ip-btn warn" onClick={() => bumpPage("clear")}>Clear</button>
                 <button className={`ip-btn${scratchOpen ? " on" : ""}`} onClick={toggleScratch}>Scratch</button>
@@ -366,7 +405,7 @@ export default function IpadPage() {
 
           {moreOpen && (
             <div className="ip-row">
-              {onBoard && (
+              {onWhiteboard && (
                 <>
                   <button className={`ip-btn${showProblem ? " on" : ""}`} onClick={() => setShowProblem((v) => !v)}>Problem</button>
                   <button className={`ip-btn${showTemplates ? " on" : ""}`} onClick={() => setShowTemplates((v) => !v)}>Templates</button>
@@ -380,7 +419,7 @@ export default function IpadPage() {
             </div>
           )}
 
-          {onBoard && showProblem && (
+          {onWhiteboard && showProblem && (
             <div className="ip-row">
               <textarea
                 className="ip-problem-in"
@@ -393,7 +432,7 @@ export default function IpadPage() {
             </div>
           )}
 
-          {onBoard && showTemplates && (
+          {onWhiteboard && showTemplates && (
             <div className="ip-row">
               {BOARD_TEMPLATES.map((t) => (
                 <button key={t.id} className="ip-btn" onClick={() => { patchPage(activePage, { bg: t.build() }); setShowTemplates(false); }}>{t.label}</button>
@@ -405,37 +444,7 @@ export default function IpadPage() {
       <input ref={fileRef} type="file" accept="image/*" onChange={onPickFile} style={{ display: "none" }} />
 
       <div className="ip-stage">
-        {/* Every page stays mounted (hidden pages park at 1x1 canvases) so
-            strokes, history, and sync survive page flips AND surface
-            switches - toggling to Write on screen no longer discards the
-            iPad's copy of the board. */}
-        {pages.map((p, i) => (
-          <InkBoard
-            key={i}
-            room={i === 0 ? room : `${room}__p${i}`}
-            interactive
-            hidden={!onBoard || i !== activePage}
-            allowZoom
-            paper="dots"
-            color={color}
-            tool={tool}
-            penWidth={penWidth}
-            fingerDraws={fingerDraws}
-            background={p.bg}
-            problem={p.problem}
-            clearSignal={p.clear}
-            undoSignal={p.undo}
-            redoSignal={p.redo}
-            exportSignal={p.exportSig}
-            onExport={handleExport}
-            onHistoryChange={(undo, redo) => {
-              historiesRef.current[i] = { undo, redo };
-              if (surfaceRef.current === "board" && i === activePageRef.current) setHistory({ undo, redo });
-            }}
-            onConnectionChange={i === 0 ? setBoardStatus : undefined}
-          />
-        ))}
-        {onBoard && scratchOpen && (
+        {onWhiteboard && scratchOpen && (
           <div className="ip-scratch">
             <div className="ip-scratch-bar">
               <span className="ip-scratch-title">Scratch</span>
@@ -458,20 +467,28 @@ export default function IpadPage() {
             </div>
           </div>
         )}
-        <div className="ip-screen-stage" style={onBoard ? { display: "none" } : undefined}>
+        {/* ONE stage for both modes, always letterboxed to the projector's own
+            aspect ratio, so what the hand sees is what the wall shows.
+              Board      - the glass sheet: transparent ink over the whole live
+                           screen, so the pen annotates what is already there.
+              Whiteboard - the LEFT 42%, the exact geometry /teacher/present
+                           gives .stage-board-panel, with the lesson content
+                           filling the remaining 58% behind the iframe.
+            The iframe keeps rendering in whiteboard mode: with boardOpen set it
+            already draws its own panel from the same room, so the interactive
+            board simply lands on top of its own strokes. Nothing doubles. */}
+        <div className="ip-screen-stage">
           <div className="ip-screen-box" style={{ aspectRatio: String(screenAr) }}>
-            {!onBoard && (
-              <iframe
-                className="ip-screen-frame"
-                src={`/teacher/present?embed=1${room !== "main" ? `&room=${encodeURIComponent(room)}` : ""}`}
-                title="Live class screen"
-              />
-            )}
+            <iframe
+              className="ip-screen-frame"
+              src={`/teacher/present?embed=1${room !== "main" ? `&room=${encodeURIComponent(room)}` : ""}`}
+              title="Live class screen"
+            />
             <InkBoard
               room={`${room}__over`}
               interactive
               transparent
-              hidden={onBoard}
+              hidden={onWhiteboard}
               color={color}
               tool={tool}
               penWidth={penWidth}
@@ -481,10 +498,40 @@ export default function IpadPage() {
               redoSignal={redoSignal}
               onHistoryChange={(undo, redo) => {
                 screenHistoryRef.current = { undo, redo };
-                if (surfaceRef.current === "screen") setHistory({ undo, redo });
+                if (surfaceRef.current === "annotate") setHistory({ undo, redo });
               }}
             />
-            <span className="ip-screen-note">Writing over the class screen</span>
+            <div className="ip-wb-panel" style={onWhiteboard ? undefined : { display: "none" }}>
+              {pages.map((p, i) => (
+                <InkBoard
+                  key={i}
+                  room={i === 0 ? room : `${room}__p${i}`}
+                  interactive
+                  hidden={!onWhiteboard || i !== activePage}
+                  allowZoom
+                  paper="dots"
+                  color={color}
+                  tool={tool}
+                  penWidth={penWidth}
+                  fingerDraws={fingerDraws}
+                  background={p.bg}
+                  problem={p.problem}
+                  clearSignal={p.clear}
+                  undoSignal={p.undo}
+                  redoSignal={p.redo}
+                  exportSignal={p.exportSig}
+                  onExport={handleExport}
+                  onHistoryChange={(undo, redo) => {
+                    historiesRef.current[i] = { undo, redo };
+                    if (surfaceRef.current === "whiteboard" && i === activePageRef.current) setHistory({ undo, redo });
+                  }}
+                  onConnectionChange={i === 0 ? setBoardStatus : undefined}
+                />
+              ))}
+            </div>
+            <span className="ip-screen-note">
+              {onWhiteboard ? "Whiteboard - the room sees this half" : "Writing over the class screen"}
+            </span>
           </div>
         </div>
       </div>

@@ -869,6 +869,10 @@ export default function ClassroomStagePage() {
         .stage-independent-label { margin:0 0 7px; color:var(--acc-deep); font-size:0.68rem; font-weight:900; letter-spacing:0.12em; text-transform:uppercase; }
         .stage-independent-body { margin:0; color:var(--ink); font-size:clamp(0.98rem,1.55vw,1.3rem); line-height:1.3; font-weight:700; }
         .stage-independent-card.required-paper-work .stage-independent-body { font-size:clamp(1.08rem,1.9vw,1.55rem); }
+        /* Steele writes left-handed, so the work space is the LEFT 42% and the
+           lesson content is pushed right. Flipping this means flipping every
+           rule in this block together - the panel, the scenes, the spinner, the
+           success card and the state strip all key off which side is the ink. */
         .stage-work.board-open .stage-empty,
         .stage-work.board-open .stage-directions,
         .stage-work.board-open .stage-poll,
@@ -877,10 +881,12 @@ export default function ClassroomStagePage() {
         .stage-work.board-open .stage-score-scene,
         .stage-work.board-open .stage-discussion,
         .stage-work.board-open .stage-routine,
-        .stage-work.board-open .stage-independent { right:42%; }
+        .stage-work.board-open .stage-independent { left:42%; }
         .stage-work.board-open .stage-resource,
-        .stage-work.board-open .stage-tool { width:58%; }
-        .stage-work.board-open .stage-success { right:calc(42% + 14px); width:min(27vw,360px); }
+        .stage-work.board-open .stage-tool { left:42%; width:58%; }
+        /* The panel is on the LEFT now, so the success card keeps its top-right
+           home and only narrows to the content column. */
+        .stage-work.board-open .stage-success { width:min(27vw,360px); }
         .stage-work.board-open .stage-directions p { font-size:clamp(1rem,1.8vw,1.45rem); }
         .stage-work.board-open .stage-score-scene { grid-template-columns:1fr; gap:18px; padding:24px; }
         .stage-work.board-open .stage-score-copy h2 { font-size:clamp(2rem,4vw,3.8rem); }
@@ -889,14 +895,12 @@ export default function ClassroomStagePage() {
         .stage-work.board-open .stage-independent { overflow:auto; padding:18px; }
         .stage-work.board-open .stage-independent-grid { grid-template-columns:1fr; align-content:start; }
         .stage-work.board-open .stage-independent-card { grid-column:1; }
-        .stage-work.board-open .classroom-spinner { right:42%; }
-        .stage-board-panel { position:absolute; z-index:5; inset:0 0 0 auto; width:42%; overflow:hidden; border-left:5px solid var(--acc); background:#fff; box-shadow:-18px 0 40px rgba(40,32,20,0.16); }
-        /* The work space takes the right 42%, which is exactly where the state
-           group sits - and it is the ink surface, so it wins. The group hops to
-           the left instead of covering what the teacher is writing on. Slot ORDER
-           is the cue students read, and that is unchanged; only the group moves,
-           and only when the whole screen reconfigures. */
-        .stage-work.board-open .css-strip { right:auto; left:clamp(12px,1.5vw,26px); }
+        .stage-work.board-open .classroom-spinner { left:42%; }
+        .stage-board-panel { position:absolute; z-index:5; inset:0 auto 0 0; width:42%; overflow:hidden; border-right:5px solid var(--acc); background:#fff; box-shadow:18px 0 40px rgba(40,32,20,0.16); }
+        /* The work space used to own the right 42% and the state group hopped
+           LEFT to avoid covering the ink. The panel is on the left now, so the
+           group stays in its normal top-right home and there is no override -
+           if the panel ever moves back, this hop has to come back with it. */
         @media (max-width:900px) { .stage-success { width:40vw; } .stage-score-scene, .stage-discussion { grid-template-columns:1fr; overflow:auto; } }
         @media (max-height:650px) {
           .stage-frame { grid-template-rows:54px minmax(0,1fr); }
