@@ -25,6 +25,13 @@ Claude Design Wireframe/*.zip
 Claude Design Wireframe/*-handoff*
 output/
 
+# Repomix packs are a whole-codebase dump written to the repo root. They are for
+# handing to an outside model, never for committing - and a pack made from a
+# stale checkout is what produced a confidently wrong privacy audit on
+# 2026-07-30. Regenerate one when you need it; never review one from disk.
+repomix-*.xml
+repomix-output.*
+
 # Roster and student-data files must never be committable. The only CSV that
 # belongs in this repo is scripts/fixtures/*.csv, which is fully fictional
 # (mock.bigdogmath.example). See rule 8.
