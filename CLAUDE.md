@@ -231,7 +231,17 @@ bars and live misconception grouping).
   reload displays via DeployRefresh, so re-arm after every deploy); the arming chip shows for 90s
   at load and again whenever a call arrives silent, and tapping it plays the call as a speaker
   check. The pulse fires armed or not.
-- **THE ABBIE AI FEATURE IS OFF THE SITE, AND STILL IN THE REPO** (Steele, 2026-07-29: "lets get rid
+- **THE ABBIE AI FEATURE IS DELETED** (unmounted 2026-07-29, files removed 2026-07-30 on Steele's
+  word: "take the abbie communication files and remove them from the repo"). What follows is the
+  history of how it came off; the components, the relay, abbieBus/abbieQuestions, both question
+  endpoints and the `/api/abbie` proxy gate are GONE, so re-enabling is a rebuild, not a remount.
+  ELEVENLABS WENT WITH IT - it lived only in `/api/abbie/voice`, and no reference to it remains
+  anywhere in the repo. THE MASCOT STAYS: the art, the "Abbie Says" hints, the warmup wordmark and
+  the ratio problems about her treats are not the AI feature. STILL IN THE DATABASE and needing a
+  destructive migration nobody has run: the `sessions.abbie` column (no longer read or written) and
+  the `abbie_questions` table, which holds student-submitted free text from when the feature was
+  live - dropping it is a real privacy improvement and needs Steele's word.
+  Original note follows. (Steele, 2026-07-29: "lets get rid
   of the abbie feature for now. leave it in the repo but lets take it off the site. it doesnt
   contribute to the learning"). UNMOUNTED, not deleted - re-enabling is re-adding a mount, not a
   restore from git. `AbbieTalk.tsx`, `AbbieConsole.tsx`, `AbbieStudentBubble.tsx`,
@@ -265,6 +275,18 @@ bars and live misconception grouping).
   `play-warning`/`play-countdown`/`play-times-up`, playing through the laptop's speakers. Those three
   are Control's own uploadable timer cues and are deliberately NOT bank cues -
   `soundCueIdForAction` returns null for them.
+  USER-LOADABLE AS OF 2026-07-30 (Steele: "a user loadable sound bank that I can assign sound
+  effects to the button to trigger the clip"). THREE SOURCES, IN ORDER: a clip loaded in
+  `/control`'s Sounds panel, then `public/sounds/<id>.mp3`, then the synthesized cue - so a
+  button is never silent and removing a clip falls back rather than breaking. The clips live in
+  the IndexedDB store `/control` ALREADY used for timer cues and per-state music, under a
+  `bank:<cueId>` key - one upload mechanism on the machine with the speakers, not a second one.
+  Nothing goes to Supabase: no bucket, no table, no migration. `soundBank.ts` still imports
+  nothing local (its contract compiles it in isolation with the `@/` aliases dropped), so the
+  store does NOT reach into it - Control reads IndexedDB and pushes decoded audio down through
+  `installUserClip`, which returns false on undecodable bytes so a broken file is reported
+  instead of silently ignored. Clips are per-device: loading them on a different laptop is a
+  fresh load, which is the correct behaviour for a machine-local speaker cue.
   `SOUND_BANK_REMOTE_BUTTONS` in `remoteDeck.ts` is DERIVED from `SOUND_CUES`, so a new cue appears on
   the iPad with no edit there; `npm run test:sound-bank` asserts the three lists (cues, deck, action
   union) cannot drift and that no cue is missing a label or a synth. Adding a cue = one entry in
@@ -519,6 +541,13 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   names and district emails, which is precisely the open CCSD question in rule 8. Its proposed fix
   (drop both columns) would break `/api/roster/sync`, which UPSERTs both from Notion every morning
   at 13:00 UTC; a pseudonymous roster is a project, not a column drop.
+- `supabase/audit-exposure.sql` IS THE SELF-AUDIT - run it in the SQL Editor instead of trusting
+  anyone's summary. Read-only: anon and authenticated grants with policy counts, policies that
+  filter by nothing, every column whose name suggests an identifier, row counts, and a direct
+  impersonated read wrapped in `begin`/`rollback`. Section 7 lists the checks SQL cannot make.
+  It was an untracked file for a day and TWO outside audits read it as implemented logging the
+  project does not have - the real audit trail is `src/lib/securityAudit.ts`
+  (`recordSecurityEvent`), used by the join, admission, warmup-verify, roster and session routes.
 - Migrations are idempotent and hand-run; each schema-changing file ends with
   `notify pgrst, 'reload schema';`. Adding a table means writing a new `.sql`, choosing its RLS group
   deliberately, and running it in the SQL Editor. Order matters: `schema.sql` -> `proficiency.sql` ->
