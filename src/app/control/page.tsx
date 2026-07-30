@@ -22,6 +22,13 @@ import LessonVisual from "@/components/LessonVisual";
 import { SOUND_CUES, clearUserClip, installUserClip, matchSoundCueFile, playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
 import { joinRealtimeRoom } from "@/lib/realtimeRooms";
 import {
+  REMOTE_COMMAND_PING_EVENT,
+  isRemoteCommandPing,
+  pingPlaysDirectly,
+  remoteCommandTopic,
+  type RemoteCommandPing,
+} from "@/lib/remoteCommandPing";
+import {
   MAX_SOUND_LABEL,
   SOUND_LABEL_ROOM,
   normalizeSoundLabel,
@@ -696,6 +703,8 @@ export default function ControlPage() {
   const [activeLessonContext, setActiveLessonContext] = useState<ActiveLessonContext | null>(null);
   const [soundUrls, setSoundUrls] = useState<Record<string, string>>({});
   const [soundBankError, setSoundBankError] = useState<string | null>(null);
+  const findTeacherSessionRef = useRef<(() => Promise<void>) | null>(null);
+  const playedCueNoncesRef = useRef<Set<string>>(new Set());
   const [soundLabels, setSoundLabels] = useState<SoundLabels>({});
   const soundLabelsRef = useRef<SoundLabels>({});
   const soundLabelRoomRef = useRef<{ send: (m: { t: "labels"; labels: SoundLabels }) => void } | null>(null);
@@ -954,10 +963,13 @@ export default function ControlPage() {
 
     void findTeacherSession();
     // 1.2s keeps the panel feeling live while quartering the full-snapshot
-    // request volume (this endpoint returns the whole lesson flow).
+    // request volume (this endpoint returns the whole lesson flow). It stays the
+    // floor; the Remote-command ping pulls a re-read forward through this ref.
+    findTeacherSessionRef.current = findTeacherSession;
     const interval = window.setInterval(findTeacherSession, 1200);
     return () => {
       stopped = true;
+      findTeacherSessionRef.current = null;
       window.clearInterval(interval);
     };
   }, [supabase]);
@@ -2763,8 +2775,7 @@ export default function ControlPage() {
       // the three timer cues above: the iPad sends the key, the classroom
       // computer's speakers play it. Reuse this page's AudioContext when it
       // exists - the teacher's own clicks already unlocked it.
-      const cue = soundCueIdForAction(command.action);
-      if (cue) playSoundCue(cue, audioCtxRef.current);
+      playCueOnce(command.action, command.nonce);
     }
     if (teacherSession) {
       pendingRemoteReceiptRef.current = {
@@ -2783,6 +2794,41 @@ export default function ControlPage() {
       secRef.current = clamped * 60; setSecondsLeft(clamped * 60);
     }
   }
+
+  // One cue per command, whichever path gets there first. The ping usually wins
+  // by about a second; the poll then delivers the same nonce and must not
+  // replay it. Bounded so a long lesson cannot grow the set without limit.
+  const playCueOnce = useCallback((action: string, nonce: string) => {
+    const cue = soundCueIdForAction(action);
+    if (!cue) return false;
+    const seen = playedCueNoncesRef.current;
+    if (seen.has(nonce)) return true;
+    seen.add(nonce);
+    if (seen.size > 200) for (const old of [...seen].slice(0, 100)) seen.delete(old);
+    playSoundCue(cue, audioCtxRef.current);
+    return true;
+  }, []);
+
+  // A Remote command is announced the instant it is written, so a rimshot lands
+  // on the beat instead of up to 1.2s later. A ping may PLAY a sound directly -
+  // a duplicate clip is harmless - but nothing else acts on it: for anything
+  // that moves the lesson the ping only pulls the authoritative re-read
+  // forward, because a duplicated `next` would skip a step of a real class.
+  useEffect(() => {
+    const sessionId = teacherSession?.id;
+    if (!sessionId) return;
+    const room = joinRealtimeRoom<RemoteCommandPing>(
+      remoteCommandTopic(sessionId),
+      (ping) => {
+        if (!isRemoteCommandPing(ping)) return;
+        if (pingPlaysDirectly(ping.action) && playCueOnce(ping.action, ping.nonce)) return;
+        void findTeacherSessionRef.current?.();
+      },
+      undefined,
+      REMOTE_COMMAND_PING_EVENT,
+    );
+    return () => room.close();
+  }, [teacherSession?.id, playCueOnce]);
 
   // ── Sound bank button names ─────────────────────────────────────────────
   // Control owns them; the iPad Remote asks for them on mount and caches what
