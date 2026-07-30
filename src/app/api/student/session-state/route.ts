@@ -18,7 +18,7 @@ type Db = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
 async function publicProjection(db: Db, sessionId: string) {
   const { data: session, error } = await db
     .from("sessions")
-    .select("id,period_id,status,broadcast,live_flow,abbie")
+    .select("id,period_id,status,broadcast,live_flow")
     .eq("id", sessionId)
     .maybeSingle();
   if (error) throw new StudentIdentityError("The class session could not be loaded.", 500, "session_lookup_failed");
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     if (process.env.NEXT_PUBLIC_SECURE_STUDENT_DATA !== "true") {
       const { data: session, error: sessionError } = await db
         .from("sessions")
-        .select("id,period_id,status,broadcast,live_flow,abbie")
+        .select("id,period_id,status,broadcast,live_flow")
         .eq("id", sessionId)
         .maybeSingle();
       if (sessionError) throw new StudentIdentityError("The class session could not be loaded.", 500, "session_lookup_failed");
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
 
     const { data: session, error: sessionError } = await db
       .from("sessions")
-      .select("id,period_id,status,broadcast,live_flow,abbie")
+      .select("id,period_id,status,broadcast,live_flow")
       .eq("id", sessionId)
       .eq("period_id", student.periodId)
       .maybeSingle();

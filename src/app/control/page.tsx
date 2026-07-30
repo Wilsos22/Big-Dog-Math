@@ -17,7 +17,7 @@ import LessonVisual from "@/components/LessonVisual";
 // GONE 2026-07-29: AbbieConsole mounted at the bottom of this page and was the
 // ONLY subscriber to abbieBus, so the poll's "Have Abbie react" button and the
 // six abbie-* deck keys had to go with it - a button firing into an empty bus is
-// dead UI on the live engine. AbbieConsole.tsx and abbieBus.ts stay in the repo.
+// dead UI on the live engine. Both files are deleted as of 2026-07-30.
 // The sound bank took the deck's place.
 import { playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
 import { discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";

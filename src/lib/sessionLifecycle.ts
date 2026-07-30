@@ -78,7 +78,7 @@ export async function closeSessions(db: Db, sessionIds: string[]): Promise<strin
   const [, sessionResult] = await Promise.all([
     db.from("polls").update({ status: "closed" }).in("session_id", sessionIds).eq("status", "open"),
     db.from("sessions")
-      .update({ status: "closed", ended_at: now, broadcast: null, live_flow: null, abbie: null, remote_command: null })
+      .update({ status: "closed", ended_at: now, broadcast: null, live_flow: null, remote_command: null })
       .in("id", sessionIds)
       .eq("status", "open")
       .select("id"),

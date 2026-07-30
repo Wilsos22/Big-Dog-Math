@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 type SessionAction =
   | { action: "start"; periodId?: unknown; joinCode?: unknown; assignmentId?: unknown }
-  | { action: "update"; sessionId?: unknown; broadcast?: unknown; liveFlow?: unknown; expectedLiveFlowUpdatedAt?: unknown; abbie?: unknown; remoteCommand?: unknown; expectedRemoteCommandNonce?: unknown }
+  | { action: "update"; sessionId?: unknown; broadcast?: unknown; liveFlow?: unknown; expectedLiveFlowUpdatedAt?: unknown; remoteCommand?: unknown; expectedRemoteCommandNonce?: unknown }
   | { action: "admit"; sessionId?: unknown; requestCode?: unknown; studentEmail?: unknown }
   | { action: "close"; sessionId?: unknown };
 
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
   if (liveSessionId || latestOpen) {
     let query = db
       .from("sessions")
-      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,abbie,remote_command")
+      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,remote_command")
       .eq("status", "open");
     query = liveSessionId
       ? query.eq("id", liveSessionId)
@@ -84,7 +84,7 @@ export async function GET(request: Request) {
   if (!sessionId) {
     const { data, error } = await db
       .from("sessions")
-      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,abbie,remote_command")
+      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,remote_command")
       .order("started_at", { ascending: false })
       .limit(50);
     if (error) return Response.json({ error: error.message }, { status: 500 });
@@ -93,7 +93,7 @@ export async function GET(request: Request) {
 
   const [sessionResult, joinResult, admissionResult, pollResult] = await Promise.all([
     db.from("sessions")
-      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,abbie,remote_command")
+      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,remote_command")
       .eq("id", sessionId)
       .maybeSingle(),
     db.from("session_joins")
@@ -492,7 +492,6 @@ export async function POST(request: Request) {
     const patch: Record<string, unknown> = {};
     if ("broadcast" in body) patch.broadcast = typeof body.broadcast === "string" ? text(body.broadcast, 300) : null;
     if ("liveFlow" in body) patch.live_flow = body.liveFlow ?? null;
-    if ("abbie" in body) patch.abbie = body.abbie ?? null;
     if ("remoteCommand" in body) patch.remote_command = body.remoteCommand ?? null;
     if (!Object.keys(patch).length) return Response.json({ error: "No session fields were supplied." }, { status: 400 });
 
@@ -531,7 +530,7 @@ export async function POST(request: Request) {
         : update.is("remote_command", null);
     }
     const { data, error: updateError } = await update
-      .select("id,status,broadcast,live_flow,abbie,remote_command")
+      .select("id,status,broadcast,live_flow,remote_command")
       .maybeSingle();
     if (updateError) return Response.json({ error: updateError.message }, { status: 500 });
     if (!data && checksLiveFlowRevision) {
@@ -557,7 +556,7 @@ export async function POST(request: Request) {
     const [pollResult, sessionResult] = await Promise.all([
       db.from("polls").update({ status: "closed" }).eq("session_id", sessionId).eq("status", "open"),
       db.from("sessions")
-        .update({ status: "closed", ended_at: now, broadcast: null, live_flow: null, abbie: null, remote_command: null })
+        .update({ status: "closed", ended_at: now, broadcast: null, live_flow: null, remote_command: null })
         .eq("id", sessionId)
         .select("id")
         .maybeSingle(),

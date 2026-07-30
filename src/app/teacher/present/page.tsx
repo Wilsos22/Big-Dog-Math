@@ -1284,8 +1284,8 @@ export default function ClassroomStagePage() {
         {/* The Abbie broadcast bubble used to sit here, pinned bottom-centre over
             the stage, reading sessions.abbie. The Abbie AI feature is off the site
             (Steele, 2026-07-29) so the aside, its .stage-abbie styles and the
-            session field are gone. The AbbieBroadcast type and the Supabase
-            column both remain. */}
+            session field are gone. The type and every component went with it on
+            2026-07-30; only the unused Supabase column remains. */}
       </section>
       {inkOverlay && !inkOverlay.embed && <ScreenInkOverlay room={inkOverlay.room} />}
       {inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && <AttentionListener room={inkOverlay.room} />}
