@@ -67,12 +67,17 @@ export const TEACHER_REMOTE_ACTIONS = [
   "play-warning",
   "play-countdown",
   "play-times-up",
-  "abbie-hype",
-  "abbie-goal",
-  "abbie-move",
-  "abbie-settle",
-  "abbie-roast",
-  "abbie-stuck",
+  // The sound bank (Steele, 2026-07-29), which replaced the six abbie-* keys on
+  // the iPad deck. One flat action per cue, named `play-<id>` after the cue ids
+  // in src/lib/soundBank.ts - that file owns the labels and the synthesis, and
+  // npm run test:sound-bank asserts this list matches it exactly.
+  "play-applause",
+  "play-sad-trombone",
+  "play-crickets",
+  "play-drumroll",
+  "play-rimshot",
+  "play-ding",
+  "play-buzzer",
 ] as const;
 export type TeacherRemoteAction = (typeof TEACHER_REMOTE_ACTIONS)[number];
 

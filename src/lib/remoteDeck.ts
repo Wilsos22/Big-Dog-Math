@@ -1,5 +1,6 @@
 import type { TeacherRemoteAction } from "@/lib/liveClassFlow";
 import type { StateStripSlot } from "@/lib/classroomStateStrip";
+import { SOUND_CUES, soundCueAction } from "@/lib/soundBank";
 
 // Extra fields sent with the command body. Mostly flat (transition-now's
 // vibe/seconds); `behavior` carries a classroom-state-strip override, which is a
@@ -42,55 +43,29 @@ export const TRANSITION_NOW_BUTTONS: readonly RemoteDeckButton[] = [
   { action: "transition-now", label: "Settle 30s", detail: "Bring it down", tone: "teal", payload: { vibe: "settle", seconds: 30 } },
 ];
 
-export interface AbbieRemoteDeckButton extends RemoteDeckButton {
-  direction: string;
-}
+/**
+ * The sound bank, which took the Abbie AI deck's place (Steele, 2026-07-29:
+ * applause, and a sad trombone for the question that gets silence).
+ *
+ * DERIVED from SOUND_CUES rather than written out here. A second hand-kept list
+ * of these ids is exactly how /api/teacher/poll silently stored every
+ * multiple-choice-explain poll as a short answer, so the cue id, the label and
+ * the sound all live in src/lib/soundBank.ts and this file only decides where
+ * they sit on the deck. The action cast is the one seam: soundBank imports
+ * nothing local (its contract compiles it in isolation), so it cannot name
+ * TeacherRemoteAction itself - npm run test:sound-bank is what proves every
+ * `play-<id>` here is really in the union.
+ */
+export const SOUND_BANK_REMOTE_BUTTONS: readonly RemoteDeckButton[] = SOUND_CUES.map((cue) => ({
+  action: soundCueAction(cue.id) as TeacherRemoteAction,
+  label: cue.label,
+  detail: cue.detail,
+  tone: cue.tone,
+}));
 
-export const ABBIE_REMOTE_BUTTONS: readonly AbbieRemoteDeckButton[] = [
-  {
-    action: "abbie-hype",
-    label: "Hype us up",
-    detail: "Start with energy",
-    tone: "orange",
-    direction: "Pump up the class. We are about to get into it. Bring real energy and keep it short.",
-  },
-  {
-    action: "abbie-goal",
-    label: "Today's goal",
-    detail: "Explain the purpose",
-    tone: "teal",
-    direction: "Tell the class what we are working on today and why it is worth their time. Use the learning intention and make it land.",
-  },
-  {
-    action: "abbie-move",
-    label: "Move us on",
-    detail: "Transition the room",
-    tone: "blue",
-    direction: "Wrap up what we are doing and push the class to the next thing. Keep it moving.",
-  },
-  {
-    action: "abbie-settle",
-    label: "Settle the room",
-    detail: "Refocus students",
-    tone: "gold",
-    direction: "The room is getting loud. Pull them back and refocus them. Be deadpan, not a nag.",
-  },
-  {
-    action: "abbie-roast",
-    label: "Roast dad",
-    detail: "One clean joke",
-    tone: "purple",
-    direction: "Roast dad for the class about something true, such as the Red Bulls, dancing, slang, or his knees. One clean burn.",
-  },
-  {
-    action: "abbie-stuck",
-    label: "We are stuck",
-    detail: "Encourage persistence",
-    tone: "green",
-    direction: "The class is stuck and getting frustrated. Remind them that being confused is step one and nudge them to try something.",
-  },
-];
-
+// Control's own timer cue sounds - separate from the sound bank on purpose:
+// these are the countdown cues every timer already uses, and Steele can upload
+// his own file per cue on the /control sound panel.
 export const SOUND_REMOTE_BUTTONS: readonly RemoteDeckButton[] = [
   {
     action: "play-warning",
@@ -111,7 +86,3 @@ export const SOUND_REMOTE_BUTTONS: readonly RemoteDeckButton[] = [
     tone: "red",
   },
 ];
-
-export function abbieDirectionForRemoteAction(action: TeacherRemoteAction): string | null {
-  return ABBIE_REMOTE_BUTTONS.find((button) => button.action === action)?.direction ?? null;
-}

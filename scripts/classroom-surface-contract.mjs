@@ -20,16 +20,38 @@ const remoteManifest = read("public/teacher-remote.webmanifest");
 
 // Anchors re-based 2026-07-27 to the Warm Notebook canonical surfaces
 // (the 2026-07-20 Turn 12 standardization) - same intents, current landmarks.
+// FALSE PASS FOUND 2026-07-29: the 'src="/big-dog-mark.png"' anchor was dropped
+// from this list because it had not been testing the projector frame since
+// 2026-07-20. The Warm Notebook redesign (3d6eb9a) set `.stage-mark {
+// display:none }` and stopped rendering the img in the topbar, so the ONLY
+// remaining big-dog-mark img on Main was the one inside the Abbie broadcast
+// bubble - itself hidden until Abbie spoke. The anchor passed on an element the
+// room never saw. Do not re-add a logo to Main to satisfy a contract; the
+// approved Turn 12a frame is content-only and putting the mark back is Steele's
+// call.
 for (const required of [
   "grid-template-rows:66px minmax(0,1fr)",
-  'src="/big-dog-mark.png"',
   'className="stage-dot"',
   "className={`stage-timer",
   'className="stage-main-prompt"',
-  "session?.abbie?.text",
+  // Replaced the "session?.abbie?.text" anchor 2026-07-29: the Abbie broadcast
+  // bubble came off the projector with the rest of the Abbie AI feature
+  // (Steele: "it doesnt contribute to the learning"), and the classroom state
+  // group is the approved element that now owns the top right of the stage.
+  "<ClassroomStateStrip",
 ]) {
   if (!present.includes(required)) {
     throw new Error(`Main projector is missing the approved fixed-frame element: ${required}`);
+  }
+}
+// The Abbie AI feature is deliberately unmounted, not deleted. Re-mounting it
+// anywhere is Steele's call, so the surfaces assert the absence rather than
+// letting a component quietly reappear on a classroom screen or a student page.
+// Matches a JSX mount or the deck export, never prose - the files carry comments
+// explaining where the feature used to be, and those must stay readable.
+for (const [surface, source] of [["Main projector", present], ["iPad Remote", remote], ["Control", control]]) {
+  if (/<Abbie[A-Za-z]*|ABBIE_REMOTE_BUTTONS|className="stage-abbie/.test(source)) {
+    throw new Error(`${surface} has re-mounted the Abbie AI feature, which Steele took off the site on 2026-07-29.`);
   }
 }
 if (!present.includes('resource.url.startsWith("/")')
