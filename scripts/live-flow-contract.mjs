@@ -55,6 +55,54 @@ for (const testCase of responseResolutionCases) {
   }
 }
 
+// A response kind with no question that can be asked is a stalled classroom:
+// resolveLiveStepPollKind tells every student surface to expect a response box,
+// and /live-flow then sits on "your response box is opening" until someone
+// notices. A fist to five must therefore resolve a question WITHOUT an authored
+// one; every other kind must not invent one.
+const pollQuestionCases = [
+  { question: "", kind: "fist-to-five", expected: contract.FIST_TO_FIVE_DEFAULT_QUESTION },
+  { question: "   ", kind: "fist-to-five", expected: contract.FIST_TO_FIVE_DEFAULT_QUESTION },
+  { question: undefined, kind: "fist-to-five", expected: contract.FIST_TO_FIVE_DEFAULT_QUESTION },
+  { question: "Rate your confidence", kind: "fist-to-five", expected: "Rate your confidence" },
+  { question: "  Rate your confidence  ", kind: "fist-to-five", expected: "Rate your confidence" },
+  { question: "", kind: "short-answer", expected: "" },
+  { question: "", kind: "multiple-choice", expected: "" },
+  { question: "", kind: "structured-numeric", expected: "" },
+  { question: "", kind: null, expected: "" },
+  { question: "Explain your split", kind: "short-answer", expected: "Explain your split" },
+];
+for (const testCase of pollQuestionCases) {
+  const actual = contract.liveStepPollQuestion(testCase.question, testCase.kind);
+  if (actual !== testCase.expected) {
+    throw new Error(`liveStepPollQuestion(${JSON.stringify(testCase.question)}, ${testCase.kind}): expected ${JSON.stringify(testCase.expected)}, received ${JSON.stringify(actual)}`);
+  }
+}
+if (!contract.FIST_TO_FIVE_DEFAULT_QUESTION.trim()) {
+  throw new Error("FIST_TO_FIVE_DEFAULT_QUESTION must be a real question - a blank one opens no poll.");
+}
+// A blank-Question Learning Check is the exact step that stalled the room: the
+// kind resolves, so the question must too.
+{
+  const kind = contract.resolveLiveStepPollKind("", "", "learning-check");
+  if (!contract.liveStepPollQuestion("", kind)) {
+    throw new Error("a Learning Check with no authored Question must still open a fist to five");
+  }
+}
+// Both engines must read the default from here, not from a copy of the string.
+for (const [file, label] of [
+  ["src/app/api/control-remote/route.ts", "the server lesson engine"],
+  ["src/app/control/page.tsx", "the control panel"],
+]) {
+  const source = fs.readFileSync(path.join(root, file), "utf8");
+  if (!/liveStepPollQuestion|FIST_TO_FIVE_DEFAULT_QUESTION/.test(source)) {
+    throw new Error(`${label} (${file}) must resolve its poll question through liveFlowContract`);
+  }
+  if (source.includes(contract.FIST_TO_FIVE_DEFAULT_QUESTION)) {
+    throw new Error(`${label} (${file}) still hardcodes the fist-to-five question; use FIST_TO_FIVE_DEFAULT_QUESTION`);
+  }
+}
+
 const discussionProtocolCases = [
   { state: "error-analysis", label: "", expected: true },
   { state: "question", label: "Error Analysis", expected: true },

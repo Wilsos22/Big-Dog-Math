@@ -16,6 +16,7 @@ import {
   canRevealM2T1L1FinalScore,
   isDiscussionRemoteAction,
   liveAssignedToolRoute,
+  liveStepPollQuestion,
   pickRemoteSharerName,
   resolveLiveStepPollKind,
   resolveRemoteNextBehavior,
@@ -297,7 +298,11 @@ async function navigateFlow(
   const pollKind = isDiscussion
     ? null
     : resolveLiveStepPollKind(step.responseMode, step.pollKind || undefined, step.stateId);
-  if (step.question && pollKind) {
+  // A fist to five opens on its own question - see liveStepPollQuestion. Gating
+  // this on an authored Question left every student screen waiting for a
+  // response box that was never coming.
+  const pollQuestion = liveStepPollQuestion(step.question, pollKind);
+  if (pollQuestion && pollKind) {
     const choices = pollKind === "fist-to-five" ? ["0", "1", "2", "3", "4", "5"] : step.choices;
     // Fail loudly rather than opening a Structured Numeric step with zero
     // boxes. A student staring at a question with no inputs cannot tell that
@@ -312,7 +317,7 @@ async function navigateFlow(
       .from("polls")
       .insert({
         session_id: session.id,
-        question: step.question,
+        question: pollQuestion,
         choices: choices.length ? choices : null,
         kind: pollKind,
         status: "open",
@@ -328,7 +333,7 @@ async function navigateFlow(
     poll = {
       id: inserted.data.id,
       kind: pollKind,
-      question: step.question,
+      question: pollQuestion,
       choices: choices.length ? choices : null,
       stage: "responding",
       ...(pollKind === "structured-numeric"

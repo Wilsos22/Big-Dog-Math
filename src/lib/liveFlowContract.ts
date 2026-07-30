@@ -165,6 +165,37 @@ export function resolveLiveStepPollKind(
   return null;
 }
 
+/**
+ * A fist to five carries its own question - the 0 to 5 scale IS the question -
+ * so the step never has to author one.
+ */
+export const FIST_TO_FIVE_DEFAULT_QUESTION = "How well do you understand this right now?";
+
+/**
+ * The question a step's response check actually opens with.
+ *
+ * EVERY ENGINE MUST USE THIS. resolveLiveStepPollKind calls a Learning Check
+ * step a fist to five whether or not it authored a Question, and /live-flow
+ * believes it: with a kind and no poll, the student screen sits on "your
+ * response box is opening". But three places independently required an authored
+ * question before opening anything - navigateFlow's `if (step.question &&
+ * pollKind)`, /control's auto-open guard, and openControlPoll - so a Learning
+ * Check with an empty Question stalled the whole room at the fist to five and
+ * nothing said why. Only /control's manual "Open to students" knew the default,
+ * and it was a hardcoded copy of this string.
+ *
+ * Steps with no question and any other kind still open nothing: a short answer
+ * with nothing to answer is not a check, it is a blank box.
+ */
+export function liveStepPollQuestion(
+  question: string | undefined,
+  pollKind: LivePollKind | null,
+): string {
+  const authored = question?.trim();
+  if (authored) return authored;
+  return pollKind === "fist-to-five" ? FIST_TO_FIVE_DEFAULT_QUESTION : "";
+}
+
 export type LiveIndependentSupportLesson = {
   selectedSuccessCriterion?: string;
   learningIntention?: string;

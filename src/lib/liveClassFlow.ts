@@ -8,6 +8,7 @@ import type { DiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import type { ClassroomStateStrip, ClassroomStateStripOverride } from "@/lib/classroomStateStrip";
 
 export {
+  FIST_TO_FIVE_DEFAULT_QUESTION,
   LIVE_POLL_KINDS,
   LIVE_RESPONSE_MODES,
   canRevealM2T1L1FinalScore,
@@ -16,6 +17,7 @@ export {
   liveAssignedToolRoute,
   liveIndependentSupportItems,
   liveResponseModePollKind,
+  liveStepPollQuestion,
   pickRemoteSharerName,
   resolveLiveStepPollKind,
   resolveRemoteNextBehavior,

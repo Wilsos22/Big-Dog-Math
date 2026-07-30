@@ -28,6 +28,7 @@ import {
 } from "@/lib/discussionProtocol";
 import { TeacherApiError, teacherApiRequest, teacherPost } from "@/lib/teacherApi";
 import {
+  FIST_TO_FIVE_DEFAULT_QUESTION,
   LIVE_FLOW_MODE,
   REMOTE_COMMAND_STALE_MS,
   canRevealM2T1L1FinalScore,
@@ -36,6 +37,7 @@ import {
   isChoicePollKind,
   isDiscussionRemoteAction,
   liveAssignedToolRoute,
+  liveStepPollQuestion,
   resolveLiveStepPollKind,
   shouldRunNavigationDestination,
   liveTimerSeconds,
@@ -1341,7 +1343,7 @@ export default function ControlPage() {
       setPollKind("short-answer");
     } else if (activeInteractiveState === "poll" || activeInteractiveState === "learning-check") {
       setPollKind("fist-to-five");
-      setPollQuestion((current) => current || "How well do you understand this right now?");
+      setPollQuestion((current) => current || FIST_TO_FIVE_DEFAULT_QUESTION);
     }
   }, [activeInteractiveState, configuredResponseKind]);
 
@@ -1423,9 +1425,7 @@ export default function ControlPage() {
     }
     const kind = config?.kind ?? pollKind;
     const configuredQuestion = config?.question.trim() ?? "";
-    const question = kind === "fist-to-five"
-      ? configuredQuestion || pollQuestion.trim() || "How well do you understand this right now?"
-      : configuredQuestion || pollQuestion.trim();
+    const question = liveStepPollQuestion(configuredQuestion || pollQuestion.trim(), kind);
     const choices = isChoicePollKind(kind)
       ? (config?.choices ?? pollChoices).map((choice) => choice.trim()).filter(Boolean)
       : kind === "fist-to-five"
@@ -1481,14 +1481,20 @@ export default function ControlPage() {
     return true;
   }
 
+  // A fist to five carries its own question, so this may not require an authored
+  // one: with the old `!activeItem?.question` guard a Learning Check with an
+  // empty Question never auto-opened here, /api/control-remote would not open it
+  // either, and every student screen sat on "your response box is opening" for
+  // the rest of the lesson.
+  const autoOpenQuestion = liveStepPollQuestion(activeItem?.question, configuredResponseKind);
   useEffect(() => {
-    if (!activeItem?.question || !activeInteractiveState || !configuredResponseKind || controlPoll || autoOpenedStepRef.current.has(activeItem.uid)) return;
+    if (!autoOpenQuestion || !activeItem || !activeInteractiveState || !configuredResponseKind || controlPoll || autoOpenedStepRef.current.has(activeItem.uid)) return;
     if (!teacherSession || openingStepRef.current === activeItem.uid) return;
     openingStepRef.current = activeItem.uid;
     void openControlPoll({
       stateId: activeInteractiveState,
       kind: configuredResponseKind,
-      question: activeItem.question,
+      question: autoOpenQuestion,
       choices: activeItem.choices,
       correctAnswer: activeItem.correctAnswer,
       standard: activeItem.standard,
@@ -1508,7 +1514,7 @@ export default function ControlPage() {
     setPollAnswers([]);
     setPollError(null);
     setPollChoices(["", "", "", ""]);
-    setPollQuestion(activeInteractiveState === "poll" || activeInteractiveState === "learning-check" ? "How well do you understand this right now?" : "");
+    setPollQuestion(activeInteractiveState === "poll" || activeInteractiveState === "learning-check" ? FIST_TO_FIVE_DEFAULT_QUESTION : "");
     setFinished(false);
   }
 
@@ -3268,7 +3274,7 @@ export default function ControlPage() {
                           className="cx-poll-input"
                           value={pollQuestion}
                           onChange={(event) => setPollQuestion(event.target.value)}
-                          placeholder={pollKind === "fist-to-five" ? "How well do you understand this right now?" : "Type the question students should answer"}
+                          placeholder={pollKind === "fist-to-five" ? FIST_TO_FIVE_DEFAULT_QUESTION : "Type the question students should answer"}
                         />
                       </div>
                       {isChoicePollKind(pollKind) && (
