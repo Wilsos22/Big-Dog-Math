@@ -77,8 +77,23 @@ bars and live misconception grouping).
    `src/app/api/*` route handlers.
 5. Secrets live in Vercel env vars only - never paste a key into chat, code, or a commit. Do not commit
    `.env*.local`, `.next`, `.data`, `.tmp-mastery/`, or anything under `aistudio_*`.
-6. The control panel (`/control`) stays DARK for projector contrast. Do not carry the cream theme onto
-   it.
+6. REVERSED 2026-07-29 BY STEELE: **the control panel's DURING-SESSION view goes CREAM**, matching the
+   rest of the site's wireframes. The old rule ("`/control` stays DARK for projector contrast, do not
+   carry the cream theme onto it") assumed Control might be seen by the room. It is not: Control lives
+   on his laptop, both projectors are separate browser tabs, and the room never sees it. His ask is
+   that the during-session flow controller match the Screen Studio wireframe language.
+   The iPad Remote STAYS DARK (Turn 12d) - he holds it in a dim room facing the class, which is where
+   the contrast rationale actually applies. So the split is now BY DEVICE, not by privacy: laptop
+   surfaces read up close are cream, the handheld is dark.
+   Scope note: this is the RUNNING view. The bank, lineup editor, tool forms, games and rosters are
+   setup surfaces he does not open mid-lesson, and restyling them is not part of this.
+   Related decision (same conversation): Control STAYS OPEN as the engine - he is not removing it, he
+   just should not need to GO there during a lesson unless something fails. Because Control publishes
+   its snapshot about once a second and Chrome throttles hidden tabs hard after roughly five minutes, it
+   has to stay FOREGROUNDED - which is why the during-lesson student-data view belongs INSIDE Control
+   rather than on its own route. The chosen data view is LIVE MISCONCEPTION CLUSTERS (what
+   `/teacher/rightnow` renders from `/api/live/groups`), because it is the highest-value thing not
+   already on the iPad and it is what changes the next teacher move.
 7. Verify the build before reporting "done" (`npm run typecheck` at minimum, `npm run build` for
    anything non-trivial). Do not rely on file edits alone.
 8. Do not store real student PII until RLS is tightened. Mock/test identities must be fully fictional.
@@ -848,8 +863,11 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   "Lesson Frame Wireframes" canvas. Turn 11 made the choice; TURN 12 is canonical - it standardizes
   the look across all four surfaces (12a main, 12b support, 12c Chromebook, 12d Remote) and all
   eleven lesson states (12e). Warm dotted paper, system-font content, handwritten voice for teacher
-  asides ONLY - anything a student must read uses the system font. The Remote (12d) is dark - it is
-  the private teacher surface, consistent with the dark `/control` rule. The Blueprint temperature
+  asides ONLY - anything a student must read uses the system font. The Remote (12d) is dark, and STAYS
+  dark - it is held in a dim room facing the class, which is where the contrast rationale applies. It
+  is no longer "consistent with the dark `/control` rule", because that rule was reversed on
+  2026-07-29: Control's during-session view is CREAM (see rule 6). The split is now by DEVICE - laptop
+  surfaces read up close are cream, the handheld is dark. The Blueprint temperature
   was rejected: fine graph grids moire on a projector at room distance, and its navy/orange chrome
   collides with the semantic per-state accent colors students learn. Source of truth lives in-repo:
   `Claude Design Wireframe/Lesson Frame Wireframes.dc.html` plus the `_ds` token set (cream/ink
