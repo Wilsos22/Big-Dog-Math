@@ -65,6 +65,7 @@ import { launchExitTicket, type ExitKind } from "@/lib/exitTickets";
 import { SBAC_CHECKPOINTS, getCheckpoint } from "@/lib/sbacCheckpoints";
 import { launchCheckpoint } from "@/lib/checkpoints";
 import { resolveLessonVisual } from "@/lib/lessonVisuals";
+import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 import type { PublicLessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { defaultPublicSurfaceModeForState, type PublicSurfaceMode } from "@/lib/lessonStepMetadata";
 import {
@@ -650,6 +651,11 @@ export default function ControlPage() {
   const [warnFlash, setWarnFlash] = useState(false);
 
   const [editing, setEditing] = useState(false);
+  // Steele authors lessons in Notion and Screen Studio, never here, so the bank,
+  // the lineup editor and the sound uploads are pre-class surfaces (rule 6 scope
+  // note, 2026-07-29). Once a step is loaded the page collapses to the running
+  // view and this reopens the machinery in one tap when something fails.
+  const [setupOpen, setSetupOpen] = useState(false);
   const [showSounds, setShowSounds] = useState(false);
   const [showSpinner, setShowSpinner] = useState(false);
   const [showLessons, setShowLessons] = useState(false);
@@ -2859,6 +2865,12 @@ export default function ControlPage() {
 
   const accent = activeState?.color ?? "#4e6ef2";
   const inFinal10 = running && secondsLeft <= 10 && secondsLeft > 0;
+  // Same escalation the projectors and the student device show, so Control never
+  // reads calm while the room is being warned.
+  const clockUrgency = timerUrgency(secondsLeft, { running, finished });
+  // With nothing loaded the setup machinery IS the view - there is no running
+  // view to protect yet, and the idle copy points at the bank.
+  const setupVisible = setupOpen || !activeState;
   const overBudget = totalMin > PERIOD_MIN;
   const denom = activeState ? activeMinutes * 60 : 1;
   const pct = activeState ? Math.max(0, Math.min(100, (secondsLeft / denom) * 100)) : 0;
@@ -2907,101 +2919,161 @@ export default function ControlPage() {
   return (
     <>
       <style>{`
-        .cx-root { min-height:100vh; background:${finished ? "#2a0d0d" : warnFlash ? "#1c190d" : "#14110c"}; color:#fff; font-family:var(--bdb-font); display:grid; grid-template-rows:auto 1fr auto auto; transition:background 300ms ease; }
-        .cx-overlay { position:fixed; inset:0; z-index:50; overflow:auto; background:#14110c; }
-        .cx-top { display:flex; align-items:center; justify-content:space-between; padding:14px 26px; border-bottom:1px solid #2a241a; flex-wrap:wrap; gap:8px; }
-        .cx-mark { font-size:0.76rem; font-weight:900; letter-spacing:0.14em; text-transform:uppercase; color:${accent}; margin:0; transition:color 300ms ease; }
-        .cx-live-status { margin:0 auto 0 0; border:1px solid ${liveFlowConnected && !flowSyncError ? "rgba(20,184,166,0.45)" : "rgba(251,191,36,0.4)"}; background:${liveFlowConnected && !flowSyncError ? "rgba(20,184,166,0.12)" : "rgba(251,191,36,0.1)"}; color:${liveFlowConnected && !flowSyncError ? "#5eead4" : "#fcaf38"}; border-radius:999px; padding:6px 10px; font-size:0.72rem; font-weight:900; letter-spacing:0.07em; text-transform:uppercase; max-width:min(52vw,520px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .cx-conductor-note { color:#a39a88; font-size:0.7rem; font-weight:850; letter-spacing:0.04em; white-space:nowrap; }
+        /* Warm Notebook skin for the RUNNING view (rule 6, reversed 2026-07-29):
+           Control lives on the laptop, the projectors are separate tabs, and the
+           room never sees this screen - so it matches the wireframe language of
+           /teacher/pace and /teacher/present instead of fighting a projector.
+           Dark survives only where it is still the right answer: the setup drawer
+           and the full-screen overlays, both scoped below. */
+        .cx-root { min-height:100vh; font-family:var(--bdb-font); color:var(--bdb-ink);
+          /* Dotted paper, same recipe as the pace projector so the two read as one system. */
+          background-color:${finished
+            ? "color-mix(in srgb, var(--bdb-coral) 9%, var(--bdb-ground))"
+            : warnFlash
+              ? "color-mix(in srgb, var(--bdb-amber) 15%, var(--bdb-ground))"
+              : "var(--bdb-ground)"};
+          background-image:radial-gradient(circle,#cbc4b2 1px,transparent 1.3px);
+          background-size:18px 18px;
+          display:grid; grid-template-rows:auto minmax(0,1fr) auto; transition:background-color 300ms ease;
+          /* Three tiers of the per-state accent, because the catalog colours run
+             from #35785a to #fcaf38 and the light ones fail AA both as text on
+             cream and under white text. -text is the AA-safe small-caps tier,
+             -deep is for large headings, -fill goes behind white button text. */
+          --cx-acc:${accent};
+          --cx-acc-deep:color-mix(in srgb, var(--cx-acc) 62%, var(--bdb-ink));
+          --cx-acc-text:color-mix(in srgb, var(--cx-acc) 42%, var(--bdb-ink));
+          --cx-acc-fill:color-mix(in srgb, var(--cx-acc) 48%, var(--bdb-ink));
+          --cx-card-shadow:0 2px 10px rgba(40,32,20,0.06); }
+        .cx-overlay { position:fixed; inset:0; z-index:50; overflow:auto; background:#14110c; color:#fff; }
+        .cx-top { display:flex; align-items:center; justify-content:space-between; padding:12px 26px; border-bottom:1px solid var(--bdb-line); background:rgba(255,255,255,0.74); flex-wrap:wrap; gap:9px; }
+        .cx-mark { margin:0; font-size:0.72rem; font-weight:800; letter-spacing:0.14em; text-transform:uppercase; color:var(--cx-acc-deep); transition:color 300ms ease; }
+        .cx-live-status { margin:0 auto 0 0; border:1px solid ${liveFlowConnected && !flowSyncError ? "color-mix(in srgb, var(--bdb-green) 45%, var(--bdb-line))" : "color-mix(in srgb, var(--bdb-amber) 60%, var(--bdb-line))"}; background:${liveFlowConnected && !flowSyncError ? "color-mix(in srgb, var(--bdb-green) 10%, var(--bdb-card))" : "color-mix(in srgb, var(--bdb-amber) 20%, var(--bdb-card))"}; color:${liveFlowConnected && !flowSyncError ? "var(--bdb-green-deep)" : "var(--bdb-ink)"}; border-radius:999px; padding:6px 11px; font-size:0.7rem; font-weight:800; letter-spacing:0.07em; text-transform:uppercase; max-width:min(52vw,520px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .cx-conductor-note { color:var(--bdb-ink-soft); font-size:0.7rem; font-weight:750; letter-spacing:0.04em; white-space:nowrap; }
         .cx-tbtns { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-        .cx-sbtn { font-size:0.76rem; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; color:#a39a88; background:transparent; border:1px solid #2a241a; border-radius:7px; padding:7px 12px; cursor:pointer; text-decoration:none; transition:all 140ms ease; }
-        .cx-sbtn:hover { border-color:${accent}; color:#fff; }
-        .cx-home { border-color:#3a3228; color:#d8d2c5; }
-        .cx-admission-alert { border-color:rgba(252,175,56,0.7); background:rgba(252,175,56,0.12); color:#ffd28a; }
-        .cx-admission-alert:hover { border-color:#fcaf38; background:rgba(252,175,56,0.2); color:#fff; }
-        .cx-end-session { border-color:rgba(249,83,53,0.55); color:#fca5a5; }
-        .cx-end-session:hover { border-color:#f95335; color:#fff; background:rgba(249,83,53,0.14); }
+        .cx-sbtn { font-size:0.74rem; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; color:var(--bdb-ink-soft); background:var(--bdb-card); border:1px solid var(--bdb-line); border-radius:9px; padding:7px 12px; cursor:pointer; text-decoration:none; box-shadow:0 1px 2px rgba(40,32,20,0.05); transition:border-color 140ms ease, color 140ms ease, background 140ms ease; }
+        .cx-sbtn:hover { border-color:var(--cx-acc); color:var(--bdb-ink); }
+        .cx-sbtn.on { border-color:var(--cx-acc-fill); background:var(--cx-acc-fill); color:var(--bdb-card); }
+        .cx-sbtn.cx-teal { border-color:color-mix(in srgb, var(--bdb-teal) 55%, var(--bdb-line)); color:var(--bdb-teal-deep); }
+        .cx-sbtn.cx-teal:hover { border-color:var(--bdb-teal-deep); background:color-mix(in srgb, var(--bdb-teal) 10%, var(--bdb-card)); color:var(--bdb-teal-deep); }
+        .cx-setup-toggle { display:inline-flex; align-items:center; gap:7px; }
+        .cx-home { color:var(--bdb-ink); }
+        .cx-admission-alert { border-color:color-mix(in srgb, var(--bdb-amber) 65%, var(--bdb-line)); background:color-mix(in srgb, var(--bdb-amber) 24%, var(--bdb-card)); color:var(--bdb-ink); }
+        .cx-admission-alert:hover { border-color:var(--bdb-amber); background:color-mix(in srgb, var(--bdb-amber) 36%, var(--bdb-card)); color:var(--bdb-ink); }
+        .cx-end-session { border-color:color-mix(in srgb, var(--bdb-coral) 45%, var(--bdb-line)); color:var(--bdb-coral-deep); }
+        .cx-end-session:hover { border-color:var(--bdb-coral-deep); background:color-mix(in srgb, var(--bdb-coral) 11%, var(--bdb-card)); color:var(--bdb-coral-deep); }
         .cx-end-session:disabled { opacity:0.5; cursor:wait; }
-        .cx-divider { width:1px; height:22px; background:#2a241a; flex:none; margin:0 2px; }
+        .cx-divider { width:1px; height:22px; background:var(--bdb-line); flex:none; margin:0 2px; }
 
-        .cx-main { display:grid; align-content:center; justify-items:center; gap:18px; padding:18px; text-align:center; }
-        .cx-main.cx-main-visual { align-content:start; gap:10px; padding:12px 18px; }
+        .cx-main { display:grid; align-content:center; justify-items:center; gap:16px; padding:24px 18px 30px; text-align:center; }
+        .cx-main.cx-main-visual { align-content:start; gap:12px; padding:14px 18px 22px; }
         .cx-story-head { width:min(94vw,1180px); display:flex; align-items:end; justify-content:space-between; gap:20px; text-align:left; }
-        .cx-story-head-copy { min-width:0; display:grid; gap:2px; }
-        .cx-story-head .cx-pos { font-size:0.67rem; }
-        .cx-story-head .cx-state { min-height:0; font-size:clamp(1.05rem,2.2vw,1.75rem); line-height:1.05; }
-        .cx-story-time { flex:none; color:#fff; font-size:clamp(2.15rem,5vw,4.1rem); line-height:0.85; font-weight:950; font-variant-numeric:tabular-nums; letter-spacing:-0.045em; }
-        .cx-story-time.final { color:#fbbf24; animation:cxPulse 1s ease-in-out infinite; }
-        .cx-story-time.finished { color:#f95335; animation:cxFlash 0.7s steps(1) infinite; }
-        .cx-story-stage { width:min(94vw,1180px); min-width:0; }
+        .cx-story-head-copy { min-width:0; display:grid; gap:3px; }
+        .cx-story-head .cx-pos { font-size:0.66rem; }
+        .cx-story-head .cx-state { min-height:0; font-size:clamp(1.05rem,2.2vw,1.7rem); line-height:1.05; }
+        .cx-story-time { flex:none; color:var(--bdb-ink); font-size:clamp(2.1rem,4.8vw,3.9rem); line-height:0.85; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-0.045em; }
+        /* LessonVisual is the SHARED projector slide component and paints white on
+           transparent, so the stage stays an ink panel. It reads as a mirror of
+           what the room is looking at rather than a cream card that lost its text. */
+        .cx-story-stage { width:min(94vw,1180px); min-width:0; border:1px solid var(--bdb-line); border-radius:var(--bdb-r); background:var(--bdb-ink); padding:clamp(12px,2vw,20px); box-shadow:var(--cx-card-shadow); }
         .cx-main-visual .cx-progress { width:min(76vw,650px); height:10px; }
-        .cx-main-visual .cx-note { min-height:0.8em; font-size:0.82rem; }
-        .cx-state { font-size:clamp(1.2rem,3.5vw,2.2rem); font-weight:900; color:${accent}; min-height:1.2em; transition:color 300ms ease; }
-        .cx-pos { font-size:0.8rem; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:#7c7363; }
-        .cx-clock { font-variant-numeric:tabular-nums; font-weight:900; line-height:0.9; letter-spacing:-0.02em;
-          font-size:${inFinal10 ? "clamp(9rem,40vw,28rem)" : "clamp(5rem,20vw,15rem)"};
-          color:${inFinal10 ? "#fbbf24" : finished ? "#f95335" : "#fff"};
-          animation:${finished ? "cxFlash 0.7s steps(1) infinite" : inFinal10 ? "cxPulse 1s ease-in-out infinite" : "none"}; }
-        @keyframes cxFlash { 50%{opacity:0.18;} }
-        @keyframes cxPulse { 50%{opacity:0.55; transform:scale(1.04);} }
-        .cx-note { font-size:1.1rem; font-weight:800; text-transform:uppercase; letter-spacing:0.08em; min-height:1.3em; }
-        .cx-warn { color:#fcaf38; } .cx-fin { color:#f95335; } .cx-idle { color:#5a5142; font-weight:700; max-width:440px; text-transform:none; letter-spacing:0; }
-        .cx-desc { font-size:clamp(1.1rem,3vw,1.9rem); font-weight:800; color:#efe9df; max-width:780px; line-height:1.3; }
-        .cx-join { display:inline-flex; align-items:center; gap:16px; margin-bottom:18px; padding:10px 22px; border-radius:16px; background:#101820; border:1px solid #2a3a44; }
-        .cx-join-label { font-size:0.8rem; font-weight:800; letter-spacing:0.14em; text-transform:uppercase; color:#7fd6cf; }
-        .cx-join-code { font-size:clamp(2.2rem,6vw,3.6rem); font-weight:900; letter-spacing:0.16em; color:#5eead4; line-height:1; }
-        .cx-progress { width:min(82vw,760px); height:16px; border-radius:999px; background:#241f15; overflow:hidden; border:1px solid #34301f; }
+        .cx-main-visual .cx-note { min-height:0.8em; font-size:0.8rem; }
+        .cx-hero { width:min(94vw,880px); display:grid; justify-items:center; gap:12px; border:1px solid var(--bdb-line); border-radius:var(--bdb-r-lg); background:var(--bdb-card); padding:clamp(20px,3vw,34px) clamp(18px,3vw,38px); box-shadow:var(--cx-card-shadow); }
+        .cx-state { font-size:clamp(1.3rem,3.4vw,2.3rem); font-weight:800; line-height:1.1; letter-spacing:-0.01em; color:var(--cx-acc-deep); min-height:1.2em; transition:color 300ms ease; text-wrap:balance; }
+        .cx-pos { font-size:0.72rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:var(--bdb-ink-faint); }
+        .cx-clock { font-variant-numeric:tabular-nums; font-weight:800; line-height:0.9; letter-spacing:-0.03em; color:var(--bdb-ink);
+          font-size:${inFinal10 ? "clamp(9rem,34vw,24rem)" : "clamp(4.5rem,17vw,12rem)"}; }
+        ${TIMER_URGENCY_CSS}
+        /* The shared warn amber is tuned for a projector at 25 feet; on a white
+           card 18 inches away it measures under 2:1, so the clock takes a deeper
+           mix of the SAME amber. Coral already passes at this size. */
+        .cx-clock.bdb-urgency-warn, .cx-story-time.bdb-urgency-warn { color:color-mix(in srgb, var(--bdb-amber) 68%, var(--bdb-ink)); }
+        .cx-note { font-size:0.92rem; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; min-height:1.3em; color:var(--bdb-ink-soft); }
+        .cx-warn { color:color-mix(in srgb, var(--bdb-amber) 68%, var(--bdb-ink)); }
+        .cx-fin { color:var(--bdb-coral-deep); }
+        .cx-idle { color:var(--bdb-ink-soft); font-size:1rem; font-weight:700; max-width:46ch; text-transform:none; letter-spacing:0; }
+        .cx-desc { font-size:clamp(1rem,2vw,1.35rem); font-weight:700; color:var(--bdb-ink-soft); max-width:46ch; line-height:1.35; }
+        .cx-join { display:inline-flex; align-items:center; gap:16px; padding:10px 22px; border-radius:var(--bdb-r); background:var(--bdb-card); border:1px solid var(--bdb-line); box-shadow:var(--cx-card-shadow); }
+        .cx-join-label { font-size:0.7rem; font-weight:800; letter-spacing:0.14em; text-transform:uppercase; color:var(--bdb-teal-deep); }
+        .cx-join-code { font-size:clamp(2rem,5vw,3.2rem); font-weight:800; letter-spacing:0.16em; color:var(--bdb-ink); line-height:1; font-variant-numeric:tabular-nums; }
+        .cx-progress { width:min(82vw,700px); height:12px; border-radius:999px; background:var(--bdb-ground-2); overflow:hidden; border:1px solid var(--bdb-line); }
         .cx-progress-fill { height:100%; border-radius:999px; transition:width 1s linear, background 300ms ease; }
-        .cx-upnext { font-size:0.82rem; font-weight:800; color:#7c7363; text-transform:uppercase; letter-spacing:0.07em; }
-        .cx-pace { margin-top:4px; font-size:0.82rem; font-weight:700; color:#a89f8c; }
-        .cx-pace strong { color:#e8e2d4; }
-        .cx-upnext strong { color:#b3aa98; }
+        .cx-upnext { font-size:0.78rem; font-weight:800; color:var(--bdb-ink-faint); text-transform:uppercase; letter-spacing:0.08em; }
+        .cx-pace { font-size:0.82rem; font-weight:700; color:var(--bdb-ink-soft); }
+        .cx-pace strong { color:var(--bdb-ink); }
+        .cx-upnext strong { color:var(--bdb-ink-soft); }
 
-        .cx-actions { display:flex; flex-wrap:wrap; gap:9px; justify-content:center; align-items:center; }
-        .cx-actions-sep { width:1px; align-self:stretch; min-height:20px; background:#34301f; margin:0 4px; }
-        .cx-btn { font-size:1rem; font-weight:900; border-radius:11px; padding:13px 24px; cursor:pointer; border:1px solid #34301f; background:#1d1810; color:#fff; transition:transform 120ms ease, border-color 140ms ease, filter 140ms; }
-        .cx-btn:hover { transform:translateY(-1px); border-color:${accent}; }
-        .cx-btn.pri { background:${accent}; border-color:${accent}; } .cx-btn.pri:hover { filter:brightness(1.08); }
-        .cx-btn.next { background:#2f9e6f; border-color:#2f9e6f; }
-        .cx-btn:disabled { opacity:0.32; cursor:not-allowed; transform:none; }
-        .cx-poll { width:min(94vw,760px); display:grid; gap:12px; padding:16px; border:1px solid #34301f; border-radius:12px; background:#18140d; text-align:left; }
+        .cx-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; align-items:center; }
+        /* The transport is the one thing he touches every ninety seconds, so it
+           gets its own card and the fine adjustments sit back as quiet chips. */
+        .cx-transport { border:1px solid var(--bdb-line); border-radius:var(--bdb-r-lg); background:var(--bdb-card); padding:12px 14px; box-shadow:var(--cx-card-shadow); }
+        .cx-actions-sep { width:1px; align-self:stretch; min-height:22px; background:var(--bdb-line); margin:0 5px; }
+        .cx-btn { font-size:0.95rem; font-weight:800; border-radius:11px; padding:12px 21px; cursor:pointer; border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink); box-shadow:0 1px 2px rgba(40,32,20,0.05); transition:transform 120ms ease, border-color 140ms ease, filter 140ms; }
+        .cx-btn:hover { transform:translateY(-1px); border-color:var(--cx-acc); }
+        .cx-btn.pri { background:var(--cx-acc-fill); border-color:var(--cx-acc-fill); color:var(--bdb-card); } .cx-btn.pri:hover { filter:brightness(1.1); }
+        .cx-btn.next { background:var(--bdb-green-deep); border-color:var(--bdb-green-deep); color:var(--bdb-card); }
+        .cx-btn.cx-amber { background:var(--bdb-amber); border-color:var(--bdb-amber); color:var(--bdb-ink); }
+        .cx-btn.cx-teal { background:var(--bdb-teal-deep); border-color:var(--bdb-teal-deep); color:var(--bdb-card); }
+        .cx-btn.quiet { background:transparent; border-color:var(--bdb-line); color:var(--bdb-ink-soft); padding:9px 13px; font-size:0.8rem; box-shadow:none; }
+        .cx-btn.quiet:hover { color:var(--bdb-ink); }
+        .cx-btn:disabled { opacity:0.35; cursor:not-allowed; transform:none; }
+        .cx-poll { width:min(94vw,760px); display:grid; gap:12px; padding:16px 18px; border:1px solid var(--bdb-line); border-left:6px solid var(--cx-acc); border-radius:var(--bdb-r); background:var(--bdb-card); box-shadow:var(--cx-card-shadow); text-align:left; }
         .cx-poll-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-        .cx-poll-title { margin:0; color:#fff; font-size:0.9rem; font-weight:900; letter-spacing:0.08em; text-transform:uppercase; }
-        .cx-poll-note { color:#a39a88; font-size:0.82rem; font-weight:700; line-height:1.4; }
+        .cx-poll-title { margin:0; color:var(--cx-acc-text); font-size:0.72rem; font-weight:900; letter-spacing:0.13em; text-transform:uppercase; }
+        .cx-poll-note { color:var(--bdb-ink-soft); font-size:0.84rem; font-weight:700; line-height:1.4; }
         .cx-poll-grid { display:grid; grid-template-columns:180px minmax(0,1fr); gap:10px; align-items:center; }
-        .cx-poll-label { color:#d8d2c5; font-size:0.82rem; font-weight:900; }
-        .cx-poll-input, .cx-poll-select { width:100%; border:1px solid #3d3524; border-radius:8px; box-sizing:border-box; background:#14110c; color:#fff; padding:10px 12px; font:inherit; font-size:0.95rem; font-weight:700; }
+        .cx-poll-label { color:var(--bdb-ink-faint); font-size:0.74rem; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; }
+        .cx-poll-input, .cx-poll-select { width:100%; border:1px solid var(--bdb-line); border-radius:9px; box-sizing:border-box; background:var(--bdb-ground); color:var(--bdb-ink); padding:10px 12px; font:inherit; font-size:0.95rem; font-weight:700; }
         .cx-poll-input { min-height:44px; }
+        .cx-poll-input:focus, .cx-poll-select:focus, .cx-tool-input:focus, .cx-tool-select:focus { outline:2px solid var(--cx-acc-fill); outline-offset:1px; }
         .cx-poll-choices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-        .cx-poll-error { color:#fca5a5; font-size:0.82rem; font-weight:800; }
-        .cx-poll-summary { color:#d8d2c5; font-size:0.96rem; font-weight:800; }
+        .cx-poll-error { color:var(--bdb-coral-deep); font-size:0.84rem; font-weight:800; }
+        .cx-poll-summary { color:var(--bdb-ink); font-size:0.92rem; font-weight:800; }
         .cx-poll-results { display:grid; gap:8px; }
-        .cx-poll-result { display:grid; grid-template-columns:minmax(110px,1fr) minmax(80px,2fr) auto; gap:10px; align-items:center; color:#efe9df; font-size:0.9rem; font-weight:800; }
-        .cx-poll-bar { height:10px; overflow:hidden; border-radius:999px; background:#2a2418; }
-        .cx-poll-fill { height:100%; border-radius:inherit; background:${accent}; transition:width 220ms ease; }
+        .cx-poll-result { display:grid; grid-template-columns:minmax(110px,1fr) minmax(80px,2fr) auto; gap:10px; align-items:center; color:var(--bdb-ink); font-size:0.9rem; font-weight:750; }
+        .cx-poll-bar { height:10px; overflow:hidden; border-radius:999px; background:var(--bdb-ground-2); }
+        .cx-poll-fill { height:100%; border-radius:inherit; background:var(--cx-acc); transition:width 220ms ease; }
         .cx-poll-answers { display:flex; flex-wrap:wrap; gap:7px; }
-        .cx-poll-answer { border:1px solid #3d3524; border-radius:999px; padding:6px 10px; color:#efe9df; font-size:0.78rem; font-weight:800; }
-        .cx-tool { width:min(94vw,760px); display:grid; gap:12px; padding:16px; border:1px solid #3a3322; border-radius:12px; background:#17130d; text-align:left; }
+        .cx-poll-answer { border:1px solid var(--bdb-line); border-radius:999px; padding:6px 11px; background:var(--bdb-ground); color:var(--bdb-ink); font-size:0.78rem; font-weight:700; }
+        .cx-tool { width:min(94vw,760px); display:grid; gap:12px; padding:16px 18px; border:1px solid var(--bdb-line); border-left:6px solid var(--bdb-teal); border-radius:var(--bdb-r); background:var(--bdb-card); box-shadow:var(--cx-card-shadow); text-align:left; }
         .cx-tool-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-        .cx-tool-title { margin:0; color:#e0f2fe; font-size:0.9rem; font-weight:900; letter-spacing:0.08em; text-transform:uppercase; }
-        .cx-tool-note { color:#8fb4cf; font-size:0.82rem; font-weight:700; line-height:1.4; }
-        .cx-tool-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
-        .cx-tool-field { display:grid; gap:5px; color:#c8e3f6; font-size:0.78rem; font-weight:900; }
+        .cx-tool-title { margin:0; color:var(--bdb-teal-deep); font-size:0.72rem; font-weight:900; letter-spacing:0.13em; text-transform:uppercase; }
+        .cx-tool-note { color:var(--bdb-ink-soft); font-size:0.84rem; font-weight:700; line-height:1.4; }
+        .cx-tool-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+        /* No text-transform on the field label: it wraps its own input, and an
+           inherited uppercase would rewrite what the teacher typed. */
+        .cx-tool-field { display:grid; gap:5px; color:var(--bdb-ink-faint); font-size:0.78rem; font-weight:800; }
         .cx-tool-field.wide { grid-column:1 / -1; }
-        .cx-tool-hint { color:#8fb4cf; font-size:0.76rem; font-weight:700; line-height:1.4; text-transform:none; letter-spacing:0; }
-        .cx-tool-check { display:flex; align-items:center; gap:8px; min-height:42px; color:#c8e3f6; font-size:0.78rem; font-weight:900; cursor:pointer; }
-        .cx-tool-check input { width:20px; height:20px; accent-color:#fcaf38; cursor:pointer; }
-        .cx-tool-input, .cx-tool-select { width:100%; min-height:42px; box-sizing:border-box; border:1px solid #3f3725; border-radius:8px; background:#120f0a; color:#fff; padding:9px 10px; font:inherit; font-weight:750; }
-        .cx-tool-status { color:#a7f3d0; font-size:0.82rem; font-weight:800; }
-        .cx-leader { display:grid; gap:8px; border:1px solid #3a3322; border-radius:10px; background:#120f0a; padding:12px; }
-        .cx-leader-title { color:#e0f2fe; font-size:0.78rem; font-weight:900; letter-spacing:0.08em; text-transform:uppercase; }
-        .cx-leader-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; gap:10px; align-items:center; border:1px solid #2f281a; border-radius:8px; background:#19150e; padding:9px 10px; color:#efe9df; font-size:0.86rem; font-weight:850; }
-        .cx-leader-rank { display:grid; width:28px; height:28px; place-items:center; border-radius:6px; background:${accent}; color:#fff; font-weight:950; }
+        .cx-tool-hint { color:var(--bdb-ink-soft); font-size:0.76rem; font-weight:650; line-height:1.4; letter-spacing:0; }
+        .cx-tool-check { display:flex; align-items:center; gap:8px; min-height:42px; color:var(--bdb-ink); font-size:0.8rem; font-weight:800; cursor:pointer; }
+        .cx-tool-check input { width:20px; height:20px; accent-color:var(--bdb-teal-deep); cursor:pointer; }
+        .cx-tool-input, .cx-tool-select { width:100%; min-height:42px; box-sizing:border-box; border:1px solid var(--bdb-line); border-radius:9px; background:var(--bdb-ground); color:var(--bdb-ink); padding:9px 11px; font:inherit; font-weight:700; }
+        .cx-tool-status { color:var(--bdb-green-deep); font-size:0.84rem; font-weight:800; }
+        .cx-tool-key { grid-column:1 / -1; color:var(--bdb-ink-faint); font-size:0.82rem; font-weight:700; }
+        .cx-leader { display:grid; gap:8px; border:1px solid var(--bdb-line); border-radius:12px; background:var(--bdb-ground); padding:12px; }
+        .cx-leader-title { color:var(--bdb-teal-deep); font-size:0.72rem; font-weight:900; letter-spacing:0.12em; text-transform:uppercase; }
+        .cx-leader-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; gap:10px; align-items:center; border:1px solid var(--bdb-line); border-radius:9px; background:var(--bdb-card); padding:9px 10px; color:var(--bdb-ink); font-size:0.86rem; font-weight:750; }
+        .cx-leader-rank { display:grid; width:28px; height:28px; place-items:center; border-radius:7px; background:var(--cx-acc-fill); color:var(--bdb-card); font-weight:800; }
         .cx-leader-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .cx-leader-acc { color:#9fb7c8; font-size:0.78rem; }
-        .cx-leader-points { color:#a7f3d0; font-weight:950; }
+        .cx-leader-acc { color:var(--bdb-ink-soft); font-size:0.78rem; }
+        .cx-leader-points { color:var(--bdb-green-deep); font-weight:800; }
         @media (max-width:640px) { .cx-poll-grid { grid-template-columns:1fr; } .cx-poll-choices { grid-template-columns:1fr; } }
         @media (max-width:640px) { .cx-tool-grid { grid-template-columns:1fr; } }
+
+        /* The setup drawer keeps its dark styling (out of scope for the 07-29
+           restyle), so the boundary has to look chosen: a brown seam, its own
+           header and label, and a hard cap on height so it can never push the
+           running view off the laptop screen. */
+        .cx-setup { border-top:3px solid var(--bdb-brown); background:#14110c; color:#fff; max-height:56vh; overflow:auto; display:grid; align-content:start; }
+        .cx-setup-head { position:sticky; top:0; z-index:1; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; padding:12px 20px; border-bottom:1px solid #2a241a; background:#14110c; }
+        .cx-setup-title { margin:0; color:#efe9df; font-size:0.76rem; font-weight:900; letter-spacing:0.12em; text-transform:uppercase; }
+        .cx-setup-hint { color:#a39a88; font-size:0.78rem; font-weight:700; }
+        .cx-setup-tools { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-left:auto; }
+        .cx-setup .cx-sbtn, .cx-overlay .cx-sbtn { color:#a39a88; background:transparent; border-color:#2a241a; box-shadow:none; }
+        .cx-setup .cx-sbtn:hover, .cx-overlay .cx-sbtn:hover { border-color:#5a5142; color:#fff; }
+        .cx-setup .cx-sbtn.on { border-color:#5a5142; background:rgba(255,255,255,0.08); color:#fff; }
+        .cx-overlay .cx-btn { background:#1d1810; border-color:#34301f; color:#fff; box-shadow:none; }
+        .cx-overlay .cx-btn.pri { background:${accent}; border-color:${accent}; }
+        .cx-overlay .cx-btn.next { background:#2f9e6f; border-color:#2f9e6f; }
 
         .cx-lineup { border-top:1px solid #2a241a; padding:12px 20px; display:flex; gap:8px; align-items:center; overflow-x:auto; }
         .cx-lineup-title { font-size:0.72rem; font-weight:900; letter-spacing:0.1em; text-transform:uppercase; color:#7c7363; flex:none; margin-right:4px; }
@@ -3075,10 +3147,11 @@ export default function ControlPage() {
           <p className="cx-mark">Big Dog Math — Classroom</p>
           <p className="cx-live-status">{liveFlowStatus}</p>
           {autoAdvance ? <span className="cx-conductor-note">Keep this Control window open during automatic pacing.</span> : null}
+          {/* Only what he touches while the lesson runs. Everything else moved
+              into the setup drawer below - see the Set up toggle. */}
           <div className="cx-tbtns">
             <a className="cx-sbtn cx-home" href="/teacher">Home</a>
             <a className="cx-sbtn" href={teacherSession ? `/session?sessionId=${encodeURIComponent(teacherSession.id)}` : "/session"}>{teacherSession ? "Session" : "Start session"}</a>
-            {teacherSession ? <a className="cx-sbtn" href={`/session?sessionId=${encodeURIComponent(teacherSession.id)}#classroom-screens-title`}>Set up screens</a> : null}
             {admissionRequests.length > 0 && (
               <button
                 className="cx-sbtn cx-admission-alert"
@@ -3093,15 +3166,26 @@ export default function ControlPage() {
                 {endingSession ? "Ending session" : "End session"}
               </button>
             )}
-            <a className="cx-sbtn" href="/session#challenge">Games</a>
-            <a className="cx-sbtn" href="/roster">Rosters</a>
             <span className="cx-divider" />
-            <button className="cx-sbtn" style={{ borderColor: "#14b8a6", color: "#5eead4" }} onClick={loadTodayLesson}>Today&apos;s lesson</button>
-            <button className="cx-sbtn" onClick={() => { setShowLessons(true); setLessonMsg(null); }}>Lessons</button>
-            <button className="cx-sbtn" onClick={() => setShowSpinner(true)}>Spinner</button>
-            <button className="cx-sbtn" style={autoAdvance ? { borderColor: accent, color: "#fff" } : undefined} onClick={() => setAutoAdvance((v) => !v)}>Pacing {autoAdvance ? "on" : "off"}</button>
-            <button className="cx-sbtn" onClick={() => setShowSounds((v) => !v)}>Sounds</button>
-            <button className="cx-sbtn" onClick={() => setEditing((v) => !v)}>{editing ? "Done" : "Edit times"}</button>
+            <button className="cx-sbtn cx-teal" onClick={loadTodayLesson}>Today&apos;s lesson</button>
+            <button className={`cx-sbtn${autoAdvance ? " on" : ""}`} onClick={() => setAutoAdvance((v) => !v)}>Pacing {autoAdvance ? "on" : "off"}</button>
+            {activeState ? (
+              <button
+                className={`cx-sbtn cx-setup-toggle${setupVisible ? " on" : ""}`}
+                onClick={() => setSetupOpen((value) => !value)}
+                aria-expanded={setupVisible}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+                  <path d="M3.5 7.5h9" />
+                  <path d="M18.5 7.5h2" />
+                  <circle cx="15.5" cy="7.5" r="2.4" />
+                  <path d="M3.5 16.5h4" />
+                  <path d="M13 16.5h7.5" />
+                  <circle cx="10" cy="16.5" r="2.4" />
+                </svg>
+                {setupVisible ? "Hide set up" : "Set up"}
+              </button>
+            ) : null}
             <button className="cx-sbtn" onClick={toggleFullscreen}>Full screen</button>
           </div>
         </header>
@@ -3111,10 +3195,10 @@ export default function ControlPage() {
             role="status"
             style={{
               position: "fixed", left: "50%", bottom: "18px", transform: "translateX(-50%)",
-              zIndex: 60, maxWidth: "min(720px, 92vw)", background: "#151a27", color: "#e6f6f4",
-              border: "1px solid #2a3550", borderLeft: "4px solid #14b8a6", borderRadius: "10px",
+              zIndex: 60, maxWidth: "min(720px, 92vw)", background: "var(--bdb-card)", color: "var(--bdb-ink)",
+              border: "1px solid var(--bdb-line)", borderLeft: "5px solid var(--bdb-teal-deep)", borderRadius: "12px",
               padding: "12px 16px", fontSize: "0.9rem", fontWeight: 700,
-              boxShadow: "0 14px 34px rgba(0,0,0,0.45)",
+              boxShadow: "0 14px 34px rgba(40,32,20,0.16)",
             }}
           >
             {todayMsg}
@@ -3137,7 +3221,7 @@ export default function ControlPage() {
                       <div className="cx-pos">Step {currentIndex + 1} of {lineup.length}</div>
                       <div className="cx-state">{activeItem?.title || activeState.label}</div>
                     </div>
-                    <div className={`cx-story-time${inFinal10 ? " final" : finished ? " finished" : ""}`}>
+                    <div className={`cx-story-time ${timerUrgencyClass(clockUrgency)}`}>
                       {inFinal10 ? secondsLeft : fmt(secondsLeft)}
                     </div>
                   </div>
@@ -3146,15 +3230,15 @@ export default function ControlPage() {
                   </section>
                 </>
               ) : (
-                <>
+                <div className="cx-hero">
                   <div className="cx-pos">Step {currentIndex + 1} of {lineup.length}</div>
                   <div className="cx-state">{activeItem?.title || activeState.label}</div>
                   <div className="cx-desc">{activeItem?.studentDirections || activeState.desc}</div>
-                  <div className="cx-clock">{inFinal10 ? secondsLeft : fmt(secondsLeft)}</div>
-                </>
+                  <div className={`cx-clock ${timerUrgencyClass(clockUrgency)}`}>{inFinal10 ? secondsLeft : fmt(secondsLeft)}</div>
+                </div>
               )}
               <div className="cx-progress">
-                <div className="cx-progress-fill" style={{ width: `${pct}%`, background: finished ? "#f95335" : inFinal10 ? "#fbbf24" : accent }} />
+                <div className="cx-progress-fill" style={{ width: `${pct}%`, background: finished ? "var(--bdb-coral)" : inFinal10 ? "var(--bdb-amber)" : accent }} />
               </div>
               <div className={`cx-note ${finished ? "cx-fin" : warnFlash ? "cx-warn" : ""}`}>
                 {finished
@@ -3290,7 +3374,7 @@ export default function ControlPage() {
                       <div className="cx-actions" style={{ justifyContent: "flex-start" }}>
                         <button className="cx-btn" onClick={prepareAnotherPoll}>New {activeInteractiveState === "question" ? "question" : "poll"}</button>
                         {pollAnswers.length > 0 && (
-                          <button className="cx-btn" style={{ borderColor: "#2dd4bf", color: "#5eead4" }} onClick={haveAbbieReactToPoll}>Have Abbie react</button>
+                          <button className="cx-btn cx-teal" onClick={haveAbbieReactToPoll}>Have Abbie react</button>
                         )}
                       </div>
                     </>
@@ -3485,7 +3569,7 @@ export default function ControlPage() {
                               {choices.map(({ it, i }) => <option key={i} value={String(i)}>{it.ccss} — {it.q.length > 64 ? it.q.slice(0, 64) + "…" : it.q}</option>)}
                             </select>
                           </label>
-                          {sel && <div style={{ gridColumn: "1 / -1", fontSize: "0.82rem", fontWeight: 700, color: "#8b8170" }}>Answer key: {sel.a}{sel.digital ? "" : "  ·  (paper item — grade by eye)"}</div>}
+                          {sel && <div className="cx-tool-key">Answer key: {sel.a}{sel.digital ? "" : "  ·  (paper item — grade by eye)"}</div>}
                         </>
                       );
                     })()}
@@ -3532,7 +3616,10 @@ export default function ControlPage() {
                   </div>
                 </section>
               )}
-              <div className="cx-actions">
+              {/* Transport. The three moves he makes constantly stay full weight;
+                  the clock adjustments and Stop pacing drop back to quiet chips
+                  so the row reads as one decision instead of eight. */}
+              <div className="cx-actions cx-transport">
                 <button
                   className="cx-btn pri"
                   onClick={running ? toggleRun : runSequence}
@@ -3543,18 +3630,18 @@ export default function ControlPage() {
                 </button>
                 <button className="cx-btn" onClick={previous} disabled={currentIndex <= 0}>Back</button>
                 <button className="cx-btn next" onClick={() => { void next(); }} disabled={controlPoll?.stage !== "responding" && currentIndex + 1 >= lineup.length}>{controlPoll?.stage === "responding" ? "Show results" : "Next state"}</button>
-                <button className="cx-btn" onClick={stopSequence}>Stop pacing</button>
-                <span className="cx-actions-sep" />
-                <button className="cx-btn" onClick={reset}>Reset state</button>
-                <button className="cx-btn" onClick={() => adjust(60)}>+1 min</button>
-                <button className="cx-btn" onClick={() => adjust(-60)} disabled={secondsLeft < 60}>−1 min</button>
-                <button className="cx-btn" onClick={() => adjust(30)}>+30s</button>
                 {finished && activeState.id === "warmup" && (
-                  <button className="cx-btn" style={{ background: "#f59e0b", borderColor: "#f59e0b" }} onClick={() => setShowSpinner(true)}>Pick readers</button>
+                  <button className="cx-btn cx-amber" onClick={() => setShowSpinner(true)}>Pick readers</button>
                 )}
                 {activeUsesDiscussionProtocol && (
-                  <button className="cx-btn" style={{ background: "#06b6d4", borderColor: "#06b6d4" }} onClick={() => setShowDiscussion(true)}>Run discussion</button>
+                  <button className="cx-btn cx-teal" onClick={() => setShowDiscussion(true)}>Run discussion</button>
                 )}
+                <span className="cx-actions-sep" />
+                <button className="cx-btn quiet" onClick={stopSequence}>Stop pacing</button>
+                <button className="cx-btn quiet" onClick={reset}>Reset state</button>
+                <button className="cx-btn quiet" onClick={() => adjust(60)}>+1 min</button>
+                <button className="cx-btn quiet" onClick={() => adjust(-60)} disabled={secondsLeft < 60}>−1 min</button>
+                <button className="cx-btn quiet" onClick={() => adjust(30)}>+30s</button>
               </div>
               {hasNext
                 ? <div className="cx-upnext">Up next: <strong>{nextLabel}</strong></div>
@@ -3577,101 +3664,124 @@ export default function ControlPage() {
           )}
         </main>
 
-        {/* Lineup */}
-        <section className="cx-lineup">
-          <span className="cx-lineup-title">Today</span>
-          {lineup.length === 0 && <span className="cx-empty-line">empty - add states from the bank below</span>}
-          {lineup.map((it, i) => {
-            const st = bank.find((s) => s.id === it.stateId);
-            if (!st) return null;
-            return (
-              <div key={it.uid} className={`cx-litem${i === currentIndex ? " cur" : ""}`} onClick={() => loadIndex(i)}>
-                <span className="dot" style={{ background: st.color }} />
-                <span className="lbl">{it.title || st.label}</span>
-                <span className="mins">{minutesForLineupItem(it, bank)}m</span>
-                <button className="cx-ibtn" onClick={(e) => { e.stopPropagation(); moveItem(it.uid, -1); }} title="Move left">‹</button>
-                <button className="cx-ibtn" onClick={(e) => { e.stopPropagation(); moveItem(it.uid, 1); }} title="Move right">›</button>
-                <button className="cx-ibtn" onClick={(e) => { e.stopPropagation(); removeFromLineup(it.uid); }} title="Remove">×</button>
-              </div>
-            );
-          })}
-          <span className="cx-budget">{totalMin} / {PERIOD_MIN} min{overBudget ? " over" : ""}</span>
-        </section>
+        {/* Setup drawer: everything that belongs to building a day rather than
+            running one. Page state lives in the component, not the JSX, so
+            unmounting these panels cannot lose toolSetup, showSounds or a
+            half-typed lesson code. */}
+        {setupVisible && (
+          <section className="cx-setup" aria-label="Lesson setup">
+          <div className="cx-setup-head">
+            <h2 className="cx-setup-title">Set up</h2>
+            <span className="cx-setup-hint">Lineup, cue sounds and the state bank. Nothing here is needed once the lesson is running.</span>
+            <div className="cx-setup-tools">
+              {teacherSession ? <a className="cx-sbtn" href={`/session?sessionId=${encodeURIComponent(teacherSession.id)}#classroom-screens-title`}>Set up screens</a> : null}
+              <button className="cx-sbtn" onClick={() => { setShowLessons(true); setLessonMsg(null); }}>Lessons</button>
+              <button className="cx-sbtn" onClick={() => setShowSpinner(true)}>Spinner</button>
+              <a className="cx-sbtn" href="/session#challenge">Games</a>
+              <a className="cx-sbtn" href="/roster">Rosters</a>
+              <button className={`cx-sbtn${showSounds ? " on" : ""}`} onClick={() => setShowSounds((v) => !v)}>Sounds</button>
+              <button className={`cx-sbtn${editing ? " on" : ""}`} onClick={() => setEditing((v) => !v)}>{editing ? "Done" : "Edit times"}</button>
+              {activeState ? <button className="cx-sbtn" onClick={() => setSetupOpen(false)}>Close</button> : null}
+            </div>
+          </div>
 
-        {/* Sound setup */}
-        {showSounds && (
-          <section className="cx-sounds">
-            <h3>Cue sounds — used by every timer (remembered on this computer)</h3>
-            {(["warn30", "tick", "end"] as CueKey[]).map((key) => {
-              const has = !!soundUrls[key];
+          {/* Lineup */}
+          <section className="cx-lineup">
+            <span className="cx-lineup-title">Today</span>
+            {lineup.length === 0 && <span className="cx-empty-line">empty - add states from the bank below</span>}
+            {lineup.map((it, i) => {
+              const st = bank.find((s) => s.id === it.stateId);
+              if (!st) return null;
               return (
-                <div className="cx-srow" key={key}>
-                  <span className="cx-slabel">{CUE_LABELS[key]}</span>
-                  <label className="cx-supload">
-                    {has ? "Replace file" : "Upload file"}
-                    <input type="file" accept="audio/*" style={{ display: "none" }}
-                      onChange={(e) => uploadSound(key, e.target.files?.[0])} />
-                  </label>
-                  {has && <span className="cx-sset">loaded</span>}
-                  {has && <button className="cx-sclear" onClick={() => clearSound(key)}>Remove</button>}
-                  {!has && <span className="cx-hint">no file — uses built-in beep</span>}
+                <div key={it.uid} className={`cx-litem${i === currentIndex ? " cur" : ""}`} onClick={() => loadIndex(i)}>
+                  <span className="dot" style={{ background: st.color }} />
+                  <span className="lbl">{it.title || st.label}</span>
+                  <span className="mins">{minutesForLineupItem(it, bank)}m</span>
+                  <button className="cx-ibtn" onClick={(e) => { e.stopPropagation(); moveItem(it.uid, -1); }} title="Move left">‹</button>
+                  <button className="cx-ibtn" onClick={(e) => { e.stopPropagation(); moveItem(it.uid, 1); }} title="Move right">›</button>
+                  <button className="cx-ibtn" onClick={(e) => { e.stopPropagation(); removeFromLineup(it.uid); }} title="Remove">×</button>
                 </div>
               );
             })}
+            <span className="cx-budget">{totalMin} / {PERIOD_MIN} min{overBudget ? " over" : ""}</span>
+          </section>
 
-            <h3 style={{ marginTop: 6 }}>Music per state — loops while that state runs, stops at zero</h3>
-            {bank.map((s) => {
-              const storageKey = `music:${s.id}`;
-              const has = !!soundUrls[storageKey];
-              return (
-                <div className="cx-srow" key={s.id}>
-                  <span className="cx-slabel">
-                    <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: s.color, marginRight: 8 }} />
-                    {s.label}
-                  </span>
-                  <label className="cx-supload">
-                    {has ? "Replace music" : "Upload music"}
-                    <input type="file" accept="audio/*" style={{ display: "none" }}
-                      onChange={(e) => uploadSound(storageKey, e.target.files?.[0])} />
-                  </label>
-                  {has && <span className="cx-sset">loaded</span>}
-                  {has && <button className="cx-sclear" onClick={() => clearSound(storageKey)}>Remove</button>}
-                  {!has && <span className="cx-hint">no music</span>}
+          {/* Sound setup */}
+          {showSounds && (
+            <section className="cx-sounds">
+              <h3>Cue sounds — used by every timer (remembered on this computer)</h3>
+              {(["warn30", "tick", "end"] as CueKey[]).map((key) => {
+                const has = !!soundUrls[key];
+                return (
+                  <div className="cx-srow" key={key}>
+                    <span className="cx-slabel">{CUE_LABELS[key]}</span>
+                    <label className="cx-supload">
+                      {has ? "Replace file" : "Upload file"}
+                      <input type="file" accept="audio/*" style={{ display: "none" }}
+                        onChange={(e) => uploadSound(key, e.target.files?.[0])} />
+                    </label>
+                    {has && <span className="cx-sset">loaded</span>}
+                    {has && <button className="cx-sclear" onClick={() => clearSound(key)}>Remove</button>}
+                    {!has && <span className="cx-hint">no file — uses built-in beep</span>}
+                  </div>
+                );
+              })}
+
+              <h3 style={{ marginTop: 6 }}>Music per state — loops while that state runs, stops at zero</h3>
+              {bank.map((s) => {
+                const storageKey = `music:${s.id}`;
+                const has = !!soundUrls[storageKey];
+                return (
+                  <div className="cx-srow" key={s.id}>
+                    <span className="cx-slabel">
+                      <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: s.color, marginRight: 8 }} />
+                      {s.label}
+                    </span>
+                    <label className="cx-supload">
+                      {has ? "Replace music" : "Upload music"}
+                      <input type="file" accept="audio/*" style={{ display: "none" }}
+                        onChange={(e) => uploadSound(storageKey, e.target.files?.[0])} />
+                    </label>
+                    {has && <span className="cx-sset">loaded</span>}
+                    {has && <button className="cx-sclear" onClick={() => clearSound(storageKey)}>Remove</button>}
+                    {!has && <span className="cx-hint">no music</span>}
+                  </div>
+                );
+              })}
+              <p className="cx-hint">Tip: your Stream Deck still works alongside this — use either.</p>
+            </section>
+          )}
+
+          {/* Bank */}
+          <section className="cx-bank">
+            <p className="cx-bank-title">Bank — tap to add to today&apos;s lineup{editing ? " · set default minutes" : ""}</p>
+            <div className="cx-bank-groups">
+              {groupedBankSections.map((group) => (
+                <div className="cx-bank-group" key={group.id}>
+                  <div className="cx-bank-group-head">
+                    <h2 className="cx-bank-group-title">{group.label}</h2>
+                    <span className="cx-bank-group-hint">{group.hint}</span>
+                  </div>
+                  <div className="cx-bank-chip-row">
+                    {group.states.map(renderBankChip)}
+                  </div>
                 </div>
-              );
-            })}
-            <p className="cx-hint">Tip: your Stream Deck still works alongside this — use either.</p>
+              ))}
+              {ungroupedBankStates.length > 0 && (
+                <div className="cx-bank-group">
+                  <div className="cx-bank-group-head">
+                    <h2 className="cx-bank-group-title">Other</h2>
+                    <span className="cx-bank-group-hint">Additional saved states</span>
+                  </div>
+                  <div className="cx-bank-chip-row">
+                    {ungroupedBankStates.map(renderBankChip)}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
           </section>
         )}
-
-        {/* Bank */}
-        <section className="cx-bank">
-          <p className="cx-bank-title">Bank — tap to add to today&apos;s lineup{editing ? " · set default minutes" : ""}</p>
-          <div className="cx-bank-groups">
-            {groupedBankSections.map((group) => (
-              <div className="cx-bank-group" key={group.id}>
-                <div className="cx-bank-group-head">
-                  <h2 className="cx-bank-group-title">{group.label}</h2>
-                  <span className="cx-bank-group-hint">{group.hint}</span>
-                </div>
-                <div className="cx-bank-chip-row">
-                  {group.states.map(renderBankChip)}
-                </div>
-              </div>
-            ))}
-            {ungroupedBankStates.length > 0 && (
-              <div className="cx-bank-group">
-                <div className="cx-bank-group-head">
-                  <h2 className="cx-bank-group-title">Other</h2>
-                  <span className="cx-bank-group-hint">Additional saved states</span>
-                </div>
-                <div className="cx-bank-chip-row">
-                  {ungroupedBankStates.map(renderBankChip)}
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
 
         {showAdmissions && (
           <div
