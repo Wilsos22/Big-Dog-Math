@@ -504,7 +504,21 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   `supabase/student-data-security-rollback.sql` restores the old posture if ever needed. Still true:
   server-only spine tables (`mastery`, `mastery_history`, `recommendations`, `iready_scores`) are
   service-role only, and the read-only reference group (`standards`, `standard_prereqs`,
-  `misconceptions`, `mastery_config`) allows anon SELECT.
+  `misconceptions`) allows anon SELECT. `mastery_config` was listed here too and does NOT: it
+  returns 42501 to anon like the spine tables (re-probed live 2026-07-30). Locked tighter than
+  documented, so nothing to fix - but do not plan a browser read against it.
+  RE-VERIFIED LIVE 2026-07-30, against a Gemini audit that reported the opposite. Every one of
+  `students`, `periods`, `sessions`, `session_joins`, `polls`, `poll_answers`, `responses`,
+  `challenge_attempts`, `practice_assignment_attempts`, `exit_ticket_responses`,
+  `checkpoint_results`, `mastery`, `mastery_history`, `recommendations` and `iready_scores` returns
+  **401 / Postgres 42501 "permission denied for table"** to the public anon key, for SELECT AND
+  INSERT - the GRANT is revoked at the role level, so no policy is even evaluated. The reference
+  group returning 200 in the same sweep is the control that proves the probe was live. If an audit
+  claims `prototype_all` is still open, it is reading a pre-hardening snapshot: re-run the sweep
+  before believing it. THE AUDIT WAS RIGHT ABOUT ONE THING - `students.full_name` / `email` are real
+  names and district emails, which is precisely the open CCSD question in rule 8. Its proposed fix
+  (drop both columns) would break `/api/roster/sync`, which UPSERTs both from Notion every morning
+  at 13:00 UTC; a pseudonymous roster is a project, not a column drop.
 - Migrations are idempotent and hand-run; each schema-changing file ends with
   `notify pgrst, 'reload schema';`. Adding a table means writing a new `.sql`, choosing its RLS group
   deliberately, and running it in the SQL Editor. Order matters: `schema.sql` -> `proficiency.sql` ->
