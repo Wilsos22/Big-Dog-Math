@@ -231,6 +231,44 @@ bars and live misconception grouping).
   reload displays via DeployRefresh, so re-arm after every deploy); the arming chip shows for 90s
   at load and again whenever a call arrives silent, and tapping it plays the call as a speaker
   check. The pulse fires armed or not.
+- **THE ABBIE AI FEATURE IS OFF THE SITE, AND STILL IN THE REPO** (Steele, 2026-07-29: "lets get rid
+  of the abbie feature for now. leave it in the repo but lets take it off the site. it doesnt
+  contribute to the learning"). UNMOUNTED, not deleted - re-enabling is re-adding a mount, not a
+  restore from git. `AbbieTalk.tsx`, `AbbieConsole.tsx`, `AbbieStudentBubble.tsx`,
+  `AbbieStudentAsk.tsx`, `src/lib/abbieBus.ts`, `abbieQuestions.ts`, the `AbbieBroadcast` type, the
+  `sessions.abbie` column and the `abbie_questions` table ALL REMAIN. What came off: the two
+  `<AbbieStudentBubble />` / `<AbbieStudentAsk />` mounts in the root layout (they were on EVERY page,
+  student surfaces included), the `AbbieConsole` mount on `/control`, the `stage-abbie` broadcast
+  bubble on `/teacher/present`, the "Abbie AI" deck section on `/teacher/remote`, the six `abbie-*`
+  entries in `TEACHER_REMOTE_ACTIONS`, and the whole `/abbie` ROUTE (`src/app/abbie/` deleted -
+  nothing linked to it, and `AbbieTalk.tsx` is what actually held the feature).
+  TWO CONSEQUENCES THAT ARE NOT OBVIOUS. (1) `AbbieConsole` was the ONLY subscriber to `abbieBus`, so
+  unmounting it made `requestAbbieLine` a no-op everywhere - `/control`'s "Have Abbie react" poll
+  button and `StudentSpinner`'s "Have Abbie announce it" both had to go too, or they would render and
+  do nothing. `abbieBus.ts` still exports both functions with zero callers; that is deliberate.
+  (2) `scripts/classroom-surface-contract.mjs` asserted `session?.abbie?.text` on Main, so removing
+  the bubble broke the suite - the anchor was replaced with `<ClassroomStateStrip`, and the same file
+  now asserts the ABSENCE of any `<Abbie*` mount so the feature cannot quietly come back.
+- **THE SOUND BANK REPLACED THE ABBIE DECK** (same conversation: "id rather have other sound clips
+  attached to a button bank like that so i can have an applause sound and a sad trombone when i ask a
+  question and i get silence or i embarrass myself"). `src/lib/soundBank.ts` is the SINGLE source of
+  truth - seven cues (`applause`, `sad-trombone`, `crickets`, `drumroll`, `rimshot`, `ding`,
+  `buzzer`), each with a label, a deck tone and a Web Audio synthesis function.
+  THE CUE ID IS THE FILENAME. Every cue synthesizes from nothing so the bank works with zero assets
+  committed, AND prefers `public/sounds/<id>.mp3` the moment that file exists - same trick as
+  `attentionCall.ts`. That is why ids are lowercase-hyphenated: drop `applause.mp3` in and the
+  synthesized clap is replaced with no code change. `public/sounds/` does not exist yet; do not commit
+  binary audio.
+  IT IS THE SAME MECHANISM AS THE TIMER CUES, NOT A SECOND AUDIO PATH. The iPad deck sends
+  `play-<id>` (one flat entry per cue in `TEACHER_REMOTE_ACTIONS`, no typed payload), and `/control`
+  answers it in the SAME remote-command handler that already answers
+  `play-warning`/`play-countdown`/`play-times-up`, playing through the laptop's speakers. Those three
+  are Control's own uploadable timer cues and are deliberately NOT bank cues -
+  `soundCueIdForAction` returns null for them.
+  `SOUND_BANK_REMOTE_BUTTONS` in `remoteDeck.ts` is DERIVED from `SOUND_CUES`, so a new cue appears on
+  the iPad with no edit there; `npm run test:sound-bank` asserts the three lists (cues, deck, action
+  union) cannot drift and that no cue is missing a label or a synth. Adding a cue = one entry in
+  `SOUND_CUES` plus one `"play-<id>"` in `TEACHER_REMOTE_ACTIONS`. Nothing else.
 - /weekly-display is the FIFTH room surface: two all-day TVs in the back rotating
   learning intention / success criteria / week schedule / bells, fed by public
   /api/weekly-display (params ?screen= pins one view and pauses rotation, ?day=, ?track=acc,
@@ -303,8 +341,9 @@ bars and live misconception grouping).
   posted answers with its catch-to-empty every tick.
 - Teacher (gated): `/teacher` and `/teacher/*` (analytics, assignments, challenges, checkpoint-upload,
   checkpoints, exit-tickets, mastery, rightnow), `/control`, `/session`, `/roster`, `/start-question`.
-  `/teacher/growth` redirects to `/teacher/rightnow`. Note: `/builder` and `/abbie` are teacher-ish but
-  NOT gated. The lesson flow does NOT require `/control` to run: `/api/control-remote` executes
+  `/teacher/growth` redirects to `/teacher/rightnow`. Note: `/builder` is teacher-ish but NOT gated
+  (`/abbie` was the other one; that route is DELETED - see the Abbie section below).
+  The lesson flow does NOT require `/control` to run: `/api/control-remote` executes
   everything server-side - POST `start-lesson` (sessionId + notionLessonId, lessonCode as fallback -
   the by-code Notion lookup returned empty on the first live run, so prefer the page id) builds the
   flow from Notion and
@@ -316,9 +355,12 @@ bars and live misconception grouping).
   /session's toolbar) is polling. `/control` remains the full host; `/session` carries a minimal
   Start / Back / Pause / Next toolbar for rush days.
 - API: gated - `/api/form-responses`, `/api/mastery` (+`/history`,`/recompute`), `/api/live/*`,
-  `/api/roster/sync`, `/api/checkpoints/upload`. Public - `/api/today`, `/api/lessons`,
-  `/api/warmup-summaries`, `/api/abbie` (+`/voice`), `/api/session/*`, `/api/auth/login`,
+  `/api/roster/sync`, `/api/checkpoints/upload`, `/api/abbie` (+`/voice`). Public - `/api/today`,
+  `/api/lessons`, `/api/warmup-summaries`, `/api/session/*`, `/api/auth/login`,
   `/api/evidence` (authed separately by header, see Notion pipeline).
+  `/api/abbie` WAS PUBLIC and was gated 2026-07-29: it forwards whatever text it is handed straight
+  to api.anthropic.com on the server's key, so an ungated prefix was an open relay anyone could
+  spend on and put arbitrary text through. It is in `PROTECTED_PREFIXES` now. Do not move it back.
 
 Slide overlays: `/teacher/slides` is the Canva-lite editor writing the Lesson Step's `Slide Overlay`
 Notion property (percent-based element JSON via `src/lib/slideOverlay.ts`; rich_text values chunk at
@@ -418,8 +460,9 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   filters `SUCCESS_CRITERION_SETUP_PLACEHOLDER` (the snapshot's `successCriteria` can carry the
   placeholder too).
 - Student session-state reads go through `fetchSharedSessionState` (`src/lib/studentSessionShared.ts`)
-  in secure mode - a single-flight ~3s cache shared by ClassSync, /live-flow, AbbieStudentBubble,
-  and useLiveToolConfig (measured 0.27 req/s per device, was ~1.5). A NEW consumer that calls
+  in secure mode - a single-flight ~3s cache shared by ClassSync, /live-flow and useLiveToolConfig
+  (AbbieStudentBubble was the fourth consumer until it was unmounted 2026-07-29; the 0.27 req/s per
+  device measured then, down from ~1.5, is now a ceiling). A NEW consumer that calls
   `studentApiRequest` for session-state directly reintroduces the per-device request storm - go
   through the shared fetcher.
 - Class-mode following is `ClassSync` in the root layout: every student device polls
@@ -983,10 +1026,18 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 24 golden/contract suites, run with typecheck by
+  2026-07-27 `npm test` - the aggregate of all 25 golden/contract suites, run with typecheck by
   GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.
+  A CONTRACT CAN PASS ON THE WRONG ELEMENT (found 2026-07-29). `classroom-surface-contract.mjs`
+  required `src="/big-dog-mark.png"` on `/teacher/present` as proof of the approved frame, but the
+  Warm Notebook redesign (`3d6eb9a`, 2026-07-20) set `.stage-mark { display:none }` and stopped
+  rendering the topbar img - so for nine days the anchor was satisfied ONLY by the tiny mark inside
+  the Abbie broadcast bubble, itself invisible unless Abbie was speaking. The check was green and
+  testing nothing the room could see. When a string anchor survives a redesign, confirm WHICH
+  occurrence is matching before trusting it, and never re-add UI to a classroom surface just to make
+  an anchor pass. (Main renders no logo by design; putting it back is Steele's call.)
   Dependencies are pinned EXACT in package.json (they were "latest" until 7/27 - never revert
   that; an unreviewed Next/React major landing on a school-morning deploy is the failure mode).
   `scripts/proxy-gate-contract.mjs` asserts every PROTECTED_PREFIX has its `/:path*` matcher
