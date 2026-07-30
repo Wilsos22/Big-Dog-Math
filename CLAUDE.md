@@ -683,6 +683,16 @@ the invariants they protect are easy to break again.
   students fall through to `sessionFromPeriodCode`, which is gated on `withinSchoolHours()` AND a
   district account. When either gate closes it opens a DIFFERENT row - `broadcast:"free"`,
   `live_flow` null - and `ClassSync` holds those students on `/` forever.
+  **A NULL `class_code` SILENTLY REINTRODUCES THE RANDOM CODE.** Preferring `periods.class_code`
+  only helps when the period HAS one, and nothing warns when it does not - the start path just
+  falls back to `makeCode()` and the session opens on something like `DOGPSM`. Found live
+  2026-07-30: Period 1's `class_code` was null while every other period had DOG2/3/4/5/7, so its
+  session took a random code and no surface said a word. Set to `DOG1` the same day with Steele's
+  word. The check is one query, and it belongs in any session-start debugging:
+  `select name, class_code from periods order by name` - a null on a real period is the bug, and
+  it is invisible from `/control`, `/session` and the Remote alike. Note `periods` outlives the
+  student wipes (the roster cron only touches `students`), so a code lost to a migration or a
+  hand-edit stays lost until someone looks.
 - **NEVER OPEN A SECOND `/control` TAB ON A RUNNING SESSION.** (Found 2026-07-29 while verifying a
   live CC.3 run - a second tab was opened to observe, and it was one poll away from destroying the
   lesson.) Control's snapshot is a FULL REPLACE published about once a second while a timer runs, and
