@@ -152,6 +152,9 @@ export default function LiveFlowPage() {
   const [mySignal, setMySignal] = useState<string | null>(null);
   const [signalBusy, setSignalBusy] = useState(false);
   const [signalCooldown, setSignalCooldown] = useState(false);
+  // Rendered beside the chips, because that is where the student is looking
+  // when a tap fails to send.
+  const [signalError, setSignalError] = useState<string | null>(null);
   const signalStepRef = useRef<number>(-1);
   // Answer writes require the verified join. When one fails because this
   // device never verified (a skipped warm-up, a no-form day), surface the
@@ -561,12 +564,14 @@ export default function LiveFlowPage() {
     if (signalStepRef.current !== progressIndex) {
       signalStepRef.current = progressIndex;
       setMySignal(null);
+      setSignalError(null);
     }
   }, [progressIndex]);
 
   async function sendSignal(signal: "stuck" | "again" | "got-it") {
     if (!liveSessionId || signalBusy || signalCooldown) return;
     setSignalBusy(true);
+    setSignalError(null);
     const previous = mySignal;
     setMySignal(signal);
     try {
@@ -584,10 +589,20 @@ export default function LiveFlowPage() {
       // help taps it, watches it un-click, and concludes the teacher ignored
       // them. Cooldown 429s stay quiet (the chip still reads as set); every
       // identity failure surfaces the same admit path the polls use.
+      //
+      // The message has to land NEXT TO THE CHIPS. It used to go only to
+      // setPollSubmitError, and every render site of that - like the admission
+      // help block - lives inside `activePoll`. The chips are always up and a
+      // poll usually is not, so the common case set an explanation nobody could
+      // see and the snap-back this comment forbids is exactly what happened.
       const identityCodes = new Set(["session_join_required", "warmup_verification_required", "not_on_roster"]);
-      if (error instanceof StudentApiError && identityCodes.has(error.code)) {
+      const code = error instanceof StudentApiError ? error.code : null;
+      if (code && identityCodes.has(code)) {
         setJoinHelpNeeded(true);
         setPollSubmitError("Your help signal did not reach your teacher because you are not let in yet. Tap Ask for help and your teacher can admit you.");
+        setSignalError("That did not send - your teacher has not let you in yet.");
+      } else if (code !== "signal_cooldown") {
+        setSignalError("That did not send. Try again in a moment.");
       }
     } finally {
       setSignalBusy(false);
@@ -753,6 +768,9 @@ export default function LiveFlowPage() {
         .lf-signal.gotit.on { background:var(--bdb-green-deep); border-color:var(--bdb-green-deep); color:#fff; }
         .lf-signal:disabled { opacity:0.7; }
         .lf-signal-note { flex-basis:100%; text-align:center; color:var(--bdb-ink-soft); font-size:0.78rem; font-weight:700; }
+        .lf-signal-note.failed { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; color:var(--bdb-coral-deep); }
+        .lf-signal-help { min-height:36px; padding:5px 14px; border-radius:999px; border:1.5px solid var(--bdb-coral-deep); background:#fff; color:var(--bdb-coral-deep); font:inherit; font-size:0.78rem; font-weight:800; cursor:pointer; }
+        .lf-signal-help:disabled { opacity:0.7; cursor:default; }
         @keyframes lfEdgePulse { 0%, 100% { box-shadow:inset 0 0 0 4px color-mix(in srgb, var(--lf-accent) 60%, transparent); } 50% { box-shadow:inset 0 0 0 4px color-mix(in srgb, var(--lf-accent) 18%, transparent); } }
         @keyframes lfTimerLow { 0%, 100% { box-shadow:0 0 0 0 rgba(239,68,68,0.45); } 50% { box-shadow:0 0 0 7px rgba(239,68,68,0); } }
         @media (prefers-reduced-motion:reduce) { .lf-shell.warn30, .lf-timer.low { animation:none; } }
@@ -1178,7 +1196,18 @@ export default function LiveFlowPage() {
             >
               I&apos;ve got this
             </button>
-            {mySignal ? <span className="lf-signal-note" role="status">Only your teacher sees this.</span> : null}
+            {signalError ? (
+              <span className="lf-signal-note failed" role="status">
+                {signalError}
+                {joinHelpCode ? (
+                  <> Help code: <strong>{joinHelpCode}</strong>.</>
+                ) : joinHelpNeeded ? (
+                  <button className="lf-signal-help" type="button" disabled={joinHelpBusy} onClick={() => void requestAdmissionHelp()}>
+                    {joinHelpBusy ? "Requesting" : "Ask for help"}
+                  </button>
+                ) : null}
+              </span>
+            ) : mySignal ? <span className="lf-signal-note" role="status">Only your teacher sees this.</span> : null}
           </div>
         ) : null}
       </section>
