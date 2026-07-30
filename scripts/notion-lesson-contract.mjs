@@ -151,4 +151,40 @@ for (const privateValue of Object.values(privateSmallGroupRoutine.teacherPlan).f
   );
 }
 
+// A FILE property must resolve to a link.
+//
+// `Assignment Link`, `Assignments` and `Explainer Videos` are all `files` in the
+// lessons database - despite `Assignment Link`'s name and its own description
+// ("Link to the assignment when no file is embedded"). extractUrl handled url,
+// title, rich_text, formula and rollup but NOT files, so attaching the
+// assignment resolved to "" and the student lesson page rendered "Assignment
+// link coming soon" while Notion plainly showed the file. Nothing errored, which
+// is why it read as an authoring mistake for as long as it did.
+const lessons = require(path.join(root, ".tmp-mastery", "notionLessons.js"));
+
+assert.equal(
+  lessons.extractUrl({ type: "files", files: [{ name: "hw.pdf", file: { url: "https://notion-signed.example/hw.pdf?X-Amz=1" } }] }),
+  "https://notion-signed.example/hw.pdf?X-Amz=1",
+  "An uploaded file must resolve to its url, or attaching the assignment does nothing.",
+);
+assert.equal(
+  lessons.extractUrl({ type: "files", files: [{ name: "hw", external: { url: "https://classroom.example/hw" } }] }),
+  "https://classroom.example/hw",
+  "A pasted external link in a files property must resolve.",
+);
+assert.equal(
+  lessons.extractUrl({
+    type: "files",
+    files: [{ name: "hw", external: { url: "https://permanent.example/hw" }, file: { url: "https://signed.example/hw" } }],
+  }),
+  "https://permanent.example/hw",
+  "External wins over a Notion upload: the signed url expires in about an hour.",
+);
+assert.equal(lessons.extractUrl({ type: "files", files: [] }), "", "No attachment stays empty rather than guessing.");
+assert.equal(lessons.extractUrl({ type: "files" }), "", "A files property with no array must not throw.");
+// The types that already worked must keep working.
+assert.equal(lessons.extractUrl({ type: "url", url: "https://a.example" }), "https://a.example");
+assert.equal(lessons.extractUrl(undefined), "");
+console.log("  ok  a files property resolves to a link, external before signed upload");
+
 console.log("PASS - Notion lesson and step fields map into the four-surface contract.");

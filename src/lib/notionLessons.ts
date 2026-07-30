@@ -132,6 +132,15 @@ interface NotionProperty {
   checkbox?: boolean;
   number?: number | null;
   relation?: { id: string }[];
+  /**
+   * File/media properties. `Assignment Link`, `Assignments` and
+   * `Explainer Videos` are all this type in the lessons database, so a teacher
+   * who attaches the assignment gets a `files` array rather than a url.
+   * `external` is a pasted link and permanent; `file` is a Notion upload whose
+   * signed url expires in about an hour, which is why every route that serves
+   * one has to stay dynamic rather than cache the resolved value.
+   */
+  files?: { name?: string; external?: { url?: string | null } | null; file?: { url?: string | null } | null }[];
   formula?: {
     type: string;
     string?: string | null;
@@ -232,11 +241,23 @@ function firstUrlFromText(text: string): string {
   return text.match(/https?:\/\/\S+/)?.[0]?.replace(/[),.;]+$/, "") ?? "";
 }
 
-function extractUrl(prop: NotionProperty | undefined): string {
+/** Exported for `npm run test:notion-lesson-contract`; nothing else imports it. */
+export function extractUrl(prop: NotionProperty | undefined): string {
   if (!prop) return "";
   if (prop.type === "url") return prop.url ?? "";
   if (prop.type === "title" || prop.type === "rich_text" || prop.type === "formula") {
     return firstUrlFromText(extractText(prop));
+  }
+  // `Assignment Link` is a FILE property, not a url - so attaching the
+  // assignment used to resolve to nothing and the student page said "Assignment
+  // link coming soon" while Notion plainly showed the file. Prefer the pasted
+  // external link over a Notion upload's signed url, the same order
+  // extractCoverUrl uses.
+  if (prop.type === "files") {
+    for (const item of prop.files ?? []) {
+      const url = item?.external?.url || item?.file?.url;
+      if (url) return url;
+    }
   }
   if (prop.type === "rollup" && prop.rollup?.type === "array") {
     for (const item of prop.rollup.array ?? []) {
