@@ -4,6 +4,12 @@
 // Shows whatever the paired iPad (same room) writes, live. Read-only.
 // Follows the iPad's page flips; every page stays mounted (inactive pages
 // park at 1x1 canvases) so flipping back is instant and complete.
+//
+// TWO LAYERS, because the pen moved. <room> and its __p pages carry the PAPER
+// (dotted stock, templates, imported backgrounds); the teacher's writing is on
+// <room>__over, the glass sheet, in both iPad modes. Paper below, writing on
+// top - the same stack /teacher/present builds from .stage-board-panel plus
+// ScreenInkOverlay. Dropping either layer shows half a board.
 
 import { useEffect, useRef, useState } from "react";
 import AttentionPulse from "@/components/AttentionPulse";
@@ -57,6 +63,14 @@ export default function BoardPage() {
           <InkBoard room={`${room}__scratch`} interactive={false} />
         </div>
       )}
+      {/* The glass sheet, on top of everything, exactly as ScreenInkOverlay
+          sits on the projector. Since 2026-07-30 the pen writes to
+          <room>__over in BOTH iPad modes and <room> carries only the paper, so
+          without this layer a second board display shows the dotted page and
+          the templates and none of the teacher's actual writing. */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 4, pointerEvents: "none" }}>
+        <InkBoard room={`${room}__over`} interactive={false} transparent passThrough />
+      </div>
       <div
         style={{
           position: "absolute", top: 10, right: 12, zIndex: 2,
