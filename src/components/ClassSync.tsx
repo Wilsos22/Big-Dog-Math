@@ -9,7 +9,8 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 import { SECURE_STUDENT_DATA, studentApiRequest } from "@/lib/studentApi";
-import { fetchSharedSessionState } from "@/lib/studentSessionShared";
+import { fetchSharedSessionState, invalidateSharedSessionState } from "@/lib/studentSessionShared";
+import { joinLiveFlowPings } from "@/lib/liveFlowPing";
 import {
   LIVE_FLOW_MODE,
   LIVE_FLOW_ROUTE,
@@ -201,9 +202,25 @@ export default function ClassSync() {
     void tick();
     const id = setInterval(tick, 3000);
     window.addEventListener(STUDENT_SESSION_READY_EVENT, handleStudentSessionReady);
+
+    // The 3s tick is the floor. A screen ping means the lesson just moved, so
+    // drop the shared cache (otherwise this read is served a value from up to
+    // FRESH_MS ago) and follow immediately - class mode used to take up to
+    // three seconds to send a student to the next surface.
+    // Skipped on the teacher surfaces for the same reason tick() returns early
+    // there: the pen surface has no business holding a class-mode subscription.
+    const sessionId = getStoredStudentSessionId();
+    const pings = sessionId && !isTeacherRoute(pathRef.current || "")
+      ? joinLiveFlowPings(sessionId, () => {
+          invalidateSharedSessionState(sessionId);
+          void tick();
+        })
+      : null;
+
     return () => {
       stop = true;
       clearInterval(id);
+      pings?.close();
       window.removeEventListener(STUDENT_SESSION_READY_EVENT, handleStudentSessionReady);
     };
   }, [supabase, router, pathname]);

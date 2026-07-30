@@ -5,6 +5,12 @@
 // attached to a button bank like that so i can have an applause sound and a sad
 // trombone when i ask a question and i get silence or i embarrass myself").
 //
+// THREE SOURCES, IN THIS ORDER: a clip the teacher loaded on the classroom
+// laptop (src/lib/soundBankStore.ts, IndexedDB, installed into this module by
+// /control at mount), then a committed public/sounds/<id>.mp3, then the
+// synthesized cue. A button can therefore never be silent, and loading a real
+// sound no longer needs a binary in the repo and a deploy.
+//
 // TWO THINGS MAKE THIS SAFE TO SHIP WITH AN EMPTY public/sounds/ FOLDER.
 // 1. Every cue SYNTHESIZES in Web Audio, so the bank works today with zero
 //    assets in the repo and nothing binary to commit.
@@ -299,6 +305,43 @@ function sharedContext(): AudioContext | null {
   return ownCtx;
 }
 
+// ── Teacher-loaded clips ────────────────────────────────────────────────────
+// Held here as decoded buffers. This module deliberately imports nothing local
+// - its contract compiles it in isolation with the "@/" aliases dropped - so
+// the store does not reach in; /control reads IndexedDB and pushes clips down.
+
+const userBuffers = new Map<string, AudioBuffer>();
+
+/**
+ * Assign decoded audio to a cue for the rest of this page's life. Returns false
+ * if the bytes would not decode, so a caller can tell the teacher the file is
+ * broken instead of leaving a button that silently falls back.
+ */
+export async function installUserClip(
+  id: string,
+  bytes: ArrayBuffer,
+  existing?: AudioContext | null,
+): Promise<boolean> {
+  const c = existing ?? sharedContext();
+  if (!c) return false;
+  try {
+    userBuffers.set(id, await c.decodeAudioData(bytes.slice(0)));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Drop a loaded clip; the cue falls back to its file, then to synthesis. */
+export function clearUserClip(id: string): void {
+  userBuffers.delete(id);
+}
+
+/** Which cues are currently playing a teacher-loaded clip. */
+export function loadedUserClipIds(): string[] {
+  return [...userBuffers.keys()];
+}
+
 // Absence is the normal case, so nothing is fetched until the teacher actually
 // uses the bank. The first press of a cue synthesizes while the HEADs are in
 // flight; every press after it plays whatever real clip is installed.
@@ -355,10 +398,11 @@ export function playSoundCue(id: SoundCueId, existing?: AudioContext | null): vo
   master.gain.value = 0.9;
   master.connect(c.destination);
   const at = c.currentTime + 0.02;
-  const file = fileBuffers.get(id);
-  if (file) {
+  // Teacher's own clip first, then a committed file, then synthesis.
+  const chosen = userBuffers.get(id) ?? fileBuffers.get(id);
+  if (chosen) {
     const src = c.createBufferSource();
-    src.buffer = file;
+    src.buffer = chosen;
     src.connect(master);
     src.start(at);
     return;

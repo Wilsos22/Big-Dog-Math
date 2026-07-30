@@ -231,7 +231,17 @@ bars and live misconception grouping).
   reload displays via DeployRefresh, so re-arm after every deploy); the arming chip shows for 90s
   at load and again whenever a call arrives silent, and tapping it plays the call as a speaker
   check. The pulse fires armed or not.
-- **THE ABBIE AI FEATURE IS OFF THE SITE, AND STILL IN THE REPO** (Steele, 2026-07-29: "lets get rid
+- **THE ABBIE AI FEATURE IS DELETED** (unmounted 2026-07-29, files removed 2026-07-30 on Steele's
+  word: "take the abbie communication files and remove them from the repo"). What follows is the
+  history of how it came off; the components, the relay, abbieBus/abbieQuestions, both question
+  endpoints and the `/api/abbie` proxy gate are GONE, so re-enabling is a rebuild, not a remount.
+  ELEVENLABS WENT WITH IT - it lived only in `/api/abbie/voice`, and no reference to it remains
+  anywhere in the repo. THE MASCOT STAYS: the art, the "Abbie Says" hints, the warmup wordmark and
+  the ratio problems about her treats are not the AI feature. STILL IN THE DATABASE and needing a
+  destructive migration nobody has run: the `sessions.abbie` column (no longer read or written) and
+  the `abbie_questions` table, which holds student-submitted free text from when the feature was
+  live - dropping it is a real privacy improvement and needs Steele's word.
+  Original note follows. (Steele, 2026-07-29: "lets get rid
   of the abbie feature for now. leave it in the repo but lets take it off the site. it doesnt
   contribute to the learning"). UNMOUNTED, not deleted - re-enabling is re-adding a mount, not a
   restore from git. `AbbieTalk.tsx`, `AbbieConsole.tsx`, `AbbieStudentBubble.tsx`,
@@ -265,6 +275,18 @@ bars and live misconception grouping).
   `play-warning`/`play-countdown`/`play-times-up`, playing through the laptop's speakers. Those three
   are Control's own uploadable timer cues and are deliberately NOT bank cues -
   `soundCueIdForAction` returns null for them.
+  USER-LOADABLE AS OF 2026-07-30 (Steele: "a user loadable sound bank that I can assign sound
+  effects to the button to trigger the clip"). THREE SOURCES, IN ORDER: a clip loaded in
+  `/control`'s Sounds panel, then `public/sounds/<id>.mp3`, then the synthesized cue - so a
+  button is never silent and removing a clip falls back rather than breaking. The clips live in
+  the IndexedDB store `/control` ALREADY used for timer cues and per-state music, under a
+  `bank:<cueId>` key - one upload mechanism on the machine with the speakers, not a second one.
+  Nothing goes to Supabase: no bucket, no table, no migration. `soundBank.ts` still imports
+  nothing local (its contract compiles it in isolation with the `@/` aliases dropped), so the
+  store does NOT reach into it - Control reads IndexedDB and pushes decoded audio down through
+  `installUserClip`, which returns false on undecodable bytes so a broken file is reported
+  instead of silently ignored. Clips are per-device: loading them on a different laptop is a
+  fresh load, which is the correct behaviour for a machine-local speaker cue.
   `SOUND_BANK_REMOTE_BUTTONS` in `remoteDeck.ts` is DERIVED from `SOUND_CUES`, so a new cue appears on
   the iPad with no edit there; `npm run test:sound-bank` asserts the three lists (cues, deck, action
   union) cannot drift and that no cue is missing a label or a synth. Adding a cue = one entry in
@@ -504,7 +526,28 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   `supabase/student-data-security-rollback.sql` restores the old posture if ever needed. Still true:
   server-only spine tables (`mastery`, `mastery_history`, `recommendations`, `iready_scores`) are
   service-role only, and the read-only reference group (`standards`, `standard_prereqs`,
-  `misconceptions`, `mastery_config`) allows anon SELECT.
+  `misconceptions`) allows anon SELECT. `mastery_config` was listed here too and does NOT: it
+  returns 42501 to anon like the spine tables (re-probed live 2026-07-30). Locked tighter than
+  documented, so nothing to fix - but do not plan a browser read against it.
+  RE-VERIFIED LIVE 2026-07-30, against a Gemini audit that reported the opposite. Every one of
+  `students`, `periods`, `sessions`, `session_joins`, `polls`, `poll_answers`, `responses`,
+  `challenge_attempts`, `practice_assignment_attempts`, `exit_ticket_responses`,
+  `checkpoint_results`, `mastery`, `mastery_history`, `recommendations` and `iready_scores` returns
+  **401 / Postgres 42501 "permission denied for table"** to the public anon key, for SELECT AND
+  INSERT - the GRANT is revoked at the role level, so no policy is even evaluated. The reference
+  group returning 200 in the same sweep is the control that proves the probe was live. If an audit
+  claims `prototype_all` is still open, it is reading a pre-hardening snapshot: re-run the sweep
+  before believing it. THE AUDIT WAS RIGHT ABOUT ONE THING - `students.full_name` / `email` are real
+  names and district emails, which is precisely the open CCSD question in rule 8. Its proposed fix
+  (drop both columns) would break `/api/roster/sync`, which UPSERTs both from Notion every morning
+  at 13:00 UTC; a pseudonymous roster is a project, not a column drop.
+- `supabase/audit-exposure.sql` IS THE SELF-AUDIT - run it in the SQL Editor instead of trusting
+  anyone's summary. Read-only: anon and authenticated grants with policy counts, policies that
+  filter by nothing, every column whose name suggests an identifier, row counts, and a direct
+  impersonated read wrapped in `begin`/`rollback`. Section 7 lists the checks SQL cannot make.
+  It was an untracked file for a day and TWO outside audits read it as implemented logging the
+  project does not have - the real audit trail is `src/lib/securityAudit.ts`
+  (`recordSecurityEvent`), used by the join, admission, warmup-verify, roster and session routes.
 - Migrations are idempotent and hand-run; each schema-changing file ends with
   `notify pgrst, 'reload schema';`. Adding a table means writing a new `.sql`, choosing its RLS group
   deliberately, and running it in the SQL Editor. Order matters: `schema.sql` -> `proficiency.sql` ->
@@ -778,8 +821,14 @@ the invariants they protect are easy to break again.
   - with a join that lands mid-teardown waiting for it and opening a fresh channel. `npm run
   test:ink-sync` drives the real compiled `joinInkRoom` against a fake client that reproduces the
   dedupe, and it FAILS on the old implementation. Duplicate joins are now safe, so do not "fix" one
-  by hunting call sites; the rule to keep is that nothing outside `src/lib/inkSync.ts` may call
-  `supabase.channel("ink-...")` directly, and the contract asserts that too.
+  by hunting call sites. The registry itself now lives in `src/lib/realtimeRooms.ts`
+  (`joinRealtimeRoom`) and `joinInkRoom` is a thin wrapper that keeps the wire event `"ink"`,
+  because classroom displays open since before the refactor are still listening for it. The
+  rule to keep is that a shared broadcast room is opened ONLY through that registry - the
+  contract asserts `inkSync.ts` never calls `supabase.channel` itself. NOT yet converted, and
+  carrying the same latent hazard: `useLiveToolConfig.tsx` (`live-tool-<route>-<session>`) and
+  `classroomSpinnerSync.ts` (`classroom-spinner-<room>`) still open and remove channels per
+  call. Their topics happen to be unique per page today, which is the only reason they work.
 - **THE PROJECTOR IS A DISPLAY ON THE INK ROOM, NEVER A WRITER** (2026-07-30). `/teacher/present`'s
   board-scene `InkBoard` was mounted `interactive`, which made the projector the SECOND author on
   the shared room: `InkBoard`'s interactive-only effects broadcast `{t:"bg", url:null}` (wiping the
@@ -788,6 +837,33 @@ the invariants they protect are easy to break again.
   board, racing the iPad's. It is `interactive={false}` now, which also means it ASKS for state on
   mount - so opening the board scene mid-lesson fills in everything already written instead of
   starting blank. The pen is the iPad; nobody touches the projector.
+- **SCREENS ARE PUSHED, NOT JUST POLLED** (added 2026-07-30, Steele: "is there a way to have the
+  screens polled more frequently to reduce the lag in screen changes?"). Measured first: the
+  projectors were about 1-1.8s behind the teacher's tap (1500ms poll) and the Chromebooks 2-3s
+  (2000ms poll behind `studentSessionShared`'s 2800ms cache). Polling harder was the WRONG lever on
+  the student side - that multiplies by the whole class, and the per-device request storm it would
+  recreate is the exact thing `studentSessionShared.ts` was written to end.
+  So `/api/teacher/session` and `/api/control-remote` now BROADCAST a contentless "re-read" ping on
+  `flow-<sessionId>` after a write, and `/teacher/present`, `/teacher/pace`, `/live-flow` and
+  `ClassSync` re-read on it. Measured live: about 200ms end to end, down from 1-3s.
+  FOUR THINGS HOLD THIS UP AND NONE ARE OPTIONAL. (1) **Every poll stays.** The ping is an
+  optimisation on top of polling, so a dropped ping costs one tick and nothing else; never delete an
+  interval because "the ping handles it". (2) **The ping must stay RARE.** `/control` republishes
+  about once a second while a timer runs, so both writers gate on
+  `liveFlowScreensChanged` (`src/lib/liveFlowScreens.ts`), which ignores `updatedAt`,
+  `timer.secondsLeft` and the Remote's `transition` claim marker. Ping every write and thirty
+  Chromebooks re-fetch every second - the storm, arrived by another road, and it would present as
+  "the sync broke". (3) **The student surfaces must call `invalidateSharedSessionState` BEFORE
+  re-reading**, or the shared cache serves a value up to 2.8s old and the ping looks like it did
+  nothing. (4) **The payload carries nothing.** It says "something changed"; each surface then
+  re-reads through the gated endpoint it already used, so `studentSafeLiveFlow`, the teacher gate and
+  `requireVerifiedStudent` are all exactly where they were - which is also why this does not run
+  into the hold on new student-data plumbing (no new table, no new column, no PII on the wire).
+  `broadcastLiveFlowChange` is SERVER-ONLY (service-role key) and can never throw into a write:
+  if realtime is down the room just feels like it did before. Sent over the REST endpoint
+  `POST /realtime/v1/api/broadcast` rather than a socket, because a route handler has no connection
+  to keep - verified against the live project, 202 and delivery in about 200ms. `npm run
+  test:live-flow-push` pins all four rules.
 - **CONTROL'S SNAPSHOT IS A FULL REPLACE.** Any field Control does not carry through is DELETED.
   `interlude` and `transition` are owned by `/api/control-remote`, and omitting them erased a Hustle
   or Settle about one second after it started, then auto-advanced past it. Same class of bug wiped
@@ -1115,7 +1191,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 26 golden/contract suites, run with typecheck by
+  2026-07-27 `npm test` - the aggregate of all 27 golden/contract suites, run with typecheck by
   GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.

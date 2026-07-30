@@ -1,12 +1,16 @@
+import { after } from "next/server";
 import { recordSecurityEvent } from "@/lib/securityAudit";
 import { closeOtherOpenSessions, sweepStaleSessions } from "@/lib/sessionLifecycle";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
+import { broadcastLiveFlowChange } from "@/lib/liveFlowBroadcast";
+import { liveFlowScreensChanged } from "@/lib/liveFlowScreens";
+import type { LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
 
 export const dynamic = "force-dynamic";
 
 type SessionAction =
   | { action: "start"; periodId?: unknown; joinCode?: unknown; assignmentId?: unknown }
-  | { action: "update"; sessionId?: unknown; broadcast?: unknown; liveFlow?: unknown; expectedLiveFlowUpdatedAt?: unknown; abbie?: unknown; remoteCommand?: unknown; expectedRemoteCommandNonce?: unknown }
+  | { action: "update"; sessionId?: unknown; broadcast?: unknown; liveFlow?: unknown; expectedLiveFlowUpdatedAt?: unknown; remoteCommand?: unknown; expectedRemoteCommandNonce?: unknown }
   | { action: "admit"; sessionId?: unknown; requestCode?: unknown; studentEmail?: unknown }
   | { action: "close"; sessionId?: unknown };
 
@@ -67,7 +71,7 @@ export async function GET(request: Request) {
   if (liveSessionId || latestOpen) {
     let query = db
       .from("sessions")
-      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,abbie,remote_command")
+      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,remote_command")
       .eq("status", "open");
     query = liveSessionId
       ? query.eq("id", liveSessionId)
@@ -80,7 +84,7 @@ export async function GET(request: Request) {
   if (!sessionId) {
     const { data, error } = await db
       .from("sessions")
-      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,abbie,remote_command")
+      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,remote_command")
       .order("started_at", { ascending: false })
       .limit(50);
     if (error) return Response.json({ error: error.message }, { status: 500 });
@@ -89,7 +93,7 @@ export async function GET(request: Request) {
 
   const [sessionResult, joinResult, admissionResult, pollResult] = await Promise.all([
     db.from("sessions")
-      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,abbie,remote_command")
+      .select("id,period_id,assignment_id,join_code,status,started_at,ended_at,broadcast,live_flow,remote_command")
       .eq("id", sessionId)
       .maybeSingle(),
     db.from("session_joins")
@@ -488,9 +492,23 @@ export async function POST(request: Request) {
     const patch: Record<string, unknown> = {};
     if ("broadcast" in body) patch.broadcast = typeof body.broadcast === "string" ? text(body.broadcast, 300) : null;
     if ("liveFlow" in body) patch.live_flow = body.liveFlow ?? null;
-    if ("abbie" in body) patch.abbie = body.abbie ?? null;
     if ("remoteCommand" in body) patch.remote_command = body.remoteCommand ?? null;
     if (!Object.keys(patch).length) return Response.json({ error: "No session fields were supplied." }, { status: 400 });
+
+    // Read the snapshot this write replaces, so the screen ping below fires on
+    // real changes only. /control republishes about once a second while a timer
+    // runs; pinging every write would have the whole class re-fetching every
+    // second, which is the request storm this feature exists to avoid.
+    // One indexed single-column read against 30 devices polling - it is cheap.
+    let previousFlow: LiveClassFlowSnapshot | null = null;
+    if ("liveFlow" in body) {
+      const { data: before } = await db
+        .from("sessions")
+        .select("live_flow")
+        .eq("id", sessionId)
+        .maybeSingle();
+      previousFlow = (before?.live_flow ?? null) as LiveClassFlowSnapshot | null;
+    }
 
     let update = db
       .from("sessions")
@@ -512,7 +530,7 @@ export async function POST(request: Request) {
         : update.is("remote_command", null);
     }
     const { data, error: updateError } = await update
-      .select("id,status,broadcast,live_flow,abbie,remote_command")
+      .select("id,status,broadcast,live_flow,remote_command")
       .maybeSingle();
     if (updateError) return Response.json({ error: updateError.message }, { status: 500 });
     if (!data && checksLiveFlowRevision) {
@@ -522,6 +540,12 @@ export async function POST(request: Request) {
       return Response.json({ error: "A newer classroom command replaced this receipt." }, { status: 409 });
     }
     if (!data) return Response.json({ error: "Open session not found." }, { status: 404 });
+    // after() so the ping never sits between the teacher's tap and Control's
+    // response - the screens are what we are trying to make faster, not slower.
+    if ("liveFlow" in body
+      && liveFlowScreensChanged(previousFlow, data.live_flow as LiveClassFlowSnapshot | null)) {
+      after(() => broadcastLiveFlowChange(sessionId));
+    }
     return Response.json({ session: data });
   }
 
@@ -532,7 +556,7 @@ export async function POST(request: Request) {
     const [pollResult, sessionResult] = await Promise.all([
       db.from("polls").update({ status: "closed" }).eq("session_id", sessionId).eq("status", "open"),
       db.from("sessions")
-        .update({ status: "closed", ended_at: now, broadcast: null, live_flow: null, abbie: null, remote_command: null })
+        .update({ status: "closed", ended_at: now, broadcast: null, live_flow: null, remote_command: null })
         .eq("id", sessionId)
         .select("id")
         .maybeSingle(),

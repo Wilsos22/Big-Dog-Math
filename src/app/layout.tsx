@@ -4,8 +4,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ClassSync from "@/components/ClassSync";
 import WarmupJoinSync from "@/components/WarmupJoinSync";
-// The Abbie AI feature is OFF THE SITE (Steele, 2026-07-29: "it doesnt contribute
-// to the learning"). AbbieStudentBubble and AbbieStudentAsk used to mount here,
+// The Abbie AI feature is GONE (unmounted 2026-07-29, deleted 2026-07-30).
+// AbbieStudentBubble and AbbieStudentAsk used to mount here,
 // which put them on EVERY page including every student surface. The components
 // stay in src/components/ - re-enabling is re-adding two mounts, not a restore
 // from git. Do not re-add them without his word.

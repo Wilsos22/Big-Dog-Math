@@ -214,6 +214,5 @@ export function studioPreviewSession(snapshot: LiveClassFlowSnapshot) {
     broadcast: LIVE_FLOW_MODE,
     live_flow: snapshot,
     remote_command: null,
-    abbie: null,
   };
 }

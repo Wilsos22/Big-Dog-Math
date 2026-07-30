@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useLiveFlowPing } from "@/lib/liveFlowPing";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
 import InkBoard from "@/components/InkBoard";
 import LessonVisual from "@/components/LessonVisual";
@@ -294,6 +295,7 @@ function WarmupLearningSteps({ direction }: { direction?: string }) {
 
 export default function ClassroomStagePage() {
   const [session, setSession] = useState<StageSession | null>(null);
+  const reloadRef = useRef<(() => void) | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionMessage, setSessionMessage] = useState("Connecting to the confirmed class session.");
   const [pollAnswers, setPollAnswers] = useState<PollAnswer[]>([]);
@@ -375,12 +377,23 @@ export default function ClassroomStagePage() {
       }
     };
     void load();
+    // The poll is the floor, not the mechanism: reloadRef lets the screen ping
+    // pull the change through immediately instead of waiting out the interval.
+    reloadRef.current = () => { void load(); };
     const interval = window.setInterval(load, requested.pinned ? 1000 : 1500);
     return () => {
       stopped = true;
+      reloadRef.current = null;
       window.clearInterval(interval);
     };
   }, []);
+
+  // Re-read the moment the lesson changes. Without this the wall sits up to
+  // 1.5s behind the teacher's tap; with it, about 200ms.
+  // Skipped in Studio preview and on /demo: those adopt a posted snapshot and
+  // fetch nothing, so a subscription there would be a channel with nothing to
+  // pull through.
+  useLiveFlowPing(isStudioPreviewMode ? null : session?.id, () => reloadRef.current?.());
 
   const flow = session?.live_flow ?? null;
   const pollId = flow?.poll?.id ?? null;
@@ -1271,8 +1284,8 @@ export default function ClassroomStagePage() {
         {/* The Abbie broadcast bubble used to sit here, pinned bottom-centre over
             the stage, reading sessions.abbie. The Abbie AI feature is off the site
             (Steele, 2026-07-29) so the aside, its .stage-abbie styles and the
-            session field are gone. The AbbieBroadcast type and the Supabase
-            column both remain. */}
+            session field are gone. The type and every component went with it on
+            2026-07-30; only the unused Supabase column remains. */}
       </section>
       {inkOverlay && !inkOverlay.embed && <ScreenInkOverlay room={inkOverlay.room} />}
       {inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && <AttentionListener room={inkOverlay.room} />}

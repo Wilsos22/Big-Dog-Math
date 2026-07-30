@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
 import { getSupabase } from "@/lib/supabase";
 import { SECURE_STUDENT_DATA, StudentApiError, studentApiRequest } from "@/lib/studentApi";
-import { fetchSharedSessionState } from "@/lib/studentSessionShared";
+import { fetchSharedSessionState, invalidateSharedSessionState } from "@/lib/studentSessionShared";
+import { useLiveFlowPing } from "@/lib/liveFlowPing";
 import { studentSafeLiveFlow } from "@/lib/liveFlowPrivacy";
 import { useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
@@ -137,6 +138,7 @@ export default function LiveFlowPage() {
   const [selectedChoice, setSelectedChoice] = useState("");
   const [numericBoxes, setNumericBoxes] = useState<string[]>([]);
   const [fistRating, setFistRating] = useState(3);
+  const reloadSessionRef = useRef<(() => void) | null>(null);
   const [submittedPollIds, setSubmittedPollIds] = useState<string[]>([]);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [identityConfirmed, setIdentityConfirmed] = useState(false);
@@ -279,14 +281,26 @@ export default function LiveFlowPage() {
     };
 
     void readSession();
+    // The poll stays exactly as it was and remains the safety net; the ping
+    // below just pulls a change through without waiting for the next tick.
+    // It must drop the shared cache first, or the re-read is served a value
+    // from up to FRESH_MS ago and the ping looks like it did nothing.
+    reloadSessionRef.current = () => {
+      invalidateSharedSessionState(sessionId);
+      void readSession();
+    };
     const poll = window.setInterval(readSession, SECURE_STUDENT_DATA ? 2000 : 1000);
 
     return () => {
       stopped = true;
+      reloadSessionRef.current = null;
       window.clearTimeout(connectionFallback);
       window.clearInterval(poll);
     };
   }, [supabase, isStudioPreviewMode]);
+
+  // Chromebooks sat 2-3s behind the room; this brings them to about 200ms.
+  useLiveFlowPing(isStudioPreviewMode ? null : getStoredStudentSessionId(), () => reloadSessionRef.current?.());
 
   useEffect(() => {
     if (!WARMUP_IDENTITY || !supabase) return;

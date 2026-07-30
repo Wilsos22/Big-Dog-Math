@@ -21,6 +21,19 @@ let cache: { sessionId: string; at: number; data: unknown } | null = null;
 let failure: { sessionId: string; at: number; error: unknown } | null = null;
 let inflight: { sessionId: string; promise: Promise<unknown> } | null = null;
 
+/**
+ * Drop the cached read so the next call goes to the wire.
+ *
+ * The screen ping (liveFlowPing.ts) tells a device the lesson just changed, but
+ * a re-read straight afterwards would be served this cache and hand back the
+ * state from up to FRESH_MS ago - the ping would look like it did nothing.
+ * Invalidate first, then re-read.
+ */
+export function invalidateSharedSessionState(sessionId?: string) {
+  if (!sessionId || (cache && cache.sessionId === sessionId)) cache = null;
+  if (!sessionId || (failure && failure.sessionId === sessionId)) failure = null;
+}
+
 export function fetchSharedSessionState<T>(sessionId: string): Promise<T> {
   const now = Date.now();
   if (cache && cache.sessionId === sessionId && now - cache.at < FRESH_MS) {
