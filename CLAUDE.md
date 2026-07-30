@@ -892,6 +892,19 @@ the invariants they protect are easy to break again.
   `POST /realtime/v1/api/broadcast` rather than a socket, because a route handler has no connection
   to keep - verified against the live project, 202 and delivery in about 200ms. `npm run
   test:live-flow-push` pins all four rules.
+- **A REMOTE COMMAND PINGS CONTROL, AND A PING MAY ONLY PLAY A SOUND** (2026-07-30, Steele: "it
+  needs less lag"). Control learns about `remote_command` on a 1.2s poll - ~600ms average, 1.2s
+  worst - which is fine for applause and wrong for a rimshot. `/api/control-remote` now also
+  broadcasts `{action, nonce}` on `remote-<sessionId>` (`src/lib/remoteCommandPing.ts`) and Control
+  reacts at once. Measured live: 62ms average, 105ms worst.
+  THE RULE THAT MATTERS IS WHAT A PING MAY DO. It is an unverified broadcast that can arrive twice,
+  out of order, or from a stale sender. `pingPlaysDirectly` allows ONLY `play-*`: a duplicate clip
+  is harmless, a duplicated `next` skips a step of a real class. Everything else may only pull the
+  authoritative re-read forward. Do not widen that function without a very good reason.
+  It is a SEPARATE room from the screen ping on purpose - a sound cue changes nothing a projector or
+  a Chromebook shows, and waking thirty student devices on every rimshot is the storm to avoid. Both
+  the ping and the poll play through Control's one `playCueOnce` guard, keyed on the command nonce,
+  so whichever arrives first wins and the other is a no-op. The 1.2s poll stays as the floor.
 - **CONTROL'S SNAPSHOT IS A FULL REPLACE.** Any field Control does not carry through is DELETED.
   `interlude` and `transition` are owned by `/api/control-remote`, and omitting them erased a Hustle
   or Settle about one second after it started, then auto-advanced past it. Same class of bug wiped
