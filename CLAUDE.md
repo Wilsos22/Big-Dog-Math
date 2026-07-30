@@ -653,6 +653,16 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   button. Before debugging signals, check `select count(*) from session_joins where student_id is
   not null` - if it is zero, nothing is broken and nothing can be proven either. THE WHOLE CHAIN
   IS STILL UNPROVEN END TO END; the first real verified student to tap a chip is the test.
+  HOW TO TEST THE HALF THAT CAN BE TESTED (2026-07-30): the WRITE needs a district Google account and
+  cannot be faked - seeding a roster row does NOT help, because the gate is `linkedStudent(auth.uid)`
+  at the auth layer, not a `students` row. Everything downstream - the `/api/live/signals` read, the
+  step filter, the strip, the pulse - is provable by INSERTING a `student_signals` row directly, using
+  a student from the fictional `BDM Mock Class` (`supabase/mock-classroom-seed.sql`) so no real name
+  ever carries a fake signal. Read `step_index` from the session row in the same statement
+  (`(live_flow->'sequence'->>'currentIndex')::int`) or the teacher advances past it before you look.
+  It requires an OPEN session: the Remote renders the strip only when one exists, and
+  `sessionLifecycle` closes sessions on its own, so check `status` first rather than wondering why the
+  insert matched no rows.
   THE BUG THAT WAS REAL, and its general form: the failure was INVISIBLE. `sendSignal` reported
   identity failures only through `setPollSubmitError` / `joinHelpNeeded`, and EVERY render site of
   both lives inside `{activePoll ? ...}`. The chips are always up and a poll usually is not, so the
