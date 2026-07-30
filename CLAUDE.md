@@ -582,6 +582,29 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   2026-07-26): no free-text student input - fixed chips are the spam filter; plus a 10s server
   cooldown on writes, signals never render on public surfaces, and mute gives the student no
   feedback (their chip keeps working, it just goes nowhere).
+  **A MOCK RUN CANNOT SEND A SIGNAL, AND THAT IS THE FEATURE WORKING** (2026-07-30). As of that
+  date `student_signals` has ZERO rows lifetime - not a bug, and not evidence of one: no real
+  student has used the site yet, and a mock device cannot write. The POST needs BOTH
+  `requireVerifiedStudent` (an anon auth user LINKED to a roster student, which only completing
+  the Google warm-up creates) and a `session_joins` row carrying that `student_id`. A device
+  typing a class code gets a PROVISIONAL session with an empty studentId, so it fails the first
+  gate with 428 `warmup_verification_required`. Steele hit exactly this and read it as a dead
+  button. Before debugging signals, check `select count(*) from session_joins where student_id is
+  not null` - if it is zero, nothing is broken and nothing can be proven either. THE WHOLE CHAIN
+  IS STILL UNPROVEN END TO END; the first real verified student to tap a chip is the test.
+  THE BUG THAT WAS REAL, and its general form: the failure was INVISIBLE. `sendSignal` reported
+  identity failures only through `setPollSubmitError` / `joinHelpNeeded`, and EVERY render site of
+  both lives inside `{activePoll ? ...}`. The chips are always up and a poll usually is not, so the
+  common case set an explanation nothing rendered - the silent snap-back the code's own comment
+  forbids. Fixed by rendering a `signalError` beside the chips with the Ask-for-help button.
+  Generalise it: setting an error state is not surfacing an error. Check the CONTAINER its render
+  site sits in, because a message parked in a conditional branch is a message nobody reads.
+  The Remote's strip PULSES on a new current-step signal (Steele's ask, 2026-07-30: "I just want a
+  quick alert. I dont even need to know what student it came from"). A count going 0 to 1 in a thin
+  bar on a handheld is not an alert. Colour survives `prefers-reduced-motion`, motion does not -
+  the same line `timerUrgency` holds. Step scoping is DELIBERATE and he confirmed it: a tap vanishes
+  when you advance. Names stay in the strip because /session shows them too; he does not need them,
+  which is not the same as wanting them gone.
 - Mock data for practice runs (added 2026-07-25, after the end-of-year wipe): `supabase/mock-classroom-seed.sql`
   creates the fictional `BDM Mock Class` (period code MOCK, 11 invented students on the reserved
   `mock.bigdogmath.example` domain) plus i-Ready Fall baselines and six warm-up days of `responses`
