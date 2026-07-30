@@ -705,6 +705,35 @@ export default function TeacherRemotePage() {
     finally { setSignalBusy(false); }
   }, [signalSessionId, signalBusy]);
 
+  // The signals showing RIGHT NOW. Lifted out of the render so the pulse below
+  // and the strip itself cannot disagree about which step is current.
+  const signalStepIndex = session?.liveFlow?.sequence?.currentIndex ?? null;
+  const currentSignals = useMemo(() => {
+    if (!signalState || signalState.signalsOff) return [];
+    return signalStepIndex === null
+      ? signalState.signals
+      : signalState.signals.filter((s) => s.step_index === signalStepIndex);
+  }, [signalState, signalStepIndex]);
+
+  // A count going 0 to 1 in a thin bar is not an alert. This is a handheld held
+  // at your side in a busy room, so a new signal flashes the strip and then
+  // settles. Motion only - the colour change survives prefers-reduced-motion,
+  // the same line timerUrgency holds.
+  const [signalPulse, setSignalPulse] = useState(false);
+  const seenSignalsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const keys = new Set(currentSignals.map((s) => `${s.student_id || s.display_name}:${s.signal}`));
+    let fresh = false;
+    for (const key of keys) {
+      if (!seenSignalsRef.current.has(key)) { fresh = true; break; }
+    }
+    seenSignalsRef.current = keys;
+    if (!fresh) return;
+    setSignalPulse(true);
+    const timer = window.setTimeout(() => setSignalPulse(false), 2400);
+    return () => window.clearTimeout(timer);
+  }, [currentSignals]);
+
   const flow = session?.liveFlow ?? null;
   const timer = flow?.timer ?? null;
   const timerSeconds = liveTimerSeconds(timer);
@@ -924,6 +953,12 @@ export default function TeacherRemotePage() {
         .remote-status { flex:none; min-height:30px; margin:0; border-bottom:1px solid rgba(255,255,255,0.08); border-left:4px solid var(--remote-accent); background:#26211A; color:#B8AE99; padding:6px 14px; font-size:0.7rem; line-height:1.25; font-weight:780; }
         .remote-signals { flex:none; display:flex; flex-wrap:wrap; align-items:center; gap:5px 12px; margin:0; border-bottom:1px solid rgba(255,255,255,0.08); border-left:4px solid #E4694A; background:#26211A; color:#E8E2D4; padding:7px 14px; font-size:0.74rem; font-weight:800; }
         .remote-signals.off { border-left-color:rgba(255,255,255,0.18); color:#B8AE99; }
+        .remote-signals.pulse { animation:remote-signal-pulse 1.2s ease-out 2; }
+        @keyframes remote-signal-pulse {
+          0% { background:#26211A; border-left-color:#E4694A; }
+          16% { background:#4C2A1E; border-left-color:#F0876B; }
+          100% { background:#26211A; border-left-color:#E4694A; }
+        }
         .remote-signal-count.stuck { color:#F0876B; }
         .remote-signal-count.gotit { color:#7FC7A0; }
         .remote-signal-name { display:inline-flex; align-items:center; gap:5px; color:#D9D2C2; font-weight:750; }
@@ -1067,7 +1102,11 @@ export default function TeacherRemotePage() {
           .deck-section-note { margin-top:4px; text-align:left; }
           .private-plan-grid { grid-template-columns:1fr; }
         }
-        @media (prefers-reduced-motion:reduce) { .deck-key { transition:none; } }
+        @media (prefers-reduced-motion:reduce) {
+          .deck-key { transition:none; }
+          /* The alert still has to read as an alert without the flash. */
+          .remote-signals.pulse { animation:none; background:#4C2A1E; border-left-color:#F0876B; }
+        }
       `}</style>
       <section className="remote-shell">
         <header className="remote-head">
@@ -1108,10 +1147,7 @@ export default function TeacherRemotePage() {
               </div>
             );
           }
-          const currentStep = session.liveFlow?.sequence?.currentIndex ?? null;
-          const current = currentStep === null
-            ? signalState.signals
-            : signalState.signals.filter((s) => s.step_index === currentStep);
+          const current = currentSignals;
           const stuck = current.filter((s) => s.signal === "stuck");
           const again = current.filter((s) => s.signal === "again");
           const gotIt = current.filter((s) => s.signal === "got-it");
@@ -1123,7 +1159,7 @@ export default function TeacherRemotePage() {
           // as "nobody is stuck on this step".
           if (!current.length && !signalState.controls) return null;
           return (
-            <div className="remote-signals" role="status" aria-label="Student self-signals">
+            <div className={`remote-signals${signalPulse ? " pulse" : ""}`} role="status" aria-label="Student self-signals">
               <span className="remote-signal-count stuck">Stuck {stuck.length}</span>
               <span className="remote-signal-count">Again {again.length}</span>
               <span className="remote-signal-count gotit">Got it {gotIt.length}</span>
