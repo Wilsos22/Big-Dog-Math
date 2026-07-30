@@ -34,6 +34,12 @@ import {
   soundCueIdForAction,
   soundCueFileUrl,
 } from "../.tmp-mastery/soundBank.js";
+import {
+  MAX_SOUND_LABEL,
+  normalizeSoundLabel,
+  normalizeSoundLabels,
+  soundLabelFor,
+} from "../.tmp-mastery/soundBankLabels.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -42,6 +48,8 @@ const liveClassFlow = read("src/lib/liveClassFlow.ts");
 const remoteDeck = read("src/lib/remoteDeck.ts");
 const control = read("src/app/control/page.tsx");
 const remotePage = read("src/app/teacher/remote/page.tsx");
+const soundBankSource = read("src/lib/soundBank.ts");
+const soundLabelsSource = read("src/lib/soundBankLabels.ts");
 
 let checks = 0;
 function check(name, fn) {
@@ -167,6 +175,67 @@ check("Control plays the bank through the same remote-command handler as the tim
   }
   assert.ok(control.includes("soundCueIdForAction(command.action)"), "Control does not resolve sound-bank commands");
   assert.ok(control.includes("playSoundCue("), "Control does not play sound-bank cues");
+});
+
+
+// ── Loadable clips and editable names ───────────────────────────────────────
+// Three sources in a fixed order - a clip the teacher loaded on the classroom
+// laptop, then a committed public/sounds/<id>.mp3, then synthesis - so a deck
+// key can never be silent. And because clips are loaded on /control while the
+// buttons are pressed on the iPad, a renamed button has to actually reach the
+// Remote or the teacher is reading the wrong name mid-lesson.
+
+check("a loaded clip wins, then the committed file, then synthesis", () => {
+  assert.ok(soundBankSource.includes("installUserClip"), "no way to install a teacher's clip");
+  assert.ok(soundBankSource.includes("clearUserClip"), "no way to take one back off");
+  const play = soundBankSource.slice(soundBankSource.indexOf("export function playSoundCue"));
+  assert.ok(
+    play.includes("userBuffers.get(id) ?? fileBuffers.get(id)"),
+    "playback must prefer the teacher's clip over the committed file",
+  );
+  assert.ok(play.includes("cue.render("), "synthesis must stay the last resort, so no key is ever silent");
+});
+
+check("bytes that will not decode are reported, not silently ignored", () => {
+  const install = soundBankSource.slice(soundBankSource.indexOf("export async function installUserClip"));
+  assert.ok(/catch\s*\{[^}]*return false;/.test(install), "a broken file must report failure");
+});
+
+check("Control owns both the clips and the names", () => {
+  assert.ok(control.includes("bank:"), "bank clips must be namespaced in the shared sound store");
+  assert.ok(control.includes("installUserClip("), "Control does not hand loaded clips to the bank");
+  assert.ok(control.includes("renameSoundCue"), "Control has no way to rename a button");
+  assert.ok(control.includes("SOUND_LABEL_ROOM"), "Control does not publish names to the iPad");
+  assert.ok(control.includes('t: "labels"'), "Control never answers with the name set");
+});
+
+check("the Remote asks for the names and puts them on the keys", () => {
+  assert.ok(remotePage.includes("SOUND_LABEL_ROOM"), "the Remote does not subscribe to button names");
+  assert.ok(remotePage.includes('t: "hello"'), "the Remote must ask on mount, not wait for an edit");
+  assert.ok(remotePage.includes("soundLabelFor("), "the deck keys do not apply the teacher's names");
+  assert.ok(remotePage.includes("writeStoredSoundLabels"), "the Remote must cache names to read right on reload");
+});
+
+check("a cue with no custom name keeps its built-in one", () => {
+  assert.equal(soundLabelFor("buzzer", "Buzzer", {}), "Buzzer");
+  assert.equal(soundLabelFor("buzzer", "Buzzer", { buzzer: "Airhorn" }), "Airhorn");
+  assert.equal(soundLabelFor("buzzer", "Buzzer", { buzzer: "" }), "Buzzer");
+});
+
+check("names are trimmed, collapsed and capped, and blanking one restores the default", () => {
+  assert.equal(normalizeSoundLabel("  Air   horn  "), "Air horn");
+  assert.equal(normalizeSoundLabel("   "), "");
+  assert.equal(normalizeSoundLabel("x".repeat(200)).length, MAX_SOUND_LABEL);
+  assert.deepEqual(normalizeSoundLabels({ buzzer: "  ", ding: "Bell", bad: 7 }), { ding: "Bell" });
+  assert.deepEqual(normalizeSoundLabels(null), {});
+});
+
+check("a button name is a device preference, never classroom data", () => {
+  // /control full-replaces its live_flow snapshot about once a second and that
+  // snapshot reaches student screens. A button name has no business in it, and
+  // needs no server state at all.
+  const withoutComments = soundLabelsSource.replace(/\/\/.*$/gm, "");
+  assert.ok(!/supabase|live_flow/i.test(withoutComments), "names must need no server state");
 });
 
 console.log(`\n${checks} sound bank checks passed`);

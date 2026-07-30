@@ -25,6 +25,16 @@ import type { LessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import type { LessonStepData } from "@/lib/notionLessons";
 import { BEHAVIOR_OVERRIDE_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
+import { joinRealtimeRoom } from "@/lib/realtimeRooms";
+import {
+  SOUND_LABEL_ROOM,
+  normalizeSoundLabels,
+  readStoredSoundLabels,
+  soundLabelFor,
+  writeStoredSoundLabels,
+  type SoundLabelMessage,
+  type SoundLabels,
+} from "@/lib/soundBankLabels";
 import { overrideIsLive, stripFromStep } from "@/lib/classroomStateStrip";
 import { speakerNoteItems } from "@/lib/speakerNotes";
 
@@ -294,6 +304,7 @@ export default function TeacherRemotePage() {
   const [session, setSession] = useState<RemoteSession | null>(null);
   const [status, setStatus] = useState("Choose the class session this Remote should control.");
   const [busy, setBusy] = useState<TeacherRemoteAction | null>(null);
+  const [soundLabels, setSoundLabels] = useState<SoundLabels>({});
   // Student self-signals ("I'm stuck") - the Remote is the surface in hand
   // while teaching, so the live counts belong here too. null until the
   // student-signals migration has been run.
@@ -320,6 +331,22 @@ export default function TeacherRemotePage() {
   const refreshInFlightRef = useRef(false);
   const refreshEpochRef = useRef(0);
   const utilitiesRef = useRef<HTMLDetailsElement | null>(null);
+
+  // The sound bank's button names are owned by /control, where the clips are
+  // loaded - this is where they are pressed. Start from the cached copy so the
+  // deck reads right immediately (and still reads right if Control is not open
+  // yet), then ask for the current set.
+  useEffect(() => {
+    setSoundLabels(readStoredSoundLabels());
+    const room = joinRealtimeRoom<SoundLabelMessage>(SOUND_LABEL_ROOM, (m) => {
+      if (m.t !== "labels") return;
+      const next = normalizeSoundLabels(m.labels);
+      setSoundLabels(next);
+      writeStoredSoundLabels(next);
+    });
+    room.send({ t: "hello" });
+    return () => room.close();
+  }, []);
 
   useEffect(() => {
     try {
@@ -1392,7 +1419,14 @@ export default function TeacherRemotePage() {
                         <p className="deck-section-note">Plays from the classroom computer.</p>
                       </div>
                       <div className="deck-grid">
-                        {SOUND_BANK_REMOTE_BUTTONS.map((button) => <DeckKey key={button.action} button={button} busy={busy} disabled={controlsDisabled} onSend={send} />)}
+                        {SOUND_BANK_REMOTE_BUTTONS.map((button) => {
+                          const cueId = button.action.replace(/^play-/, "");
+                          const named = soundLabelFor(cueId, "", soundLabels);
+                          const shown = named
+                            ? { ...button, label: named, detail: "Your sound" }
+                            : button;
+                          return <DeckKey key={button.action} button={shown} busy={busy} disabled={controlsDisabled} onSend={send} />;
+                        })}
                       </div>
                     </section>
 
