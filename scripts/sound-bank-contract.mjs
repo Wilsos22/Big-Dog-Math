@@ -33,7 +33,15 @@ import {
   soundCueAction,
   soundCueIdForAction,
   soundCueFileUrl,
+  matchSoundCueFile,
+  slugFileName,
 } from "../.tmp-mastery/soundBank.js";
+import {
+  MAX_SOUND_LABEL,
+  normalizeSoundLabel,
+  normalizeSoundLabels,
+  soundLabelFor,
+} from "../.tmp-mastery/soundBankLabels.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -42,6 +50,8 @@ const liveClassFlow = read("src/lib/liveClassFlow.ts");
 const remoteDeck = read("src/lib/remoteDeck.ts");
 const control = read("src/app/control/page.tsx");
 const remotePage = read("src/app/teacher/remote/page.tsx");
+const soundBankSource = read("src/lib/soundBank.ts");
+const soundLabelsSource = read("src/lib/soundBankLabels.ts");
 
 let checks = 0;
 function check(name, fn) {
@@ -68,12 +78,47 @@ const TIMER_CUE_ACTIONS = ["play-warning", "play-countdown", "play-times-up"];
 
 console.log("sound bank contract");
 
-check("Steele's ask is covered, plus the classroom companions", () => {
-  // applause and the sad trombone are his words (2026-07-29); crickets is the
-  // silence joke the trombone pairs with, and the rest are the obvious set.
-  for (const required of ["applause", "sad-trombone", "crickets", "drumroll", "ding", "buzzer"]) {
-    assert.ok(soundCue(required), `the bank is missing the ${required} cue`);
+// The bank IS Steele's Stream Deck sound board (2026-07-30: "these are the
+// soundbites i would like mapped"). These are the exact files he sent, so this
+// list is the specification - if a cue disappears from the bank, a button he
+// reaches for mid-lesson is gone.
+const STEELE_FILES = [
+  "Air Horn.mp3", "Applause.mp3", "cheering.mp3", "crickets.mp3", "Drum roll.mp3",
+  "dun-dun-dun-sound-effect-brass_8nFBccR.mp3", "Jeopardy-theme-song.mp3", "locked-in.mp3",
+  "sponge-stank-noise copy.mp3", "2-chainz-says-true.mp3",
+  "a-few-moments-later-sponge-bob-sfx-fun.mp3", "another-one_dPvHt2Z.mp3", "bingo_sdTuErT.mp3",
+  "bruh-sound-effect_WstdzdM.mp3", "directed-by-robert-b_voI2Z4T.mp3",
+  "i-guess-well-never-know-kanye.mp3", "law and order.mp3", "lil-jon-what.mp3", "metroooo.mp3",
+  "money-soundfx.mp3", "record-scratch-2.mp3", "straight-up-travis-scott.mp3",
+  "travisscott-omg.mp3", "well be right back.mp3", "you.mp3",
+];
+
+check("every clip Steele asked for has a button", () => {
+  assert.equal(SOUND_CUES.length, STEELE_FILES.length, "the bank and his sound board have drifted apart");
+});
+
+check("each of his files lands on its own button, so one bulk load fills the bank", () => {
+  const placed = new Map();
+  for (const file of STEELE_FILES) {
+    const id = matchSoundCueFile(file);
+    assert.ok(id, `nothing claims "${file}" - it would land on no button`);
+    assert.ok(!placed.has(id), `"${file}" and "${placed.get(id)}" both claim ${id}`);
+    placed.set(id, file);
   }
+  assert.equal(placed.size, SOUND_CUES.length, "some button would be left with no clip");
+});
+
+check("a file nobody asked for is reported, not dropped on a random button", () => {
+  assert.equal(matchSoundCueFile("Water Park_.mp3"), null);
+  assert.equal(matchSoundCueFile("10-seconds-count-down.mp3"), null);
+  assert.equal(matchSoundCueFile(""), null);
+});
+
+check("filenames normalize past capitals, spaces, copies and download suffixes", () => {
+  assert.equal(slugFileName("Drum roll.mp3"), "drum-roll");
+  assert.equal(slugFileName("bruh-sound-effect_WstdzdM.mp3"), "bruh-sound-effect");
+  assert.equal(slugFileName("sponge-stank-noise copy.mp3"), "sponge-stank-noise");
+  assert.equal(slugFileName("back-to-work (1).mp3"), "back-to-work");
 });
 
 check("ids are unique", () => {
@@ -167,6 +212,67 @@ check("Control plays the bank through the same remote-command handler as the tim
   }
   assert.ok(control.includes("soundCueIdForAction(command.action)"), "Control does not resolve sound-bank commands");
   assert.ok(control.includes("playSoundCue("), "Control does not play sound-bank cues");
+});
+
+
+// ── Loadable clips and editable names ───────────────────────────────────────
+// Three sources in a fixed order - a clip the teacher loaded on the classroom
+// laptop, then a committed public/sounds/<id>.mp3, then synthesis - so a deck
+// key can never be silent. And because clips are loaded on /control while the
+// buttons are pressed on the iPad, a renamed button has to actually reach the
+// Remote or the teacher is reading the wrong name mid-lesson.
+
+check("a loaded clip wins, then the committed file, then synthesis", () => {
+  assert.ok(soundBankSource.includes("installUserClip"), "no way to install a teacher's clip");
+  assert.ok(soundBankSource.includes("clearUserClip"), "no way to take one back off");
+  const play = soundBankSource.slice(soundBankSource.indexOf("export function playSoundCue"));
+  assert.ok(
+    play.includes("userBuffers.get(id) ?? fileBuffers.get(id)"),
+    "playback must prefer the teacher's clip over the committed file",
+  );
+  assert.ok(play.includes("cue.render("), "synthesis must stay the last resort, so no key is ever silent");
+});
+
+check("bytes that will not decode are reported, not silently ignored", () => {
+  const install = soundBankSource.slice(soundBankSource.indexOf("export async function installUserClip"));
+  assert.ok(/catch\s*\{[^}]*return false;/.test(install), "a broken file must report failure");
+});
+
+check("Control owns both the clips and the names", () => {
+  assert.ok(control.includes("bank:"), "bank clips must be namespaced in the shared sound store");
+  assert.ok(control.includes("installUserClip("), "Control does not hand loaded clips to the bank");
+  assert.ok(control.includes("renameSoundCue"), "Control has no way to rename a button");
+  assert.ok(control.includes("SOUND_LABEL_ROOM"), "Control does not publish names to the iPad");
+  assert.ok(control.includes('t: "labels"'), "Control never answers with the name set");
+});
+
+check("the Remote asks for the names and puts them on the keys", () => {
+  assert.ok(remotePage.includes("SOUND_LABEL_ROOM"), "the Remote does not subscribe to button names");
+  assert.ok(remotePage.includes('t: "hello"'), "the Remote must ask on mount, not wait for an edit");
+  assert.ok(remotePage.includes("soundLabelFor("), "the deck keys do not apply the teacher's names");
+  assert.ok(remotePage.includes("writeStoredSoundLabels"), "the Remote must cache names to read right on reload");
+});
+
+check("a cue with no custom name keeps its built-in one", () => {
+  assert.equal(soundLabelFor("buzzer", "Buzzer", {}), "Buzzer");
+  assert.equal(soundLabelFor("buzzer", "Buzzer", { buzzer: "Airhorn" }), "Airhorn");
+  assert.equal(soundLabelFor("buzzer", "Buzzer", { buzzer: "" }), "Buzzer");
+});
+
+check("names are trimmed, collapsed and capped, and blanking one restores the default", () => {
+  assert.equal(normalizeSoundLabel("  Air   horn  "), "Air horn");
+  assert.equal(normalizeSoundLabel("   "), "");
+  assert.equal(normalizeSoundLabel("x".repeat(200)).length, MAX_SOUND_LABEL);
+  assert.deepEqual(normalizeSoundLabels({ buzzer: "  ", ding: "Bell", bad: 7 }), { ding: "Bell" });
+  assert.deepEqual(normalizeSoundLabels(null), {});
+});
+
+check("a button name is a device preference, never classroom data", () => {
+  // /control full-replaces its live_flow snapshot about once a second and that
+  // snapshot reaches student screens. A button name has no business in it, and
+  // needs no server state at all.
+  const withoutComments = soundLabelsSource.replace(/\/\/.*$/gm, "");
+  assert.ok(!/supabase|live_flow/i.test(withoutComments), "names must need no server state");
 });
 
 console.log(`\n${checks} sound bank checks passed`);

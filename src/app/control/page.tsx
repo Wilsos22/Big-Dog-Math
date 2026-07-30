@@ -19,7 +19,18 @@ import LessonVisual from "@/components/LessonVisual";
 // six abbie-* deck keys had to go with it - a button firing into an empty bus is
 // dead UI on the live engine. Both files are deleted as of 2026-07-30.
 // The sound bank took the deck's place.
-import { SOUND_CUES, clearUserClip, installUserClip, playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
+import { SOUND_CUES, clearUserClip, installUserClip, matchSoundCueFile, playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
+import { joinRealtimeRoom } from "@/lib/realtimeRooms";
+import {
+  MAX_SOUND_LABEL,
+  SOUND_LABEL_ROOM,
+  normalizeSoundLabel,
+  readStoredSoundLabels,
+  soundLabelFor,
+  writeStoredSoundLabels,
+  type SoundLabelMessage,
+  type SoundLabels,
+} from "@/lib/soundBankLabels";
 import { discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { missingStripSlots, stripFromStep } from "@/lib/classroomStateStrip";
 import {
@@ -685,6 +696,9 @@ export default function ControlPage() {
   const [activeLessonContext, setActiveLessonContext] = useState<ActiveLessonContext | null>(null);
   const [soundUrls, setSoundUrls] = useState<Record<string, string>>({});
   const [soundBankError, setSoundBankError] = useState<string | null>(null);
+  const [soundLabels, setSoundLabels] = useState<SoundLabels>({});
+  const soundLabelsRef = useRef<SoundLabels>({});
+  const soundLabelRoomRef = useRef<{ send: (m: { t: "labels"; labels: SoundLabels }) => void } | null>(null);
   const [teacherSession, setTeacherSession] = useState<TeacherSessionRow | null>(null);
   const [teacherSessionReady, setTeacherSessionReady] = useState(false);
   const [notionLaunchRequest, setNotionLaunchRequest] = useState<{ id: string; code: string; run: boolean } | null>(null);
@@ -2770,6 +2784,36 @@ export default function ControlPage() {
     }
   }
 
+  // ── Sound bank button names ─────────────────────────────────────────────
+  // Control owns them; the iPad Remote asks for them on mount and caches what
+  // it hears. Names live in localStorage here - a button name is not classroom
+  // data and has no business in the session snapshot Control full-replaces
+  // every second.
+  useEffect(() => {
+    const stored = readStoredSoundLabels();
+    soundLabelsRef.current = stored;
+    setSoundLabels(stored);
+    const room = joinRealtimeRoom<SoundLabelMessage>(SOUND_LABEL_ROOM, (m) => {
+      if (m.t === "hello") room.send({ t: "labels", labels: soundLabelsRef.current });
+    });
+    soundLabelRoomRef.current = room;
+    // Announce once on join too, so a Remote already open picks the names up
+    // without the teacher touching anything.
+    room.send({ t: "labels", labels: stored });
+    return () => room.close();
+  }, []);
+
+  function renameSoundCue(cueId: string, raw: string) {
+    const label = normalizeSoundLabel(raw);
+    const next = { ...soundLabelsRef.current };
+    if (label) next[cueId] = label;
+    else delete next[cueId];
+    soundLabelsRef.current = next;
+    setSoundLabels(next);
+    writeStoredSoundLabels(next);
+    soundLabelRoomRef.current?.send({ t: "labels", labels: next });
+  }
+
   // ── Sound upload ────────────────────────────────────────────────────────
   async function uploadSound(key: string, file: File | undefined) {
     if (!file) return;
@@ -2786,6 +2830,26 @@ export default function ControlPage() {
       setSoundBankError(ok ? null : `${file.name} would not decode. Try an MP3 or WAV.`);
     }
   }
+  // Twenty-five clips placed by hand is twenty-five file pickers. Matching on
+  // the filename puts each one on its own button in a single drop, and says
+  // plainly which files nothing claimed rather than dropping them somewhere.
+  async function loadSoundBankFolder(files: FileList | null) {
+    if (!files?.length) return;
+    const placed: string[] = [];
+    const skipped: string[] = [];
+    for (const file of Array.from(files)) {
+      const cueId = matchSoundCueFile(file.name);
+      if (!cueId) { skipped.push(file.name); continue; }
+      await uploadSound(bankClipKey(cueId), file);
+      placed.push(cueId);
+    }
+    setSoundBankError(
+      skipped.length
+        ? `Loaded ${placed.length}. No button matched: ${skipped.slice(0, 4).join(", ")}${skipped.length > 4 ? ` and ${skipped.length - 4} more` : ""}.`
+        : placed.length ? `Loaded ${placed.length} clips.` : null,
+    );
+  }
+
   async function clearSound(key: string) {
     await idbDel(key);
     setSoundUrls((prev) => {
@@ -3126,6 +3190,10 @@ export default function ControlPage() {
         .cx-slabel { font-size:0.9rem; font-weight:800; color:#d8d2c5; min-width:220px; }
         .cx-supload { font-size:0.8rem; font-weight:800; color:#8ba0f8; background:rgba(78,110,242,0.1); border:1px solid rgba(78,110,242,0.3); border-radius:8px; padding:7px 12px; cursor:pointer; }
         .cx-sset { font-size:0.78rem; font-weight:800; color:#86efac; }
+        .cx-sbank { max-height:38vh; overflow-y:auto; display:grid; gap:2px; padding-right:6px; }
+        .cx-sname { min-width:220px; font-size:0.9rem; font-weight:800; color:#d8d2c5; background:#0d0b07; border:1px solid #2a241a; border-radius:8px; padding:7px 10px; font-family:inherit; }
+        .cx-sname::placeholder { color:#6f6656; font-weight:700; }
+        .cx-sname:focus { outline:none; border-color:#8ba0f8; }
         .cx-stest { font-size:0.74rem; font-weight:800; color:#d8d2c5; background:transparent; border:1px solid #3a3226; border-radius:6px; padding:5px 9px; cursor:pointer; }
         .cx-stest:hover { border-color:#5a5040; }
         .cx-sclear { font-size:0.74rem; font-weight:800; color:#fca5a5; background:transparent; border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:5px 9px; cursor:pointer; }
@@ -3768,16 +3836,35 @@ export default function ControlPage() {
               <h3 style={{ marginTop: 6 }}>Sound bank — the buttons on the iPad Remote</h3>
               <p className="cx-hint">
                 Load your own clip onto any button. It plays from this computer&apos;s speakers when
-                you tap the button on the iPad. With nothing loaded each button still works — it uses
+                you tap the button on the iPad. Rename a button and the iPad shows the new name.
+                With nothing loaded each button still works — it uses
                 the built-in effect, so a button is never silent.
               </p>
+              <div className="cx-srow">
+                <label className="cx-supload">
+                  Load a whole folder at once
+                  <input type="file" accept="audio/*" multiple style={{ display: "none" }}
+                    onChange={(e) => loadSoundBankFolder(e.target.files)} />
+                </label>
+                <span className="cx-hint">Each file goes to the button its name matches.</span>
+              </div>
               {soundBankError && <p className="cx-hint" style={{ color: "#f9a58f" }}>{soundBankError}</p>}
+              <div className="cx-sbank">
               {SOUND_CUES.map((cue) => {
                 const storageKey = bankClipKey(cue.id);
                 const has = !!soundUrls[storageKey];
                 return (
                   <div className="cx-srow" key={cue.id}>
-                    <span className="cx-slabel">{cue.label}</span>
+                    {/* The name travels to the iPad, where the button actually
+                        gets pressed. Blank it to go back to the built-in name. */}
+                    <input
+                      className="cx-sname"
+                      value={soundLabelFor(cue.id, "", soundLabels)}
+                      placeholder={cue.label}
+                      maxLength={MAX_SOUND_LABEL}
+                      aria-label={`Name for the ${cue.label} button`}
+                      onChange={(e) => renameSoundCue(cue.id, e.target.value)}
+                    />
                     <label className="cx-supload">
                       {has ? "Replace clip" : "Load clip"}
                       <input type="file" accept="audio/*" style={{ display: "none" }}
@@ -3790,6 +3877,7 @@ export default function ControlPage() {
                   </div>
                 );
               })}
+              </div>
 
               <p className="cx-hint">Tip: your Stream Deck still works alongside this — use either.</p>
             </section>

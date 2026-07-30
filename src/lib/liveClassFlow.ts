@@ -69,17 +69,36 @@ export const TEACHER_REMOTE_ACTIONS = [
   "play-warning",
   "play-countdown",
   "play-times-up",
-  // The sound bank (Steele, 2026-07-29), which replaced the six abbie-* keys on
-  // the iPad deck. One flat action per cue, named `play-<id>` after the cue ids
-  // in src/lib/soundBank.ts - that file owns the labels and the synthesis, and
-  // npm run test:sound-bank asserts this list matches it exactly.
+  // The sound bank. One flat action per cue, named `play-<id>` after the cue
+  // ids in src/lib/soundBank.ts - that file owns the labels, the synthesis and
+  // the filename matching, and npm run test:sound-bank asserts this list matches
+  // it exactly. Steele's own Stream Deck clips, so most of them only make their
+  // real sound once he loads the file on /control.
+  "play-air-horn",
   "play-applause",
-  "play-sad-trombone",
+  "play-cheering",
   "play-crickets",
-  "play-drumroll",
-  "play-rimshot",
-  "play-ding",
-  "play-buzzer",
+  "play-drum-roll",
+  "play-dun-dun-dun",
+  "play-jeopardy",
+  "play-locked-in",
+  "play-stank-face",
+  "play-true",
+  "play-a-few-moments-later",
+  "play-another-one",
+  "play-bingo",
+  "play-bruh",
+  "play-directed-by-robert",
+  "play-never-know",
+  "play-law-and-order",
+  "play-what",
+  "play-metro",
+  "play-money",
+  "play-record-scratch",
+  "play-straight-up",
+  "play-omg",
+  "play-be-right-back",
+  "play-you",
 ] as const;
 export type TeacherRemoteAction = (typeof TEACHER_REMOTE_ACTIONS)[number];
 

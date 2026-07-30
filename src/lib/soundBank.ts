@@ -36,13 +36,31 @@
 // isolation (tsc --ignoreConfig drops the "@/" path aliases).
 
 export const SOUND_CUE_IDS = [
+  "air-horn",
   "applause",
-  "sad-trombone",
+  "cheering",
   "crickets",
-  "drumroll",
-  "rimshot",
-  "ding",
-  "buzzer",
+  "drum-roll",
+  "dun-dun-dun",
+  "jeopardy",
+  "locked-in",
+  "stank-face",
+  "true",
+  "a-few-moments-later",
+  "another-one",
+  "bingo",
+  "bruh",
+  "directed-by-robert",
+  "never-know",
+  "law-and-order",
+  "what",
+  "metro",
+  "money",
+  "record-scratch",
+  "straight-up",
+  "omg",
+  "be-right-back",
+  "you",
 ] as const;
 export type SoundCueId = (typeof SOUND_CUE_IDS)[number];
 
@@ -57,6 +75,12 @@ export interface SoundCue {
   tone: string;
   /** Synthesize the cue into `out`, starting at context time `t`. */
   render: (c: AudioContext, out: AudioNode, t: number) => void;
+  /**
+   * Filename stems this cue answers to, normalized the way slugFileName does.
+   * They exist so loading a folder of clips at once maps each file to the right
+   * button instead of asking the teacher to place twenty-five of them by hand.
+   */
+  match?: readonly string[];
 }
 
 // ── Synthesis building blocks ───────────────────────────────────────────────
@@ -249,20 +273,87 @@ function renderBuzzer(c: AudioContext, out: AudioNode, t: number) {
   pitched(c, out, t, { freq: 55, duration: 0.62, peak: 0.20, type: "square", attack: 0.006, release: 0.05, lowpass: 300 });
 }
 
+// Most of the bank is Steele's own recordings - a voice clip cannot be
+// synthesized, so these carry a short neutral blip until his file is loaded.
+// It exists so a key pressed before the clip is in place makes a sound rather
+// than nothing, which is indistinguishable from a broken button.
+function renderBlip(c: AudioContext, out: AudioNode, t: number) {
+  pitched(c, out, t, { freq: 660, duration: 0.1, peak: 0.16, type: "sine", attack: 0.004, release: 0.06 });
+}
+
 export const SOUND_CUES: readonly SoundCue[] = [
-  { id: "applause", label: "Applause", detail: "The room claps", tone: "green", render: renderApplause },
-  { id: "sad-trombone", label: "Sad trombone", detail: "That went badly", tone: "purple", render: renderSadTrombone },
-  { id: "crickets", label: "Crickets", detail: "Nobody answered", tone: "teal", render: renderCrickets },
-  { id: "drumroll", label: "Drumroll", detail: "Build to the reveal", tone: "gold", render: renderDrumroll },
-  { id: "rimshot", label: "Rimshot", detail: "The joke landed", tone: "orange", render: renderRimshot },
-  { id: "ding", label: "Ding", detail: "That is the one", tone: "blue", render: renderDing },
-  { id: "buzzer", label: "Buzzer", detail: "Not that one", tone: "red", render: renderBuzzer },
+  { id: "air-horn", label: "Air horn", detail: "Big noise", tone: "red", render: renderBuzzer, match: ["air-horn"] },
+  { id: "applause", label: "Applause", detail: "The room claps", tone: "green", render: renderApplause, match: ["applause"] },
+  { id: "cheering", label: "Cheering", detail: "They earned it", tone: "green", render: renderApplause, match: ["cheering"] },
+  { id: "crickets", label: "Crickets", detail: "Nobody answered", tone: "teal", render: renderCrickets, match: ["crickets"] },
+  { id: "drum-roll", label: "Drum roll", detail: "Build to the reveal", tone: "gold", render: renderDrumroll, match: ["drum-roll", "drumroll"] },
+  { id: "dun-dun-dun", label: "Dun dun dun", detail: "The twist", tone: "purple", render: renderSadTrombone, match: ["dun-dun-dun"] },
+  { id: "jeopardy", label: "Jeopardy", detail: "Thinking time", tone: "gold", render: renderDing, match: ["jeopardy-theme-song", "jeopardy"] },
+  { id: "locked-in", label: "Locked in", detail: "Heads down", tone: "blue", render: renderDing, match: ["locked-in"] },
+  { id: "stank-face", label: "Stank face", detail: "That was nasty", tone: "purple", render: renderBlip, match: ["sponge-stank-noise", "stank"] },
+  { id: "true", label: "True", detail: "Hard agree", tone: "green", render: renderBlip, match: ["2-chainz-says-true"] },
+  { id: "a-few-moments-later", label: "A few moments later", detail: "Time passes", tone: "teal", render: renderBlip, match: ["a-few-moments-later"] },
+  { id: "another-one", label: "Another one", detail: "Next problem", tone: "orange", render: renderBlip, match: ["another-one"] },
+  { id: "bingo", label: "Bingo", detail: "Exactly right", tone: "green", render: renderDing, match: ["bingo"] },
+  { id: "bruh", label: "Bruh", detail: "Come on now", tone: "purple", render: renderBlip, match: ["bruh-sound-effect", "bruh"] },
+  { id: "directed-by-robert", label: "Directed by Robert B", detail: "Roll credits", tone: "blue", render: renderBlip, match: ["directed-by-robert-b", "directed-by-robert"] },
+  { id: "never-know", label: "We will never know", detail: "Unanswerable", tone: "teal", render: renderBlip, match: ["i-guess-well-never-know-kanye", "i-guess-well-never-know"] },
+  { id: "law-and-order", label: "Law and order", detail: "Case closed", tone: "blue", render: renderBlip, match: ["law-and-order"] },
+  { id: "what", label: "What", detail: "Said with feeling", tone: "red", render: renderBlip, match: ["lil-jon-what"] },
+  { id: "metro", label: "Metro", detail: "Producer tag", tone: "purple", render: renderBlip, match: ["metroooo", "metro"] },
+  { id: "money", label: "Money", detail: "Cha-ching", tone: "gold", render: renderDing, match: ["money-soundfx", "money"] },
+  { id: "record-scratch", label: "Record scratch", detail: "Stop right there", tone: "orange", render: renderBlip, match: ["record-scratch"] },
+  { id: "straight-up", label: "Straight up", detail: "No notes", tone: "orange", render: renderBlip, match: ["straight-up-travis-scott", "straight-up"] },
+  { id: "omg", label: "OMG", detail: "Genuine shock", tone: "red", render: renderBlip, match: ["travisscott-omg", "omg"] },
+  { id: "be-right-back", label: "Be right back", detail: "Hold on", tone: "teal", render: renderBlip, match: ["well-be-right-back", "be-right-back"] },
+  { id: "you", label: "You", detail: "Yes, you", tone: "blue", render: renderBlip, match: ["you"] },
 ];
 
 const SOUND_CUE_BY_ID = new Map<string, SoundCue>(SOUND_CUES.map((cue) => [cue.id, cue]));
 
 export function soundCue(id: string): SoundCue | null {
   return SOUND_CUE_BY_ID.get(id) ?? null;
+}
+
+// ── Matching a dropped file to a button ─────────────────────────────────────
+//
+// Steele's clips come out of a Stream Deck sound board, so the filenames carry
+// spaces, capitals, " copy", and the random suffix a download site appends
+// ("bruh-sound-effect_WstdzdM.mp3"). Normalizing all of that away lets one
+// multi-file load place twenty-five clips on the right twenty-five buttons
+// instead of asking him to do it by hand.
+
+/** "Drum roll.mp3" and "another-one_dPvHt2Z.mp3" -> "drum-roll", "another-one". */
+export function slugFileName(name: string): string {
+  return name
+    .replace(/\.[a-z0-9]+$/i, "")        // extension
+    .replace(/[_-][A-Za-z0-9]{7,}$/, "")  // download-site suffix
+    .replace(/\s*\(\d+\)\s*$/, "")       // "(1)" from a second download
+    .replace(/\s*copy\s*$/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Which button a file belongs on, or null if nothing claims it. Exact matches
+ * win over partial ones so "you.mp3" cannot be swallowed by a cue that merely
+ * contains "you", and the longest partial wins so "drum-roll" beats a shorter
+ * accidental overlap.
+ */
+export function matchSoundCueFile(fileName: string): SoundCueId | null {
+  const slug = slugFileName(fileName);
+  if (!slug) return null;
+  let partial: { id: SoundCueId; len: number } | null = null;
+  for (const cue of SOUND_CUES) {
+    for (const hint of [cue.id, ...(cue.match ?? [])]) {
+      if (slug === hint) return cue.id;
+      if (slug.includes(hint) && (!partial || hint.length > partial.len)) {
+        partial = { id: cue.id, len: hint.length };
+      }
+    }
+  }
+  return partial?.id ?? null;
 }
 
 // ── Remote action naming ────────────────────────────────────────────────────

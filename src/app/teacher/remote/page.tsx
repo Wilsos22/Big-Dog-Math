@@ -25,6 +25,16 @@ import type { LessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import type { LessonStepData } from "@/lib/notionLessons";
 import { BEHAVIOR_OVERRIDE_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
+import { joinRealtimeRoom } from "@/lib/realtimeRooms";
+import {
+  SOUND_LABEL_ROOM,
+  normalizeSoundLabels,
+  readStoredSoundLabels,
+  soundLabelFor,
+  writeStoredSoundLabels,
+  type SoundLabelMessage,
+  type SoundLabels,
+} from "@/lib/soundBankLabels";
 import { overrideIsLive, stripFromStep } from "@/lib/classroomStateStrip";
 import { speakerNoteItems } from "@/lib/speakerNotes";
 
@@ -294,6 +304,7 @@ export default function TeacherRemotePage() {
   const [session, setSession] = useState<RemoteSession | null>(null);
   const [status, setStatus] = useState("Choose the class session this Remote should control.");
   const [busy, setBusy] = useState<TeacherRemoteAction | null>(null);
+  const [soundLabels, setSoundLabels] = useState<SoundLabels>({});
   // Student self-signals ("I'm stuck") - the Remote is the surface in hand
   // while teaching, so the live counts belong here too. null until the
   // student-signals migration has been run.
@@ -320,6 +331,22 @@ export default function TeacherRemotePage() {
   const refreshInFlightRef = useRef(false);
   const refreshEpochRef = useRef(0);
   const utilitiesRef = useRef<HTMLDetailsElement | null>(null);
+
+  // The sound bank's button names are owned by /control, where the clips are
+  // loaded - this is where they are pressed. Start from the cached copy so the
+  // deck reads right immediately (and still reads right if Control is not open
+  // yet), then ask for the current set.
+  useEffect(() => {
+    setSoundLabels(readStoredSoundLabels());
+    const room = joinRealtimeRoom<SoundLabelMessage>(SOUND_LABEL_ROOM, (m) => {
+      if (m.t !== "labels") return;
+      const next = normalizeSoundLabels(m.labels);
+      setSoundLabels(next);
+      writeStoredSoundLabels(next);
+    });
+    room.send({ t: "hello" });
+    return () => room.close();
+  }, []);
 
   useEffect(() => {
     try {
@@ -988,6 +1015,7 @@ export default function TeacherRemotePage() {
         .deck-grid.discussion-phases { grid-template-columns:repeat(3,minmax(0,1fr)); }
         .deck-grid.discussion-controls { grid-template-columns:repeat(4,minmax(0,1fr)); }
         .deck-grid.spinner-control { grid-template-columns:1fr; }
+        .deck-grid.sound-bank { max-height:46vh; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-right:4px; overscroll-behavior:contain; }
         .remote-control-block { display:grid; gap:8px; }
         .discussion-selection { display:grid; gap:5px; border:1px solid #bba9dd; border-left:5px solid #8b5cf6; border-radius:12px; background:#f5efff; padding:11px 13px; }
         .discussion-selection span { color:#6d4aa7; font-size:0.62rem; font-weight:900; letter-spacing:0.1em; text-transform:uppercase; }
@@ -1425,10 +1453,21 @@ export default function TeacherRemotePage() {
                     <section className="deck-section" aria-labelledby="sound-bank-title">
                       <div className="deck-section-head">
                         <h2 className="deck-section-title" id="sound-bank-title">Sound bank</h2>
-                        <p className="deck-section-note">Plays from the classroom computer.</p>
+                        <p className="deck-section-note">Plays from the classroom computer. Scroll for the rest.</p>
                       </div>
-                      <div className="deck-grid">
-                        {SOUND_BANK_REMOTE_BUTTONS.map((button) => <DeckKey key={button.action} button={button} busy={busy} disabled={controlsDisabled} onSend={send} />)}
+                      {/* Twenty-five keys is taller than the iPad, and the deck
+                          below it (timer cues, projector links) still has to be
+                          reachable - so the bank scrolls inside itself rather
+                          than pushing everything else off the screen. */}
+                      <div className="deck-grid sound-bank">
+                        {SOUND_BANK_REMOTE_BUTTONS.map((button) => {
+                          const cueId = button.action.replace(/^play-/, "");
+                          const named = soundLabelFor(cueId, "", soundLabels);
+                          const shown = named
+                            ? { ...button, label: named, detail: "Your sound" }
+                            : button;
+                          return <DeckKey key={button.action} button={shown} busy={busy} disabled={controlsDisabled} onSend={send} />;
+                        })}
                       </div>
                     </section>
 
