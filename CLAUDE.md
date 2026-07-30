@@ -867,6 +867,26 @@ the invariants they protect are easy to break again.
   carrying the same latent hazard: `useLiveToolConfig.tsx` (`live-tool-<route>-<session>`) and
   `classroomSpinnerSync.ts` (`classroom-spinner-<room>`) still open and remove channels per
   call. Their topics happen to be unique per page today, which is the only reason they work.
+- **THE PEN BELONGS TO WHICHEVER SURFACE IS OPEN, AND A WRAPPER DIV CAN STEAL IT** (2026-07-30).
+  /ipad mounts the glass sheet (`<room>__over`) LAST and highest so that in Board mode nothing below
+  can take a stroke. Mounted that way UNCONDITIONALLY it also covered the Whiteboard panel, so the
+  panel could never be written on at all: every mark went to the annotate room, the projector's work
+  space (which reads `<room>`) stayed empty however long he wrote, and switching modes changed
+  nothing he could feel. That is what "it doesnt show up on the projector screen and the
+  whiteboard/board buttons havent changed" was. The sheet now takes `passThrough={onWhiteboard}`.
+  TWO THINGS TO KEEP. Use `passThrough`, NOT `hidden` - the sheet must stop taking the pen while its
+  annotations stay on screen, or opening the whiteboard looks like it wiped what you just wrote. And
+  `.ip-ink-layer` itself carries `pointer-events:none`: a plain wrapper div defaults to `auto` and
+  swallowed the stroke even with the board passing through. A `pointer-events:none` parent still lets
+  the ink canvas inside opt back in with `auto`, which is exactly the behaviour wanted.
+  Undo/Redo follow whichever surface owns the pen; before this only one of them ever did.
+- **THE PEN SURFACE SAYS WHEN A NEW BUILD IS WAITING** (2026-07-30). `/ipad` is deliberately absent
+  from `DeployRefresh` - it holds the authoritative ink, so an automatic reload would wipe the room's
+  boards mid-lesson - and the cost of that correct decision is that it can sit on a build from days
+  ago with NOTHING saying so: the pen still draws, the dot still reads connected, and the only
+  symptom is that a shipped fix is not there. `UpdateReadyChip` polls `/api/build-id` and offers a
+  tap-to-reload chip. It must NEVER reload on its own. When a fix is reported as not working, check
+  what build the iPad is actually running before re-debugging the fix.
 - **THE PROJECTOR IS A DISPLAY ON THE INK ROOM, NEVER A WRITER** (2026-07-30). `/teacher/present`'s
   board-scene `InkBoard` was mounted `interactive`, which made the projector the SECOND author on
   the shared room: `InkBoard`'s interactive-only effects broadcast `{t:"bg", url:null}` (wiping the
