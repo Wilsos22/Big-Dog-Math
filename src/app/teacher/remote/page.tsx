@@ -1087,7 +1087,13 @@ export default function TeacherRemotePage() {
           const stuck = current.filter((s) => s.signal === "stuck");
           const again = current.filter((s) => s.signal === "again");
           const gotIt = current.filter((s) => s.signal === "got-it");
-          if (!current.length) return null;
+          // Keep the strip up at zero whenever the teacher has the controls, the
+          // way /session already does. Hiding it on an empty current step made
+          // the Remote look like signals were not wired at all: the step scoping
+          // below is deliberate, so a tap vanishes the moment you advance, and
+          // on the surface in your hand that reads as a dead feature rather than
+          // as "nobody is stuck on this step".
+          if (!current.length && !signalState.controls) return null;
           return (
             <div className="remote-signals" role="status" aria-label="Student self-signals">
               <span className="remote-signal-count stuck">Stuck {stuck.length}</span>
