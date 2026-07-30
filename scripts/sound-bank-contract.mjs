@@ -210,8 +210,18 @@ check("Control plays the bank through the same remote-command handler as the tim
   for (const timerAction of TIMER_CUE_ACTIONS) {
     assert.ok(control.includes(`command.action === "${timerAction}"`), `Control stopped handling ${timerAction}`);
   }
-  assert.ok(control.includes("soundCueIdForAction(command.action)"), "Control does not resolve sound-bank commands");
+  // Assert the BEHAVIOUR, not the spelling. This used to require the literal
+  // `soundCueIdForAction(command.action)`, which broke the moment the resolve
+  // was lifted into playCueOnce(action, nonce) so the ping and poll paths
+  // could not fire the same cue twice. That refactor was right and the
+  // contract was wrong: what matters is that a remote command reaches the
+  // resolver and the resolver's cue reaches the player.
+  assert.ok(control.includes("soundCueIdForAction("), "Control does not resolve sound-bank commands");
   assert.ok(control.includes("playSoundCue("), "Control does not play sound-bank cues");
+  assert.ok(
+    /playCueOnce\(\s*command\.action/.test(control),
+    "Control no longer feeds the remote command's action to the cue player",
+  );
 });
 
 
