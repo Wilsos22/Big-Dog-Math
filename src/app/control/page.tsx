@@ -19,7 +19,7 @@ import LessonVisual from "@/components/LessonVisual";
 // six abbie-* deck keys had to go with it - a button firing into an empty bus is
 // dead UI on the live engine. Both files are deleted as of 2026-07-30.
 // The sound bank took the deck's place.
-import { SOUND_CUES, clearUserClip, installUserClip, playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
+import { SOUND_CUES, clearUserClip, installUserClip, matchSoundCueFile, playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
 import { joinRealtimeRoom } from "@/lib/realtimeRooms";
 import {
   MAX_SOUND_LABEL,
@@ -2830,6 +2830,26 @@ export default function ControlPage() {
       setSoundBankError(ok ? null : `${file.name} would not decode. Try an MP3 or WAV.`);
     }
   }
+  // Twenty-five clips placed by hand is twenty-five file pickers. Matching on
+  // the filename puts each one on its own button in a single drop, and says
+  // plainly which files nothing claimed rather than dropping them somewhere.
+  async function loadSoundBankFolder(files: FileList | null) {
+    if (!files?.length) return;
+    const placed: string[] = [];
+    const skipped: string[] = [];
+    for (const file of Array.from(files)) {
+      const cueId = matchSoundCueFile(file.name);
+      if (!cueId) { skipped.push(file.name); continue; }
+      await uploadSound(bankClipKey(cueId), file);
+      placed.push(cueId);
+    }
+    setSoundBankError(
+      skipped.length
+        ? `Loaded ${placed.length}. No button matched: ${skipped.slice(0, 4).join(", ")}${skipped.length > 4 ? ` and ${skipped.length - 4} more` : ""}.`
+        : placed.length ? `Loaded ${placed.length} clips.` : null,
+    );
+  }
+
   async function clearSound(key: string) {
     await idbDel(key);
     setSoundUrls((prev) => {
@@ -3170,6 +3190,7 @@ export default function ControlPage() {
         .cx-slabel { font-size:0.9rem; font-weight:800; color:#d8d2c5; min-width:220px; }
         .cx-supload { font-size:0.8rem; font-weight:800; color:#8ba0f8; background:rgba(78,110,242,0.1); border:1px solid rgba(78,110,242,0.3); border-radius:8px; padding:7px 12px; cursor:pointer; }
         .cx-sset { font-size:0.78rem; font-weight:800; color:#86efac; }
+        .cx-sbank { max-height:38vh; overflow-y:auto; display:grid; gap:2px; padding-right:6px; }
         .cx-sname { min-width:220px; font-size:0.9rem; font-weight:800; color:#d8d2c5; background:#0d0b07; border:1px solid #2a241a; border-radius:8px; padding:7px 10px; font-family:inherit; }
         .cx-sname::placeholder { color:#6f6656; font-weight:700; }
         .cx-sname:focus { outline:none; border-color:#8ba0f8; }
@@ -3819,7 +3840,16 @@ export default function ControlPage() {
                 With nothing loaded each button still works — it uses
                 the built-in effect, so a button is never silent.
               </p>
+              <div className="cx-srow">
+                <label className="cx-supload">
+                  Load a whole folder at once
+                  <input type="file" accept="audio/*" multiple style={{ display: "none" }}
+                    onChange={(e) => loadSoundBankFolder(e.target.files)} />
+                </label>
+                <span className="cx-hint">Each file goes to the button its name matches.</span>
+              </div>
               {soundBankError && <p className="cx-hint" style={{ color: "#f9a58f" }}>{soundBankError}</p>}
+              <div className="cx-sbank">
               {SOUND_CUES.map((cue) => {
                 const storageKey = bankClipKey(cue.id);
                 const has = !!soundUrls[storageKey];
@@ -3847,6 +3877,7 @@ export default function ControlPage() {
                   </div>
                 );
               })}
+              </div>
 
               <p className="cx-hint">Tip: your Stream Deck still works alongside this — use either.</p>
             </section>

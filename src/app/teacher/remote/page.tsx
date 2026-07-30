@@ -980,6 +980,7 @@ export default function TeacherRemotePage() {
         .deck-grid.discussion-phases { grid-template-columns:repeat(3,minmax(0,1fr)); }
         .deck-grid.discussion-controls { grid-template-columns:repeat(4,minmax(0,1fr)); }
         .deck-grid.spinner-control { grid-template-columns:1fr; }
+        .deck-grid.sound-bank { max-height:46vh; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-right:4px; overscroll-behavior:contain; }
         .remote-control-block { display:grid; gap:8px; }
         .discussion-selection { display:grid; gap:5px; border:1px solid #bba9dd; border-left:5px solid #8b5cf6; border-radius:12px; background:#f5efff; padding:11px 13px; }
         .discussion-selection span { color:#6d4aa7; font-size:0.62rem; font-weight:900; letter-spacing:0.1em; text-transform:uppercase; }
@@ -1416,9 +1417,13 @@ export default function TeacherRemotePage() {
                     <section className="deck-section" aria-labelledby="sound-bank-title">
                       <div className="deck-section-head">
                         <h2 className="deck-section-title" id="sound-bank-title">Sound bank</h2>
-                        <p className="deck-section-note">Plays from the classroom computer.</p>
+                        <p className="deck-section-note">Plays from the classroom computer. Scroll for the rest.</p>
                       </div>
-                      <div className="deck-grid">
+                      {/* Twenty-five keys is taller than the iPad, and the deck
+                          below it (timer cues, projector links) still has to be
+                          reachable - so the bank scrolls inside itself rather
+                          than pushing everything else off the screen. */}
+                      <div className="deck-grid sound-bank">
                         {SOUND_BANK_REMOTE_BUTTONS.map((button) => {
                           const cueId = button.action.replace(/^play-/, "");
                           const named = soundLabelFor(cueId, "", soundLabels);

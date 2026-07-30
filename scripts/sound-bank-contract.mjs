@@ -33,6 +33,8 @@ import {
   soundCueAction,
   soundCueIdForAction,
   soundCueFileUrl,
+  matchSoundCueFile,
+  slugFileName,
 } from "../.tmp-mastery/soundBank.js";
 import {
   MAX_SOUND_LABEL,
@@ -76,12 +78,47 @@ const TIMER_CUE_ACTIONS = ["play-warning", "play-countdown", "play-times-up"];
 
 console.log("sound bank contract");
 
-check("Steele's ask is covered, plus the classroom companions", () => {
-  // applause and the sad trombone are his words (2026-07-29); crickets is the
-  // silence joke the trombone pairs with, and the rest are the obvious set.
-  for (const required of ["applause", "sad-trombone", "crickets", "drumroll", "ding", "buzzer"]) {
-    assert.ok(soundCue(required), `the bank is missing the ${required} cue`);
+// The bank IS Steele's Stream Deck sound board (2026-07-30: "these are the
+// soundbites i would like mapped"). These are the exact files he sent, so this
+// list is the specification - if a cue disappears from the bank, a button he
+// reaches for mid-lesson is gone.
+const STEELE_FILES = [
+  "Air Horn.mp3", "Applause.mp3", "cheering.mp3", "crickets.mp3", "Drum roll.mp3",
+  "dun-dun-dun-sound-effect-brass_8nFBccR.mp3", "Jeopardy-theme-song.mp3", "locked-in.mp3",
+  "sponge-stank-noise copy.mp3", "2-chainz-says-true.mp3",
+  "a-few-moments-later-sponge-bob-sfx-fun.mp3", "another-one_dPvHt2Z.mp3", "bingo_sdTuErT.mp3",
+  "bruh-sound-effect_WstdzdM.mp3", "directed-by-robert-b_voI2Z4T.mp3",
+  "i-guess-well-never-know-kanye.mp3", "law and order.mp3", "lil-jon-what.mp3", "metroooo.mp3",
+  "money-soundfx.mp3", "record-scratch-2.mp3", "straight-up-travis-scott.mp3",
+  "travisscott-omg.mp3", "well be right back.mp3", "you.mp3",
+];
+
+check("every clip Steele asked for has a button", () => {
+  assert.equal(SOUND_CUES.length, STEELE_FILES.length, "the bank and his sound board have drifted apart");
+});
+
+check("each of his files lands on its own button, so one bulk load fills the bank", () => {
+  const placed = new Map();
+  for (const file of STEELE_FILES) {
+    const id = matchSoundCueFile(file);
+    assert.ok(id, `nothing claims "${file}" - it would land on no button`);
+    assert.ok(!placed.has(id), `"${file}" and "${placed.get(id)}" both claim ${id}`);
+    placed.set(id, file);
   }
+  assert.equal(placed.size, SOUND_CUES.length, "some button would be left with no clip");
+});
+
+check("a file nobody asked for is reported, not dropped on a random button", () => {
+  assert.equal(matchSoundCueFile("Water Park_.mp3"), null);
+  assert.equal(matchSoundCueFile("10-seconds-count-down.mp3"), null);
+  assert.equal(matchSoundCueFile(""), null);
+});
+
+check("filenames normalize past capitals, spaces, copies and download suffixes", () => {
+  assert.equal(slugFileName("Drum roll.mp3"), "drum-roll");
+  assert.equal(slugFileName("bruh-sound-effect_WstdzdM.mp3"), "bruh-sound-effect");
+  assert.equal(slugFileName("sponge-stank-noise copy.mp3"), "sponge-stank-noise");
+  assert.equal(slugFileName("back-to-work (1).mp3"), "back-to-work");
 });
 
 check("ids are unique", () => {
