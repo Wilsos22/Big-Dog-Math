@@ -2,26 +2,23 @@
 
 // Board display — runs on the computer driving the interactive panel.
 // Shows whatever the paired iPad (same room) writes, live. Read-only.
-// Follows the iPad's page flips; every page stays mounted (inactive pages
-// park at 1x1 canvases) so flipping back is instant and complete.
 //
-// TWO LAYERS, because the pen moved. <room> and its __p pages carry the PAPER
-// (dotted stock, templates, imported backgrounds); the teacher's writing is on
-// <room>__over, the glass sheet, in both iPad modes. Paper below, writing on
-// top - the same stack /teacher/present builds from .stage-board-panel plus
-// ScreenInkOverlay. Dropping either layer shows half a board.
+// ONE LAYER, because the pen surface is one surface (2026-07-30). Everything
+// the teacher writes is on <room>__over; the paper behind it is a property of
+// that same board, mirrored off <room>__ctrl exactly as ScreenInkOverlay does
+// it. The old stack - <room> plus __p1..__p7 pages plus a __scratch overlay
+// plus the glass sheet - is gone with the modes that fed it.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import AttentionPulse from "@/components/AttentionPulse";
 import InkBoard from "@/components/InkBoard";
-import { joinInkRoom, type InkConnectionStatus } from "@/lib/inkSync";
+import { joinInkRoom } from "@/lib/inkSync";
 
 export default function BoardPage() {
   const [room, setRoom] = useState("main");
-  const [scratchOpen, setScratchOpen] = useState(false);
   const [attnSignal, setAttnSignal] = useState(0);
-  const [pageView, setPageView] = useState({ index: 0, count: 1 });
-  const lastCtrlStatus = useRef<InkConnectionStatus>("connecting");
+  const [paper, setPaper] = useState(false);
+
   useEffect(() => {
     try {
       const r = new URLSearchParams(window.location.search).get("room");
@@ -29,19 +26,12 @@ export default function BoardPage() {
     } catch { /* ignore */ }
   }, []);
 
-  // Mirror the iPad's scratch overlay and page flips. Ask where things stand
-  // on join, and ask again after a connection drop.
+  // The attention call, and the paper background the pen surface is on. Ask on
+  // join so a panel switched on mid-lesson matches the hand immediately.
   useEffect(() => {
     const ctrl = joinInkRoom(`${room}__ctrl`, (m) => {
-      if (m.t === "scratch") setScratchOpen(m.open);
-      else if (m.t === "attention") setAttnSignal((n) => n + 1);
-      else if (m.t === "pageflip") {
-        const count = Math.max(1, m.count);
-        setPageView({ index: Math.min(Math.max(0, m.index), count - 1), count });
-      }
-    }, (status) => {
-      if (status === "connected" && lastCtrlStatus.current === "disconnected") ctrl.send({ t: "hello" });
-      lastCtrlStatus.current = status;
+      if (m.t === "attention") setAttnSignal((n) => n + 1);
+      else if (m.t === "paper") setPaper(m.on);
     });
     ctrl.send({ t: "hello" });
     return () => ctrl.close();
@@ -49,28 +39,7 @@ export default function BoardPage() {
 
   return (
     <main style={{ position: "fixed", inset: 0, background: "#faf6ee" }}>
-      {Array.from({ length: pageView.count }, (_, i) => (
-        <InkBoard
-          key={i}
-          room={i === 0 ? room : `${room}__p${i}`}
-          interactive={false}
-          hidden={i !== pageView.index}
-          paper="dots"
-        />
-      ))}
-      {scratchOpen && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 3, background: "#ffffff" }}>
-          <InkBoard room={`${room}__scratch`} interactive={false} />
-        </div>
-      )}
-      {/* The glass sheet, on top of everything, exactly as ScreenInkOverlay
-          sits on the projector. Since 2026-07-30 the pen writes to
-          <room>__over in BOTH iPad modes and <room> carries only the paper, so
-          without this layer a second board display shows the dotted page and
-          the templates and none of the teacher's actual writing. */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 4, pointerEvents: "none" }}>
-        <InkBoard room={`${room}__over`} interactive={false} transparent passThrough />
-      </div>
+      <InkBoard room={`${room}__over`} interactive={false} transparent={!paper} paper="dots" />
       <div
         style={{
           position: "absolute", top: 10, right: 12, zIndex: 2,
@@ -81,7 +50,7 @@ export default function BoardPage() {
         }}
       >
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#14b8a6", display: "inline-block" }} />
-        Board · {room}{pageView.count > 1 ? ` · Page ${pageView.index + 1} of ${pageView.count}` : ""}
+        Board · {room}
       </div>
       <AttentionPulse signal={attnSignal} />
     </main>

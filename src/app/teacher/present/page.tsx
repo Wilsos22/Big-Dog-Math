@@ -471,7 +471,6 @@ export default function ClassroomStagePage() {
     ? resource.url
     : null;
   const liveToolUrl = flow ? toolUrl(flow) : null;
-  const showBoardPanel = Boolean(session && presentation?.boardOpen && presentation.mode !== "board");
   const slideBody = theme.id === "closeout"
     ? CLOSEOUT_DIRECTIONS
     : presentation?.mainDisplay || presentation?.body || state?.description || "";
@@ -959,7 +958,7 @@ export default function ClassroomStagePage() {
 
         {/* zoom, not transform: the stage is fixed and non-scrolling, so zoom
             scales text and layout together with no coordinate drift. */}
-        <section className={`stage-work${showBoardPanel ? " board-open" : ""}`} style={{ zoom: textScale }}>
+        <section className="stage-work" style={{ zoom: textScale }}>
           {showLessonTargets && !isLearningCheck && !resource && !showReaderSpinner ? (
             <aside className="stage-success" aria-label="Success criterion">
               <p className="stage-success-label">Success criterion</p>
@@ -1126,7 +1125,12 @@ export default function ClassroomStagePage() {
                     text over as the room's `problem`, and answered a display's
                     `hello` with its own copy of the board. As a display it asks
                     for state on mount instead, so opening the board scene
-                    mid-lesson fills in everything already written. */}
+                    mid-lesson fills in everything already written.
+                    STILL HERE AFTER THE ONE-SURFACE SIMPLIFICATION, and not a
+                    stray board: its job is the PAPER - the Main Display drawn on
+                    dotted stock - while the writing arrives on the glass sheet
+                    above it. The `problem` comes from the prop, not the wire, so
+                    it renders whether or not anything is on <room>. */}
                 <InkBoard
                   room={inkOverlay?.room ?? "main"}
                   interactive={false}
@@ -1271,15 +1275,14 @@ export default function ClassroomStagePage() {
             )
           ) : null}
           </div>
-          {showBoardPanel && session ? (
-            <aside className="stage-board-panel" aria-label="Live writing workspace">
-              {/* Same room as the glass sheet and the iPad. Keying the board to
-                  session.id put the projector on channel ink-<uuid> while /ipad
-                  and /board broadcast on ink-main, so nothing the teacher wrote
-                  ever arrived and the board was permanently empty. */}
-              <InkBoard room={inkOverlay?.room ?? "main"} interactive={false} />
-            </aside>
-          ) : null}
+          {/* The 42% "Live writing workspace" panel used to live here, reading
+              <room>. The pen surface became ONE surface on 2026-07-30 and writes
+              only to <room>__over, which ScreenInkOverlay already shows across
+              the whole wall - so this panel could render nothing but a blank
+              white column, and the layout shift that made room for it shrank the
+              lesson for nothing. Both are gone. `boardOpen` no longer changes
+              anything here; whether "Open work space" should remain on the
+              Remote at all is Steele's call. */}
           {/* Last child of the work stage, so it paints over the inset-0 scenes.
               Pinned top right INSIDE the stage rather than in the topbar, where
               the clock already lives. */}
