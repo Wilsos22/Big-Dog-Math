@@ -896,6 +896,11 @@ the invariants they protect are easy to break again.
   section). The projector needs NO ink change for any of this: `.stage-board-panel` renders the paper
   from the same room and `ScreenInkOverlay` sits at z-index 40 above it, so the wall shows white area
   plus writing across the whole screen for free.
+  **ANY SURFACE THAT DISPLAYS THE ROOM MUST STACK BOTH LAYERS** - `<room>` (+ its `__p` pages) for the
+  paper, `<room>__over` on top for the writing. `/teacher/present` already did; `/board` did NOT and
+  showed the dotted stock and the templates with none of the mathematics until it was fixed the same
+  day. A display that renders only `<room>` now looks empty in normal use, which is the single easiest
+  way to re-break this. Writing is always the top layer, above the scratch overlay too.
   Switching modes on /ipad POSTs `show-board`/`hide-board` to `/api/control-remote` itself, so the
   room follows the pen. The Remote IS the iPad - they are two routes on one device - so requiring a
   trip to /teacher/remote to press "Open work space" was a round trip through nothing. It never
