@@ -87,6 +87,18 @@ bars and live misconception grouping).
    surfaces read up close are cream, the handheld is dark.
    Scope note: this is the RUNNING view. The bank, lineup editor, tool forms, games and rosters are
    setup surfaces he does not open mid-lesson, and restyling them is not part of this.
+   AS BUILT: `src/app/control/page.tsx` now has ONE stylesheet with a cream BASE and dark scoped
+   under `.cx-setup` (the setup drawer) and `.cx-overlay` (lessons / admissions / spinner /
+   discussion). Adding a rule for a dark panel means scoping it, not flipping the base back.
+   Per-state accent colours are NOT usable raw on cream - the catalog runs from `#35785a` to
+   `#fcaf38` - so `.cx-root` derives `--cx-acc-text` (42% ink, AA small caps), `--cx-acc-deep` (62%,
+   large headings) and `--cx-acc-fill` (48%, behind white button text) by `color-mix`, the same
+   trick `/teacher/pace` uses. THE BANK AND THE LINEUP RAIL ARE DELIBERATELY HIDDEN once a step is
+   loaded (`setupOpen` state plus the "Set up" toggle in the top bar; with nothing loaded they show
+   unconditionally, because the idle copy points at the bank). A report that "the bank disappeared
+   from /control" is that toggle, not a regression - do not restore them unconditionally. And note
+   `.cx-tool-field` is a `<label>` that WRAPS its own input, so `text-transform` on it rewrites what
+   the teacher typed; the poll labels are separate elements and can carry it.
    Related decision (same conversation): Control STAYS OPEN as the engine - he is not removing it, he
    just should not need to GO there during a lesson unless something fails. Because Control publishes
    its snapshot about once a second and Chrome throttles hidden tabs hard after roughly five minutes, it
