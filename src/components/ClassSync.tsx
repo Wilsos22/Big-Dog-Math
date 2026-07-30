@@ -207,8 +207,10 @@ export default function ClassSync() {
     // drop the shared cache (otherwise this read is served a value from up to
     // FRESH_MS ago) and follow immediately - class mode used to take up to
     // three seconds to send a student to the next surface.
+    // Skipped on the teacher surfaces for the same reason tick() returns early
+    // there: the pen surface has no business holding a class-mode subscription.
     const sessionId = getStoredStudentSessionId();
-    const pings = sessionId
+    const pings = sessionId && !isTeacherRoute(pathRef.current || "")
       ? joinLiveFlowPings(sessionId, () => {
           invalidateSharedSessionState(sessionId);
           void tick();
