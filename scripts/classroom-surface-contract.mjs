@@ -14,6 +14,10 @@ const teacher = read("src/app/teacher/page.tsx");
 const control = read("src/app/control/page.tsx");
 const inkBoard = read("src/components/InkBoard.tsx");
 const inkSync = read("src/lib/inkSync.ts");
+// The transport moved into the shared reference-counted room registry on
+// 2026-07-30; inkSync is the ink-shaped wrapper over it. Check both, so the
+// anchor cannot be satisfied by a stale alias that no longer carries anything.
+const realtimeRooms = read("src/lib/realtimeRooms.ts");
 const timers = read("src/lib/liveClassFlow.ts");
 const remoteLayout = read("src/app/teacher/remote/layout.tsx");
 const remoteManifest = read("public/teacher-remote.webmanifest");
@@ -119,8 +123,14 @@ if (!control.includes("MAX_STATE_SECONDS") || !timers.includes("MAX_LIVE_STATE_S
 }
 if (!inkBoard.includes("requestAnimationFrame")
   || !inkBoard.includes("onConnectionChange")
-  || !inkSync.includes('"connecting" | "connected" | "disconnected"')) {
+  || !realtimeRooms.includes('"connecting" | "connected" | "disconnected"')
+  || !inkSync.includes("RealtimeRoomStatus")) {
   throw new Error("The iPad writing surface must batch Pencil traffic and report its projector connection state.");
+}
+// One shared channel per topic is what keeps two surfaces on one ink room from
+// silencing each other; joinInkRoom must stay a wrapper, never its own channel.
+if (inkSync.includes("supabase.channel") || !inkSync.includes("joinRealtimeRoom")) {
+  throw new Error("joinInkRoom must go through the shared realtime room registry, not open its own channel.");
 }
 
 console.log("PASS - four classroom surfaces retain the approved roles, frames, launchers, timer guard, and live writing status.");
