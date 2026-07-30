@@ -480,13 +480,16 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   anon auth) as transient and retries silently, so ALL of them present identically as "the student
   screen just stays put" - check the class-mode selector on /session and the joins list before
   suspecting the follower itself.
-  LATENT HAZARD, NOT YET SEEN IN CLASS (noticed 2026-07-30): `ClassSync`'s `TEACHER_ROUTE_PREFIXES`
-  is `["/teacher", "/control", "/session", "/roster"]` - **`/ipad` and `/board` are NOT in it**, even
-  though the proxy gates them as teacher surfaces. Two guards normally keep it inert there (a stored
-  teacher session on the device, or no stored student session at all), but an iPad that ever typed a
-  class code and never held a teacher session would be navigated OFF the pen surface mid-lesson by
-  `router.push(target)`, mid-stroke, with the room's board still up. Do not fix this silently: adding
-  the two prefixes is a one-line change but it is classroom-orchestration core, so get Steele's word.
+  **`TEACHER_ROUTE_PREFIXES` MUST MATCH THE PROXY'S TEACHER SURFACES.** `/ipad` and `/board` were
+  missing from it until 2026-07-30 (noticed while fixing the ink channel bug, fixed with Steele's
+  word the same day; never seen in class). Two guards normally kept it inert there - a stored teacher
+  session on the device, or no stored student session at all - but an iPad that ever typed a class
+  code and never held a teacher session satisfied neither, and `router.push(target)` would have
+  navigated it OFF the pen surface mid-lesson, mid-stroke, with the room's board still up. The list is
+  now `["/teacher", "/control", "/session", "/roster", "/ipad", "/board"]`. A route the proxy gates as
+  a teacher surface goes in BOTH places; nothing tests that pairing, so check it by hand when adding
+  one. Note this list is about class-mode NAVIGATION, not access - `/join` has its own
+  `STUDENT_SWITCH_ROUTE_PREFIXES` escape and is deliberately not a teacher route.
 ## Data layer (Supabase)
 
 - Browser client: `getSupabase()` in `src/lib/supabase.ts` (`NEXT_PUBLIC_SUPABASE_URL` +

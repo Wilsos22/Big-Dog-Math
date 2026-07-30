@@ -26,7 +26,11 @@ import {
 // Short enough to catch a broken session inside one transition, long enough
 // that a Chromebook waking from sleep never flashes the notice.
 const FAILURES_BEFORE_NOTICE = 5;
-const TEACHER_ROUTE_PREFIXES = ["/teacher", "/control", "/session", "/roster"];
+// Every prefix the proxy gates as a teacher surface. /ipad and /board belong here
+// even though they do not look like teacher pages: an iPad that ever typed a class
+// code and never held a teacher session satisfies neither guard in tick(), so class
+// mode would navigate the pen surface away mid-stroke with the room's board still up.
+const TEACHER_ROUTE_PREFIXES = ["/teacher", "/control", "/session", "/roster", "/ipad", "/board"];
 const STUDENT_SWITCH_ROUTE_PREFIXES = ["/join"];
 const CLASS_MODE_TARGETS = new Set([
   LIVE_FLOW_ROUTE,
