@@ -1,6 +1,6 @@
 import { after } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
-import { broadcastLiveFlowChange } from "@/lib/liveFlowBroadcast";
+import { broadcastLiveFlowChange, broadcastRemoteCommand } from "@/lib/liveFlowBroadcast";
 import { liveFlowScreensChanged } from "@/lib/liveFlowScreens";
 import { CLOSEOUT_DIRECTIONS, DEFAULT_STATES } from "@/lib/classStates";
 import { discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";
@@ -1165,6 +1165,10 @@ export async function POST(request: Request) {
     .select("remote_command")
     .maybeSingle();
   if (error) return Response.json({ error: error.message }, { status: 500 });
+  if (data) {
+    // Control polls for commands every 1.2s; the ping lets it act now instead.
+    after(() => broadcastRemoteCommand(session.id, { action, nonce: command.nonce }));
+  }
   if (!data) {
     return Response.json({
       error: action === "spin-spinner"

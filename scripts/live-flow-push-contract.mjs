@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 const require = createRequire(import.meta.url);
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const screens = require(path.join(root, ".tmp-mastery", "liveFlowScreens.js"));
+const cmd = require(path.join(root, ".tmp-mastery", "remoteCommandPing.js"));
 
 let checks = 0;
 function ok(label, condition) {
@@ -167,6 +168,39 @@ for (const [label, source] of [
   ok(`${label} still polls, so a dropped ping only costs one tick`, /setInterval\(/.test(source));
   ok(`${label} listens for the ping`, /useLiveFlowPing|joinLiveFlowPings/.test(source));
 }
+
+
+// ── The Remote-command ping ─────────────────────────────────────────────────
+// Control polls for commands every 1.2s, which is fine for applause and wrong
+// for a rimshot. The ping lets it act immediately - but a ping is an unverified
+// broadcast message that can arrive twice, so what it is ALLOWED TO DO matters
+// more than that it arrives at all.
+const control = fs.readFileSync(path.join(root, "src/app/control/page.tsx"), "utf8");
+
+for (const action of ["play-applause", "play-bruh", "play-warning", "play-times-up"]) {
+  ok(`${action} may play straight off the ping`, cmd.pingPlaysDirectly(action));
+}
+// A duplicated or replayed ping must never move a real class.
+for (const action of ["next", "previous", "toggle-timer", "reveal-results", "show-board", "spin-spinner", "discussion-share"]) {
+  ok(`${action} must never act on a ping alone`, !cmd.pingPlaysDirectly(action));
+}
+
+ok("the command room is per session", cmd.remoteCommandTopic("abc") === "remote-abc");
+// Sharing a room with the screen ping would wake every projector and Chromebook
+// on every sound cue - the storm this whole design exists to avoid.
+ok("and separate from the screen room", cmd.remoteCommandTopic("abc") !== screens.liveFlowChannelTopic("abc"));
+
+ok("a ping with no action is ignored", !cmd.isRemoteCommandPing({ nonce: "n" }));
+ok("a ping with no nonce is ignored", !cmd.isRemoteCommandPing({ action: "play-bruh" }));
+ok("empty strings are ignored", !cmd.isRemoteCommandPing({ action: "", nonce: "" }));
+ok("a non-object is ignored", !cmd.isRemoteCommandPing("play-bruh"));
+ok("a real ping passes", cmd.isRemoteCommandPing({ action: "play-bruh", nonce: "n1" }));
+
+ok("both paths play through one guard, so a cue cannot sound twice", (control.match(/playCueOnce\(/g) || []).length >= 2);
+ok("the guard remembers nonces", control.includes("playedCueNoncesRef"));
+ok("the ping only pulls the re-read forward for everything else", control.includes("findTeacherSessionRef.current?.()"));
+ok("the 1.2s command poll stays as the floor", control.includes("setInterval(findTeacherSession, 1200)"));
+ok("the command ping never blocks the Remote's response", controlRemote.includes("after(() => broadcastRemoteCommand("));
 
 console.log(`\n${checks} screen ping checks passed`);
 console.log("PASS - screens re-read the moment the lesson changes, and a timer tick never wakes the class.");
