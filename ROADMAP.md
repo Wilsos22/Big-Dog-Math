@@ -714,6 +714,35 @@ to complaining-teen, less Red Bull, shorter replies)
 - Warm-up → spine bridge — live and verified (Evidence post 200, 7/4)
 
 ## Planned
+- **The laptop as the participation and edge-case view** (Steele, 2026-07-29,
+  refining "the laptop shows student data"): a general state of participation that
+  flags students who are not submitting - the edge cases, including students not
+  submitting on a website tool. This is a BETTER use of the laptop than live
+  misconception clusters, because clusters are partly on the iPad already (the
+  visit list groups tier 2 by the error), whereas **non-submission has no home
+  anywhere in the system.**
+  **Most of it is queryable today.** `poll_answers` gives who answered which step;
+  the signals table gives who tapped stuck; `responses` with `source='tool'` gives
+  who produced tool evidence this session; `students` minus `session_joins` gives
+  who is on the roster but never joined. `visitList.ts:158` already treats "no
+  answers at all" as tier 2, so non-submitters are not invisible - but only for the
+  readiness checks, only during the release block, and only lumped in with students
+  who answered one thing wrong.
+  **ONE PIECE OF PLUMBING IS MISSING, and it is cheap.** `session_joins` carries
+  `joined_at` and nothing else - no last-seen, no heartbeat. So there is no way to
+  tell a Chromebook that has been closed for eight minutes from one that is open
+  and idle. Every student device ALREADY polls `/api/student/session-state` every
+  three seconds, so the fix is one nullable `last_seen_at` column plus a touch on
+  that route. That single column turns "who has not submitted" into "who has not
+  submitted AND has not been seen since 9:14", which is the difference between a
+  guess and a flag worth walking over for.
+  **Framing constraint - do not call it "off task".** Liveness and submission are
+  measurable; attention is not. A student can stare out the window with a perfectly
+  healthy Chromebook. Label the flags "hasn't submitted" and "hasn't been seen",
+  never "off task", or the surface makes a claim its data cannot support - the same
+  class of error as the readiness bug that marked a whole class incorrect.
+  Privacy: this is teacher-only and must never reach a student device or a public
+  projector; do not widen `studentSafeLiveFlow` for it.
 - **Run the lesson without a control panel** (Steele, 2026-07-29: "needing to go
   to the control is not intuitive... I don't need a center control panel running
   on my laptop just to make the rest run"). He is not mirroring screens; he runs
