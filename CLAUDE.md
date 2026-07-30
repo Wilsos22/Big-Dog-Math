@@ -275,6 +275,24 @@ bars and live misconception grouping).
   `play-warning`/`play-countdown`/`play-times-up`, playing through the laptop's speakers. Those three
   are Control's own uploadable timer cues and are deliberately NOT bank cues -
   `soundCueIdForAction` returns null for them.
+  IT IS STEELE'S OWN STREAM DECK SOUND BOARD AS OF 2026-07-30 ("these are the soundbites i would
+  like mapped") - twenty-five cues, not the original seven: air horn, applause, cheering, crickets,
+  drum roll, dun dun dun, Jeopardy, locked in, stank face, true, a few moments later, another one,
+  bingo, bruh, directed by Robert B, we will never know, law and order, what, Metro, money, record
+  scratch, straight up, OMG, be right back, you. THE CLIPS ARE NOT IN THE REPO AND MUST NOT BE:
+  half are copyrighted recordings and this repository is public, and it is 14MB of binary besides.
+  They live in IndexedDB on the classroom laptop, which is the whole point of the loadable bank.
+  `matchSoundCueFile` places a dropped file on the right button by filename, normalizing past
+  capitals, spaces, " copy" and the random suffix a download site appends, so one multi-file load
+  fills the bank; a file nothing claims is reported back, never placed arbitrarily. Most cues are
+  voice clips that cannot be synthesized and carry a short neutral blip until the file is loaded -
+  a key pressed early must make SOME sound, because silence is indistinguishable from a broken
+  button. `npm run test:sound-bank` drives the matcher with his exact twenty-five filenames.
+  BUTTON NAMES ARE EDITABLE and travel to the iPad on the `soundbank` broadcast room - Control owns
+  them and answers `hello` with the set, the Remote asks on mount and caches to localStorage so the
+  deck reads right on reload and when Control is closed. Blanking a name restores the built-in one.
+  NO SERVER STATE for any of this: a button name is a device preference and has no business in the
+  live_flow snapshot Control full-replaces every second and student screens read.
   USER-LOADABLE AS OF 2026-07-30 (Steele: "a user loadable sound bank that I can assign sound
   effects to the button to trigger the clip"). THREE SOURCES, IN ORDER: a clip loaded in
   `/control`'s Sounds panel, then `public/sounds/<id>.mp3`, then the synthesized cue - so a
