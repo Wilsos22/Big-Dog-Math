@@ -97,6 +97,20 @@ bars and live misconception grouping).
 7. Verify the build before reporting "done" (`npm run typecheck` at minimum, `npm run build` for
    anything non-trivial). Do not rely on file edits alone.
 8. Do not store real student PII until RLS is tightened. Mock/test identities must be fully fictional.
+   OPEN AS OF 2026-07-29: Steele is checking CCSD's privacy requirements and whether student data can
+   live in Supabase at all. **Until he has that answer, do not build new student-data plumbing** - that
+   explicitly defers bridging `poll_answers` into `responses` (the exit-ticket-to-mastery gap) and the
+   `session_joins.last_seen_at` column the participation view wants. UX work is unblocked and is the
+   agreed priority meanwhile.
+   The facts he needs, verified 2026-07-29: `students` holds `full_name`, `email` and
+   `email_normalized` - real names and district emails, re-synced daily by the 13:00 UTC roster cron.
+   `session_joins` and `poll_answers` hold `display_name`. `poll_answers` holds `answer`,
+   `explanation`, `values`; `responses` holds `answer`, `work_snapshot`, `misconception` - student work
+   product. Two points in his favour: RLS is locked down and verified (anon gets permission-denied on
+   `students`, `sessions`, `responses` and the rest), and NO student PII reaches the Anthropic API -
+   `/api/live/next-move` sends `studentCount` only. If the sticking point turns out to be names plus
+   district emails in a third-party cloud, the mitigation is a pseudonymous roster keyed to a district
+   id with names resolved only in the teacher's browser - a real project, not a patch.
 9. KEEP THIS FILE TRUE, IMMEDIATELY. The moment you discover something that would have prevented a bug
    - a stale reference, a silent failure mode, an undocumented constraint - correct this file in the
    same turn you discovered it, as its own small commit, and get that commit onto `main` without
