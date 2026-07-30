@@ -173,7 +173,7 @@ export const DEMO_SCENES: DemoScene[] = [
       mainDisplay: "24 hot dogs. 36 buns. What is the LARGEST number of identical picnic tables you can set with nothing left over?",
       paceDirections: "Think alone. No pencils yet - just your brain.",
       studentAction: "Eyes up front. Be ready to share one idea.", index: 1,
-      strip: { eyes: "Teacher", voice: "0 silent", supplies: "In the tray", body: "Seated" },
+      strip: { eyes: "The screen", voice: "0 silent", supplies: "In the tray", body: "Seated" },
     }),
   },
   {
@@ -238,7 +238,7 @@ export const DEMO_SCENES: DemoScene[] = [
       mainDisplay: "Divisibility Rules: cross off every rule that works for 36, then build its factor family.",
       paceDirections: "Headphones optional. Work the tool - your work feeds your mastery bar.",
       studentAction: "Open Divisibility Rules and work the 36 family.", index: 4,
-      strip: { eyes: "Your build", voice: "1 partner", supplies: "In your hands", body: "Seated" },
+      strip: { eyes: "Own paper", voice: "1 partner", supplies: "In your hands", body: "Seated" },
       tool: { id: "demo-tool-divisibility", route: "/divisibility", label: "Divisibility Rules", prompt: "Cross off every rule that works for 36, then build the factor family.", config: {} },
     }),
   },

@@ -777,7 +777,16 @@ the invariants they protect are easy to break again.
   VERTICAL group pinned top right of the stage on `/teacher/pace` and `/teacher/present`, modelled on
   a garment care label (it was a full-width bottom rail for about an hour; Steele moved it). The
   mechanism is PRECORRECTION: naming the state before the transition that breaks it. Slot ORDER is a
-  cue students read by position and may never be reordered; colour and glyph are the other two. It
+  cue students read by position and may never be reordered; the other two cues changed in the
+  State Strip Icons v3 handoff (2026-07-29): the GLYPH is now one per VALUE, not one per slot, and
+  COLOUR is a single teal ramp (`#10312c` to `#14b8a6`) encoding room-activity intensity, not a
+  per-slot hue. THREE VALUES PER SLOT (Steele: "no 3 for all") - Eyes is `Own paper` / `The speaker`
+  / `The screen` (dropped `Teacher` and `Your build`), Voice is `0 silent` / `1 partner` / `2 table`
+  (dropped `3 presenting`), Supplies and Body unchanged. So the Notion `Eyes` and `Voice` select
+  options must be reduced to these three when backfilling - a step authored with a dropped value now
+  fails to resolve and renders no strip. `stripGlyphId`/`stripIntensity` in the lib map each value to
+  its glyph id and ramp step; the twelve SVG paths live in `ClassroomStateStrip.tsx` as true knockouts
+  (the glyph is a hole, so the ground reads through it). It
   mounts as the LAST child of the work stage so it paints over the `inset:0` scenes, and it hops to
   the left when `board-open` is set, because the work space owns the right 42% and that is the INK
   SURFACE - never let the group cover what the teacher is writing on. `src/lib/classroomStateStrip.ts` owns the vocabulary and `npm run test:state-strip` guards it.
