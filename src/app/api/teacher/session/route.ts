@@ -1,6 +1,10 @@
+import { after } from "next/server";
 import { recordSecurityEvent } from "@/lib/securityAudit";
 import { closeOtherOpenSessions, sweepStaleSessions } from "@/lib/sessionLifecycle";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
+import { broadcastLiveFlowChange } from "@/lib/liveFlowBroadcast";
+import { liveFlowScreensChanged } from "@/lib/liveFlowScreens";
+import type { LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
 
 export const dynamic = "force-dynamic";
 
@@ -492,6 +496,21 @@ export async function POST(request: Request) {
     if ("remoteCommand" in body) patch.remote_command = body.remoteCommand ?? null;
     if (!Object.keys(patch).length) return Response.json({ error: "No session fields were supplied." }, { status: 400 });
 
+    // Read the snapshot this write replaces, so the screen ping below fires on
+    // real changes only. /control republishes about once a second while a timer
+    // runs; pinging every write would have the whole class re-fetching every
+    // second, which is the request storm this feature exists to avoid.
+    // One indexed single-column read against 30 devices polling - it is cheap.
+    let previousFlow: LiveClassFlowSnapshot | null = null;
+    if ("liveFlow" in body) {
+      const { data: before } = await db
+        .from("sessions")
+        .select("live_flow")
+        .eq("id", sessionId)
+        .maybeSingle();
+      previousFlow = (before?.live_flow ?? null) as LiveClassFlowSnapshot | null;
+    }
+
     let update = db
       .from("sessions")
       .update(patch)
@@ -522,6 +541,12 @@ export async function POST(request: Request) {
       return Response.json({ error: "A newer classroom command replaced this receipt." }, { status: 409 });
     }
     if (!data) return Response.json({ error: "Open session not found." }, { status: 404 });
+    // after() so the ping never sits between the teacher's tap and Control's
+    // response - the screens are what we are trying to make faster, not slower.
+    if ("liveFlow" in body
+      && liveFlowScreensChanged(previousFlow, data.live_flow as LiveClassFlowSnapshot | null)) {
+      after(() => broadcastLiveFlowChange(sessionId));
+    }
     return Response.json({ session: data });
   }
 

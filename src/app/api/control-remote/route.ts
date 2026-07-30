@@ -1,4 +1,7 @@
+import { after } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
+import { broadcastLiveFlowChange } from "@/lib/liveFlowBroadcast";
+import { liveFlowScreensChanged } from "@/lib/liveFlowScreens";
 import { CLOSEOUT_DIRECTIONS, DEFAULT_STATES } from "@/lib/classStates";
 import { discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { STATE_STRIP_SLOTS, stripFromStep, type ClassroomStateStripOverride, type StateStripSlot } from "@/lib/classroomStateStrip";
@@ -641,6 +644,21 @@ async function claimRemoteFlow(
   return { session: data as RemoteSessionRow, token };
 }
 
+// Wake the room's screens the moment a write changes what they show. Both
+// persist paths funnel through here, so the iPad Remote, /teacher's Start
+// lesson, and the lazy automatic pacing all ping - not just /control.
+// after() keeps the ping off the teacher's response path, and a screen-identical
+// write (a timer tick, a claim/release) must never ping: thirty Chromebooks
+// re-fetching every second is the storm this feature exists to avoid.
+function pingScreensIfChanged(
+  sessionId: string,
+  previous: LiveClassFlowSnapshot | null | undefined,
+  next: LiveClassFlowSnapshot,
+) {
+  if (!liveFlowScreensChanged(previous, next)) return;
+  after(() => broadcastLiveFlowChange(sessionId));
+}
+
 async function persistClaimedFlow(
   db: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
   claimedSession: RemoteSessionRow,
@@ -667,6 +685,7 @@ async function persistClaimedFlow(
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data?.live_flow) throw new Error("The lesson changed while the Remote action was finishing. Try again.");
+  pingScreensIfChanged(claimedSession.id, claimedSession.live_flow, data.live_flow as LiveClassFlowSnapshot);
   return data.live_flow as LiveClassFlowSnapshot;
 }
 
@@ -703,6 +722,7 @@ async function persistDirectFlow(
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data?.live_flow) throw new Error("The lesson changed before this Remote action arrived. Try again.");
+  pingScreensIfChanged(session.id, currentFlow, data.live_flow as LiveClassFlowSnapshot);
   return data.live_flow as LiveClassFlowSnapshot;
 }
 
@@ -939,6 +959,8 @@ async function startLessonFlow(body: { sessionId?: string; lessonCode?: string; 
       .select("id,period_id,join_code,remote_command,started_at,live_flow")
       .maybeSingle();
     if (updateError || !updated) throw new Error(updateError?.message || "The lesson could not start.");
+    // Starting a lesson always changes every screen, so this one is unconditional.
+    after(() => broadcastLiveFlowChange(sessionId));
     await closeOpenPolls(db, sessionId, createdPollId);
     return Response.json({ connected: true, session: serializeSession(updated as RemoteSessionRow) });
   } catch (error) {
