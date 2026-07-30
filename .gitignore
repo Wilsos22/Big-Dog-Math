@@ -32,3 +32,20 @@ output/
 !scripts/fixtures/*.csv
 *roster*.csv
 *.roster.json
+# The EXTENSION was the wrong thing to key on. Found 2026-07-30: a file called
+# "26-27 roster emails.pdf" was sitting untracked and NOT ignored in the working
+# folder, one `git add .` away from putting real student emails in a public
+# GitHub repo. The district exports rosters as PDF and XLSX as readily as CSV,
+# so match the WORD, whatever it is attached to, and re-allow the source paths
+# that legitimately carry it.
+*roster*
+*Roster*
+!src/app/roster/**
+!src/app/api/roster/**
+!scripts/import-roster.py
+!scripts/fixtures/*roster*
+# The other shapes district student data arrives in.
+*.xlsx
+*.xls
+*student*.pdf
+*students*.pdf
