@@ -19,7 +19,7 @@ import LessonVisual from "@/components/LessonVisual";
 // six abbie-* deck keys had to go with it - a button firing into an empty bus is
 // dead UI on the live engine. Both files are deleted as of 2026-07-30.
 // The sound bank took the deck's place.
-import { playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
+import { SOUND_CUES, clearUserClip, installUserClip, playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
 import { discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { missingStripSlots, stripFromStep } from "@/lib/classroomStateStrip";
 import {
@@ -410,6 +410,11 @@ function formatLiveFlowError(message: string): string {
   return `Live sync error: ${message}`;
 }
 
+// The sound bank's clips share this store with the timer cues and the per-state
+// music - one upload mechanism on the machine that has the speakers, not two.
+// `bank:` namespaces them so a cue id can never collide with a music key.
+const bankClipKey = (cueId: string) => `bank:${cueId}`;
+
 // ── IndexedDB (stores uploaded sound files so they persist on this computer) ──
 function idbOpen(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -679,6 +684,7 @@ export default function ControlPage() {
   const [scoreboardStage, setScoreboardStage] = useState<"halftime" | "final">("halftime");
   const [activeLessonContext, setActiveLessonContext] = useState<ActiveLessonContext | null>(null);
   const [soundUrls, setSoundUrls] = useState<Record<string, string>>({});
+  const [soundBankError, setSoundBankError] = useState<string | null>(null);
   const [teacherSession, setTeacherSession] = useState<TeacherSessionRow | null>(null);
   const [teacherSessionReady, setTeacherSessionReady] = useState(false);
   const [notionLaunchRequest, setNotionLaunchRequest] = useState<{ id: string; code: string; run: boolean } | null>(null);
@@ -856,7 +862,7 @@ export default function ControlPage() {
     } catch { /* ignore */ }
 
     (async () => {
-      const keys: string[] = ["warn30", "tick", "end", ...DEFAULT_STATES.map((s) => `music:${s.id}`)];
+      const keys: string[] = ["warn30", "tick", "end", ...DEFAULT_STATES.map((s) => `music:${s.id}`), ...SOUND_CUES.map((c) => bankClipKey(c.id))];
       const next: Record<string, string> = {};
       for (const k of keys) {
         try {
@@ -865,6 +871,12 @@ export default function ControlPage() {
         } catch { /* ignore */ }
       }
       setSoundUrls(next);
+      // Hand the bank its clips. Until this resolves a press still sounds -
+      // it just plays the built-in cue, same as a machine with nothing loaded.
+      for (const cue of SOUND_CUES) {
+        const blob = await idbGet(bankClipKey(cue.id)).catch(() => undefined);
+        if (blob) void installUserClip(cue.id, await blob.arrayBuffer());
+      }
     })();
   }, []);
 
@@ -2766,6 +2778,13 @@ export default function ControlPage() {
       if (prev[key]) URL.revokeObjectURL(prev[key]);
       return { ...prev, [key]: URL.createObjectURL(file) };
     });
+    // A bank clip has to reach the bank now, not on the next reload - the
+    // teacher's next move is to press Test and hear whether it is right.
+    if (key.startsWith("bank:")) {
+      const cueId = key.slice(5);
+      const ok = await installUserClip(cueId, await file.arrayBuffer(), audioCtxRef.current);
+      setSoundBankError(ok ? null : `${file.name} would not decode. Try an MP3 or WAV.`);
+    }
   }
   async function clearSound(key: string) {
     await idbDel(key);
@@ -2773,6 +2792,12 @@ export default function ControlPage() {
       if (prev[key]) URL.revokeObjectURL(prev[key]);
       const n = { ...prev }; delete n[key]; return n;
     });
+    // Falls back to /sounds/<id>.mp3 if one is deployed, then to the synthesized
+    // cue. A button in this bank is never silent.
+    if (key.startsWith("bank:")) {
+      clearUserClip(key.slice(5));
+      setSoundBankError(null);
+    }
   }
 
   async function admitWaitingStudent(request: AdmissionRequest) {
@@ -3101,6 +3126,8 @@ export default function ControlPage() {
         .cx-slabel { font-size:0.9rem; font-weight:800; color:#d8d2c5; min-width:220px; }
         .cx-supload { font-size:0.8rem; font-weight:800; color:#8ba0f8; background:rgba(78,110,242,0.1); border:1px solid rgba(78,110,242,0.3); border-radius:8px; padding:7px 12px; cursor:pointer; }
         .cx-sset { font-size:0.78rem; font-weight:800; color:#86efac; }
+        .cx-stest { font-size:0.74rem; font-weight:800; color:#d8d2c5; background:transparent; border:1px solid #3a3226; border-radius:6px; padding:5px 9px; cursor:pointer; }
+        .cx-stest:hover { border-color:#5a5040; }
         .cx-sclear { font-size:0.74rem; font-weight:800; color:#fca5a5; background:transparent; border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:5px 9px; cursor:pointer; }
         .cx-hint { color:#7c7363; font-size:0.82rem; font-weight:600; }
 
@@ -3738,6 +3765,32 @@ export default function ControlPage() {
                   </div>
                 );
               })}
+              <h3 style={{ marginTop: 6 }}>Sound bank — the buttons on the iPad Remote</h3>
+              <p className="cx-hint">
+                Load your own clip onto any button. It plays from this computer&apos;s speakers when
+                you tap the button on the iPad. With nothing loaded each button still works — it uses
+                the built-in effect, so a button is never silent.
+              </p>
+              {soundBankError && <p className="cx-hint" style={{ color: "#f9a58f" }}>{soundBankError}</p>}
+              {SOUND_CUES.map((cue) => {
+                const storageKey = bankClipKey(cue.id);
+                const has = !!soundUrls[storageKey];
+                return (
+                  <div className="cx-srow" key={cue.id}>
+                    <span className="cx-slabel">{cue.label}</span>
+                    <label className="cx-supload">
+                      {has ? "Replace clip" : "Load clip"}
+                      <input type="file" accept="audio/*" style={{ display: "none" }}
+                        onChange={(e) => uploadSound(storageKey, e.target.files?.[0])} />
+                    </label>
+                    <button className="cx-stest" onClick={() => playSoundCue(cue.id, audioCtxRef.current)}>Test</button>
+                    {has && <span className="cx-sset">your clip</span>}
+                    {has && <button className="cx-sclear" onClick={() => clearSound(storageKey)}>Remove</button>}
+                    {!has && <span className="cx-hint">{cue.detail}</span>}
+                  </div>
+                );
+              })}
+
               <p className="cx-hint">Tip: your Stream Deck still works alongside this — use either.</p>
             </section>
           )}
