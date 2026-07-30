@@ -13,10 +13,13 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import StudentSpinner from "@/components/StudentSpinner";
 import DiscussionProtocol from "@/components/DiscussionProtocol";
-import AbbieConsole from "@/components/AbbieConsole";
 import LessonVisual from "@/components/LessonVisual";
-import { requestAbbieLine } from "@/lib/abbieBus";
-import { abbieDirectionForRemoteAction } from "@/lib/remoteDeck";
+// GONE 2026-07-29: AbbieConsole mounted at the bottom of this page and was the
+// ONLY subscriber to abbieBus, so the poll's "Have Abbie react" button and the
+// six abbie-* deck keys had to go with it - a button firing into an empty bus is
+// dead UI on the live engine. AbbieConsole.tsx and abbieBus.ts stay in the repo.
+// The sound bank took the deck's place.
+import { playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
 import { discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { missingStripSlots, stripFromStep } from "@/lib/classroomStateStrip";
 import {
@@ -1509,26 +1512,6 @@ export default function ControlPage() {
     setFinished(false);
   }
 
-  // Hand the just-closed poll's tally to Abbie for a one-line, in-character take.
-  function haveAbbieReactToPoll() {
-    if (!controlPoll) return;
-    const total = pollAnswers.length;
-    let tally: string;
-    if (controlPoll.kind === "short-answer") {
-      tally = `${total} student${total === 1 ? "" : "s"} wrote short answers`;
-    } else {
-      tally = (controlPoll.choices || [])
-        .map((choice) => {
-          const count = pollAnswers.filter((a) => a.answer === choice).length;
-          const pct = total ? Math.round((count / total) * 100) : 0;
-          const label = controlPoll.kind === "fist-to-five" ? `${choice}/5` : choice;
-          return `${label}: ${count} (${pct}%)`;
-        })
-        .join(", ");
-    }
-    requestAbbieLine(`The class just voted on "${controlPoll.question}". Results: ${tally}. React to that in one line for the room - call out the split or the surprise and nudge them toward the reasoning. Do NOT reveal which answer is correct.`);
-  }
-
   // Keyed to the field's own type, not `string`. The old signature took a
   // string and cast the result, so a non-string field (the ladder mode
   // override is the first) would have accepted a string silently.
@@ -2744,8 +2727,12 @@ export default function ControlPage() {
     else if (command.action === "play-countdown") playCue("tick");
     else if (command.action === "play-times-up") playCue("end");
     else {
-      const direction = abbieDirectionForRemoteAction(command.action);
-      if (direction) requestAbbieLine(direction);
+      // The sound bank (applause, sad trombone, crickets ...). Same mechanism as
+      // the three timer cues above: the iPad sends the key, the classroom
+      // computer's speakers play it. Reuse this page's AudioContext when it
+      // exists - the teacher's own clicks already unlocked it.
+      const cue = soundCueIdForAction(command.action);
+      if (cue) playSoundCue(cue, audioCtxRef.current);
     }
     if (teacherSession) {
       pendingRemoteReceiptRef.current = {
@@ -3373,9 +3360,6 @@ export default function ControlPage() {
                       )}
                       <div className="cx-actions" style={{ justifyContent: "flex-start" }}>
                         <button className="cx-btn" onClick={prepareAnotherPoll}>New {activeInteractiveState === "question" ? "question" : "poll"}</button>
-                        {pollAnswers.length > 0 && (
-                          <button className="cx-btn cx-teal" onClick={haveAbbieReactToPoll}>Have Abbie react</button>
-                        )}
                       </div>
                     </>
                   )}
@@ -3920,8 +3904,6 @@ export default function ControlPage() {
             />
           </div>
         )}
-
-        <AbbieConsole stateLabel={activeState?.label} stateDesc={activeState?.desc} sessionId={teacherSession?.status === "open" ? teacherSession.id : null} />
       </div>
     </>
   );

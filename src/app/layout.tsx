@@ -4,8 +4,11 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import ClassSync from "@/components/ClassSync";
 import WarmupJoinSync from "@/components/WarmupJoinSync";
-import AbbieStudentBubble from "@/components/AbbieStudentBubble";
-import AbbieStudentAsk from "@/components/AbbieStudentAsk";
+// The Abbie AI feature is OFF THE SITE (Steele, 2026-07-29: "it doesnt contribute
+// to the learning"). AbbieStudentBubble and AbbieStudentAsk used to mount here,
+// which put them on EVERY page including every student surface. The components
+// stay in src/components/ - re-enabling is re-adding two mounts, not a restore
+// from git. Do not re-add them without his word.
 import DeployRefresh from "@/components/DeployRefresh";
 import StudentAttentionSync from "@/components/StudentAttentionSync";
 
@@ -27,7 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}<ClassSync /><WarmupJoinSync /><AbbieStudentBubble /><AbbieStudentAsk /><DeployRefresh /><StudentAttentionSync /></body>
+      <body>{children}<ClassSync /><WarmupJoinSync /><DeployRefresh /><StudentAttentionSync /></body>
     </html>
   );
 }

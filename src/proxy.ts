@@ -20,6 +20,11 @@ const PROTECTED_PREFIXES = [
   "/api/control-remote",
   "/api/iready",
   "/api/warmup-summaries",
+  // /api/abbie forwards whatever text it is given to api.anthropic.com. It was
+  // PUBLIC and ungated, which made it a live third-party exposure of anything
+  // typed at it. Gated 2026-07-29 when the Abbie AI feature came off the site;
+  // the route files stay in the repo.
+  "/api/abbie",
 ];
 
 const SECURE_ROLLOUT_PREFIXES = ["/api/session", "/api/warmup"];
@@ -137,6 +142,8 @@ export const config = {
     "/api/iready",
     "/api/warmup-summaries/:path*",
     "/api/warmup-summaries",
+    "/api/abbie/:path*",
+    "/api/abbie",
     "/api/session/:path*",
     "/api/session",
     "/api/warmup/:path*",

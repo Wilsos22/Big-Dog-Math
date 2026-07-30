@@ -808,7 +808,7 @@ export default function SessionPage() {
                 />
               </div>
               <a className="se-remote-link" href={`/teacher/remote?session=${encodeURIComponent(session.id)}`} target="_blank" rel="noreferrer">
-                Open iPad Remote - private controls, notes, Abbie, sound, and writing
+                Open iPad Remote - private controls, notes, sound, and writing
               </a>
             </section>
             {admissionRequests.length > 0 && (

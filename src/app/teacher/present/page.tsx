@@ -19,7 +19,6 @@ import {
   LIVE_FLOW_MODE,
   getStoredTeacherSessionId,
   liveTimerSeconds,
-  type AbbieBroadcast,
   type LiveClassFlowSnapshot,
   type TeacherRemoteCommand,
 } from "@/lib/liveClassFlow";
@@ -37,7 +36,6 @@ interface StageSession {
   broadcast: string | null;
   live_flow: LiveClassFlowSnapshot | null;
   remote_command: TeacherRemoteCommand | null;
-  abbie: AbbieBroadcast | null;
 }
 
 interface PollAnswer {
@@ -886,12 +884,6 @@ export default function ClassroomStagePage() {
            is the cue students read, and that is unchanged; only the group moves,
            and only when the whole screen reconfigures. */
         .stage-work.board-open .css-strip { right:auto; left:clamp(12px,1.5vw,26px); }
-        .stage-abbie { position:absolute; z-index:12; left:50%; bottom:20px; width:min(88%,860px); box-sizing:border-box; display:grid; grid-template-columns:auto minmax(0,1fr); gap:14px; align-items:center;
-          transform:translateX(-50%); border:1px solid #2b5e54; border-left:7px solid #5eead4; border-radius:18px; background:#0d1f1b; padding:16px 20px; box-shadow:0 22px 60px rgba(0,0,0,0.48); }
-        .stage-abbie-mark { width:50px; height:50px; display:grid; place-items:center; overflow:hidden; border-radius:50%; background:#14241f; }
-        .stage-abbie-mark img { width:44px; height:44px; object-fit:contain; }
-        .stage-abbie-name { margin:0 0 3px; color:#5eead4; font-size:0.7rem; font-weight:950; letter-spacing:0.12em; text-transform:uppercase; }
-        .stage-abbie-line { margin:0; color:#f3fffb; font-size:clamp(1rem,2vw,1.45rem); font-weight:820; line-height:1.3; }
         @media (max-width:900px) { .stage-success { width:40vw; } .stage-score-scene, .stage-discussion { grid-template-columns:1fr; overflow:auto; } }
         @media (max-height:650px) {
           .stage-frame { grid-template-rows:54px minmax(0,1fr); }
@@ -1268,19 +1260,11 @@ export default function ClassroomStagePage() {
               the clock already lives. */}
           <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} />
         </section>
-
-        {session?.abbie?.text ? (
-          <aside className="stage-abbie" aria-live="polite" aria-label="Abbie classroom message">
-            <span className="stage-abbie-mark" aria-hidden="true">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/big-dog-mark.png" alt="" />
-            </span>
-            <span>
-              <p className="stage-abbie-name">Abbie</p>
-              <p className="stage-abbie-line">{session.abbie.text}</p>
-            </span>
-          </aside>
-        ) : null}
+        {/* The Abbie broadcast bubble used to sit here, pinned bottom-centre over
+            the stage, reading sessions.abbie. The Abbie AI feature is off the site
+            (Steele, 2026-07-29) so the aside, its .stage-abbie styles and the
+            session field are gone. The AbbieBroadcast type and the Supabase
+            column both remain. */}
       </section>
       {inkOverlay && !inkOverlay.embed && <ScreenInkOverlay room={inkOverlay.room} />}
       {inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && <AttentionListener room={inkOverlay.room} />}

@@ -24,7 +24,7 @@ import {
 import type { LessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import type { LessonStepData } from "@/lib/notionLessons";
-import { ABBIE_REMOTE_BUTTONS, BEHAVIOR_OVERRIDE_BUTTONS, SOUND_REMOTE_BUTTONS, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
+import { BEHAVIOR_OVERRIDE_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
 import { overrideIsLive, stripFromStep } from "@/lib/classroomStateStrip";
 import { speakerNoteItems } from "@/lib/speakerNotes";
 
@@ -1379,24 +1379,27 @@ export default function TeacherRemotePage() {
                   <summary>
                     <span className="remote-utilities-copy">
                       <strong>Utilities</strong>
-                      <span>Abbie, sound cues, projector links, and session switching</span>
+                      <span>Sound bank, timer cues, projector links, and session switching</span>
                     </span>
                   </summary>
                   <div className="remote-utilities-body">
-                    <section className="deck-section" aria-labelledby="abbie-controls-title">
+                    {/* Where the Abbie AI deck used to be (Steele, 2026-07-29).
+                        Buttons are derived from SOUND_CUES, so a new cue in
+                        src/lib/soundBank.ts appears here with no edit. */}
+                    <section className="deck-section" aria-labelledby="sound-bank-title">
                       <div className="deck-section-head">
-                        <h2 className="deck-section-title" id="abbie-controls-title">Abbie AI</h2>
-                        <p className="deck-section-note">Speaks from the classroom computer.</p>
+                        <h2 className="deck-section-title" id="sound-bank-title">Sound bank</h2>
+                        <p className="deck-section-note">Plays from the classroom computer.</p>
                       </div>
                       <div className="deck-grid">
-                        {ABBIE_REMOTE_BUTTONS.map((button) => <DeckKey key={button.action} button={button} busy={busy} disabled={controlsDisabled} onSend={send} />)}
+                        {SOUND_BANK_REMOTE_BUTTONS.map((button) => <DeckKey key={button.action} button={button} busy={busy} disabled={controlsDisabled} onSend={send} />)}
                       </div>
                     </section>
 
                     <section className="deck-section" aria-labelledby="sound-controls-title">
                       <div className="deck-section-head">
-                        <h2 className="deck-section-title" id="sound-controls-title">Sound effects</h2>
-                        <p className="deck-section-note">Uploaded or built-in cues.</p>
+                        <h2 className="deck-section-title" id="sound-controls-title">Timer cues</h2>
+                        <p className="deck-section-note">The countdown sounds, uploaded or built in.</p>
                       </div>
                       <div className="deck-grid">
                         {SOUND_REMOTE_BUTTONS.map((button) => <DeckKey key={button.action} button={button} busy={busy} disabled={controlsDisabled} onSend={send} />)}
