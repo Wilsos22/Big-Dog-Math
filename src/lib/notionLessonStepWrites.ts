@@ -14,8 +14,10 @@ import {
   defaultPublicSurfaceModeForState,
   resolvePublicSurfaceMode,
   setPublicSurfaceMode,
+  setScreenLayout,
   type PublicSurfaceMode,
 } from "./lessonStepMetadata";
+import { isEncodedScreenLayout } from "./lessonScreenLayout";
 
 const LESSON_DATA_SOURCE_ID = "e367e541-c0c7-4613-8066-d2e61b6fee64";
 const LESSON_STEP_DATA_SOURCE_ID = "8e467c1b-8937-4902-811e-ca0a2e15af4d";
@@ -109,6 +111,8 @@ export interface EditableLessonStep {
   standard: string;
   aiContext: string;
   publicSurfaceMode: PublicSurfaceMode;
+  // Base64url payload the studio saves for this step's screen layout; "" when none.
+  screenLayout: string;
   routineConfig: LessonRoutineConfig | null;
   advance: AdvanceMode;
   required: boolean;
@@ -183,6 +187,7 @@ const EDITABLE_KEYS = new Set<string>([
   "choices",
   "linkUrl",
   "publicSurfaceMode",
+  "screenLayout",
   "routineConfig",
 ]);
 
@@ -406,6 +411,7 @@ function mapEditableStep(page: NotionPage, lessonId: string): EditableLessonStep
     standard: propertyText(p["Standard"]),
     aiContext: parseLessonStepAiContext(stripLessonRoutineConfig(rawAiContext)).userText,
     publicSurfaceMode: resolvePublicSurfaceMode(rawAiContext, stateId),
+    screenLayout: parseLessonStepAiContext(stripLessonRoutineConfig(rawAiContext)).screenLayout,
     routineConfig: inspectRoutineConfigFromRawAiContext(rawAiContext).config,
     advance: propertySelect(p["Advance"], ADVANCE_MODES),
     required: p["Required"]?.checkbox === true,
@@ -644,6 +650,15 @@ function validateChanges(input: unknown): Record<string, unknown> {
     if (key === "publicSurfaceMode") {
       if (!isPublicSurfaceMode(rawValue)) {
         throw new LessonStepApiError("Public screens must use split or linked mode.", 400, "INVALID_FIELD_VALUE");
+      }
+      continue;
+    }
+
+    if (key === "screenLayout") {
+      // "" clears the saved layout; otherwise it must be a base64url payload. Composed into
+      // AI Context alongside the other markers, never written as its own Notion property.
+      if (typeof rawValue !== "string" || (rawValue !== "" && !isEncodedScreenLayout(rawValue))) {
+        throw new LessonStepApiError("Screen layout must be a base64url payload or empty.", 400, "INVALID_FIELD_VALUE");
       }
       continue;
     }
@@ -930,6 +945,7 @@ export async function updatePublishedLessonStep(input: {
     if (
       Object.prototype.hasOwnProperty.call(changes, "aiContext")
       || Object.prototype.hasOwnProperty.call(changes, "publicSurfaceMode")
+      || Object.prototype.hasOwnProperty.call(changes, "screenLayout")
       || Object.prototype.hasOwnProperty.call(changes, "routineConfig")
     ) {
       let nextRawAiContext = currentRawAiContext;
@@ -950,6 +966,16 @@ export async function updatePublishedLessonStep(input: {
           nextRawAiContext = setPublicSurfaceMode(
             nextRawAiContext,
             changes.publicSurfaceMode as PublicSurfaceMode,
+          );
+        }
+        if (Object.prototype.hasOwnProperty.call(changes, "screenLayout")) {
+          // Strip the routine marker, set the layout via the metadata serializer (which keeps
+          // userText + public-surface mode + create token), then re-append the routine marker
+          // so the marker ordering on disk is unchanged.
+          const routineForLayout = inspectRoutineConfigFromRawAiContext(nextRawAiContext).config;
+          nextRawAiContext = withLessonRoutineConfig(
+            setScreenLayout(stripLessonRoutineConfig(nextRawAiContext), changes.screenLayout as string),
+            routineForLayout,
           );
         }
         if (Object.prototype.hasOwnProperty.call(changes, "routineConfig")) {
