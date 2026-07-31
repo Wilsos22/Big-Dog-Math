@@ -416,14 +416,35 @@ Notion property (percent-based element JSON via `src/lib/slideOverlay.ts`; rich_
 through every flow builder and `SlideOverlayLayer` renders it on `/teacher/present` above the auto
 slide (below ink on board states). A step with an empty property renders exactly as before.
 
-Screen Studio previews are the REAL surfaces, not copies: `/teacher/studio` embeds
+TWO STUDIOS AS OF 2026-07-31, and they are different tools that share a name prefix. `/teacher/studio`
+is now the **Lesson Screen Studio** (the "Lesson visual design direction" handoff): it COMPOSES each
+lesson's Main/Pace/Student screen from a Notion Lesson Step with a frame palette, two snapping zones,
+and per-component overrides, previewed at a literal 1920x1080 scaled by a CSS transform. The prior
+lesson-content EDITOR (edits Main Display, Pace Directions, routine config, slide overlays, adds
+steps, and carries the iframe previews below) MOVED to `/teacher/studio/edit` - "replace" did not mean
+delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
+- The Lesson Screen Studio's ONLY Notion write is a fourth `AI Context` marker,
+  `[BDM_SCREEN_LAYOUT:<base64url>]` (parsed/serialized in `lessonStepMetadata.ts`, threaded through
+  `notionLessonStepWrites.ts`, blob shape in `src/lib/lessonScreenLayout.ts`). Frame edits are
+  additive overrides inside that blob, never content-property writes, so everything is reversible and
+  a screen absent from the blob renders its derived default. `src/lib/lessonScreenModel.ts` holds the
+  phase-accent tokens (keyed to CANONICAL classStates ids), palette, and default-zone derivation;
+  `src/components/screen/LessonScreen.tsx` is the shared renderer.
+- OPEN / NOT DONE: present and pace do NOT yet consume `LessonScreen`. They render FLUID
+  (`position:fixed`, `clamp()` + a `zoom` multiplier), not on a 1920x1080 canvas, and cover scenes the
+  9 components do not (tool/spinner/discussion/ink/success-criterion), so adopting the library there is
+  a fluid->fixed rewrite of the two most classroom-critical surfaces and was NOT shippable unverified.
+  Until it lands, the studio's saved layouts author-ahead - nothing on the projector reads the blob yet.
+
+The lesson-content editor's previews are the REAL surfaces, not copies: `/teacher/studio/edit` embeds
 `/teacher/present?studioPreview=1` and `/teacher/pace?studioPreview=1` in scaled iframes and posts
 the draft as a `LiveClassFlowSnapshot` (built by `src/lib/studioPreviewFlow.ts`) over
 `postMessage`. The surfaces detect `?studioPreview=1`, skip the session fetch, and adopt the posted
 snapshot as a synthetic session so every downstream render is unchanged. This is why redesigning a
-surface never needs a matching Studio change again - do NOT rebuild hand-copied studio previews.
-(The Student and Remote studio previews are still hand-built; embed them the same way when they
-drift.)
+surface never needs a matching editor change again - do NOT rebuild hand-copied studio previews.
+`/demo` and `/live-flow` also depend on `studioPreviewFlow.ts` / `?studioPreview=1`, so it must not be
+removed. (The Student and Remote studio previews are still hand-built; embed them the same way when
+they drift.)
 
 Main projector warm-up screen: when the warm-up state has no anchor "Puzzle of the day" posed, the
 Main (`/teacher/present`) fills its empty real estate with a big animated "steps of learning"
@@ -1253,7 +1274,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   `_system/frame.css` is GENERATED (`node scripts/build-screen-kit.mjs`) from the canvas +
   `_ds` tokens - never hand-edit it. `_system/frame.js` scales the fixed 1440x810 stage to any
   display. Slot contract: `data-slot="..."` text is fillable from Notion Lesson Step fields
-  (the same fields `/teacher/studio` edits); deleting the attribute locks hand-written content.
+  (the same fields `/teacher/studio/edit` edits); deleting the attribute locks hand-written content.
   Two rules hold on every screen regardless of author: student-required text uses the system
   font (`.nbaside` handwriting is teacher-asides only), and no student names or results appear.
 - Font: `--bdb-font` = Albert Sans (Google Fonts, weights 400-800), NOT Georgia. Headings are weight

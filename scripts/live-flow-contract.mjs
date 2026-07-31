@@ -8,15 +8,17 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const contract = require(path.join(root, ".tmp-mastery", "liveFlowContract.js"));
 const classroomPilot = require(path.join(root, ".tmp-mastery", "classroomPilot.js"));
 const discussion = require(path.join(root, ".tmp-mastery", "discussionProtocol.js"));
-const studioSource = fs.readFileSync(path.join(root, "src/app/teacher/studio/page.tsx"), "utf8");
+// The lesson-content editor (which previews the discussion protocol) moved to /teacher/studio/edit
+// when /teacher/studio became the Lesson Screen Studio; the discussion contract lives with it.
+const studioSource = fs.readFileSync(path.join(root, "src/app/teacher/studio/edit/page.tsx"), "utf8");
 
 for (const legacyStudioLabel of ["Think - 1 minute", "Previous phase", "Restart phase", "Next phase"]) {
   if (studioSource.includes(legacyStudioLabel)) {
-    throw new Error(`The Lesson Screen Studio still previews the legacy discussion label: ${legacyStudioLabel}`);
+    throw new Error(`The lesson-content editor still previews the legacy discussion label: ${legacyStudioLabel}`);
   }
 }
 if (!studioSource.includes("DISCUSSION_ROUNDS.map") || !studioSource.includes('const previewTimer = isDiscussion ? "02:00"')) {
-  throw new Error("The Lesson Screen Studio must preview the shared three-round, two-minute discussion contract.");
+  throw new Error("The lesson-content editor must preview the shared three-round, two-minute discussion contract.");
 }
 
 const expectedPollKinds = new Map([
