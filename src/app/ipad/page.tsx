@@ -146,6 +146,43 @@ export default function IpadPage() {
     return () => ctrl.close();
   }, [room]);
 
+  // Ink is an annotation ON a slide, so it belongs to that slide. When the
+  // lesson advances, the last step's writing must not be left sitting over the
+  // new one - on the iPad or, worse, on the wall. Clearing here rather than on
+  // the displays is deliberate: the pen surface holds the authoritative board,
+  // and its clearSignal already broadcasts { t: "clear" } to every display, so
+  // one clear reaches all of them without a second wire message.
+  //
+  // The pen surface polls for this itself instead of being told by the Remote,
+  // because it has to behave the same standing alone in its own tab as it does
+  // embedded in the Remote's work space.
+  const lastStepRef = useRef<number | null>(null);
+  useEffect(() => {
+    let stopped = false;
+    const readStep = async () => {
+      try {
+        const response = await fetch("/api/control-remote", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json() as {
+          session?: { liveFlow?: { sequence?: { currentIndex?: number } | null } | null } | null;
+        };
+        const index = data.session?.liveFlow?.sequence?.currentIndex;
+        if (stopped || typeof index !== "number") return;
+        const previous = lastStepRef.current;
+        lastStepRef.current = index;
+        // The FIRST read only learns where the lesson is. Clearing on it would
+        // wipe the board of a teacher who opened the pen surface mid-step.
+        if (previous !== null && previous !== index) setClearSignal((n) => n + 1);
+      } catch {
+        // No session, or offline. The pen keeps working either way - it just
+        // stops clearing itself, which is the safe direction to fail in.
+      }
+    };
+    void readStep();
+    const interval = window.setInterval(readStep, 2000);
+    return () => { stopped = true; window.clearInterval(interval); };
+  }, []);
+
   // The projector overlay announces its aspect ratio; letterbox to match so
   // strokes land on the wall exactly where the pen put them.
   useEffect(() => {

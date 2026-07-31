@@ -910,6 +910,10 @@ export default function TeacherRemotePage() {
           .remote-write-time { min-width:76px; color:#EFE8D8; font-size:1.45rem; font-weight:900; font-variant-numeric:tabular-nums; text-align:center; }
           .remote-write-pause { min-height:48px; border:1px solid #c89c35; border-radius:11px; background:#fff5d8; color:#6e5211; padding:0 14px; font:inherit; font-weight:900; cursor:pointer; }
           .remote-write-pause:disabled { opacity:0.5; cursor:not-allowed; }
+          /* An anchor, so it needs inline-flex to centre inside min-height the
+             way the buttons beside it do. */
+          .remote-write-tab { display:inline-flex; align-items:center; min-height:48px; border:1px solid rgba(62,50,35,0.28); border-radius:11px; background:#fff; color:#3E3223; padding:0 14px; font:inherit; font-weight:900; text-decoration:none; }
+          .remote-write-tab:focus-visible { outline:3px solid var(--remote-accent); outline-offset:2px; }
           .remote-write-back:focus-visible, .remote-write-pause:focus-visible { outline:3px solid var(--remote-accent); outline-offset:2px; }
           .remote-write-frame { width:100%; height:100%; border:0; background:#fff; }
           @media (max-width:720px) {
@@ -928,6 +932,12 @@ export default function TeacherRemotePage() {
             <button className="remote-write-pause" type="button" disabled={controlsDisabled} onClick={() => { void send(STAGE_BUTTONS[1]); }}>
               {timer?.running ? "Pause" : "Resume"}
             </button>
+            {/* Standalone pen surface. Embedded, /ipad lays out against the
+                iframe's viewport rather than the iPad's, which is the leading
+                suspect for the stage rendering too large to fit or pinch. A
+                real tab renders at the device viewport, so this is also the
+                A/B test for that. */}
+            <a className="remote-write-tab" href="/ipad" target="_blank" rel="noopener noreferrer">Open in tab</a>
             {/* Never disabled, and it closes the panel LOCALLY first. The
                 server round trip can fail or sit unreceipted; getting back to
                 the deck must not depend on it. */}
