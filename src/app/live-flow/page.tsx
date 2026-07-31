@@ -15,7 +15,9 @@ import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { TIMER_URGENCY_CSS, TIMER_URGENT_SECONDS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 import {
+  canonicalPairsAnswer,
   canonicalStructuredNumericAnswer,
+  MAX_PAIRS,
   structuredNumericBlankCount,
   structuredNumericSegments,
 } from "@/lib/structuredNumeric";
@@ -56,10 +58,22 @@ type StoredPollDraft = {
   fistRating: number;
   /** Structured Numeric boxes, kept as typed text so a half-filled row survives a reload. */
   boxes?: string[];
+  /** Structured Numeric PAIRS: the committed pairs, flattened, so a built list survives a reload. */
+  pairs?: number[];
 };
 
 function pollDraftKey(sessionId: string, responseKey: string) {
   return `bdm-live-draft:${sessionId}:${responseKey}`;
+}
+
+/** Read a flat [a,b,a,b,...] draft back into committed pairs, dropping any odd tail. */
+function pairRowsFromFlat(flat: number[] | undefined): [number, number][] {
+  if (!Array.isArray(flat)) return [];
+  const rows: [number, number][] = [];
+  for (let index = 0; index + 1 < flat.length && rows.length < MAX_PAIRS; index += 2) {
+    rows.push([flat[index], flat[index + 1]]);
+  }
+  return rows;
 }
 
 function submittedPollsKey(sessionId: string) {
@@ -137,6 +151,9 @@ export default function LiveFlowPage() {
   const [pollAnswer, setPollAnswer] = useState("");
   const [selectedChoice, setSelectedChoice] = useState("");
   const [numericBoxes, setNumericBoxes] = useState<string[]>([]);
+  // Structured Numeric PAIRS: committed pairs plus the in-progress first tap.
+  const [pairRows, setPairRows] = useState<[number, number][]>([]);
+  const [pairPending, setPairPending] = useState<number | null>(null);
   const [fistRating, setFistRating] = useState(3);
   const reloadSessionRef = useRef<(() => void) | null>(null);
   const [submittedPollIds, setSubmittedPollIds] = useState<string[]>([]);
@@ -392,6 +409,9 @@ export default function LiveFlowPage() {
             boxes: Array.isArray(parsed.boxes)
               ? parsed.boxes.filter((value): value is string => typeof value === "string")
               : undefined,
+            pairs: Array.isArray(parsed.pairs)
+              ? parsed.pairs.filter((value): value is number => typeof value === "number" && Number.isFinite(value))
+              : undefined,
           };
         }
       } catch {
@@ -405,6 +425,10 @@ export default function LiveFlowPage() {
     // step can never leave a short or long row of inputs.
     const boxCount = Math.max(0, activePoll.boxes || 0);
     setNumericBoxes(Array.from({ length: boxCount }, (_, index) => draft?.boxes?.[index] || ""));
+    // Restore committed pairs only for a pairs step, so a boxes draft can never
+    // seed the pair builder with stray rows.
+    setPairRows(activePoll.pairs ? pairRowsFromFlat(draft?.pairs) : []);
+    setPairPending(null);
     loadedDraftKeyRef.current = key;
     setPollSaveState(submittedPollIds.includes(activePoll.id) ? "submitted" : draft ? "saved" : "idle");
   }, [activePollId, activeResponseKey, submittedPollIds]);
@@ -418,13 +442,18 @@ export default function LiveFlowPage() {
     try {
       localStorage.setItem(
         key,
-        JSON.stringify({ answer: pollAnswer, fistRating, boxes: numericBoxes } satisfies StoredPollDraft),
+        JSON.stringify({
+          answer: pollAnswer,
+          fistRating,
+          boxes: numericBoxes,
+          pairs: pairRows.flatMap(([a, b]) => [a, b]),
+        } satisfies StoredPollDraft),
       );
       setPollSaveState("saved");
     } catch {
       setPollSaveState("error");
     }
-  }, [activePollId, activeResponseKey, fistRating, numericBoxes, pollAnswer, submittedPollIds]);
+  }, [activePollId, activeResponseKey, fistRating, numericBoxes, pairRows, pollAnswer, submittedPollIds]);
 
   async function submitPollAnswer(answer: string, explanation?: string, values?: (number | null)[]) {
     // Preview mode: the visitor can answer, and it succeeds locally - no
@@ -669,6 +698,39 @@ export default function LiveFlowPage() {
       />
     );
   }
+
+  // Structured Numeric PAIRS. The kind is the same "structured-numeric"; the
+  // presence of poll.pairs is what switches the boxes grid for the pair builder.
+  const pairsMeta = activePoll?.pairs ?? null;
+  const isPairsBuilder = activePoll?.kind === "structured-numeric" && Boolean(pairsMeta);
+  const pairsAtCap = pairRows.length >= MAX_PAIRS;
+
+  function tapPairNumber(value: number) {
+    // No live validation on purpose: an invented pair (4x4 for 18) must be able
+    // to reach the teacher's tally, or the whole invented-vs-missing diagnosis
+    // is moot. The two taps commit whatever the student believes is a pair.
+    if (pollSubmitted) return;
+    if (pairPending === null) {
+      setPairPending(value);
+      return;
+    }
+    if (pairsAtCap) return;
+    const first = pairPending;
+    setPairRows((rows) => [...rows, [first, value]]);
+    setPairPending(null);
+  }
+
+  function removePairRow(index: number) {
+    if (pollSubmitted) return;
+    setPairRows((rows) => rows.filter((_, position) => position !== index));
+  }
+
+  function submitPairs() {
+    if (pollSubmitted || pairRows.length < 1) return;
+    const values = pairRows.flatMap(([a, b]) => [a, b]);
+    void submitPollAnswer(canonicalPairsAnswer(values), undefined, values);
+  }
+
   const pollSaveLabel = connectionState === "reconnecting"
     ? "Reconnecting"
     : pollSubmitted || pollSaveState === "submitted"
@@ -849,6 +911,24 @@ export default function LiveFlowPage() {
         .lf-numeric-cell { display:grid; gap:6px; justify-items:center; }
         .lf-numeric-label { color:var(--bdb-ink-soft); font-size:0.72rem; font-weight:900; text-transform:uppercase; letter-spacing:0.04em; }
         .lf-numeric-send { justify-self:stretch; }
+        .lf-pairs { width:min(100%,760px); display:grid; gap:16px; justify-items:stretch; }
+        .lf-pairs-rows { display:grid; gap:10px; }
+        .lf-pair-row { display:flex; align-items:center; justify-content:space-between; gap:12px; border:2px solid var(--bdb-line); border-radius:12px; background:#fff; padding:12px 16px; box-shadow:var(--bdb-shadow-sm); }
+        .lf-pair-row.committed { border-color:var(--bdb-green-deep); background:color-mix(in srgb,var(--bdb-green) 14%,#fff); }
+        .lf-pair-row.active { border-style:dashed; border-color:var(--lf-accent); }
+        .lf-pair-expr { display:flex; align-items:center; gap:10px; color:var(--bdb-ink); font-size:clamp(1.3rem,3vw,2rem); font-weight:900; }
+        .lf-pair-num { min-width:2.2ch; text-align:center; }
+        .lf-pair-times { color:var(--bdb-ink-soft); }
+        .lf-pair-eq { color:var(--bdb-ink-soft); font-weight:800; }
+        .lf-pair-slot { display:inline-flex; align-items:center; justify-content:center; min-width:2.6ch; min-height:1.7em; padding:2px 8px; border:2px solid var(--bdb-line); border-radius:9px; background:var(--bdb-ground-2); }
+        .lf-pair-slot.await { border-color:var(--lf-accent); border-style:dashed; }
+        .lf-pair-slot.filled { border-color:var(--lf-accent); background:color-mix(in srgb,var(--lf-accent) 12%,#fff); }
+        .lf-pair-remove { border:2px solid var(--bdb-line); border-radius:9px; background:#fff; color:var(--bdb-ink-soft); font:inherit; font-size:0.82rem; font-weight:900; text-transform:uppercase; letter-spacing:0.04em; padding:8px 12px; cursor:pointer; }
+        .lf-pair-remove:hover, .lf-pair-remove:focus-visible { border-color:var(--bdb-coral-deep); color:var(--bdb-coral-deep); outline:none; }
+        .lf-pairs-bank { display:grid; grid-template-columns:repeat(auto-fit,minmax(60px,1fr)); gap:8px; }
+        .lf-pairs-chip { min-height:60px; border:2px solid var(--bdb-line); border-radius:12px; background:#fff; color:var(--bdb-ink); font:inherit; font-size:clamp(1.15rem,2.6vw,1.7rem); font-weight:950; cursor:pointer; box-shadow:var(--bdb-shadow-sm); }
+        .lf-pairs-chip:hover, .lf-pairs-chip:focus-visible { border-color:var(--lf-accent); background:color-mix(in srgb,var(--lf-accent) 10%,#fff); outline:none; }
+        .lf-pairs-chip:disabled { cursor:not-allowed; opacity:0.55; }
         .lf-fist { width:min(100%,700px); display:grid; gap:14px; }
         .lf-fist-options { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; }
         .lf-fist-option { min-height:72px; border:2px solid var(--bdb-line); border-radius:12px; background:#fff; color:var(--bdb-ink); font:inherit; font-size:clamp(1.35rem,3vw,2.15rem); font-weight:950; cursor:pointer; box-shadow:var(--bdb-shadow-sm); }
@@ -1096,6 +1176,81 @@ export default function LiveFlowPage() {
                     )}
                     {!pollSubmitted && (!selectedChoice || !pollAnswer.trim()) ? (
                       <p className="lf-poll-help">Pick one answer and write your explanation, then send.</p>
+                    ) : null}
+                    {pollSubmitError && <p className="lf-poll-help">{pollSubmitError}</p>}
+                  </div>
+                ) : isPairsBuilder && pairsMeta ? (
+                  <div className="lf-pairs">
+                    <div className="lf-pairs-rows">
+                      {pairRows.map(([a, b], index) => (
+                        <div className="lf-pair-row committed" key={`${a}x${b}-${index}`}>
+                          <span className="lf-pair-expr">
+                            <span className="lf-pair-num">{a}</span>
+                            <span className="lf-pair-times">&times;</span>
+                            <span className="lf-pair-num">{b}</span>
+                            <span className="lf-pair-eq">= {pairsMeta.target}</span>
+                          </span>
+                          {!pollSubmitted ? (
+                            <button
+                              className="lf-pair-remove"
+                              type="button"
+                              aria-label={`Remove ${a} times ${b}`}
+                              onClick={() => removePairRow(index)}
+                            >
+                              Remove
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                      {!pollSubmitted && !pairsAtCap ? (
+                        <div className="lf-pair-row active">
+                          <span className="lf-pair-expr">
+                            <span className={`lf-pair-slot${pairPending === null ? " await" : " filled"}`}>
+                              {pairPending ?? ""}
+                            </span>
+                            <span className="lf-pair-times">&times;</span>
+                            <span className={`lf-pair-slot${pairPending === null ? "" : " await"}`} aria-hidden="true" />
+                            <span className="lf-pair-eq">= {pairsMeta.target}</span>
+                          </span>
+                          {pairPending !== null ? (
+                            <button className="lf-pair-remove" type="button" onClick={() => setPairPending(null)}>
+                              Clear
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                    {!pollSubmitted ? (
+                      <div className="lf-pairs-bank" aria-label={`Numbers 1 to ${pairsMeta.bank}`}>
+                        {Array.from({ length: pairsMeta.bank }, (_, index) => index + 1).map((value) => (
+                          <button
+                            className="lf-pairs-chip"
+                            type="button"
+                            key={value}
+                            disabled={pairsAtCap && pairPending === null}
+                            onClick={() => tapPairNumber(value)}
+                          >
+                            {value}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    {pollSubmitted ? (
+                      <p className="lf-poll-sent">Answer submitted.</p>
+                    ) : (
+                      <button
+                        className="lf-poll-send lf-numeric-send"
+                        disabled={pollSaveState === "saving" || pairRows.length < 1}
+                        onClick={submitPairs}
+                      >
+                        Send answer
+                      </button>
+                    )}
+                    {!pollSubmitted && pairRows.length < 1 ? (
+                      <p className="lf-poll-help">Tap two numbers to build a pair, then keep going until you have them all.</p>
+                    ) : null}
+                    {!pollSubmitted && pairsAtCap ? (
+                      <p className="lf-poll-help">That is as many pairs as you can build. Send when you are ready.</p>
                     ) : null}
                     {pollSubmitError && <p className="lf-poll-help">{pollSubmitError}</p>}
                   </div>

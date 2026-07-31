@@ -24,6 +24,19 @@
  *     4=6*2
  *     5=168
  *
+ * A SECOND shape shares the same response kind: PAIRS. The student builds every
+ * two-factor pair of a target, and completeness is scored SEPARATELY from
+ * correctness - a student who invented a pair (4x4 for 18) and one who is only
+ * missing a pair are different people and need different teacher moves. It is
+ * authored as its own tiny spec, mutually exclusive with the boxes forms:
+ *
+ *     pairs(18)
+ *     bank: 20
+ *
+ * `pairs(N)` is the product; `bank: M` sizes the tap bank (1..M) the student
+ * chooses from, and defaults to N when omitted so every factor pair is
+ * reachable. The two shapes are a discriminated union on `spec.mode`.
+ *
  * This module has NO imports on purpose - it is compiled in isolation by
  * `npm run test:structured-numeric`, exactly like mastery.ts and grouping.ts.
  * Do not add imports or tsconfig path aliases to it.
@@ -38,12 +51,29 @@ export type StructuredNumericRule =
   /** `a=N` - box a equals constant N. */
   | { kind: "equals"; box: number; value: number; source: string };
 
-export type StructuredNumericSpec = {
+/** The N-boxes-laid-out-as-an-equation shape (`boxes: N` + sum/multiple/equals). */
+export type StructuredNumericBoxesSpec = {
+  mode: "boxes";
   /** How many inputs to render. */
   boxes: number;
   /** Evaluated in authored order - the FIRST failing rule is the diagnosis. */
   rules: StructuredNumericRule[];
 };
+
+/** The build-every-factor-pair shape (`pairs: N` + optional `bank: M`). */
+export type StructuredNumericPairsSpec = {
+  mode: "pairs";
+  /** The product every submitted pair must equal. */
+  target: number;
+  /**
+   * The tap bank runs 1..bank. A factor pair needing a number ABOVE the bank
+   * is not expected of the student - they literally cannot tap it - so the
+   * completeness target is the factor pairs reachable within the bank.
+   */
+  bank: number;
+};
+
+export type StructuredNumericSpec = StructuredNumericBoxesSpec | StructuredNumericPairsSpec;
 
 export type StructuredNumericParse =
   | { ok: true; spec: StructuredNumericSpec }
@@ -70,6 +100,27 @@ export type StructuredNumericDiagnosis = {
   split: number[] | null;
   /** Order-independent key for the chosen split, so 20+8 and 8+20 group together. */
   splitKey: string | null;
+  /** Present only for a pairs spec - the completeness/correctness breakdown. */
+  pairsResult?: StructuredNumericPairsResult;
+};
+
+/**
+ * A pairs response, scored. Completeness (`complete`) is deliberately separate
+ * from correctness: a student can be complete but have invented a pair, or have
+ * every pair valid yet be missing one. The two failures route to different
+ * teacher moves, so they must never collapse into one boolean.
+ */
+export type StructuredNumericPairsResult = {
+  /** Every distinct pair the student built, order-independent. */
+  submitted: [number, number][];
+  /** The submitted pairs that actually multiply to the target within the bank. */
+  valid: [number, number][];
+  /** Submitted pairs that do NOT multiply to the target (e.g. 4x4 for 18). */
+  invented: [number, number][];
+  /** Expected factor pairs the student never built. */
+  missing: [number, number][];
+  /** Every expected factor pair is present. Says nothing about invented pairs. */
+  complete: boolean;
 };
 
 export const STRUCTURED_NUMERIC_TIER_LABELS: Record<StructuredNumericTier, string> = {
@@ -81,28 +132,50 @@ export const STRUCTURED_NUMERIC_TIER_LABELS: Record<StructuredNumericTier, strin
 
 const RULE_SYNTAX_HELP =
   "Use one rule per line: boxes: N, sum(a,b)=N, a=K*b, or a=N.";
+const PAIRS_SYNTAX_HELP =
+  "A pairs step takes only pairs(N) and an optional bank: M.";
 
 const MAX_BOXES = 12;
+/** The most pairs a student can build - caps the flat `values` array at 2x this. */
+export const MAX_PAIRS = 12;
+/**
+ * Upper bound on the flat `values` array for EITHER shape. The boxes variant
+ * needs MAX_BOXES; the pairs variant needs two numbers per pair. The route and
+ * the client both clamp to this before writing `poll_answers.values`.
+ */
+export const MAX_STRUCTURED_NUMERIC_VALUES = Math.max(MAX_BOXES, MAX_PAIRS * 2);
+const MAX_PAIRS_TARGET = 10000;
+const MAX_PAIRS_BANK = 100;
 
 const BOXES_LINE = /^boxes\s*:\s*(\d+)$/i;
 const SUM_LINE = /^sum\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)\s*=\s*(-?\d+)$/i;
 const MULTIPLE_LINE = /^(\d+)\s*=\s*(-?\d+)\s*\*\s*(\d+)$/;
 const EQUALS_LINE = /^(\d+)\s*=\s*(-?\d+)$/;
+const PAIRS_LINE = /^pairs\s*\(\s*(\d+)\s*\)$/i;
+const BANK_LINE = /^bank\s*:\s*(\d+)$/i;
 
 /**
  * Parse an authored answer spec.
  *
- * Deliberately NOT an expression evaluator - four fixed forms is the whole
- * grammar. Anything else is a parse error, and a parse error must fail LOUDLY
- * in the control panel load message. Silently accepting a malformed spec would
- * mark a whole class wrong on a rule nobody wrote.
+ * Deliberately NOT an expression evaluator - the boxes forms are four fixed
+ * shapes and pairs is one more. Anything else is a parse error, and a parse
+ * error must fail LOUDLY in the control panel load message. Silently accepting
+ * a malformed spec would mark a whole class wrong on a rule nobody wrote.
+ *
+ * A `pairs(N)` line switches the whole spec to the pairs shape - the two modes
+ * are mutually exclusive, so mixing pairs with any boxes form is an error.
  */
 export function parseStructuredNumericSpec(text: string | null | undefined): StructuredNumericParse {
+  const lines = (text || "").split(/\r?\n/);
+  if (lines.some((line) => PAIRS_LINE.test(line.trim()))) return parsePairsSpec(lines);
+  return parseBoxesSpec(lines);
+}
+
+function parseBoxesSpec(lines: string[]): StructuredNumericParse {
   const errors: string[] = [];
   const rules: StructuredNumericRule[] = [];
   let boxes: number | null = null;
 
-  const lines = (text || "").split(/\r?\n/);
   lines.forEach((rawLine, index) => {
     const line = rawLine.trim();
     if (!line) return;
@@ -178,7 +251,84 @@ export function parseStructuredNumericSpec(text: string | null | undefined): Str
   }
 
   if (errors.length || boxes === null) return { ok: false, errors };
-  return { ok: true, spec: { boxes, rules } };
+  return { ok: true, spec: { mode: "boxes", boxes, rules } };
+}
+
+/**
+ * Parse the pairs shape: `pairs(N)` plus an optional `bank: M`. Nothing else is
+ * allowed - a boxes rule mixed in is an authoring mistake, not a silent no-op.
+ */
+function parsePairsSpec(lines: string[]): StructuredNumericParse {
+  const errors: string[] = [];
+  let target: number | null = null;
+  let bank: number | null = null;
+
+  lines.forEach((rawLine, index) => {
+    const line = rawLine.trim();
+    if (!line) return;
+    const lineNumber = index + 1;
+
+    const pairsMatch = line.match(PAIRS_LINE);
+    if (pairsMatch) {
+      if (target !== null) {
+        errors.push(`Line ${lineNumber}: "${line}" repeats pairs(). Declare the target once.`);
+        return;
+      }
+      const value = Number(pairsMatch[1]);
+      if (value < 2 || value > MAX_PAIRS_TARGET) {
+        errors.push(`Line ${lineNumber}: "${line}" needs a target between 2 and ${MAX_PAIRS_TARGET}.`);
+        return;
+      }
+      target = value;
+      return;
+    }
+
+    const bankMatch = line.match(BANK_LINE);
+    if (bankMatch) {
+      if (bank !== null) {
+        errors.push(`Line ${lineNumber}: "${line}" repeats bank:. Declare the bank once.`);
+        return;
+      }
+      const value = Number(bankMatch[1]);
+      if (value < 1 || value > MAX_PAIRS_BANK) {
+        errors.push(`Line ${lineNumber}: "${line}" needs a bank between 1 and ${MAX_PAIRS_BANK}.`);
+        return;
+      }
+      bank = value;
+      return;
+    }
+
+    errors.push(`Line ${lineNumber}: "${line}" cannot be mixed with pairs(). ${PAIRS_SYNTAX_HELP}`);
+  });
+
+  if (target === null) {
+    errors.push(`A pairs step needs a "pairs(N)" line. ${PAIRS_SYNTAX_HELP}`);
+    return { ok: false, errors };
+  }
+  // Default the bank to the target so every factor pair (1..N) is reachable.
+  const resolvedBank = bank ?? target;
+  // A step the student can never complete is worse than no step - if the bank
+  // is too small to reach a single factor pair, fail loudly, do not open it.
+  if (!expectedFactorPairs(target, resolvedBank).length) {
+    errors.push(`pairs(${target}) has no factor pair reachable from a bank of 1 to ${resolvedBank}. Raise the bank.`);
+  }
+  if (errors.length) return { ok: false, errors };
+  return { ok: true, spec: { mode: "pairs", target, bank: resolvedBank } };
+}
+
+/**
+ * The unordered factor pairs of `target` whose BOTH factors are within 1..bank,
+ * small factor first. This is the completeness target: a pair needing a number
+ * above the bank cannot be tapped, so it is never expected.
+ */
+export function expectedFactorPairs(target: number, bank: number): [number, number][] {
+  const pairs: [number, number][] = [];
+  for (let d = 1; d * d <= target; d += 1) {
+    if (target % d !== 0) continue;
+    const other = target / d;
+    if (d <= bank && other <= bank) pairs.push([d, other]);
+  }
+  return pairs;
 }
 
 function referencedBoxes(rule: StructuredNumericRule): number[] {
@@ -202,7 +352,7 @@ function constrainedBox(rule: StructuredNumericRule): number | null {
  */
 export function structuredNumericRuleRole(
   rule: StructuredNumericRule,
-  spec: StructuredNumericSpec,
+  spec: StructuredNumericBoxesSpec,
 ): StructuredNumericRole {
   if (rule.kind === "sum") return "whole";
   return constrainedBox(rule) === spec.boxes ? "total" : "partial";
@@ -250,6 +400,7 @@ export function diagnoseStructuredNumeric(
   spec: StructuredNumericSpec,
   values: readonly (number | null)[],
 ): StructuredNumericDiagnosis {
+  if (spec.mode === "pairs") return diagnosePairs(spec, values);
   const split = studentSplit(spec, values);
   const base = {
     split,
@@ -316,7 +467,7 @@ export function diagnoseStructuredNumeric(
 
 /** The addends the student chose, taken from the first `sum` rule. */
 function studentSplit(
-  spec: StructuredNumericSpec,
+  spec: StructuredNumericBoxesSpec,
   values: readonly (number | null)[],
 ): number[] | null {
   const sumRule = spec.rules.find((rule) => rule.kind === "sum");
@@ -326,6 +477,82 @@ function studentSplit(
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   });
   return chosen.every((value): value is number => value !== null) ? chosen : null;
+}
+
+/** The flat `values` array read two-at-a-time into distinct, order-independent pairs. */
+function pairsFromValues(values: readonly (number | null)[]): [number, number][] {
+  const seen = new Set<string>();
+  const pairs: [number, number][] = [];
+  for (let index = 0; index + 1 < values.length; index += 2) {
+    const a = values[index];
+    const b = values[index + 1];
+    if (typeof a !== "number" || !Number.isFinite(a)) continue;
+    if (typeof b !== "number" || !Number.isFinite(b)) continue;
+    const [low, high] = a <= b ? [a, b] : [b, a];
+    const key = `${low}x${high}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pairs.push([low, high]);
+  }
+  return pairs;
+}
+
+function pairKey(a: number, b: number): string {
+  return a <= b ? `${a}x${b}` : `${b}x${a}`;
+}
+
+/**
+ * Diagnose a pairs response.
+ *
+ * Completeness and correctness are scored on SEPARATE axes, then collapsed into
+ * one diagnosis whose PHRASE is what groups students in the tally:
+ *   - invented pair present -> "Listed a pair that is not a factor pair" (tier 2
+ *     Visit): the student thinks something that is not a factor pair is one. The
+ *     more urgent of the two, and it must never merge with a missing-pair row.
+ *   - every pair valid but one is missing -> "Missing a factor pair" (tier 3
+ *     Check): the concept is intact, they just were not exhaustive.
+ *   - complete and nothing invented -> correct (tier 4).
+ *
+ * No misconception TAG is attached: the seeded vocabulary is Steele's to extend,
+ * and the phrase already separates the two groups, which is all the tally needs.
+ */
+function diagnosePairs(
+  spec: StructuredNumericPairsSpec,
+  values: readonly (number | null)[],
+): StructuredNumericDiagnosis {
+  const { target, bank } = spec;
+  const submitted = pairsFromValues(values);
+  const isValid = ([a, b]: [number, number]): boolean =>
+    a >= 1 && b >= 1 && a <= bank && b <= bank && a * b === target;
+  const valid = submitted.filter(isValid);
+  const invented = submitted.filter((pair) => !isValid(pair));
+  const validKeys = new Set(valid.map(([a, b]) => pairKey(a, b)));
+  const missing = expectedFactorPairs(target, bank).filter(([a, b]) => !validKeys.has(pairKey(a, b)));
+  const complete = missing.length === 0;
+  const pairsResult: StructuredNumericPairsResult = { submitted, valid, invented, missing, complete };
+  const base = { split: null, splitKey: null, failedRule: null, role: null, pairsResult };
+
+  if (complete && invented.length === 0) {
+    return { ...base, correct: true, ruleId: null, phrase: "Correct", tier: 4, misconception: null };
+  }
+  if (invented.length > 0) {
+    return {
+      ...base,
+      correct: false,
+      ruleId: `pairs(${target})`,
+      phrase: "Listed a pair that is not a factor pair",
+      tier: 2,
+      misconception: null,
+    };
+  }
+  return {
+    ...base,
+    correct: false,
+    ruleId: `pairs(${target})`,
+    phrase: "Missing a factor pair",
+    tier: 3,
+    misconception: null,
+  };
 }
 
 /**
@@ -460,13 +687,30 @@ export function summarizeStructuredNumeric(
 }
 
 /**
- * Box count only - the single piece of the spec that is safe to send to a
+ * Box count only - the single piece of the BOXES spec that is safe to send to a
  * Chromebook. The rules themselves carry the answer (`5=168` IS the product),
- * so they never cross `studentSafeLiveFlow`.
+ * so they never cross `studentSafeLiveFlow`. Null for a pairs spec or a plain
+ * text answer.
  */
 export function structuredNumericBoxCount(correctAnswer: string | null | undefined): number | null {
   const parsed = parseStructuredNumericSpec(correctAnswer);
-  return parsed.ok ? parsed.spec.boxes : null;
+  return parsed.ok && parsed.spec.mode === "boxes" ? parsed.spec.boxes : null;
+}
+
+/**
+ * The public poll fields for a structured-numeric step - the ONLY part of the
+ * spec allowed to cross `studentSafeLiveFlow`. The boxes variant crosses a
+ * count; the pairs variant crosses the target and the bank range (the factors
+ * are derivable from the target anyway, and the student needs both to answer).
+ * The rules, and for boxes the answers they encode, stay teacher-side.
+ */
+export function structuredNumericPollFields(
+  correctAnswer: string | null | undefined,
+): { boxes?: number; pairs?: { target: number; bank: number } } {
+  const parsed = parseStructuredNumericSpec(correctAnswer);
+  if (!parsed.ok) return {};
+  if (parsed.spec.mode === "pairs") return { pairs: { target: parsed.spec.target, bank: parsed.spec.bank } };
+  return { boxes: parsed.spec.boxes };
 }
 
 /**
@@ -483,6 +727,22 @@ export function canonicalStructuredNumericAnswer(values: readonly (number | null
     if (typeof value === "number" && Number.isFinite(value)) return String(value);
   }
   return "";
+}
+
+/**
+ * A readable, non-empty summary for `poll_answers.answer` on a pairs step.
+ *
+ * The built pairs live in `values` (the same column the boxes variant uses).
+ * `answer` keeps a canonical, order-independent string ("1x18, 2x9, 3x6") so a
+ * teacher reading a raw row sees the pairs and the not-empty answer guard
+ * passes. It is NEVER exact-matched anywhere - pairs are judged by diagnosis,
+ * like every structured-numeric step - so ASCII "x" is fine.
+ */
+export function canonicalPairsAnswer(values: readonly (number | null)[]): string {
+  return pairsFromValues(values)
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    .map(([a, b]) => `${a}x${b}`)
+    .join(", ");
 }
 
 /**

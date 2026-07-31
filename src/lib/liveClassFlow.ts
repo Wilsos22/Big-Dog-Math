@@ -283,6 +283,14 @@ export interface LiveClassFlowSnapshot {
      * field crosses studentSafeLiveFlow to a Chromebook.
      */
     boxes?: number;
+    /**
+     * A structured-numeric PAIRS step: the product to factor and the tap-bank
+     * size (1..bank). Present instead of `boxes` when the step is a pairs
+     * builder. Safe to cross studentSafeLiveFlow - the target and bank ARE the
+     * problem statement, and the factors are derivable from the target anyway;
+     * no rule spec travels with it.
+     */
+    pairs?: { target: number; bank: number };
   } | null;
   resource: {
     label: string;

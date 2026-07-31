@@ -1115,17 +1115,27 @@ the invariants they protect are easy to break again.
   (`Response Mode: Structured Numeric`), because multiple choice cannot separate a student who
   misunderstands the distributive property from one who understands it and cannot multiply - and
   those need different teacher moves. `Correct Answer` on such a step is no longer an answer, it is a
-  four-form rule spec parsed by `src/lib/structuredNumeric.ts` (`boxes: N`, `sum(a,b)=N`, `a=K*b`,
-  `a=N`); ANY valid split passes, so there is no single correct string. `poll_answers.answer` keeps
-  the final box and the boxes go in the new `values` column, because `answer` is exact-matched by
-  the readiness tallies. THE TRAP (found while City Routes still existed): its readiness lookup keyed on the
+  rule spec parsed by `src/lib/structuredNumeric.ts`. FIVE forms in TWO mutually exclusive shapes,
+  discriminated on `spec.mode`: the BOXES shape (`boxes: N`, `sum(a,b)=N`, `a=K*b`, `a=N`) where ANY
+  valid split passes so there is no single correct string; and the PAIRS shape (`pairs(N)` plus an
+  optional `bank: M`, added 2026-07-31) where the student builds every two-factor pair of N from a tap
+  bank of 1..M. For pairs, COMPLETENESS is scored separately from CORRECTNESS: an invented pair (4x4
+  for 18, tier 2 "Listed a pair that is not a factor pair") and a merely missing pair (tier 3 "Missing
+  a factor pair") are different students and land in different tally rows - never collapse them. Both
+  shapes write the flat `values` column; `poll_answers.answer` keeps a canonical summary (the final
+  box for boxes, "1x18, 2x9, 3x6" for pairs) because `answer` is exact-matched by the readiness
+  tallies. THE TRAP (found while City Routes still existed): its readiness lookup keyed on the
   `multiple-choice` key only and compared `answer === correctAnswer` - against a structured step that
   finds no poll at all, or compares "168" to four lines of rules, marking EVERY student incorrect and
   routing the whole class to the teacher table. Confidently wrong is worse than blank. Both City
   Routes and the visit list now read through one shared `src/lib/readinessEvidence.ts`; keep it that
-  way. Only the BOX COUNT crosses `studentSafeLiveFlow` - the rules carry the answer (`5=168` IS the
-  product). A spec that will not parse fails LOUDLY in the /control load message and blocks the
-  server-side start rather than opening a step with zero inputs.
+  way. Only the public poll fields cross `studentSafeLiveFlow` - the BOX COUNT for boxes, or the
+  `{target, bank}` for pairs (the factors are derivable from the target anyway) - via
+  `structuredNumericPollFields`; the rules themselves carry the answer (`5=168` IS the product) and
+  never travel. A spec that will not parse fails LOUDLY in the /control load message and blocks the
+  server-side start rather than opening a step with zero inputs. Pairs is still NOT in the Notion
+  `Response Mode` select (same drift as Structured Numeric below) - a teacher types `Structured
+  Numeric` and authors `pairs(18)` / `bank: 20` in `Correct Answer`.
 - **THE RELEASE BLOCK IS A RANKED VISIT LIST, NOT WORK STATIONS** (Steele 2026-07-28). Nobody moves.
   `src/lib/visitList.ts` + `/api/live/visit-list` + `VisitListPanel` on `/teacher/remote`: four tiers,
   tier 2 grouped BY THE ERROR (nine students with one misconception is one stop, not nine visits),

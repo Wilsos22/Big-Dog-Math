@@ -4,6 +4,7 @@ import {
   StudentIdentityError,
   studentIdentityResponse,
 } from "@/lib/studentIdentity";
+import { MAX_STRUCTURED_NUMERIC_VALUES } from "@/lib/structuredNumeric";
 
 export const dynamic = "force-dynamic";
 
@@ -18,11 +19,12 @@ export async function POST(request: Request) {
     // Multiple Choice + Explain: the answer stays the bare choice (tallies and
     // correctness exact-match it); the explanation is stored beside it.
     const explanation = typeof body.explanation === "string" ? body.explanation.trim() : "";
-    // Structured Numeric: the boxes travel in their own column for the same
-    // reason - `answer` keeps the canonical summary so City Routes and the
-    // readiness tallies keep exact-matching it. A blank box stays null rather
-    // than collapsing to 0, which is a real answer.
-    const values = Array.isArray(body.values) && body.values.length <= 12
+    // Structured Numeric: the boxes (or the flat pairs list) travel in their
+    // own column for the same reason - `answer` keeps the canonical summary so
+    // City Routes and the readiness tallies keep exact-matching it. A blank box
+    // stays null rather than collapsing to 0, which is a real answer. The cap
+    // covers both shapes (boxes and 2-per-pair).
+    const values = Array.isArray(body.values) && body.values.length <= MAX_STRUCTURED_NUMERIC_VALUES
       ? body.values.map((value) => (typeof value === "number" && Number.isFinite(value) ? value : null))
       : null;
     if (!pollId || !answer || answer.length > 2000 || explanation.length > 2000) {

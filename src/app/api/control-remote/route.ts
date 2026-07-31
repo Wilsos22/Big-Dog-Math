@@ -11,7 +11,7 @@ import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import { normalizePublicLessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { publicLiveLessonSnapshot } from "@/lib/liveFlowPrivacy";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
-import { parseStructuredNumericSpec, structuredNumericBoxCount } from "@/lib/structuredNumeric";
+import { parseStructuredNumericSpec, structuredNumericPollFields } from "@/lib/structuredNumeric";
 import {
   LIVE_FLOW_MODE,
   REMOTE_COMMAND_STALE_MS,
@@ -339,9 +339,9 @@ async function navigateFlow(
       question: pollQuestion,
       choices: choices.length ? choices : null,
       stage: "responding",
-      ...(pollKind === "structured-numeric"
-        ? { boxes: structuredNumericBoxCount(step.correctAnswer) ?? undefined }
-        : {}),
+      // boxes for the equation variant, pairs {target,bank} for the pair
+      // builder - whichever the spec resolves to. Never the rule spec itself.
+      ...(pollKind === "structured-numeric" ? structuredNumericPollFields(step.correctAnswer) : {}),
     };
   }
 

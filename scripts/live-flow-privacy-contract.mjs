@@ -30,7 +30,17 @@ const flow = {
     running: true,
     finished: false,
   },
-  poll: null,
+  // A structured-numeric PAIRS poll: the student builds every factor pair of 18
+  // from a bank of 1..20. Only the target and bank may cross; the rule spec,
+  // which lives in the (stripped) current step's correctAnswer, may not.
+  poll: {
+    id: "poll-current",
+    kind: "structured-numeric",
+    question: "Show every factor pair of 18.",
+    choices: null,
+    stage: "responding",
+    pairs: { target: 18, bank: 20 },
+  },
   resource: {
     label: "Current public resource",
     url: "/current-public-resource",
@@ -75,10 +85,12 @@ const flow = {
         color: "#1f6f78",
         semantic: "representational",
         durationSeconds: 180,
-        question: "",
-        pollKind: null,
+        question: "Show every factor pair of 18.",
+        pollKind: "structured-numeric",
         choices: [],
-        correctAnswer: "",
+        // The raw pairs rule spec. It must be stripped with sequence.steps and
+        // never reach a student in any form - only the derived poll.pairs does.
+        correctAnswer: "pairs(18)\nbank: 20",
         standard: "6.RP.A.1",
         resourceUrl: "",
         paperTask: "",
@@ -146,6 +158,22 @@ assert.equal(safeFlow.paper.task, "Current public paper direction", "The current
 // design since the progress strip; everything else about future steps stays
 // private - especially questions, correct answers, resources, and remote
 // actions.
+// A structured-numeric pairs poll crosses ONLY the target and the bank. The
+// poll object must carry no rule spec, no correct answer, no factor list - the
+// student derives the factors themselves, which is the whole task.
+assert.deepEqual(
+  safeFlow.poll.pairs,
+  { target: 18, bank: 20 },
+  "The pairs target and bank are the public problem statement.",
+);
+const allowedPollKeys = ["id", "kind", "question", "choices", "stage", "awaitingTeacherAdvance", "boxes", "pairs"];
+for (const key of Object.keys(safeFlow.poll)) {
+  assert.ok(
+    allowedPollKeys.includes(key),
+    `poll.${key} is not an allowed public poll field - the answer spec must never ride on the poll.`,
+  );
+}
+
 const safeJson = JSON.stringify(safeFlow);
 for (const privateValue of [
   "Legacy option one",
@@ -158,8 +186,12 @@ for (const privateValue of [
   "/future-private-resource",
   "future-private-paper-task",
   "future-private-remote-action",
+  // The raw pairs rule spec, in either authored line form, must never appear -
+  // only the derived {target, bank} object may.
+  "pairs(18)",
+  "bank: 20",
 ]) {
   assert.equal(safeJson.includes(privateValue), false, `${privateValue} must not enter the student payload.`);
 }
 
-console.log("PASS - live student payload excludes future steps, raw criteria, and private routine data.");
+console.log("PASS - live student payload excludes future steps, raw criteria, the answer spec, and private routine data.");

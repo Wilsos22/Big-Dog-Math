@@ -70,7 +70,7 @@ import {
 } from "@/lib/liveClassFlow";
 import {
   parseStructuredNumericSpec,
-  structuredNumericBoxCount,
+  structuredNumericPollFields,
   summarizeStructuredNumeric,
 } from "@/lib/structuredNumeric";
 import { normalizeDistributiveSet, parseDistributiveSet } from "@/lib/distributiveProblems";
@@ -231,6 +231,8 @@ interface ControlPoll {
   awaitingTeacherAdvance?: boolean;
   /** Structured Numeric input count. The rules stay teacher-side; only this crosses. */
   boxes?: number;
+  /** Structured Numeric PAIRS target and tap-bank size. Present instead of boxes. */
+  pairs?: { target: number; bank: number };
 }
 
 interface ControlPollAnswer {
@@ -1238,6 +1240,7 @@ export default function ControlPage() {
           stage: flow.poll.stage,
           awaitingTeacherAdvance: flow.poll.awaitingTeacherAdvance,
           boxes: flow.poll.boxes,
+          pairs: flow.poll.pairs,
         }
       : null);
   }, [armTimer, disarmTimer, markServerHydration, persistLineup, startMusicFor, stopMusic, teacherSession]);
@@ -1506,9 +1509,7 @@ export default function ControlPage() {
       question,
       choices,
       stage: "responding",
-      ...(kind === "structured-numeric"
-        ? { boxes: structuredNumericBoxCount(config?.correctAnswer) ?? undefined }
-        : {}),
+      ...(kind === "structured-numeric" ? structuredNumericPollFields(config?.correctAnswer) : {}),
     });
     setPollAnswers([]);
     setFinished(false);
@@ -1692,8 +1693,9 @@ export default function ControlPage() {
           stage: controlPoll.stage,
           awaitingTeacherAdvance: controlPoll.awaitingTeacherAdvance,
           // Control's snapshot is a full REPLACE - a field omitted here is
-          // deleted, and a deleted box count renders zero inputs.
+          // deleted, and a deleted box count or pairs meta renders zero inputs.
           boxes: controlPoll.boxes,
+          pairs: controlPoll.pairs,
         }
       : null;
     const tool = publishedTool?.stateId === activeToolState ? publishedTool.tool : null;

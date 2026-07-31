@@ -11,12 +11,16 @@ import {
   parseStructuredNumericSpec,
   diagnoseStructuredNumeric,
   structuredNumericBoxCount,
+  structuredNumericPollFields,
   canonicalStructuredNumericAnswer,
+  canonicalPairsAnswer,
+  expectedFactorPairs,
   structuredNumericBlankCount,
   structuredNumericSegments,
   structuredNumericSplitConcentration,
   summarizeStructuredNumeric,
   splitKeyFor,
+  MAX_STRUCTURED_NUMERIC_VALUES,
 } from "../.tmp-mastery/structuredNumeric.js";
 
 let checks = 0;
@@ -220,6 +224,122 @@ check("summary reports split concentration even when everyone is correct", () =>
   // Everyone right, and everyone cut at the ten - flexibility has not landed.
   assert.equal(summary.splits.topKey, "8+20");
   assert.equal(summary.splits.share, 1);
+});
+
+// ── Pairs: the fifth shape ───────────────────────────────────────────────────
+// The first real use is M1.T1.L2-LAUNCH "10. Readiness 1": pairs(18), bank 20.
+const PAIRS_18 = ["pairs(18)", "bank: 20"].join("\n");
+
+check("pairs(N) parses to a pairs spec; bank defaults to the target when omitted", () => {
+  const withBank = spec(PAIRS_18);
+  assert.equal(withBank.mode, "pairs");
+  assert.equal(withBank.target, 18);
+  assert.equal(withBank.bank, 20);
+  // No bank line: the bank defaults to N so every factor pair (1..N) is reachable.
+  const noBank = spec("pairs(24)");
+  assert.equal(noBank.mode, "pairs");
+  assert.equal(noBank.bank, 24);
+});
+
+check("a malformed pairs spec fails loudly, never silently", () => {
+  for (const bad of [
+    "pairs(18)\nboxes: 5",        // cannot mix the two shapes
+    "pairs(18)\n3=6*1",           // cannot mix a boxes rule in
+    "pairs(1)",                    // target below 2
+    "pairs(18)\npairs(20)",       // repeated target
+    "pairs(18)\nbank: 4\nbank: 6", // repeated bank
+  ]) {
+    const parsed = parseStructuredNumericSpec(bad);
+    assert.equal(parsed.ok, false, `expected a parse failure for: ${JSON.stringify(bad)}`);
+    assert.ok(parsed.errors.length > 0 && parsed.errors.every((m) => typeof m === "string" && m.trim()));
+  }
+  // A bank too small to reach a single factor pair is an impossible step.
+  const impossible = parseStructuredNumericSpec("pairs(50)\nbank: 3");
+  assert.equal(impossible.ok, false);
+});
+
+check("expectedFactorPairs is limited to factors within the bank", () => {
+  assert.deepEqual(expectedFactorPairs(18, 20), [[1, 18], [2, 9], [3, 6]]);
+  // 18 is unreachable from a bank of 10, so {1,18} drops out of the target set.
+  assert.deepEqual(expectedFactorPairs(18, 10), [[2, 9], [3, 6]]);
+});
+
+check("a complete, all-valid submission is correct at tier 4", () => {
+  const result = diagnoseStructuredNumeric(spec(PAIRS_18), [1, 18, 2, 9, 3, 6]);
+  assert.equal(result.correct, true);
+  assert.equal(result.tier, 4);
+  assert.equal(result.pairsResult.complete, true);
+  assert.equal(result.pairsResult.invented.length, 0);
+  assert.equal(result.pairsResult.missing.length, 0);
+});
+
+check("an invented pair (4x4 for 18) is tier 2 and flagged distinctly", () => {
+  const result = diagnoseStructuredNumeric(spec(PAIRS_18), [1, 18, 2, 9, 3, 6, 4, 4]);
+  assert.equal(result.correct, false);
+  assert.equal(result.tier, 2);
+  assert.equal(result.phrase, "Listed a pair that is not a factor pair");
+  assert.deepEqual(result.pairsResult.invented, [[4, 4]]);
+  // Completeness is a SEPARATE axis: every expected pair is present here even
+  // though the submission is wrong.
+  assert.equal(result.pairsResult.complete, true);
+});
+
+check("a missing pair with everything else valid is tier 3, and incomplete", () => {
+  const result = diagnoseStructuredNumeric(spec(PAIRS_18), [1, 18, 2, 9]);
+  assert.equal(result.correct, false);
+  assert.equal(result.tier, 3);
+  assert.equal(result.phrase, "Missing a factor pair");
+  assert.equal(result.pairsResult.complete, false);
+  assert.deepEqual(result.pairsResult.missing, [[3, 6]]);
+  assert.equal(result.pairsResult.invented.length, 0);
+});
+
+check("pair order does not matter and duplicates collapse", () => {
+  const result = diagnoseStructuredNumeric(spec(PAIRS_18), [18, 1, 9, 2, 6, 3, 1, 18]);
+  assert.equal(result.correct, true);
+  assert.equal(result.pairsResult.submitted.length, 3);
+});
+
+check("the tally separates invented from missing - different students, different rows", () => {
+  const parsed = spec(PAIRS_18);
+  const responses = [
+    { id: "ok", name: "Correct One", values: [1, 18, 2, 9, 3, 6] },
+    ...Array.from({ length: 4 }, (_, i) => ({ id: `inv${i}`, name: `Invented ${i}`, values: [1, 18, 4, 4] })),
+    ...Array.from({ length: 2 }, (_, i) => ({ id: `miss${i}`, name: `Missing ${i}`, values: [1, 18, 2, 9] })),
+  ];
+  const summary = summarizeStructuredNumeric(parsed, responses);
+  assert.equal(summary.total, 7);
+  assert.equal(summary.correct, 1);
+  assert.equal(summary.groups.length, 2);
+  // Invented is the more urgent group and sorts first.
+  assert.equal(summary.groups[0].phrase, "Listed a pair that is not a factor pair");
+  assert.equal(summary.groups[0].students.length, 4);
+  assert.equal(summary.groups[0].tier, 2);
+  assert.equal(summary.groups[1].phrase, "Missing a factor pair");
+  assert.equal(summary.groups[1].students.length, 2);
+});
+
+check("only the target and bank cross to a student for pairs - never the spec", () => {
+  assert.deepEqual(structuredNumericPollFields(PAIRS_18), { pairs: { target: 18, bank: 20 } });
+  // The boxes variant still sends only a count.
+  assert.deepEqual(structuredNumericPollFields(EXIT_TICKET), { boxes: 5 });
+  // structuredNumericBoxCount is boxes-only - a pairs spec yields no box count.
+  assert.equal(structuredNumericBoxCount(PAIRS_18), null);
+  // A non-spec answer sends nothing.
+  assert.deepEqual(structuredNumericPollFields("168"), {});
+});
+
+check("canonicalPairsAnswer is a readable, order-independent, non-empty string", () => {
+  assert.equal(canonicalPairsAnswer([3, 6, 1, 18, 2, 9]), "1x18, 2x9, 3x6");
+  assert.equal(canonicalPairsAnswer([18, 1]), "1x18");
+  // Never JSON, and never empty when at least one pair was built.
+  assert.ok(!canonicalPairsAnswer([1, 18]).includes("["));
+  assert.equal(canonicalPairsAnswer([]), "");
+});
+
+check("the values cap covers a full pairs submission", () => {
+  // 12 pairs is the ceiling, so the flat array cap must be at least 24.
+  assert.ok(MAX_STRUCTURED_NUMERIC_VALUES >= 24);
 });
 
 console.log(`\n${checks} structured-numeric checks passed`);
