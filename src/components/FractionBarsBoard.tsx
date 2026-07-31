@@ -1,7 +1,7 @@
 "use client";
 
 // Fraction Bars — M1.T1.L5 support (6.NS.1: dividing fractions).
-// Five modes, all optional support (no scoring):
+// Four modes, all optional support (no scoring):
 //   "How many fit?"      — the Count-Draw-Verify loop: BUILD the dividend, TILE
 //                          divisor-sized groups under it, COUNT the groups (not
 //                          the tick marks), VERIFY with quotient x divisor. The
@@ -12,12 +12,6 @@
 //                          of the total, which are the two errors the drawing has
 //                          to rule out. A dashed outline shows the group the
 //                          leftover sits inside, so the referent unit is visible.
-//   "Bigger or smaller?" — estimation only: judge the DIRECTION of the answer
-//                          with no arithmetic. Two variants (compare to the
-//                          starting amount, or division head to head against
-//                          multiplication). Nothing is scored, counted, or
-//                          stored — it is a three-minute daily habit, and the
-//                          feedback names the reasoning, not the result.
 //   "Mixed numbers"      — convert a mixed number to an improper fraction by
 //                          splitting the wholes into unit pieces and counting.
 //   "Keep Change Flip"   — the reciprocal algorithm, walked one badge at a time
@@ -108,46 +102,6 @@ const divInfo = (p: DivProblem): DivInfo => {
     pieces: whole + (remN === 0 ? 0 : 1),
   };
 };
-
-// ── "Bigger or smaller?" problems (estimation, nothing scored) ──────────────
-// an/ad OP bn/bd. The list mixes divisors and multipliers on BOTH sides of one
-// whole on purpose: if every divisor were under 1, "dividing by a fraction makes
-// it bigger" just becomes the next wrong rule. Division is deliberately split
-// close to evenly between bigger and smaller so the operator alone predicts
-// nothing. `why` says the idea in one sentence — how many groups fit, never
-// "correct".
-interface EstProblem {
-  an: number; ad: number;
-  op: "div" | "mul";
-  bn: number; bd: number;
-  why: string;
-}
-const EST_PROBLEMS: EstProblem[] = [
-  { an: 5, ad: 1, op: "div", bn: 2, bd: 3, why: "Two thirds is less than one whole, so more than one of those groups fits inside each of the 5 wholes." },
-  { an: 6, ad: 1, op: "div", bn: 3, bd: 2, why: "Three halves is more than one whole, so each group takes more than 1 of the 6 and fewer groups fit." },
-  { an: 4, ad: 1, op: "mul", bn: 3, bd: 4, why: "Multiplying keeps only three fourths of each whole, so what you end up holding is less than 4." },
-  { an: 3, ad: 1, op: "mul", bn: 5, bd: 2, why: "Five halves is two and a half wholes, so three of them stacks up to more than 3." },
-  { an: 3, ad: 4, op: "div", bn: 1, bd: 8, why: "Eighths are much smaller than three fourths, so a lot of them fit inside it." },
-  // Careful one: only 2/3 of a group fits, and 2/3 is still MORE than the 1/2 we
-  // started with. "Fewer than one group fits" is true and is not the question, so
-  // the reason has to be about the size of the measuring unit.
-  { an: 1, ad: 2, op: "div", bn: 3, bd: 4, why: "Three fourths is less than one whole, so you are measuring the 1/2 with a unit smaller than a whole — and a smaller unit always gives a bigger count." },
-  { an: 10, ad: 1, op: "div", bn: 5, bd: 4, why: "Five fourths is more than one whole, so every group covers more than 1 and fewer than 10 of them fit." },
-  { an: 2, ad: 1, op: "mul", bn: 7, bd: 8, why: "Seven eighths of each whole is just short of a whole, so two of them land just short of 2." },
-  { an: 6, ad: 1, op: "div", bn: 3, bd: 4, why: "Three fourths is less than one whole, so more than one group fits in every whole and the count passes 6." },
-  { an: 4, ad: 1, op: "mul", bn: 4, bd: 3, why: "Four thirds is more than one whole, so four of them is more than 4." },
-  { an: 9, ad: 1, op: "div", bn: 9, bd: 8, why: "Nine eighths is a little more than one whole, so each group takes a little more than 1 and fewer than 9 fit." },
-  { an: 3, ad: 5, op: "div", bn: 1, bd: 10, why: "Tenths are smaller than three fifths, so several of them fit inside it." },
-  { an: 5, ad: 1, op: "div", bn: 6, bd: 5, why: "Six fifths is more than one whole, so each group swallows more than one of the 5." },
-  { an: 8, ad: 1, op: "mul", bn: 1, bd: 2, why: "Half of each whole keeps only part of it, so 8 halves is less than 8." },
-  { an: 2, ad: 3, op: "div", bn: 1, bd: 4, why: "Fourths are smaller than two thirds, so more than one of them fits inside it." },
-  { an: 4, ad: 1, op: "div", bn: 8, bd: 5, why: "Eight fifths is more than one and a half wholes, so each group eats up more than one of the 4 and fewer than 4 fit." },
-];
-// Direction of the answer against the starting amount.
-const estBigger = (p: EstProblem) => (p.op === "div" ? p.bn < p.bd : p.bn > p.bd);
-// Head to head, a divided by b against a times b: for a positive b, dividing
-// wins whenever b is under one whole, and multiplying wins whenever it is over.
-const estDivWins = (p: EstProblem) => p.bn < p.bd;
 
 // ── Mixed-number problems ───────────────────────────────────────────────────
 interface MixedProblem { w: number; n: number; d: number } // w n/d
@@ -244,16 +198,9 @@ function Frac({ n, d, color, flipped, big }: { n: ReactNode; d: ReactNode; color
   );
 }
 
-// One term of an expression: a plain number when the denominator is 1, a stacked
-// fraction otherwise. (Estimation problems can start from either.)
-function NumTerm({ n, d, color }: { n: number; d: number; color?: string }) {
-  if (d === 1) return <span style={color ? { color } : undefined}>{n}</span>;
-  return <Frac n={n} d={d} color={color} />;
-}
-
 export function FractionBarsBoard() {
   const liveTool = useLiveToolConfig("/fraction-bars");
-  const [mode, setModeRaw] = useState<"divide" | "estimate" | "mixed" | "kcf" | "explore">("divide");
+  const [mode, setModeRaw] = useState<"divide" | "mixed" | "kcf" | "explore">("divide");
   const [note, setNote] = useState<string | null>(null);
   const setMode = (m: typeof mode) => { setModeRaw(m); setNote(null); };
 
@@ -376,37 +323,6 @@ export function FractionBarsBoard() {
     if (v === verifyTarget) { setNote(null); setPhase("done"); return; }
     setNote(`${groupsWord(di.whole)} of ${divisorText} makes how many ${nths(prob.d2)} in all?`);
     setVerifyIn("");
-  };
-
-  // ── estimation state (nothing counted, nothing stored) ─────────────────────
-  const [eIdx, setEIdx] = useState(0);
-  const [eVariant, setEVariant] = useState<"start" | "head">("start");
-  const [ePick, setEPick] = useState<"bigger" | "smaller" | "div" | "mul" | null>(null);
-  const ep = EST_PROBLEMS[eIdx];
-  const eStartText = sumLabel([ep.an, ep.ad]);
-  const eDivisorText = sumLabel([ep.bn, ep.bd]);
-  const eBigger = estBigger(ep);
-  const eDivWins = estDivWins(ep);
-  const eRight = eVariant === "start"
-    ? ePick === (eBigger ? "bigger" : "smaller")
-    : ePick === (eDivWins ? "div" : "mul");
-  const eVerdictTail = eVariant === "start"
-    ? `it is ${eBigger ? "bigger" : "smaller"} than ${eStartText}.`
-    : `${eDivWins ? "dividing" : "multiplying"} gives the bigger answer.`;
-  // Head to head is one idea every time, so its reason is stated the same way
-  // every time. The per-problem `why` belongs to the compare-to-the-start round.
-  const eWhy = eVariant === "start"
-    ? ep.why
-    : eDivWins
-      ? `${eDivisorText} is less than one whole: dividing counts how many of those pieces fit inside ${eStartText}, while multiplying keeps only part of ${eStartText}.`
-      : `${eDivisorText} is more than one whole: multiplying stretches ${eStartText}, while dividing breaks it into groups bigger than a whole.`;
-  const nextEstimate = () => {
-    setEPick(null);
-    setNote(null);
-    if (EST_PROBLEMS.length < 2) return;
-    let next = eIdx;
-    while (next === eIdx) next = Math.floor(Math.random() * EST_PROBLEMS.length);
-    setEIdx(next);
   };
 
   // ── mixed-number state (circle walkthrough) ────────────────────────────────
@@ -639,14 +555,6 @@ export function FractionBarsBoard() {
         .fb-ghost { position:absolute; top:0; height:100%; box-sizing:border-box; background:transparent; border:2px dashed color-mix(in srgb, var(--bdb-ink) 40%, transparent); }
         .fb-partlbl { position:absolute; top:100%; margin-top:5px; transform:translateX(-50%); white-space:nowrap; font-size:0.74rem; font-weight:900; color:var(--bdb-ink); }
         .fb-grouprow { padding-bottom:24px; }
-        .fb-big { display:grid; grid-template-columns:1fr 1fr; gap:12px; width:min(560px,100%); margin:18px auto 0; }
-        .fb-bigbtn { font:inherit; font-weight:900; font-size:clamp(1rem,3.2vw,1.35rem); min-height:104px; padding:12px 14px; display:flex; align-items:center; justify-content:center; gap:10px; text-align:center; border:3px solid var(--bdb-ink); border-radius:16px; background:var(--bdb-card); color:var(--bdb-ink); cursor:pointer; }
-        .fb-bigbtn:disabled { cursor:default; }
-        .fb-bigbtn.win { border-color:var(--bdb-green-deep); box-shadow:0 0 0 4px color-mix(in srgb, var(--bdb-green-deep) 22%, transparent); }
-        .fb-bigbtn.lose { opacity:0.45; }
-        @media (max-width:520px) { .fb-big { grid-template-columns:1fr; } }
-        .fb-verdict { text-align:center; font-weight:900; font-size:clamp(1.05rem,3vw,1.35rem); margin-top:18px; }
-        .fb-why { max-width:44ch; margin:6px auto 0; text-align:center; color:var(--bdb-ink-soft); font-size:0.98rem; line-height:1.45; }
         .fb-wbar { display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
         .fb-wlbl { font-size:0.72rem; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; color:var(--bdb-ink-faint); }
         .fb-wbtn { font:inherit; font-weight:800; font-size:0.86rem; min-height:44px; padding:0 13px; border-radius:999px; border:2px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
@@ -660,7 +568,6 @@ export function FractionBarsBoard() {
       <div className="fb-modebar">
         <div className="fb-modeseg">
           <button className={mode === "divide" ? "on" : ""} onClick={() => { setMode("divide"); setNote(null); }}>How many fit?</button>
-          <button className={mode === "estimate" ? "on" : ""} onClick={() => { setMode("estimate"); setNote(null); }}>Bigger or smaller?</button>
           <button className={mode === "mixed" ? "on" : ""} onClick={() => { setMode("mixed"); setNote(null); }}>Mixed numbers</button>
           <button className={mode === "kcf" ? "on" : ""} onClick={() => { setMode("kcf"); setNote(null); }}>Keep Change Flip</button>
           <button className={mode === "explore" ? "on" : ""} onClick={() => { setMode("explore"); setNote(null); }}>Explore</button>
@@ -821,76 +728,6 @@ export function FractionBarsBoard() {
               </div>
               <div className="fb-bar">
                 <button className="fb-btn" onClick={() => startProblem((pIdx + 1) % DIV_PROBLEMS.length)}>Next problem</button>
-              </div>
-            </>
-          )}
-        </>
-      )}
-
-      {mode === "estimate" && (
-        <>
-          <div className="fb-prompt">
-            {eVariant === "start" ? `Will the answer be bigger or smaller than ${eStartText}?` : "Which one is bigger?"}
-          </div>
-          <div className="fb-sub">
-            {eVariant === "start"
-              ? "No arithmetic. Pick the direction, read why, keep going."
-              : "No arithmetic. Tap the one with the bigger answer, read why, keep going."}
-          </div>
-
-          <div className="fb-probs">
-            <button className={`fb-tbtn ${eVariant === "start" ? "on" : ""}`}
-              onClick={() => { setEVariant("start"); setEPick(null); setNote(null); }}>Compare to the start</button>
-            <button className={`fb-tbtn ${eVariant === "head" ? "on" : ""}`}
-              onClick={() => { setEVariant("head"); setEPick(null); setNote(null); }}>Head to head</button>
-          </div>
-
-          {eVariant === "start" && (
-            <div className="fb-formula" style={{ fontSize: "clamp(1.7rem,6vw,2.6rem)", marginTop: 18 }}>
-              <NumTerm n={ep.an} d={ep.ad} color={C_TEAL} />
-              <span>{ep.op === "div" ? "÷" : "×"}</span>
-              <NumTerm n={ep.bn} d={ep.bd} color="var(--bdb-ink)" />
-            </div>
-          )}
-
-          <div className="fb-big">
-            {eVariant === "start" ? (
-              <>
-                <button className={`fb-bigbtn ${ePick ? (eBigger ? "win" : "lose") : ""}`} disabled={ePick !== null}
-                  aria-label={`the answer is bigger than ${eStartText}`} onClick={() => setEPick("bigger")}>
-                  Bigger than {eStartText}
-                </button>
-                <button className={`fb-bigbtn ${ePick ? (eBigger ? "lose" : "win") : ""}`} disabled={ePick !== null}
-                  aria-label={`the answer is smaller than ${eStartText}`} onClick={() => setEPick("smaller")}>
-                  Smaller than {eStartText}
-                </button>
-              </>
-            ) : (
-              <>
-                <button className={`fb-bigbtn ${ePick ? (eDivWins ? "win" : "lose") : ""}`} disabled={ePick !== null}
-                  aria-label={`${eStartText} divided by ${eDivisorText} is bigger`} onClick={() => setEPick("div")}>
-                  <NumTerm n={ep.an} d={ep.ad} color={C_TEAL} />
-                  <span>÷</span>
-                  <NumTerm n={ep.bn} d={ep.bd} />
-                </button>
-                <button className={`fb-bigbtn ${ePick ? (eDivWins ? "lose" : "win") : ""}`} disabled={ePick !== null}
-                  aria-label={`${eStartText} times ${eDivisorText} is bigger`} onClick={() => setEPick("mul")}>
-                  <NumTerm n={ep.an} d={ep.ad} color={C_TEAL} />
-                  <span>×</span>
-                  <NumTerm n={ep.bn} d={ep.bd} />
-                </button>
-              </>
-            )}
-          </div>
-
-          {ePick !== null && (
-            <>
-              <div className="fb-verdict" style={{ color: eRight ? "var(--bdb-green-deep)" : "var(--bdb-coral-deep)" }}>
-                {eRight ? "Yes — " : "Not this time — "}{eVerdictTail}
-              </div>
-              <div className="fb-why">{eWhy}</div>
-              <div className="fb-bar">
-                <button className="fb-btn" onClick={nextEstimate}>Next one</button>
               </div>
             </>
           )}
