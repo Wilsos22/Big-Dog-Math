@@ -69,8 +69,30 @@ type StudentSessionState = {
   live_flow: {
     state?: { id?: string | null } | null;
     tool?: { route?: string } | null;
+    resource?: { url?: string | null } | null;
   } | null;
 };
+
+// A step with Response Mode "Assigned Tool" surfaces the tool as a RESOURCE link
+// (live_flow.resource.url), not a published live tool (live_flow.tool.route). So
+// tool.route is null and, without this, the next tick pushed the student off the
+// tool back to /live-flow - the refresh loop that made "Open Assigned Tool"
+// unreachable. Recognise the resource URL as an in-app tool route so class mode
+// lets the student open it and STAY. Normalises an absolute same-app URL and
+// strips any query/hash before matching the known class-mode targets.
+function assignedToolRoute(resourceUrl: string | null | undefined): string | null {
+  if (!resourceUrl) return null;
+  let path = resourceUrl;
+  if (!path.startsWith("/")) {
+    try {
+      path = new URL(resourceUrl).pathname;
+    } catch {
+      return null;
+    }
+  }
+  path = path.split(/[?#]/)[0];
+  return CLASS_MODE_TARGETS.has(path) ? path : null;
+}
 
 export const STUDENT_SESSION_READY_EVENT = STUDENT_SESSION_READY_EVENT_NAME;
 
@@ -182,9 +204,16 @@ export default function ClassSync() {
         // until the teacher advances into the instructional lesson flow. Also
         // hold the homepage during the brief handoff before state zero arrives.
         const liveStateId = d.live_flow?.state?.id || null;
-        target = !liveStateId || liveStateId === "warmup"
-          ? (currentPath === LIVE_FLOW_ROUTE ? "/" : null)
-          : d.live_flow?.tool?.route || LIVE_FLOW_ROUTE;
+        if (!liveStateId || liveStateId === "warmup") {
+          target = currentPath === LIVE_FLOW_ROUTE ? "/" : null;
+        } else {
+          // A published live tool moves the whole class to it. An assigned-tool
+          // resource is opened per student, so only keep them there once they
+          // are on it - never yank them off it back to /live-flow.
+          const toolRoute = assignedToolRoute(d.live_flow?.resource?.url);
+          target = d.live_flow?.tool?.route
+            || (toolRoute && currentPath === toolRoute ? toolRoute : LIVE_FLOW_ROUTE);
+        }
       } else if (d.broadcast === "free") {
         target = null; // teacher released students to browse on their own
       } else if (d.broadcast && CLASS_MODE_TARGETS.has(d.broadcast)) {

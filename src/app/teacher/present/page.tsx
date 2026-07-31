@@ -1105,14 +1105,22 @@ export default function ClassroomStagePage() {
               <article><p>Group task</p><strong>{routineConfig.publicTask}</strong></article>
             </section>
           ) : showPollPanel && poll ? (
+            poll.kind === "structured-numeric" ? (
+              /* Structured-numeric (the pairs / boxes readiness) is a
+                 teacher-only diagnostic - the per-student pattern is the whole
+                 point, and there is no public tally to show. The projector
+                 shows ONLY the prompt, never a "Class Results" reveal or a
+                 response count, in any stage. The diagnosis lives on /control
+                 and the visit list. */
+              <div className="stage-poll">
+                {showLessonTargets && lesson?.learningIntention ? <p className="stage-learning">{lesson.learningIntention}</p> : null}
+                <h2 className="stage-question">{poll.question}</h2>
+              </div>
+            ) : (
             <div className="stage-poll">
               {showLessonTargets && lesson?.learningIntention ? <p className="stage-learning">{lesson.learningIntention}</p> : null}
               <h2 className="stage-question">{poll.stage === "results" ? "Class Results" : poll.question}</h2>
-              {/* structured-numeric has no authored choices, so the choice
-                  tally below would render an EMPTY results box on the
-                  projector. It stays a count here by design as well: this is a
-                  PUBLIC screen, and the per-student diagnosis is teacher-only. */}
-              {poll.stage === "responding" || poll.kind === "short-answer" || poll.kind === "structured-numeric" ? (
+              {poll.stage === "responding" || poll.kind === "short-answer" ? (
                 <p className="stage-response-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received</p>
               ) : (
                 <div className="stage-results">
@@ -1131,6 +1139,7 @@ export default function ClassroomStagePage() {
               )}
               {poll.stage === "results" ? <p className="stage-response-count">{poll.question}</p> : null}
             </div>
+            )
           ) : showResourcePanel && resource ? (
             embeddedResourceUrl || embeddedAssignedToolUrl ? <iframe className="stage-resource" src={embeddedResourceUrl || embeddedAssignedToolUrl || ""} title={resource.label} /> : (
               <div className="stage-resource-link"><a href={resource.url} target="_blank" rel="noreferrer">{resource.label}</a></div>
