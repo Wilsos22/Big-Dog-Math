@@ -24,7 +24,7 @@
 //                          carry no printed names), and every other name re-bases
 //                          live off that choice.
 
-import { ReactNode, useCallback, useEffect, useState } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { LiveToolBanner, useLiveToolConfig } from "./useLiveToolConfig";
 
 const C_TEAL = "#50a3a4";
@@ -435,21 +435,75 @@ export function FractionBarsBoard() {
   const [exWhole, setExWhole] = useState(1);
   const exWholeColor = EX_PIECES.find((p) => p.den === exWhole)?.color ?? EX_PIECES[0].color;
 
-  const exAdd = (den: number) => {
-    const row = exRows[exSel] ?? [];
+  // Drag-to-place: a piece is PULLED from the palette down onto a row, the way a
+  // student picks up a rod and sets it down - the movement is the point, so a
+  // click alone never places it. Pointer events so a mouse and a finger on a
+  // Chromebook both work; the window listeners read live state through a ref.
+  const [dragDen, setDragDen] = useState<number | null>(null);
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const [dragOverRow, setDragOverRow] = useState<number | null>(null);
+  const dragDenRef = useRef<number | null>(null);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const exStateRef = useRef({ rows: exRows, whole: exWhole, sel: exSel });
+  useEffect(() => { exStateRef.current = { rows: exRows, whole: exWhole, sel: exSel }; }, [exRows, exWhole, exSel]);
+
+  // Lay one piece into row ri, capped by the physical strip (a row past one whole
+  // is deliberate once a smaller bar is declared one, so only the strip stops it).
+  const exPlace = (ri: number, den: number) => {
+    const { rows, whole } = exStateRef.current;
+    const row = rows[ri] ?? [];
     const [n, d] = rowSum(row);
-    // The cap is the STRIP, not the declared whole: once a smaller bar is called
-    // one whole, a row running past one whole is the whole point (it reads 3/2),
-    // so only the physical strip may stop it.
     if (n * den + d > d * den) {
-      setNote(exWhole === 1
+      setNote(whole === 1
         ? "That row already makes one whole. Add a row to keep comparing."
         : "That row already fills the strip. Add a row to keep comparing.");
       return;
     }
-    setNote(null);
-    setExRows((rs) => rs.map((r, i) => (i === exSel ? [...r, den] : r)));
+    setExSel(ri); setNote(null);
+    setExRows((rs) => rs.map((r, i) => (i === ri ? [...r, den] : r)));
   };
+
+  const startExDrag = (den: number, e: React.PointerEvent) => {
+    e.preventDefault();
+    dragDenRef.current = den;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    setDragDen(den);
+    setDragPos({ x: e.clientX, y: e.clientY });
+    setDragOverRow(null);
+  };
+
+  useEffect(() => {
+    if (dragDen == null) return;
+    const rowAt = (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y) as HTMLElement | null;
+      const rowEl = el?.closest?.("[data-exrow]") as HTMLElement | null;
+      return rowEl ? Number(rowEl.dataset.exrow) : null;
+    };
+    const move = (e: PointerEvent) => {
+      setDragPos({ x: e.clientX, y: e.clientY });
+      setDragOverRow(rowAt(e.clientX, e.clientY));
+    };
+    const drop = (e: PointerEvent) => {
+      const den = dragDenRef.current;
+      const ri = rowAt(e.clientX, e.clientY);
+      const moved = Math.hypot(e.clientX - dragStartRef.current.x, e.clientY - dragStartRef.current.y) > 8;
+      if (den != null) {
+        if (ri != null) exPlace(ri, den);
+        else if (!moved) exPlace(exStateRef.current.sel, den); // a tap still drops into the picked row
+      }
+      dragDenRef.current = null;
+      setDragDen(null); setDragPos(null); setDragOverRow(null);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", drop);
+    window.addEventListener("pointercancel", drop);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", drop);
+      window.removeEventListener("pointercancel", drop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragDen]);
   const exDeclareWhole = (den: number) => {
     setExWhole(den);
     setNote(den === 1
@@ -547,7 +601,11 @@ export function FractionBarsBoard() {
         .fb-note-in { display:inline-block; color:var(--bdb-coral); font-weight:800; font-size:clamp(1rem,3vw,1.3rem); line-height:1.35; padding:8px 16px; border-radius:12px; background:color-mix(in srgb, var(--bdb-coral) 12%, transparent); }
         .fb-done { text-align:center; font-size:clamp(1.2rem,3.6vw,1.8rem); font-weight:900; margin-top:12px; }
         .fb-palette { display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
-        .fb-pal { font:inherit; font-weight:900; font-size:1rem; min-height:44px; padding:0 16px; border:2px solid var(--bdb-ink); background:var(--bdb-card); color:var(--bdb-ink); cursor:pointer; }
+        .fb-pal { font:inherit; font-weight:900; font-size:1rem; min-height:44px; padding:0 16px; border:2px solid var(--bdb-ink); background:var(--bdb-card); color:var(--bdb-ink); cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; transition:transform .12s ease, opacity .12s ease; }
+        .fb-pal:active { cursor:grabbing; }
+        .fb-pal.dragging { opacity:0.4; transform:scale(0.94); }
+        .fb-track.dragover { box-shadow:0 0 0 3px color-mix(in srgb, ${C_AMBER} 78%, transparent); }
+        .fb-drag { position:fixed; transform:translate(-50%,-52%); pointer-events:none; z-index:80; min-height:42px; min-width:46px; padding:0 14px; display:grid; place-items:center; font-weight:900; font-size:1.05rem; border:2px solid; border-radius:9px; background:var(--bdb-card); box-shadow:0 10px 22px rgba(0,0,0,0.22); }
         .fb-track.exsel { border-style:solid; border-color:var(--bdb-ink); box-shadow:0 0 0 3px color-mix(in srgb, var(--bdb-amber) 55%, transparent); }
         button.fb-piece { border-top:none; border-bottom:none; border-left:none; font:inherit; font-weight:900; font-size:0.95rem; padding:0; cursor:pointer; }
         .fb-rowsum { font-weight:900; color:var(--bdb-ink); text-transform:none; letter-spacing:0; font-size:0.9rem; margin-left:6px; }
@@ -938,7 +996,7 @@ export function FractionBarsBoard() {
         <>
           <div className="fb-prompt">Compare fractions to one whole</div>
           <div className="fb-sub">
-            Tap a row to pick it, then tap fractions to lay pieces under the whole. Tap a piece to take it off.
+            Drag a fraction down onto a row to lay a piece. Tap a piece to take it off.
             Change which bar is one whole and every name changes with it.
           </div>
 
@@ -961,10 +1019,12 @@ export function FractionBarsBoard() {
           </div>
 
           <div className="fb-palette">
-            <span className="fb-wlbl">Lay a piece</span>
+            <span className="fb-wlbl">Drag a piece down</span>
             {EX_PIECES.map((t) => (
-              <button key={t.den} className="fb-pal" style={{ borderColor: t.color, color: t.color }}
-                aria-label={`add ${labelFor(t.den, exWhole)} to the row`} onClick={() => exAdd(t.den)}>
+              <button key={t.den} className={`fb-pal ${dragDen === t.den ? "dragging" : ""}`.trim()}
+                style={{ borderColor: t.color, color: t.color }} draggable={false}
+                aria-label={`drag ${labelFor(t.den, exWhole)} onto a row`}
+                onPointerDown={(e) => startExDrag(t.den, e)}>
                 {labelFor(t.den, exWhole)}
               </button>
             ))}
@@ -994,7 +1054,7 @@ export function FractionBarsBoard() {
                     Row {ri + 1}
                     {row.length > 0 && <span className="fb-rowsum">= {sumLabel(rowValue(row, exWhole))}</span>}
                   </div>
-                  <div className={`fb-track ${exSel === ri ? "exsel" : ""}`} onClick={() => setExSel(ri)}>
+                  <div className={`fb-track ${exSel === ri ? "exsel" : ""} ${dragOverRow === ri ? "dragover" : ""}`.trim()} data-exrow={ri} onClick={() => setExSel(ri)}>
                     {row.map((den, pi) => {
                       const left = acc;
                       acc += 1 / den;
@@ -1013,6 +1073,17 @@ export function FractionBarsBoard() {
               );
             })}
           </div>
+
+          {/* the piece riding the pointer while a drag is in flight */}
+          {dragDen != null && dragPos && (
+            <div className="fb-drag" style={{
+              left: dragPos.x, top: dragPos.y,
+              borderColor: EX_PIECES.find((p) => p.den === dragDen)?.color,
+              color: EX_PIECES.find((p) => p.den === dragDen)?.color,
+            }}>
+              {labelFor(dragDen, exWhole)}
+            </div>
+          )}
         </>
       )}
 
