@@ -65,6 +65,10 @@ export default function IpadPage() {
   const [boardStatus, setBoardStatus] = useState<InkConnectionStatus>("connecting");
   const [barkCooling, setBarkCooling] = useState(false);
   const [screenAr, setScreenAr] = useState(16 / 9);
+  // Mirrored from InkBoard, which owns the zoom, and applied to the SLIDE so
+  // the content moves with the writing. The ink needs no CSS transform - it is
+  // redrawn vectorially at the new scale, which is what keeps it sharp.
+  const [view, setView] = useState({ s: 1, x: 0, y: 0 });
   const ctrlRef = useRef<InkChannel | null>(null);
   const paperRef = useRef(false);
   useEffect(() => { paperRef.current = paper; }, [paper]);
@@ -213,60 +217,6 @@ export default function IpadPage() {
     };
   }, [screenAr]);
 
-  // Two fingers pinch and pan the stage. One finger and the Pencil are left
-  // alone so they still reach the ink canvas - the pen keeps drawing while the
-  // other hand frames the shot. Local only: nothing here is broadcast, so the
-  // wall never moves when he zooms in to write legibly.
-  const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
-  const viewRef = useRef(view);
-  useEffect(() => { viewRef.current = view; }, [view]);
-  const fitRef = useRef(fit);
-  useEffect(() => { fitRef.current = fit; }, [fit]);
-  useEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    let start: { d: number; scale: number; cx: number; cy: number; x: number; y: number } | null = null;
-    const spread = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-    const centre = (t: TouchList) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
-    // Never let the stage be dragged off into the dark - the slack is exactly
-    // what the zoom added.
-    const clamp = (scale: number, x: number, y: number) => {
-      const slackX = Math.max(0, (fitRef.current.w * scale - fitRef.current.w) / 2);
-      const slackY = Math.max(0, (fitRef.current.h * scale - fitRef.current.h) / 2);
-      return {
-        scale,
-        x: Math.min(slackX, Math.max(-slackX, x)),
-        y: Math.min(slackY, Math.max(-slackY, y)),
-      };
-    };
-    const onStart = (e: TouchEvent) => {
-      if (e.touches.length !== 2) return;
-      e.preventDefault();
-      const c = centre(e.touches);
-      const v = viewRef.current;
-      start = { d: spread(e.touches), scale: v.scale, cx: c.x, cy: c.y, x: v.x, y: v.y };
-    };
-    const onMove = (e: TouchEvent) => {
-      if (!start || e.touches.length !== 2) return;
-      e.preventDefault();
-      const ratio = spread(e.touches) / (start.d || 1);
-      const scale = Math.min(4, Math.max(1, start.scale * ratio));
-      const c = centre(e.touches);
-      setView(clamp(scale, start.x + (c.x - start.cx), start.y + (c.y - start.cy)));
-    };
-    const onEnd = (e: TouchEvent) => { if (e.touches.length < 2) start = null; };
-    el.addEventListener("touchstart", onStart, { passive: false });
-    el.addEventListener("touchmove", onMove, { passive: false });
-    el.addEventListener("touchend", onEnd);
-    el.addEventListener("touchcancel", onEnd);
-    return () => {
-      el.removeEventListener("touchstart", onStart);
-      el.removeEventListener("touchmove", onMove);
-      el.removeEventListener("touchend", onEnd);
-      el.removeEventListener("touchcancel", onEnd);
-    };
-  }, []);
-
   // The projector overlay announces its aspect ratio; letterbox to match so
   // strokes land on the wall exactly where the pen put them.
   useEffect(() => {
@@ -328,17 +278,19 @@ export default function IpadPage() {
            fought the pen and could never zoom the slide anyway. The stage owns
            the gesture now. */
         .ip-screen-stage { position:absolute; inset:0; display:grid; place-items:center; overflow:hidden; background:#26221c; touch-action:none; }
-        /* The transform lives HERE, above the box, so the slide iframe and the
-           ink layer scale as one object. InkBoard's own allowZoom moved the ink
-           and left the slide behind, which slid the writing off the thing it was
-           annotating. */
-        .ip-screen-view { position:relative; transform-origin:50% 50%; will-change:transform; }
+        /* The SLIDE mirrors InkBoard's own view. CSS-scaling the ink instead
+           stretched an already-rasterised canvas (pixelated) and left InkBoard's
+           cached rect blind to the ancestor transform, so strokes landed away
+           from the pencil. InkBoard redraws its strokes vectorially at the new
+           scale, so the writing stays crisp; only the slide needs mirroring.
+           transform-origin MUST be 0 0 - InkBoard's page layer uses that, and a
+           mirror with a different origin drifts as it scales. */
+        .ip-screen-frame { transform-origin:0 0; }
         /* Sized in JS. width:100% + aspect-ratio let the box run taller than the
            stage, and max-height then clamped the height while the width stayed
            100% - so it quietly stopped being the projector's ratio and the right
            edge of the wall was off screen. */
         .ip-screen-box { position:relative; }
-        .ip-zoom-reset { position:absolute; z-index:8; left:50%; bottom:14px; transform:translateX(-50%); min-height:40px; padding:0 16px; border-radius:999px; border:1px solid rgba(255,255,255,0.3); background:rgba(32,30,26,0.82); color:#fff; font-family:var(--bdb-font); font-weight:800; font-size:0.8rem; }
         .ip-screen-frame { position:absolute; inset:0; width:100%; height:100%; border:0; pointer-events:none; background:#fff; }
         /* The layer never captures; the ink canvas inside opts back in when it
            is interactive. A plain wrapper div defaults to auto and would
@@ -418,13 +370,12 @@ export default function IpadPage() {
           hand sees is what the wall shows. The live screen renders behind; on
           paper the board goes opaque and covers it. */}
       <div className="ip-screen-stage" ref={stageRef}>
-        <div
-          className="ip-screen-view"
-          style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
-        >
         <div className="ip-screen-box" style={fit.w ? { width: fit.w, height: fit.h } : { aspectRatio: String(screenAr), width: "100%" }}>
           <iframe
             className="ip-screen-frame"
+            style={view.s === 1 && view.x === 0 && view.y === 0
+              ? undefined
+              : { transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})` }}
             src={`/teacher/present?embed=1${room !== "main" ? `&room=${encodeURIComponent(room)}` : ""}`}
             title="Live class screen"
           />
@@ -432,10 +383,12 @@ export default function IpadPage() {
             <InkBoard
               room={`${room}__over`}
               interactive
-              // NO allowZoom. It transforms this canvas alone, and the slide is
-              // a separate iframe underneath - so zooming moved the writing off
-              // the content it was annotating. The stage above owns the gesture
-              // now and scales both together.
+              // InkBoard owns the zoom: it redraws strokes at the new scale so
+              // they stay sharp, and its own coordinate math already accounts
+              // for the view, so a stroke lands under the pencil. The slide
+              // follows via onViewChange below.
+              allowZoom
+              onViewChange={setView}
               transparent={!paper}
               paper="dots"
               color={color}
@@ -455,18 +408,6 @@ export default function IpadPage() {
             {paper ? "Paper - the wall shows this too" : "Writing over the class screen"}
           </span>
         </div>
-        </div>
-        {/* Only while zoomed. Pinching back to exactly 1 is fiddly on glass, and
-            being left slightly off-centre is how the hand stops matching the
-            wall without it being obvious. */}
-        {view.scale > 1.01 ? (
-          <button
-            className="ip-zoom-reset"
-            onClick={() => setView({ scale: 1, x: 0, y: 0 })}
-          >
-            Fit screen · {view.scale.toFixed(1)}x
-          </button>
-        ) : null}
       </div>
 
       {/* The pen surface never reloads itself - it holds the room's ink - so it

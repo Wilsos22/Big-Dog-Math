@@ -65,6 +65,11 @@ interface InkBoardProps {
   passThrough?: boolean; // display overlay: never intercept pointer events
   announceView?: boolean; // display side: broadcast this surface's aspect ratio
   allowZoom?: boolean; // pen surface only: pinch to zoom, finger-drag to pan while zoomed
+  // Reports this surface's LOCAL view whenever it changes, so a caller can move
+  // whatever sits behind the ink by the same amount - /ipad has the live slide
+  // in an iframe under the glass sheet and it has to zoom with the writing.
+  // Local only: this is not the wire, nothing here reaches a display.
+  onViewChange?: (view: { s: number; x: number; y: number }) => void;
   hidden?: boolean; // an inactive page: strokes/history/channel stay live, canvases shrink to free memory
   paper?: "white" | "dots"; // dots = the Warm Notebook dotted ground
   clearSignal?: number; // bump to clear
@@ -99,6 +104,7 @@ export default function InkBoard({
   passThrough = false,
   announceView = false,
   allowZoom = false,
+  onViewChange,
   hidden = false,
   paper = "white",
   clearSignal = 0,
@@ -150,6 +156,10 @@ export default function InkBoard({
   const pageLayerRef = useRef<HTMLDivElement | null>(null);
   const allowZoomRef = useRef(allowZoom);
   useEffect(() => { allowZoomRef.current = allowZoom; }, [allowZoom]);
+  // Held in a ref so syncViewStyles does not take the callback as a dependency
+  // - it runs on every pan frame and must not be rebuilt by a new closure.
+  const onViewChangeRef = useRef(onViewChange);
+  useEffect(() => { onViewChangeRef.current = onViewChange; }, [onViewChange]);
   const hiddenRef = useRef(hidden);
 
   // Latest tool settings, read inside pointer handlers.
@@ -409,6 +419,10 @@ export default function InkBoard({
       wrap.style.backgroundPosition = `${v.x}px ${v.y}px`;
     }
     setZoomPct(Math.round(v.s * 100));
+    // Same numbers the page layer just took, so anything mirrored behind the
+    // ink lands on exactly the same pixels. transform-origin is 0 0 above; a
+    // mirror must use that too or it will drift as it scales.
+    onViewChangeRef.current?.({ s: v.s, x: v.x, y: v.y });
   }, [paper, transparent]);
 
   const applyViewChange = useCallback(() => {
