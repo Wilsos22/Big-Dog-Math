@@ -294,6 +294,12 @@ export default function IpadPage() {
             <InkBoard
               room={`${room}__over`}
               interactive
+              // Pinch to zoom, finger-drag to pan while zoomed - LOCAL to this
+              // iPad. The wall never moves: only a surface with announceView
+              // broadcasts its view, and this one does not. Zooming in is how
+              // handwriting stays legible at speed, so losing this prop cost
+              // the pen surface its whole reason for being an iPad.
+              allowZoom
               transparent={!paper}
               paper="dots"
               color={color}

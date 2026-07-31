@@ -625,7 +625,15 @@ export default function TeacherRemotePage() {
   }, [busy, pendingCommand, session]);
 
   const setWritingMode = useCallback(async (open: boolean) => {
-    if (!session || busy || pendingCommand || commandInFlightRef.current) return;
+    // LEAVING is never blocked. Closing the work space is how the teacher gets
+    // back to the deck, and gating it on `pendingCommand` meant one unreceipted
+    // command - which is any command at all when /control is not open to
+    // acknowledge it - left the pen surface covering the whole screen with no
+    // way out but a new browser tab. hide-board is handled directly by
+    // /api/control-remote and needs nothing from Control, so there was never a
+    // reason for it to wait behind another command's receipt.
+    if (!session) return;
+    if (open && (busy || pendingCommand || commandInFlightRef.current)) return;
     const confirmedSession = session;
     refreshEpochRef.current += 1;
     const action: TeacherRemoteAction = open ? "show-board" : "hide-board";
@@ -920,7 +928,10 @@ export default function TeacherRemotePage() {
             <button className="remote-write-pause" type="button" disabled={controlsDisabled} onClick={() => { void send(STAGE_BUTTONS[1]); }}>
               {timer?.running ? "Pause" : "Resume"}
             </button>
-            <button className="remote-write-back" type="button" disabled={controlsDisabled} onClick={() => { void setWritingMode(false); }}>Back to Remote</button>
+            {/* Never disabled, and it closes the panel LOCALLY first. The
+                server round trip can fail or sit unreceipted; getting back to
+                the deck must not depend on it. */}
+            <button className="remote-write-back" type="button" onClick={() => { setBoardPanelOpen(false); void setWritingMode(false); }}>Back to Remote</button>
           </div>
         </header>
         {/* NO ?room= - the default "main" is the only room the displays listen
