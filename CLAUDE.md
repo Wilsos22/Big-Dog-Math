@@ -35,8 +35,16 @@ bars and live misconception grouping).
   standing priority is reliability, and the open loop is his Pencil feel test (tuning constants in
   InkBoard.tsx/inkGeometry.ts are the dials). Feel verdict 2026-07-22: the pen is a CONSTANT-WIDTH
   marker (radiusFor ignores pressure, taper off) - he writes equations, not calligraphy. Pressure
-  is still captured and carried on the wire, so do not remove it; restoring feel is a radiusFor
+  is still captured and carried on the wire, so do not remove it; restoring WIDTH feel is a radiusFor
   change only. Do not "fix" the flat line back to pressure ink.
+  FLUIDITY IS A SEPARATE DIAL FROM WIDTH (2026-07-31, Steele: "the pen writing is still very
+  rudimentary and not fluid"). The engine never smoothed the stroke PATH - it drew straight polygon
+  segments between raw pointer samples, so a fast stroke read as angles. `smoothCenterline`
+  (inkGeometry) now runs every stroke through a midpoint-quadratic before the outline is built;
+  `SMOOTH_SPACING` is the knob. It is self-adaptive by sample spacing - fast, sparse strokes round
+  into a curve, dense/careful strokes are barely touched, so a number's corners survive - and it is
+  path shape only, so the constant-width marker is intact. That is why "rudimentary" and the width
+  decision are NOT in conflict: one is the line's smoothness, the other its thickness.
 
 ## Hard rules (non-negotiable)
 
