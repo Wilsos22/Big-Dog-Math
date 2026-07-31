@@ -430,6 +430,17 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   a screen absent from the blob renders its derived default. `src/lib/lessonScreenModel.ts` holds the
   phase-accent tokens (keyed to CANONICAL classStates ids), palette, and default-zone derivation;
   `src/components/screen/LessonScreen.tsx` is the shared renderer.
+- THREE DEMONSTRATION OBJECTS (`manipSplit` / `manipSnap` / `manipFree`) are a SEPARATE, EPHEMERAL
+  palette (main projector only) the teacher drags live during class. Their type union is distinct from
+  the 9 persisted component types, their live position lives in the studio's in-memory `manip` map
+  keyed by block id, and `wireFromZones` STRIPS them so they can NEVER reach the layout blob or Notion
+  (`persistableLayout` strips them before the default-compare too, so adding one never dirties a save).
+  Anything that must animate on its own or react to students does NOT belong here - the latter has to
+  flow through `liveClassFlow.ts`. `npm run test:lesson-screen-layout` asserts the strip.
+- Design-canvas CHROME guidance (a v2 README "Design system" section) names `Panel`/`Button`/`Field`
+  from `DesignSystem_901ffe` + `_ds_bundle.js`. Those are Claude Design CANVAS primitives, NOT repo
+  dependencies - the studio chrome uses the repo's per-page `<style>` + `--bdb-*` convention instead,
+  per the handoff's own "do not add a new styling system." Do not pull the canvas bundle into the app.
 - OPEN / NOT DONE: present and pace do NOT yet consume `LessonScreen`. They render FLUID
   (`position:fixed`, `clamp()` + a `zoom` multiplier), not on a 1920x1080 canvas, and cover scenes the
   9 components do not (tool/spinner/discussion/ink/success-criterion), so adopting the library there is

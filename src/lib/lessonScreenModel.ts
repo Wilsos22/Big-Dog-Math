@@ -7,14 +7,15 @@
 import type {
   ScreenBlock,
   ScreenComponentType,
+  DemoComponentType,
   ScreenKey,
   ScreenZones,
   StepScreenLayout,
 } from "./lessonScreenLayout";
-import { SCREEN_KEYS } from "./lessonScreenLayout";
+import { SCREEN_KEYS, isDemoComponentType } from "./lessonScreenLayout";
 
-export type { ScreenKey, ScreenComponentType, ScreenBlock, ScreenZones, StepScreenLayout } from "./lessonScreenLayout";
-export { SCREEN_KEYS } from "./lessonScreenLayout";
+export type { ScreenKey, ScreenComponentType, DemoComponentType, ScreenBlock, ScreenZones, StepScreenLayout } from "./lessonScreenLayout";
+export { SCREEN_KEYS, DEMO_COMPONENT_TYPES, isDemoComponentType } from "./lessonScreenLayout";
 
 // ---- Phase accents -----------------------------------------------------------------------------
 
@@ -111,6 +112,7 @@ export interface PaletteEntry {
   type: ScreenComponentType;
   label: string;
   field: string; // the Notion property it binds to, shown under the palette label
+  mainOnly?: boolean; // demo objects live on the main projector only
 }
 
 export const SCREEN_PALETTE: PaletteEntry[] = [
@@ -123,7 +125,15 @@ export const SCREEN_PALETTE: PaletteEntry[] = [
   { type: "equation", label: "Answer boxes", field: "Question" },
   { type: "legend", label: "Color legend", field: "Slide Overlay" },
   { type: "callout", label: "Callout", field: "Student Directions" },
+  { type: "manipSplit", label: "Demo - slide the split", field: "Main screen only", mainOnly: true },
+  { type: "manipSnap", label: "Demo - snap two pieces", field: "Main screen only", mainOnly: true },
+  { type: "manipFree", label: "Demo - move + resize", field: "Main screen only", mainOnly: true },
 ];
+
+// The palette entries offered for a given screen - demo objects only on the main projector.
+export function paletteForScreen(screen: ScreenKey): PaletteEntry[] {
+  return SCREEN_PALETTE.filter((entry) => !entry.mainOnly || screen === "main");
+}
 
 export interface FieldSpec {
   key: string;
@@ -164,6 +174,18 @@ export const SCREEN_FIELD_SPECS: Record<ScreenComponentType, FieldSpec[]> = {
   ],
   legend: [{ key: "legendTitle", label: "Legend heading" }],
   callout: [{ key: "studentDirections", label: "Student Directions" }],
+  manipSplit: [
+    { key: "modelTitle", label: "Label" },
+    { key: "rows", label: "Rows" },
+    { key: "cols", label: "Columns" },
+  ],
+  manipSnap: [
+    { key: "modelTitle", label: "Label" },
+    { key: "snapRows", label: "Shared side" },
+    { key: "snapA", label: "Piece A width" },
+    { key: "snapB", label: "Piece B width" },
+  ],
+  manipFree: [{ key: "modelTitle", label: "Label" }],
 };
 
 // Zone flex per screen (zone 0 / zone 1). Matches the handoff's projector proportions.
@@ -189,6 +211,9 @@ export const BLOCK_FLEX: Record<ScreenComponentType, string> = {
   equation: "1 1 0",
   legend: "0 0 auto",
   callout: "0 0 auto",
+  manipSplit: "1 1 0",
+  manipSnap: "1 1 0",
+  manipFree: "1 1 0",
 };
 
 // Components that land in zone 1 when added from the palette; everything else lands in zone 0.
@@ -407,8 +432,33 @@ export function zonesMatchDefault(data: ScreenStepData, screen: ScreenKey, zones
   return zoneSignature(zones) === zoneSignature(defaultZones(data, screen));
 }
 
+// Live state for a demonstration object, keyed by block id in the studio's `manip` map. Never
+// persisted (see lessonScreenLayout) - it is the teacher's in-the-moment manipulation, not authoring.
+export interface ManipState {
+  split?: number; // manipSplit: fraction 0..1 of the dividing line
+  snapped?: boolean; // manipSnap: the two pieces are pushed together
+  fx?: number; // manipFree: box left, as a percent of the container
+  fy?: number; // manipFree: box top
+  fw?: number; // manipFree: box width
+  fh?: number; // manipFree: box height
+}
+
+export const MANIP_FREE_DEFAULT: Required<Pick<ManipState, "fx" | "fy" | "fw" | "fh">> = {
+  fx: 16,
+  fy: 14,
+  fw: 46,
+  fh: 54,
+};
+
+// Drop the ephemeral demo objects from a screen's zones - used before persistence and before the
+// default comparison, so a demo the teacher added never counts as a saved customization.
+export function stripDemoBlocks(zones: ScreenZones): ScreenZones {
+  return zones.map((zone) => zone.filter((block) => !isDemoComponentType(block.type)));
+}
+
 // Build the persistable layout for one step: only the screens that differ from their derived
-// default are included, so the blob stays small and a reset screen simply drops out.
+// default are included, so the blob stays small and a reset screen simply drops out. Demo objects
+// are stripped first, so adding one never dirties the save.
 export function persistableLayout(
   data: ScreenStepData,
   materialized: Partial<Record<ScreenKey, ScreenZones>>,
@@ -417,8 +467,9 @@ export function persistableLayout(
   for (const screen of SCREEN_KEYS) {
     const zones = materialized[screen];
     if (!zones) continue;
-    if (zonesMatchDefault(data, screen, zones)) continue;
-    layout[screen] = zones;
+    const persisted = stripDemoBlocks(zones);
+    if (zonesMatchDefault(data, screen, persisted)) continue;
+    layout[screen] = persisted;
   }
   return layout;
 }

@@ -16,7 +16,10 @@ fall back to the Notion value when blank. The locked band — state word, accent
 step dots, clock — is always derived from the row and never editable. Layout
 persists as a fourth `AI Context` marker, `[BDM_SCREEN_LAYOUT:...]`, which is the
 studio's only Notion write; every frame edit is a reversible override in that
-blob, so "reset to auto" is free. The prior lesson-content editor is preserved
+blob, so "reset to auto" is free. Three main-screen "demonstration objects" —
+slide the split, snap two pieces, move + resize — let the teacher drag a live
+model during class; they are deliberately ephemeral (never synced, saved, or
+recorded). The prior lesson-content editor is preserved
 at `/teacher/studio/edit`. OPEN: present and pace do not yet render the shared
 `LessonScreen` library — they are fluid, not a 1920x1080 canvas — so the studio
 authors layouts ahead of the projector reading them; that adoption is a separate,

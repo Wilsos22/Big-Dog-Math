@@ -20,8 +20,10 @@ import {
   autoScreenValue,
   defaultZones,
   paletteDropZone,
+  paletteForScreen,
   persistableLayout,
   stepScreenData,
+  type ManipState,
   type ScreenBlock,
   type ScreenComponentType,
   type ScreenKey,
@@ -100,8 +102,14 @@ function StudioInner() {
   const [stepIndex, setStepIndex] = useState(0);
   const [screen, setScreen] = useState<ScreenKey>("main");
   const [layouts, setLayouts] = useState<Record<string, ScreenZones>>({});
+  // Live demo-object state, keyed by block id. Ephemeral - never saved, never sent to Notion.
+  const [manip, setManip] = useState<Record<string, ManipState>>({});
   const [selected, setSelected] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
+
+  const onManipChange = useCallback((id: string, patch: ManipState) => {
+    setManip((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+  }, []);
 
   const [record, setRecord] = useState<StepRecord | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -171,6 +179,7 @@ function StudioInner() {
         setStepIndex(0);
         setScreen("main");
         setLayouts({});
+        setManip({});
         setSelected(null);
         setRecord(null);
         setSaveState("idle");
@@ -462,11 +471,11 @@ function StudioInner() {
           <span className="lss-eyebrow">Frames</span>
           <p className="lss-help">Click to add. Each frame fills itself from the lesson field named under it.</p>
           <div className="lss-palette-list">
-            {SCREEN_PALETTE.map((entry) => (
+            {paletteForScreen(screen).map((entry) => (
               <button
                 key={entry.type}
                 type="button"
-                className="lss-palette-btn"
+                className={`lss-palette-btn${entry.mainOnly ? " lss-palette-demo" : ""}`}
                 onClick={() => addBlock(entry.type)}
                 disabled={!currentStep}
               >
@@ -496,6 +505,8 @@ function StudioInner() {
                   editing
                   dotScale={scale}
                   selectedId={selected}
+                  manip={manip}
+                  onManipChange={onManipChange}
                   onSelectBlock={setSelected}
                   onSelectZone={() => setSelected(null)}
                   onBlockAction={blockAction}
@@ -634,6 +645,8 @@ const STUDIO_CSS = `
 .lss-palette-btn:disabled { opacity:.5; cursor:default; }
 .lss-palette-label { font-size:14px; font-weight:900; color:#201E1A; }
 .lss-palette-field { font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#8A8378; }
+.lss-palette-demo { border-style:dashed; }
+.lss-palette-demo:hover { border-color:#F2820C; }
 
 .lss-preview { display:grid; gap:9px; min-width:0; }
 .lss-preview-caption { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }

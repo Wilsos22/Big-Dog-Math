@@ -10,6 +10,7 @@
 export const SCREEN_KEYS = ["main", "pace", "student"] as const;
 export type ScreenKey = (typeof SCREEN_KEYS)[number];
 
+// Persisted component types - these round-trip through the layout blob.
 export const SCREEN_COMPONENT_TYPES = [
   "prompt",
   "text",
@@ -21,7 +22,20 @@ export const SCREEN_COMPONENT_TYPES = [
   "legend",
   "callout",
 ] as const;
-export type ScreenComponentType = (typeof SCREEN_COMPONENT_TYPES)[number];
+export type PersistedComponentType = (typeof SCREEN_COMPONENT_TYPES)[number];
+
+// Demonstration objects the teacher drags live on the main projector. They are deliberately
+// EPHEMERAL - never synced, never persisted, never evidence - so they are a separate union and are
+// stripped from the layout blob on encode (their live position lives in the studio's `manip` map).
+export const DEMO_COMPONENT_TYPES = ["manipSplit", "manipSnap", "manipFree"] as const;
+export type DemoComponentType = (typeof DEMO_COMPONENT_TYPES)[number];
+
+export type ScreenComponentType = PersistedComponentType | DemoComponentType;
+
+const DEMO_TYPE_SET = new Set<string>(DEMO_COMPONENT_TYPES);
+export function isDemoComponentType(value: string): value is DemoComponentType {
+  return DEMO_TYPE_SET.has(value);
+}
 
 // One placed component. `ov` is the per-field override map; an absent key means "use the Notion
 // value" (that is what makes an override additive and reversible). `id` is a runtime handle only -
@@ -129,10 +143,13 @@ function zonesFromWire(screen: unknown, screenKey: ScreenKey): ScreenZones | nul
 
 function wireFromZones(zones: ScreenZones): WireScreen {
   return zones.map((zone) =>
-    zone.map((block): WireEntry => {
-      const overrides = sanitizeOverrides(block.ov);
-      return Object.keys(overrides).length ? [block.type, overrides] : [block.type];
-    }),
+    zone
+      // Demo objects are ephemeral - they must never be written to the blob.
+      .filter((block) => !isDemoComponentType(block.type))
+      .map((block): WireEntry => {
+        const overrides = sanitizeOverrides(block.ov);
+        return Object.keys(overrides).length ? [block.type, overrides] : [block.type];
+      }),
   );
 }
 

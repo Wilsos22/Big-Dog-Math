@@ -52,6 +52,21 @@ assert.equal(layout.isEncodedScreenLayout("!!!"), false);
 assert.equal(layout.isEncodedScreenLayout(""), false);
 assert.equal(layout.isEncodedScreenLayout(42), false);
 
+// Demo objects are ephemeral - they must never survive into the persisted blob.
+const withDemo = layout.encodeScreenLayout({
+  main: [
+    [
+      { id: "p", type: "prompt", ov: {} },
+      { id: "d", type: "manipSplit", ov: { rows: "6" } },
+    ],
+    [{ id: "m", type: "model", ov: {} }],
+  ],
+});
+const demoDecoded = layout.decodeScreenLayout(withDemo);
+const mainTypes = demoDecoded.main.flat().map((b) => b.type);
+assert.ok(!mainTypes.includes("manipSplit"), "Demo objects are stripped from the persisted blob.");
+assert.deepEqual(mainTypes, ["prompt", "model"], "Real frames survive; the demo object does not.");
+
 // Unknown component types are dropped, not trusted.
 const withJunk = layout.encodeScreenLayout({ main: [[{ id: "j", type: "prompt", ov: {} }]] });
 const tampered = Buffer.from(

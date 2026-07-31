@@ -6,16 +6,19 @@
 // the optional editor affordances (selection, per-frame toolbar, dashed empty zones) are what the
 // studio adds on top. The live surfaces can render the same component with the editor props omitted.
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from "react";
 import {
   BLOCK_FLEX,
+  MANIP_FREE_DEFAULT,
   MATH_COLORS,
   SCREEN_NEUTRALS,
   ZONE_EMPTY_LABEL,
   ZONE_FLEX,
+  isDemoComponentType,
   mmss,
   resolveScreenValue,
   stateStyleFor,
+  type ManipState,
   type ScreenBlock,
   type ScreenKey,
   type ScreenStepData,
@@ -36,6 +39,10 @@ export interface LessonScreenProps {
   // When set (the studio preview), the dotted ground is drawn on this scaled layer and its pattern
   // is divided by the scale so it holds an ~11px grid at preview size. Omitted on a real projector.
   dotScale?: number;
+  // Live state for demonstration objects, keyed by block id, plus the callback to update it. Both
+  // are supplied only where demo objects are interactive (the studio); omit them elsewhere.
+  manip?: Record<string, ManipState>;
+  onManipChange?: (id: string, patch: ManipState) => void;
   onSelectBlock?: (id: string) => void;
   onSelectZone?: () => void;
   onBlockAction?: (id: string, action: BlockAction) => void;
@@ -58,11 +65,180 @@ export default function LessonScreen({
   editing = false,
   selectedId = null,
   dotScale,
+  manip = {},
+  onManipChange,
   onSelectBlock,
   onSelectZone,
   onBlockAction,
 }: LessonScreenProps) {
   const style = stateStyleFor(data.stateId, data.title);
+
+  // Demo-object drag plumbing. Listeners live on window so a drag survives the cursor leaving the
+  // element; deltas are divided by the measured (already-scaled) rect, so the same math works under
+  // the studio's CSS transform and unscaled on a projector.
+  const runDrag = (onMove: (event: PointerEvent) => void) => {
+    const up = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", up);
+  };
+
+  const manipSplitDrag = (event: ReactPointerEvent<HTMLDivElement>, id: string) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const apply = (clientX: number) => {
+      const fraction = (clientX - rect.left) / rect.width;
+      onManipChange?.(id, { split: Math.min(1, Math.max(0, fraction)) });
+    };
+    apply(event.clientX);
+    runDrag((moveEvent) => apply(moveEvent.clientX));
+  };
+
+  const manipSnapToggle = (event: ReactMouseEvent, id: string) => {
+    event.stopPropagation();
+    onManipChange?.(id, { snapped: !manip[id]?.snapped });
+  };
+
+  const manipFreeMove = (event: ReactPointerEvent<HTMLDivElement>, id: string) => {
+    event.stopPropagation();
+    const host = event.currentTarget.parentElement;
+    if (!host) return;
+    const rect = host.getBoundingClientRect();
+    const start = { ...MANIP_FREE_DEFAULT, ...(manip[id] || {}) };
+    const x0 = event.clientX;
+    const y0 = event.clientY;
+    runDrag((moveEvent) => {
+      const dx = ((moveEvent.clientX - x0) / rect.width) * 100;
+      const dy = ((moveEvent.clientY - y0) / rect.height) * 100;
+      onManipChange?.(id, {
+        fx: Math.min(100 - start.fw, Math.max(0, start.fx + dx)),
+        fy: Math.min(100 - start.fh, Math.max(0, start.fy + dy)),
+      });
+    });
+  };
+
+  const manipFreeResize = (event: ReactPointerEvent<HTMLSpanElement>, id: string) => {
+    event.stopPropagation();
+    const box = event.currentTarget.parentElement;
+    const host = box?.parentElement;
+    if (!host) return;
+    const rect = host.getBoundingClientRect();
+    const start = { ...MANIP_FREE_DEFAULT, ...(manip[id] || {}) };
+    const x0 = event.clientX;
+    const y0 = event.clientY;
+    runDrag((moveEvent) => {
+      const dx = ((moveEvent.clientX - x0) / rect.width) * 100;
+      const dy = ((moveEvent.clientY - y0) / rect.height) * 100;
+      onManipChange?.(id, {
+        fw: Math.min(100 - start.fx, Math.max(8, start.fw + dx)),
+        fh: Math.min(100 - start.fy, Math.max(8, start.fh + dy)),
+      });
+    });
+  };
+
+  const demoBody = (block: ScreenBlock) => {
+    const value = (key: string) => resolveScreenValue(data, block, key);
+    const live = manip[block.id] || {};
+    if (block.type === "manipSplit") {
+      const cols = Math.max(1, Number(value("cols")) || 28);
+      const rows = Math.max(1, Number(value("rows")) || 6);
+      const base = data.model.cols ? data.model.split / data.model.cols : 0.7;
+      const at = Math.min(cols - 1, Math.max(1, Math.round((live.split === undefined ? base : live.split) * cols)));
+      const splitPct = ((at / cols) * 100).toFixed(3) + "%";
+      return (
+        <>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
+            <span style={demoTitle}>{value("modelTitle") || "Slide the split"}</span>
+            <span style={demoHint}>Drag the line</span>
+          </div>
+          <div
+            onPointerDown={(event) => manipSplitDrag(event, block.id)}
+            style={{
+              position: "relative",
+              minHeight: 230,
+              height: "100%",
+              border: "4px solid #201E1A",
+              borderRadius: 8,
+              backgroundColor: "#fff",
+              backgroundImage: "linear-gradient(to right,rgba(32,30,26,.17) 1px,transparent 1px),linear-gradient(to bottom,rgba(32,30,26,.17) 1px,transparent 1px)",
+              backgroundSize: `calc(100%/${cols}) calc(100%/${rows})`,
+              cursor: "ew-resize",
+              touchAction: "none",
+            }}
+          >
+            <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, background: MATH_COLORS.firstAddendFill, display: "grid", placeItems: "end center", paddingBottom: 16, width: splitPct }}>
+              <span style={{ border: "3px solid #D88A1C", borderRadius: 999, background: "#fff", padding: "6px 20px", fontSize: 34, fontWeight: 900, color: MATH_COLORS.firstAddendInk, fontVariantNumeric: "tabular-nums" }}>{at} wide</span>
+            </div>
+            <div style={{ position: "absolute", top: 0, bottom: 0, right: 0, background: MATH_COLORS.secondAddendFill, display: "grid", placeItems: "end center", paddingBottom: 16, width: (100 - (at / cols) * 100).toFixed(3) + "%" }}>
+              <span style={{ border: "3px solid #67429E", borderRadius: 999, background: "#fff", padding: "6px 20px", fontSize: 34, fontWeight: 900, color: MATH_COLORS.secondAddendInk, fontVariantNumeric: "tabular-nums" }}>{cols - at} wide</span>
+            </div>
+            <div style={{ position: "absolute", top: -18, bottom: -18, width: 8, marginLeft: -4, borderRadius: 999, background: "#201E1A", left: splitPct }}>
+              <span style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 52, height: 52, borderRadius: 999, border: "6px solid #201E1A", background: "#fff", display: "grid", placeItems: "center", fontSize: 24, fontWeight: 900, color: "#201E1A" }}>↔</span>
+            </div>
+          </div>
+        </>
+      );
+    }
+    if (block.type === "manipSnap") {
+      const rowsN = Math.max(1, Number(value("snapRows")) || 8);
+      const a = Math.max(1, Number(value("snapA")) || 5);
+      const c = Math.max(1, Number(value("snapB")) || 4);
+      const snapped = Boolean(live.snapped);
+      const hint = snapped
+        ? `${rowsN} by ${a + c} · area ${rowsN * (a + c)}`
+        : `${rowsN} × ${a} = ${rowsN * a}   ·   ${rowsN} × ${c} = ${rowsN * c}`;
+      return (
+        <>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
+            <span style={demoTitle}>{value("modelTitle") || "Snap two pieces"}</span>
+            <span style={demoHint}>{hint}</span>
+          </div>
+          <div style={{ display: "grid", justifyItems: "center", gap: 22 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", transition: "gap 700ms cubic-bezier(.2,.7,.2,1)", gap: snapped ? 0 : 46 }}>
+              <div style={{ display: "grid", gap: 12, justifyItems: "center" }}>
+                <div style={{ width: 210, height: 320, border: "4px solid #201E1A", borderRadius: 8, backgroundColor: MATH_COLORS.firstAddendFill, backgroundImage: "linear-gradient(to right,rgba(32,30,26,.2) 1px,transparent 1px),linear-gradient(to bottom,rgba(32,30,26,.2) 1px,transparent 1px)", backgroundSize: `calc(100%/${a}) calc(100%/${rowsN})` }} />
+                <span style={{ fontSize: 30, fontWeight: 900, color: MATH_COLORS.firstAddendInk }}>{rowsN} by {a}</span>
+              </div>
+              <div style={{ display: "grid", gap: 12, justifyItems: "center" }}>
+                <div style={{ width: 168, height: 320, border: "4px solid #201E1A", borderRadius: 8, backgroundColor: MATH_COLORS.secondAddendFill, backgroundImage: "linear-gradient(to right,rgba(32,30,26,.2) 1px,transparent 1px),linear-gradient(to bottom,rgba(32,30,26,.2) 1px,transparent 1px)", backgroundSize: `calc(100%/${c}) calc(100%/${rowsN})` }} />
+                <span style={{ fontSize: 30, fontWeight: 900, color: MATH_COLORS.secondAddendInk }}>{rowsN} by {c}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={(event) => manipSnapToggle(event, block.id)}
+              style={{ border: "3px solid #201E1A", borderRadius: 999, background: "#201E1A", color: "#fff", padding: "16px 40px", fontSize: 30, fontWeight: 900, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              {snapped ? "Pull apart" : "Push together"}
+            </button>
+          </div>
+        </>
+      );
+    }
+    // manipFree
+    const f = { ...MANIP_FREE_DEFAULT, ...live };
+    return (
+      <>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
+          <span style={demoTitle}>{value("modelTitle") || "Move + resize"}</span>
+          <span style={demoHint}>Drag to move · corner to resize</span>
+        </div>
+        <div style={{ position: "relative", minHeight: 250, height: "100%", borderRadius: 10, backgroundColor: "#fff", backgroundImage: "linear-gradient(to right,rgba(32,30,26,.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(32,30,26,.12) 1px,transparent 1px)", backgroundSize: "48px 48px", overflow: "hidden", touchAction: "none" }}>
+          <div
+            onPointerDown={(event) => manipFreeMove(event, block.id)}
+            style={{ position: "absolute", border: "5px solid #201E1A", borderRadius: 6, background: "rgba(80,163,164,.34)", cursor: "move", display: "grid", placeItems: "center", left: f.fx.toFixed(2) + "%", top: f.fy.toFixed(2) + "%", width: f.fw.toFixed(2) + "%", height: f.fh.toFixed(2) + "%" }}
+          >
+            <span
+              onPointerDown={(event) => manipFreeResize(event, block.id)}
+              style={{ position: "absolute", right: -14, bottom: -14, width: 44, height: 44, border: "5px solid #201E1A", borderRadius: 10, background: "#fff", cursor: "nwse-resize" }}
+            />
+          </div>
+        </div>
+      </>
+    );
+  };
   const isStudent = screen === "student";
   const bandWidth = isStudent ? 214 : 220;
   const screenLabel = screen === "main" ? "Main projector" : screen === "pace" ? "Pace + Support" : "Student";
@@ -140,7 +316,7 @@ export default function LessonScreen({
           </div>
         ) : null}
 
-        {blockBody(block, screen, value, style, editing)}
+        {isDemoComponentType(block.type) ? demoBody(block) : blockBody(block, screen, value, style, editing)}
       </div>
     );
   };
@@ -247,6 +423,21 @@ export default function LessonScreen({
     </div>
   );
 }
+
+const demoTitle: CSSProperties = {
+  fontSize: 27,
+  fontWeight: 900,
+  letterSpacing: ".1em",
+  textTransform: "uppercase",
+  color: MATH_COLORS.frontFactorInk,
+};
+
+const demoHint: CSSProperties = {
+  marginLeft: "auto",
+  fontSize: 23,
+  fontWeight: 800,
+  color: SCREEN_NEUTRALS.placeholder,
+};
 
 const toolbarButton: CSSProperties = {
   width: 46,
