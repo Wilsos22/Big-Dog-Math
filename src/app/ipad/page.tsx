@@ -50,6 +50,11 @@ const WIDTHS: { label: string; px: number }[] = [
 export default function IpadPage() {
   const [room, setRoom] = useState("main");
   const [paper, setPaper] = useState(false);
+  // The split whiteboard: a clean white work area on the left 42% to write on,
+  // mirrored to every display. It does NOT change the pen - the glass sheet
+  // still covers the whole screen and writes exactly as before - it only ADDS
+  // a white background section (Steele, 2026-07-30).
+  const [whiteboard, setWhiteboard] = useState(false);
   const [color, setColor] = useState(COLORS[0]);
   const [tool, setTool] = useState<InkTool>("pen");
   const [penWidth, setPenWidth] = useState(6);
@@ -73,6 +78,8 @@ export default function IpadPage() {
   const ctrlRef = useRef<InkChannel | null>(null);
   const paperRef = useRef(false);
   useEffect(() => { paperRef.current = paper; }, [paper]);
+  const whiteboardRef = useRef(false);
+  useEffect(() => { whiteboardRef.current = whiteboard; }, [whiteboard]);
 
   function flashToast(message: string) {
     setToast(message);
@@ -155,7 +162,13 @@ export default function IpadPage() {
   // while the hand is on paper.
   useEffect(() => {
     const ctrl = joinInkRoom(`${room}__ctrl`, (m) => {
-      if (m.t === "hello") ctrl.send({ t: "paper", on: paperRef.current });
+      if (m.t === "hello") {
+        // A display opened (or reconnected): tell it where this surface is, so
+        // a projector switched on mid-lesson never sits on the slide while the
+        // hand is already on paper or in the split whiteboard.
+        ctrl.send({ t: "paper", on: paperRef.current });
+        ctrl.send({ t: "whiteboard", on: whiteboardRef.current });
+      }
     });
     ctrlRef.current = ctrl;
     return () => ctrl.close();
@@ -257,6 +270,18 @@ export default function IpadPage() {
     });
   }
 
+  // Split in / out the white work area. Broadcast on __ctrl so every display -
+  // and the /teacher/present embedded in this very iframe - shifts the slide to
+  // the right and reveals the white panel on the left, keeping the hand and the
+  // wall identical.
+  function toggleWhiteboard() {
+    setWhiteboard((v) => {
+      const next = !v;
+      ctrlRef.current?.send({ t: "whiteboard", on: next });
+      return next;
+    });
+  }
+
   function toggleFullscreen() {
     try {
       if (document.fullscreenElement) document.exitFullscreen();
@@ -303,6 +328,12 @@ export default function IpadPage() {
            edge of the wall was off screen. */
         .ip-screen-box { position:relative; }
         .ip-screen-frame { position:absolute; inset:0; width:100%; height:100%; border:0; pointer-events:none; background:#fff; }
+        /* The split whiteboard: a clean white work area on the left 42%, the
+           exact geometry /teacher/present gives .stage-board-panel, so the hand
+           matches the wall. A BACKGROUND under the glass sheet (z 5 < the ink
+           layer's 6) - the pen writes across it just as it writes over the
+           slide, and the panel can never take a stroke. */
+        .ip-wb-panel { position:absolute; z-index:5; inset:0 auto 0 0; width:42%; background:#fff; border-right:5px solid var(--bdb-amber); box-shadow:18px 0 40px rgba(40,32,20,0.16); }
         /* The layer never captures; the ink canvas inside opts back in when it
            is interactive. A plain wrapper div defaults to auto and would
            swallow the stroke before it reached the board. */
@@ -362,6 +393,9 @@ export default function IpadPage() {
             <button className={`ip-btn${paper ? " on" : ""}`} onClick={togglePaper}>
               {paper ? "Paper" : "Screen"}
             </button>
+            {/* Splits a clean white work area onto the left of the screen. The
+                pen is unchanged - this only adds a background to write on. */}
+            <button className={`ip-btn${whiteboard ? " on" : ""}`} onClick={toggleWhiteboard}>Whiteboard</button>
             <button className="ip-btn warn" onClick={() => setClearSignal((n) => n + 1)}>Clear</button>
             <span className="ip-spacer" />
             <button className={`ip-btn${moreOpen ? " on" : ""}`} onClick={() => setMoreOpen((v) => !v)}>More</button>
@@ -393,6 +427,10 @@ export default function IpadPage() {
             src={`/teacher/present?embed=1${room !== "main" ? `&room=${encodeURIComponent(room)}` : ""}`}
             title="Live class screen"
           />
+          {/* White work area. A pure background - no ink room of its own - so
+              the pen stays one surface on one room. The embedded present shifts
+              the slide off the left 42% to sit behind it. */}
+          {whiteboard && <div className="ip-wb-panel" aria-hidden />}
           <div className="ip-ink-layer">
             <InkBoard
               room={`${room}__over`}
@@ -418,7 +456,7 @@ export default function IpadPage() {
             />
           </div>
           <span className="ip-screen-note">
-            {paper ? "Paper - the wall shows this too" : "Writing over the class screen"}
+            {paper ? "Paper - the wall shows this too" : whiteboard ? "Whiteboard - the wall shows this too" : "Writing over the class screen"}
           </span>
         </div>
       </div>
