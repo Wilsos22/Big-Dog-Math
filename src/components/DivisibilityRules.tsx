@@ -35,7 +35,7 @@ const RULES: Record<number, string> = {
   1: "Every whole number is divisible by 1.",
   2: "Last digit is even (0, 2, 4, 6, 8).",
   3: "The digit sum is divisible by 3.",
-  4: "The last two digits make a number divisible by 4.",
+  4: "Half of the number is even.",
   5: "Last digit is 0 or 5.",
   6: "Passes both the rule for 2 and the rule for 3.",
 };
@@ -83,10 +83,16 @@ function evidence(N: number, d: number, prior: Record<number, boolean>): Ev {
         card: <>Last digit: <b>{lastDigit}</b></>,
         reason: `the last digit is ${lastDigit}, ${correct ? "a 0 or 5" : "not 0 or 5"}` };
     case 4: {
-      const t = N % 100;
-      return { correct, idx: idxLast(2), mode: "digits",
-        card: <>Last two digits: <b>{String(t).padStart(2, "0")}</b></>,
-        reason: `${t} ${correct ? `= 4 x ${t / 4}` : `divided by 4 leaves ${t % 4}`}` };
+      if (N % 2 !== 0) {
+        return { correct: false, idx: none, mode: "digits",
+          card: <>{N} is odd</>,
+          reason: `${N} is odd, so it cannot be cut in half` };
+      }
+      const half = N / 2;
+      const halfEven = half % 2 === 0;
+      return { correct: halfEven, idx: none, mode: "digits",
+        card: <>Half of {N}: <b>{half}</b></>,
+        reason: halfEven ? `${half} is even` : `half of ${N} is ${half}, which is odd` };
     }
     case 3:
       return { correct, idx: all, mode: "sum",
@@ -258,8 +264,8 @@ export default function DivisibilityRules() {
         /* CENTER - the travelling number */
         .dv-track { position:relative; min-height:${ROW * RAIL.length}px; }
         .dv-car { transition:transform .42s cubic-bezier(.34,.75,.3,1); }
-        .dv-num { display:flex; gap:5px; justify-content:center; }
-        .dv-dig { font-weight:900; font-size:clamp(2.1rem,6vw,3.2rem); line-height:1.05; padding:2px 5px; border-radius:10px; transition:background .25s, box-shadow .25s; }
+        .dv-num { display:flex; gap:6px; justify-content:center; align-items:center; height:${ROW}px; }
+        .dv-dig { font-weight:900; font-size:clamp(2.8rem,8vw,4.2rem); line-height:1; padding:2px 7px; border-radius:12px; transition:background .25s, box-shadow .25s; }
         .dv-dig.on { background:color-mix(in srgb, ${C_TEAL} 26%, transparent); box-shadow:inset 0 -5px 0 ${C_TEAL}; }
         .dv-dig.sum { background:color-mix(in srgb, ${C_AMBER} 32%, transparent); box-shadow:inset 0 -5px 0 ${C_AMBER}; }
         .dv-ask { border:2px solid var(--bdb-ink); background:var(--bdb-card); padding:12px; text-align:center; margin-top:10px; }
@@ -271,10 +277,10 @@ export default function DivisibilityRules() {
         .dv-yn .no { background:var(--bdb-card); color:var(--bdb-ink); }
 
         /* RIGHT - the factor family */
-        .dv-fam { border:2px solid var(--bdb-line); background:var(--bdb-card); padding:12px; min-height:180px; }
-        .dv-pair { display:flex; align-items:center; gap:8px; padding:7px 2px; animation:dvIn .34s cubic-bezier(.34,.8,.3,1) backwards; }
-        .dv-pf { display:grid; place-items:center; min-width:46px; min-height:42px; padding:0 9px; background:${C_GREEN}; color:#fff; font-weight:900; font-size:1.15rem; border-radius:10px; }
-        .dv-x { font-weight:800; color:var(--bdb-ink-faint); }
+        .dv-fam { padding:4px 2px; min-height:180px; }
+        .dv-eq { display:flex; align-items:baseline; gap:9px; padding:10px 6px; border-bottom:1px solid var(--bdb-line); font-weight:900; font-size:clamp(1.5rem,3.6vw,2.1rem); color:var(--bdb-ink); animation:dvIn .34s cubic-bezier(.34,.8,.3,1) backwards; }
+        .dv-eq .op { color:var(--bdb-ink-faint); font-weight:800; }
+        .dv-eq .res { color:${C_GREEN}; }
         .dv-empty { color:var(--bdb-ink-faint); font-size:0.9rem; line-height:1.5; }
         @keyframes dvIn { from { opacity:0; transform:translateX(16px); } to { opacity:1; transform:none; } }
 
@@ -408,10 +414,12 @@ export default function DivisibilityRules() {
             )}
 
             {running && pairs.map(([a, b]) => (
-              <div className="dv-pair" key={a}>
-                <span className="dv-pf">{a}</span>
-                <span className="dv-x">x</span>
-                <span className="dv-pf">{b}</span>
+              <div className="dv-eq" key={a}>
+                <span>{a}</span>
+                <span className="op">x</span>
+                <span>{b}</span>
+                <span className="op">=</span>
+                <span className="res">{N}</span>
               </div>
             ))}
 
