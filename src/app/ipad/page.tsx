@@ -21,9 +21,11 @@
 // and tells the displays to do the same over the ctrl channel, so the wall and
 // the hand always agree. Same room, same strokes, same undo history.
 //
-// Pencil-first: fingers never mark unless "Finger draws" is switched on, so a
-// resting palm cannot leave ink even before the first pen touch. The screen
-// wake lock keeps the iPad awake through a whole lesson.
+// PENCIL ONLY. Fingers never mark, with no switch to get that wrong - a
+// resting palm cannot leave ink, and there is no state in which it can. That
+// frees the finger to be a gesture: a touch on the stage puts the tool palette
+// away, so the board is never buried under its own toolbar mid-sentence. The
+// screen wake lock keeps the iPad awake through a whole lesson.
 
 import { useEffect, useRef, useState } from "react";
 import InkBoard, { type InkTool } from "@/components/InkBoard";
@@ -48,10 +50,14 @@ const WIDTHS: { label: string; px: number }[] = [
 export default function IpadPage() {
   const [room, setRoom] = useState("main");
   const [paper, setPaper] = useState(false);
+  // The split whiteboard: a clean white work area on the left 42% to write on,
+  // mirrored to every display. It does NOT change the pen - the glass sheet
+  // still covers the whole screen and writes exactly as before - it only ADDS
+  // a white background section (Steele, 2026-07-30).
+  const [whiteboard, setWhiteboard] = useState(false);
   const [color, setColor] = useState(COLORS[0]);
   const [tool, setTool] = useState<InkTool>("pen");
   const [penWidth, setPenWidth] = useState(6);
-  const [fingerDraws, setFingerDraws] = useState(false);
   const [clearSignal, setClearSignal] = useState(0);
   const [undoSignal, setUndoSignal] = useState(0);
   const [redoSignal, setRedoSignal] = useState(0);
@@ -65,9 +71,15 @@ export default function IpadPage() {
   const [boardStatus, setBoardStatus] = useState<InkConnectionStatus>("connecting");
   const [barkCooling, setBarkCooling] = useState(false);
   const [screenAr, setScreenAr] = useState(16 / 9);
+  // Mirrored from InkBoard, which owns the zoom, and applied to the SLIDE so
+  // the content moves with the writing. The ink needs no CSS transform - it is
+  // redrawn vectorially at the new scale, which is what keeps it sharp.
+  const [view, setView] = useState({ s: 1, x: 0, y: 0 });
   const ctrlRef = useRef<InkChannel | null>(null);
   const paperRef = useRef(false);
   useEffect(() => { paperRef.current = paper; }, [paper]);
+  const whiteboardRef = useRef(false);
+  useEffect(() => { whiteboardRef.current = whiteboard; }, [whiteboard]);
 
   function flashToast(message: string) {
     setToast(message);
@@ -103,6 +115,16 @@ export default function IpadPage() {
       if (localStorage.getItem("bdm-ipad-tools-open") === "0") setToolsOpen(false);
     } catch { /* ignore */ }
   }, []);
+
+  // A finger on the writing surface puts the palette away. Safe precisely
+  // because the finger cannot draw: the gesture can never cost a stroke.
+  function closeTools() {
+    setToolsOpen((open) => {
+      if (!open) return open;
+      try { localStorage.setItem("bdm-ipad-tools-open", "0"); } catch { /* ignore */ }
+      return false;
+    });
+  }
 
   function toggleTools() {
     setToolsOpen((v) => {
@@ -140,11 +162,84 @@ export default function IpadPage() {
   // while the hand is on paper.
   useEffect(() => {
     const ctrl = joinInkRoom(`${room}__ctrl`, (m) => {
-      if (m.t === "hello") ctrl.send({ t: "paper", on: paperRef.current });
+      if (m.t === "hello") {
+        // A display opened (or reconnected): tell it where this surface is, so
+        // a projector switched on mid-lesson never sits on the slide while the
+        // hand is already on paper or in the split whiteboard.
+        ctrl.send({ t: "paper", on: paperRef.current });
+        ctrl.send({ t: "whiteboard", on: whiteboardRef.current });
+      }
     });
     ctrlRef.current = ctrl;
     return () => ctrl.close();
   }, [room]);
+
+  // Ink is an annotation ON a slide, so it belongs to that slide. When the
+  // lesson advances, the last step's writing must not be left sitting over the
+  // new one - on the iPad or, worse, on the wall. Clearing here rather than on
+  // the displays is deliberate: the pen surface holds the authoritative board,
+  // and its clearSignal already broadcasts { t: "clear" } to every display, so
+  // one clear reaches all of them without a second wire message.
+  //
+  // The pen surface polls for this itself instead of being told by the Remote,
+  // because it has to behave the same standing alone in its own tab as it does
+  // embedded in the Remote's work space.
+  const lastStepRef = useRef<number | null>(null);
+  useEffect(() => {
+    let stopped = false;
+    const readStep = async () => {
+      try {
+        const response = await fetch("/api/control-remote", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json() as {
+          session?: { liveFlow?: { sequence?: { currentIndex?: number } | null } | null } | null;
+        };
+        const index = data.session?.liveFlow?.sequence?.currentIndex;
+        if (stopped || typeof index !== "number") return;
+        const previous = lastStepRef.current;
+        lastStepRef.current = index;
+        // The FIRST read only learns where the lesson is. Clearing on it would
+        // wipe the board of a teacher who opened the pen surface mid-step.
+        if (previous !== null && previous !== index) setClearSignal((n) => n + 1);
+      } catch {
+        // No session, or offline. The pen keeps working either way - it just
+        // stops clearing itself, which is the safe direction to fail in.
+      }
+    };
+    void readStep();
+    const interval = window.setInterval(readStep, 2000);
+    return () => { stopped = true; window.clearInterval(interval); };
+  }, []);
+
+  // ── The stage: fit to the wall's shape, then pinch the whole thing ─────────
+  // Sized in JS because the CSS version could not letterbox: width:100% plus an
+  // aspect-ratio ran the box taller than the stage, and clamping the height left
+  // the width at 100%, so the box stopped matching the projector and the right
+  // edge simply was not on screen.
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [fit, setFit] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  useEffect(() => {
+    let frame = 0;
+    const measure = () => {
+      const el = stageRef.current;
+      if (!el) return;
+      const cw = el.clientWidth;
+      const ch = el.clientHeight;
+      // A zero rect means the layout has not settled (or this is an iframe that
+      // has not been given a size yet); keep asking rather than baking in 0.
+      if (!cw || !ch) { frame = window.requestAnimationFrame(measure); return; }
+      const w = Math.min(cw, ch * screenAr);
+      setFit({ w, h: w / screenAr });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+    };
+  }, [screenAr]);
 
   // The projector overlay announces its aspect ratio; letterbox to match so
   // strokes land on the wall exactly where the pen put them.
@@ -171,6 +266,18 @@ export default function IpadPage() {
     setPaper((v) => {
       const next = !v;
       ctrlRef.current?.send({ t: "paper", on: next });
+      return next;
+    });
+  }
+
+  // Split in / out the white work area. Broadcast on __ctrl so every display -
+  // and the /teacher/present embedded in this very iframe - shifts the slide to
+  // the right and reveals the white panel on the left, keeping the hand and the
+  // wall identical.
+  function toggleWhiteboard() {
+    setWhiteboard((v) => {
+      const next = !v;
+      ctrlRef.current?.send({ t: "whiteboard", on: next });
       return next;
     });
   }
@@ -203,9 +310,30 @@ export default function IpadPage() {
         .ip-btn.on { background:var(--bdb-ink); color:#fff; border-color:var(--bdb-ink); }
         .ip-btn.warn { color:var(--bdb-coral); border-color:color-mix(in srgb, var(--bdb-coral) 40%, rgba(32,30,26,0.14)); }
         .ip-divider { width:1px; align-self:stretch; background:rgba(32,30,26,0.12); margin:2px 4px; }
-        .ip-screen-stage { position:absolute; inset:0; display:grid; place-items:center; background:#26221c; }
-        .ip-screen-box { position:relative; width:100%; max-height:100%; }
+        /* touch-action:none stops Safari's own pinch/double-tap page zoom, which
+           fought the pen and could never zoom the slide anyway. The stage owns
+           the gesture now. */
+        .ip-screen-stage { position:absolute; inset:0; display:grid; place-items:center; overflow:hidden; background:#26221c; touch-action:none; }
+        /* The SLIDE mirrors InkBoard's own view. CSS-scaling the ink instead
+           stretched an already-rasterised canvas (pixelated) and left InkBoard's
+           cached rect blind to the ancestor transform, so strokes landed away
+           from the pencil. InkBoard redraws its strokes vectorially at the new
+           scale, so the writing stays crisp; only the slide needs mirroring.
+           transform-origin MUST be 0 0 - InkBoard's page layer uses that, and a
+           mirror with a different origin drifts as it scales. */
+        .ip-screen-frame { transform-origin:0 0; }
+        /* Sized in JS. width:100% + aspect-ratio let the box run taller than the
+           stage, and max-height then clamped the height while the width stayed
+           100% - so it quietly stopped being the projector's ratio and the right
+           edge of the wall was off screen. */
+        .ip-screen-box { position:relative; }
         .ip-screen-frame { position:absolute; inset:0; width:100%; height:100%; border:0; pointer-events:none; background:#fff; }
+        /* The split whiteboard: a clean white work area on the left 42%, the
+           exact geometry /teacher/present gives .stage-board-panel, so the hand
+           matches the wall. A BACKGROUND under the glass sheet (z 5 < the ink
+           layer's 6) - the pen writes across it just as it writes over the
+           slide, and the panel can never take a stroke. */
+        .ip-wb-panel { position:absolute; z-index:5; inset:0 auto 0 0; width:42%; background:#fff; border-right:5px solid var(--bdb-amber); box-shadow:18px 0 40px rgba(40,32,20,0.16); }
         /* The layer never captures; the ink canvas inside opts back in when it
            is interactive. A plain wrapper div defaults to auto and would
            swallow the stroke before it reached the board. */
@@ -265,6 +393,9 @@ export default function IpadPage() {
             <button className={`ip-btn${paper ? " on" : ""}`} onClick={togglePaper}>
               {paper ? "Paper" : "Screen"}
             </button>
+            {/* Splits a clean white work area onto the left of the screen. The
+                pen is unchanged - this only adds a background to write on. */}
+            <button className={`ip-btn${whiteboard ? " on" : ""}`} onClick={toggleWhiteboard}>Whiteboard</button>
             <button className="ip-btn warn" onClick={() => setClearSignal((n) => n + 1)}>Clear</button>
             <span className="ip-spacer" />
             <button className={`ip-btn${moreOpen ? " on" : ""}`} onClick={() => setMoreOpen((v) => !v)}>More</button>
@@ -273,7 +404,6 @@ export default function IpadPage() {
           {moreOpen && (
             <div className="ip-row">
               <button className="ip-btn" onClick={() => setExportSignal((n) => n + 1)}>Export</button>
-              <button className={`ip-btn${fingerDraws ? " on" : ""}`} onClick={() => setFingerDraws((v) => !v)}>Finger draws</button>
               <button className="ip-btn" onClick={toggleFullscreen}>Full screen</button>
             </div>
           )}
@@ -283,23 +413,39 @@ export default function IpadPage() {
       {/* One stage, letterboxed to the projector's own aspect ratio so what the
           hand sees is what the wall shows. The live screen renders behind; on
           paper the board goes opaque and covers it. */}
-      <div className="ip-screen-stage">
-        <div className="ip-screen-box" style={{ aspectRatio: String(screenAr) }}>
+      <div
+        className="ip-screen-stage"
+        ref={stageRef}
+        onPointerDownCapture={(e) => { if (e.pointerType === "touch") closeTools(); }}
+      >
+        <div className="ip-screen-box" style={fit.w ? { width: fit.w, height: fit.h } : { aspectRatio: String(screenAr), width: "100%" }}>
           <iframe
             className="ip-screen-frame"
+            style={view.s === 1 && view.x === 0 && view.y === 0
+              ? undefined
+              : { transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})` }}
             src={`/teacher/present?embed=1${room !== "main" ? `&room=${encodeURIComponent(room)}` : ""}`}
             title="Live class screen"
           />
+          {/* White work area. A pure background - no ink room of its own - so
+              the pen stays one surface on one room. The embedded present shifts
+              the slide off the left 42% to sit behind it. */}
+          {whiteboard && <div className="ip-wb-panel" aria-hidden />}
           <div className="ip-ink-layer">
             <InkBoard
               room={`${room}__over`}
               interactive
+              // InkBoard owns the zoom: it redraws strokes at the new scale so
+              // they stay sharp, and its own coordinate math already accounts
+              // for the view, so a stroke lands under the pencil. The slide
+              // follows via onViewChange below.
+              allowZoom
+              onViewChange={setView}
               transparent={!paper}
               paper="dots"
               color={color}
               tool={tool}
               penWidth={penWidth}
-              fingerDraws={fingerDraws}
               clearSignal={clearSignal}
               undoSignal={undoSignal}
               redoSignal={redoSignal}
@@ -310,7 +456,7 @@ export default function IpadPage() {
             />
           </div>
           <span className="ip-screen-note">
-            {paper ? "Paper - the wall shows this too" : "Writing over the class screen"}
+            {paper ? "Paper - the wall shows this too" : whiteboard ? "Whiteboard - the wall shows this too" : "Writing over the class screen"}
           </span>
         </div>
       </div>

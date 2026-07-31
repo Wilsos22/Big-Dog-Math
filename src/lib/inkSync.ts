@@ -40,6 +40,7 @@ export type InkMessage =
   | { t: "bg"; url: string | null }
   | { t: "problem"; text: string | null } // problem(s) to show with space to solve
   | { t: "paper"; on: boolean } // the pen surface went to plain paper; displays cover the slide to match
+  | { t: "whiteboard"; on: boolean } // the pen surface split in a white work area on the left; displays show the matching panel and shift the slide to the right
   | { t: "attention" } // the class attention call: displays play the room sound + Eyes-up pulse
   | { t: "view"; ar: number } // the display announces its stage aspect ratio so the pen surface can letterbox to match
   | { t: "remove"; ids: string[] } // undo / stroke-eraser: these strokes vanish

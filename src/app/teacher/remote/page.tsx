@@ -625,7 +625,15 @@ export default function TeacherRemotePage() {
   }, [busy, pendingCommand, session]);
 
   const setWritingMode = useCallback(async (open: boolean) => {
-    if (!session || busy || pendingCommand || commandInFlightRef.current) return;
+    // LEAVING is never blocked. Closing the work space is how the teacher gets
+    // back to the deck, and gating it on `pendingCommand` meant one unreceipted
+    // command - which is any command at all when /control is not open to
+    // acknowledge it - left the pen surface covering the whole screen with no
+    // way out but a new browser tab. hide-board is handled directly by
+    // /api/control-remote and needs nothing from Control, so there was never a
+    // reason for it to wait behind another command's receipt.
+    if (!session) return;
+    if (open && (busy || pendingCommand || commandInFlightRef.current)) return;
     const confirmedSession = session;
     refreshEpochRef.current += 1;
     const action: TeacherRemoteAction = open ? "show-board" : "hide-board";
@@ -902,6 +910,10 @@ export default function TeacherRemotePage() {
           .remote-write-time { min-width:76px; color:#EFE8D8; font-size:1.45rem; font-weight:900; font-variant-numeric:tabular-nums; text-align:center; }
           .remote-write-pause { min-height:48px; border:1px solid #c89c35; border-radius:11px; background:#fff5d8; color:#6e5211; padding:0 14px; font:inherit; font-weight:900; cursor:pointer; }
           .remote-write-pause:disabled { opacity:0.5; cursor:not-allowed; }
+          /* An anchor, so it needs inline-flex to centre inside min-height the
+             way the buttons beside it do. */
+          .remote-write-tab { display:inline-flex; align-items:center; min-height:48px; border:1px solid rgba(62,50,35,0.28); border-radius:11px; background:#fff; color:#3E3223; padding:0 14px; font:inherit; font-weight:900; text-decoration:none; }
+          .remote-write-tab:focus-visible { outline:3px solid var(--remote-accent); outline-offset:2px; }
           .remote-write-back:focus-visible, .remote-write-pause:focus-visible { outline:3px solid var(--remote-accent); outline-offset:2px; }
           .remote-write-frame { width:100%; height:100%; border:0; background:#fff; }
           @media (max-width:720px) {
@@ -920,10 +932,28 @@ export default function TeacherRemotePage() {
             <button className="remote-write-pause" type="button" disabled={controlsDisabled} onClick={() => { void send(STAGE_BUTTONS[1]); }}>
               {timer?.running ? "Pause" : "Resume"}
             </button>
-            <button className="remote-write-back" type="button" disabled={controlsDisabled} onClick={() => { void setWritingMode(false); }}>Back to Remote</button>
+            {/* Standalone pen surface. Embedded, /ipad lays out against the
+                iframe's viewport rather than the iPad's, which is the leading
+                suspect for the stage rendering too large to fit or pinch. A
+                real tab renders at the device viewport, so this is also the
+                A/B test for that. */}
+            <a className="remote-write-tab" href="/ipad" target="_blank" rel="noopener noreferrer">Open in tab</a>
+            {/* Never disabled, and it closes the panel LOCALLY first. The
+                server round trip can fail or sit unreceipted; getting back to
+                the deck must not depend on it. */}
+            <button className="remote-write-back" type="button" onClick={() => { setBoardPanelOpen(false); void setWritingMode(false); }}>Back to Remote</button>
           </div>
         </header>
-        <iframe className="remote-write-frame" src={`/ipad?room=${encodeURIComponent(session.id)}`} title="iPad writing work space" />
+        {/* NO ?room= - the default "main" is the only room the displays listen
+            on. This embedded the pen on `ink-<session-uuid>__over` while
+            /teacher/present and /board (both opened with a bare URL) render
+            `ink-main__over`, so every stroke went into a room nothing displays
+            and the wall stayed empty through a whole lesson. Same bug CLAUDE.md
+            already records from the other direction, when present keyed its own
+            InkBoards to session.id. A per-session room is never right here:
+            there is one teacher, one pen and one wall, and the projector has no
+            way to learn a session id. */}
+        <iframe className="remote-write-frame" src="/ipad" title="iPad writing work space" />
       </main>
     );
   }

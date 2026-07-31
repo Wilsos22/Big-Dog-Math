@@ -230,5 +230,33 @@ const strays = inkFiles.filter((file) => {
 });
 ok("every ink surface joins through joinInkRoom", strays.length === 0);
 
+// ── The pen and the wall must be on the SAME room ───────────────────────────
+// Twice now the ink has been silently routed into a room nothing displays, by
+// keying a room to a session id. First /teacher/present mounted its InkBoards
+// on session.id while the iPad broadcast on main; then the Remote embedded
+// /ipad?room=<session.id> while the projector rendered main. Both times the pen
+// worked, the dot read connected, and the wall stayed empty - there is no
+// runtime symptom, because a realtime room that nobody joins is not an error.
+//
+// The rule: displays are opened with a bare URL, so the room is ALWAYS the
+// ?room= param defaulting to "main". Nothing may derive one from a session.
+const sessionKeyedRoom = inkFiles.filter((file) => {
+  const source = fs.readFileSync(file, "utf8");
+  return /room=\$\{[^}]*[Ss]ession/.test(source)
+    || /room=\{[^}]*[Ss]ession(?!Storage)/.test(source)
+    || /\broom:\s*[a-zA-Z]*[Ss]ession[A-Za-z]*\.id\b/.test(source);
+});
+ok(
+  "no ink room is keyed to a session id - the projector cannot know one",
+  sessionKeyedRoom.length === 0,
+  sessionKeyedRoom.join(", "),
+);
+
+const remoteSource = fs.readFileSync(path.join(root, "src/app/teacher/remote/page.tsx"), "utf8");
+ok(
+  "the Remote embeds the pen surface on the displays' default room",
+  /src="\/ipad"/.test(remoteSource),
+);
+
 console.log(`\n${checks} ink transport checks passed`);
 console.log("PASS - ink rooms are shared and reference counted; one surface closing can no longer silence another.");

@@ -42,10 +42,48 @@ export function thinPoints(pts: InkRenderPoint[], minDist = 0.75): InkRenderPoin
   return out;
 }
 
+// Smooth the centreline so a stroke FLOWS as a curve instead of showing the
+// straight segments between raw pointer samples - the thing that reads as
+// "rudimentary" ink, worst on fast strokes where the samples are far apart.
+// Midpoint-quadratic (the standard notes-app smoother): each quadratic runs
+// from the midpoint of one pair to the midpoint of the next, bending around the
+// sample between them. It passes through every midpoint and only ever bends
+// TOWARD a sample, so it can never overshoot or loop the way a Catmull-Rom
+// spline can on a sharp corner. Path shape only - width stays constant and
+// pressure is carried through untouched.
+const SMOOTH_SPACING = 2.4; // px between resampled points along the curve
+const SMOOTH_MAX_STEPS = 16; // cap per segment so one long fast flick cannot explode the point count
+
+export function smoothCenterline(pts: InkRenderPoint[]): InkRenderPoint[] {
+  const n = pts.length;
+  if (n < 3) return pts;
+  const mid = (a: InkRenderPoint, b: InkRenderPoint): InkRenderPoint => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, p: (a.p + b.p) / 2 });
+  const out: InkRenderPoint[] = [pts[0]];
+  for (let i = 1; i < n - 1; i += 1) {
+    // First segment starts at the real start; every later one starts where the
+    // previous ended (the shared midpoint), so the path stays continuous.
+    const start = i === 1 ? pts[0] : mid(pts[i - 1], pts[i]);
+    const ctrl = pts[i];
+    const end = mid(pts[i], pts[i + 1]);
+    const approx = Math.hypot(ctrl.x - start.x, ctrl.y - start.y) + Math.hypot(end.x - ctrl.x, end.y - ctrl.y);
+    const steps = Math.max(1, Math.min(SMOOTH_MAX_STEPS, Math.round(approx / SMOOTH_SPACING)));
+    for (let s = 1; s <= steps; s += 1) {
+      const t = s / steps, u = 1 - t;
+      out.push({
+        x: u * u * start.x + 2 * u * t * ctrl.x + t * t * end.x,
+        y: u * u * start.y + 2 * u * t * ctrl.y + t * t * end.y,
+        p: u * u * start.p + 2 * u * t * ctrl.p + t * t * end.p,
+      });
+    }
+  }
+  out.push(pts[n - 1]);
+  return out;
+}
+
 // Build the outline polygon: left edge out, right edge back, with round caps.
 // Returns a flat [x0,y0, x1,y1, ...] ring, or null for a dot (use fillDot).
 export function strokeOutline(raw: InkRenderPoint[], baseWidth: number, taper = false): number[] | null {
-  const pts = thinPoints(raw);
+  const pts = smoothCenterline(thinPoints(raw));
   if (pts.length < 2) return null;
 
   const left: number[] = [];

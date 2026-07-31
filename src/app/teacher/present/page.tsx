@@ -7,6 +7,7 @@ import InkBoard from "@/components/InkBoard";
 import LessonVisual from "@/components/LessonVisual";
 import AttentionListener from "@/components/AttentionListener";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
+import { joinInkRoom } from "@/lib/inkSync";
 import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
 import { applyStripOverride, overrideIsLive } from "@/lib/classroomStateStrip";
 import SlideOverlayLayer from "@/components/SlideOverlayLayer";
@@ -301,6 +302,10 @@ export default function ClassroomStagePage() {
   const [pollAnswers, setPollAnswers] = useState<PollAnswer[]>([]);
   const [previewStage, setPreviewStage] = useState<string | null>(null);
   const [inkOverlay, setInkOverlay] = useState<{ room: string; embed: boolean } | null>(null);
+  // The iPad's split-whiteboard toggle rides the ink control channel (same path
+  // as Paper). When on, the lesson content shifts to the right 58% and a white
+  // work panel fills the left 42%, so the wall matches the hand.
+  const [boardOpen, setBoardOpen] = useState(false);
   const [stripWords, setStripWords] = useState(true);
   useEffect(() => { setStripWords(stateStripWords()); }, []);
   const [overrideUrl, setOverrideUrl] = useState<string | null>(null);
@@ -333,6 +338,21 @@ export default function ClassroomStagePage() {
       if (stored >= 1 && stored <= 2.5) setTextScale(stored);
     } catch { /* ignore */ }
   }, []);
+
+  // Follow the split-whiteboard toggle off the ink control channel. Runs EMBEDDED
+  // TOO (the present inside /ipad's own iframe): its scenes must shift the same
+  // way the projector's do, or the teacher's slide view would not match the
+  // wall. Asks on mount so a display opened mid-lesson is not left un-split.
+  useEffect(() => {
+    if (isStudioPreviewMode) return;
+    const room = inkOverlay?.room;
+    if (!room) return;
+    const ctrl = joinInkRoom(`${room}__ctrl`, (m) => {
+      if (m.t === "whiteboard") setBoardOpen(m.on);
+    });
+    ctrl.send({ t: "hello" });
+    return () => ctrl.close();
+  }, [inkOverlay?.room, isStudioPreviewMode]);
 
   const adjustTextScale = (delta: number) => {
     setTextScale((current) => {
@@ -958,7 +978,12 @@ export default function ClassroomStagePage() {
 
         {/* zoom, not transform: the stage is fixed and non-scrolling, so zoom
             scales text and layout together with no coordinate drift. */}
-        <section className="stage-work" style={{ zoom: textScale }}>
+        <section className={`stage-work${boardOpen ? " board-open" : ""}`} style={{ zoom: textScale }}>
+          {/* The white work area. Only on the real projector - the present
+              embedded in /ipad shifts its scenes with board-open, but the iPad
+              draws its own .ip-wb-panel over the iframe, so drawing it here too
+              would double the edge. */}
+          {boardOpen && !inkOverlay?.embed && <div className="stage-board-panel" aria-hidden />}
           {showLessonTargets && !isLearningCheck && !resource && !showReaderSpinner ? (
             <aside className="stage-success" aria-label="Success criterion">
               <p className="stage-success-label">Success criterion</p>

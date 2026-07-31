@@ -35,8 +35,16 @@ bars and live misconception grouping).
   standing priority is reliability, and the open loop is his Pencil feel test (tuning constants in
   InkBoard.tsx/inkGeometry.ts are the dials). Feel verdict 2026-07-22: the pen is a CONSTANT-WIDTH
   marker (radiusFor ignores pressure, taper off) - he writes equations, not calligraphy. Pressure
-  is still captured and carried on the wire, so do not remove it; restoring feel is a radiusFor
+  is still captured and carried on the wire, so do not remove it; restoring WIDTH feel is a radiusFor
   change only. Do not "fix" the flat line back to pressure ink.
+  FLUIDITY IS A SEPARATE DIAL FROM WIDTH (2026-07-31, Steele: "the pen writing is still very
+  rudimentary and not fluid"). The engine never smoothed the stroke PATH - it drew straight polygon
+  segments between raw pointer samples, so a fast stroke read as angles. `smoothCenterline`
+  (inkGeometry) now runs every stroke through a midpoint-quadratic before the outline is built;
+  `SMOOTH_SPACING` is the knob. It is self-adaptive by sample spacing - fast, sparse strokes round
+  into a curve, dense/careful strokes are barely touched, so a number's corners survive - and it is
+  path shape only, so the constant-width marker is intact. That is why "rudimentary" and the width
+  decision are NOT in conflict: one is the line's smoothness, the other its thickness.
 
 ## Hard rules (non-negotiable)
 
@@ -926,48 +934,45 @@ the invariants they protect are easy to break again.
   board, racing the iPad's. It is `interactive={false}` now, which also means it ASKS for state on
   mount - so opening the board scene mid-lesson fills in everything already written instead of
   starting blank. The pen is the iPad; nobody touches the projector.
-- **/ipad HAS EXACTLY TWO MODES AND THE WORK SPACE IS ON THE LEFT** (Steele, 2026-07-30 - "the board
-  button should just allow me to annotate with the pencil whats already on the screen no whiteboard.
-  the whiteboard feature should show the half whiteboard half screen both should be visible on the
-  main projector screen").
-  **THE PEN IS THE GLASS SHEET IN BOTH MODES, ALWAYS.** One interactive `InkBoard` on
-  `<room>__over`, transparent, covering the ENTIRE live screen, in Board and in Whiteboard alike.
-  **Board** adds nothing - he annotates the lesson content where it already is. **Whiteboard** ONLY
-  ADDS a clean white area on the left 42%; it does not move the pen, shrink it, or fence it in.
-  This was built wrong first and corrected the same day, so it is worth saying twice: confining the
-  pen to the panel is NOT what "half whiteboard half screen" means. His words - "i can still write
-  where i want, i just have a clean white area to write on". `.ip-ink-layer` is last in
-  `.ip-screen-box` at z-index 6 over the panel's 5 precisely so the panel can never take a stroke.
-  The old names are GONE: "Board" used to mean a full-page blank whiteboard and "Write on screen" was
-  the glass sheet, so every pre-2026-07-30 note here (including the `joinInkRoom` story above) uses
-  the INVERTED vocabulary - read those as history, not as the current UI. Internally the surface
-  union is `"annotate" | "whiteboard"` precisely so the flip cannot be misread again.
-  THE PANEL CARRIES THE PAPER, NOT THE WRITING. `.ip-wb-panel` keeps a real `InkBoard` on `<room>`
-  rather than being a plain white div, because Template, Background and the file import have to reach
-  the wall and that room already carries exactly that - no new wire protocol. It is under the glass
-  sheet and never receives a stroke. Consequence for the toolbar: Undo / Redo / Clear ink act on the
-  glass sheet UNCONDITIONALLY. Routing Undo to the page under the panel points it at a surface the
-  pen no longer writes to, which reads as a broken button. Whiteboard mode carries a separate
-  `Clear paper` for the panel's background.
-  THE 42% IS A MIRROR, NOT A STYLE CHOICE. `.ip-wb-panel` on /ipad and `.stage-board-panel` on
-  /teacher/present must hold the same side and the same width, because the iPad writes inside a stage
-  letterboxed to the projector's aspect ratio and the whole point is that the hand matches the wall.
-  Moving one means moving the other AND the board-open rules that dodge it - the scenes, `.stage-tool`
-  and `.stage-resource`, `.classroom-spinner`, `.stage-success`, and the state strip (see the strip
-  section). The projector needs NO ink change for any of this: `.stage-board-panel` renders the paper
-  from the same room and `ScreenInkOverlay` sits at z-index 40 above it, so the wall shows white area
-  plus writing across the whole screen for free.
-  **ANY SURFACE THAT DISPLAYS THE ROOM MUST STACK BOTH LAYERS** - `<room>` (+ its `__p` pages) for the
-  paper, `<room>__over` on top for the writing. `/teacher/present` already did; `/board` did NOT and
-  showed the dotted stock and the templates with none of the mathematics until it was fixed the same
-  day. A display that renders only `<room>` now looks empty in normal use, which is the single easiest
-  way to re-break this. Writing is always the top layer, above the scratch overlay too.
-  Switching modes on /ipad POSTs `show-board`/`hide-board` to `/api/control-remote` itself, so the
-  room follows the pen. The Remote IS the iPad - they are two routes on one device - so requiring a
-  trip to /teacher/remote to press "Open work space" was a round trip through nothing. It never
-  force-closes the room's panel on mount, only on a real switch.
-  NOT VERIFIED ON A PROJECTOR as of this writing - it typechecks, tests and builds, and the browser
-  pane timed out on every render attempt. The state strip is the most likely thing to be wrong.
+- **THE SPLIT WHITEBOARD IS A BACKGROUND, NOT A MODE OR A SECOND ROOM** (rebuilt 2026-07-30, Steele:
+  "the split whiteboard button that splits the screen between the slide and a white area to write in
+  ... the writing feature doesnt change with the whiteboard move, it just creates a white background
+  section to write on"). The one-surface simplification had dropped the old two-mode whiteboard; this
+  put a whiteboard back WITHOUT reintroducing the two-surface design that caused every ink report in
+  this file. AN EARLIER, NOW-DELETED VERSION of this note described a `"annotate" | "whiteboard"`
+  surface union with a real `InkBoard`-in-the-panel on a second `<room>` and `show-board`/`hide-board`
+  through `/api/control-remote` - that design is GONE; do not resurrect it, and read any pre-rebuild
+  note that mentions it as history.
+  THE PEN NEVER CHANGES. It is still one interactive `InkBoard` on `<room>__over`, transparent,
+  covering the whole screen, writing EVERYWHERE - over the slide and over the white area alike.
+  Turning **Whiteboard** on (the toolbar toggle beside Screen/Paper) ONLY ADDS a clean white panel on
+  the LEFT 42% to write on; it does not move the pen, shrink it, or fence it in. `.ip-wb-panel` on
+  /ipad is a PLAIN WHITE DIV (no ink room of its own) at z-index 5, UNDER the ink layer's z-index 6,
+  so the panel can never take a stroke.
+  IT RIDES THE INK CONTROL CHANNEL, exactly like Paper: `{ t: "whiteboard"; on }` on `<room>__ctrl`
+  (`InkMessage` in `inkSync.ts`), broadcast by /ipad on toggle and re-sent in the `hello` handshake so
+  a display opened mid-lesson is never left un-split. NO live session, no control-remote, no server
+  state - it works standing alone, which is the whole point of the one-surface design.
+  THE PROJECTOR MIRRORS IT by RE-ENABLING the board-open machinery the simplification left in the CSS
+  but unwired. `/teacher/present` listens on `<room>__ctrl`, sets `boardOpen`, adds `board-open` to
+  `.stage-work` (which shifts every lesson scene to `left:42%`/`width:58%` - `.stage-tool`,
+  `.stage-resource`, `.classroom-spinner`, `.stage-success`, the state strip and the rest - so the
+  slide content moves to the right 58% and nothing hides behind the panel) and renders the white
+  `.stage-board-panel` on the left 42%; `ScreenInkOverlay` at z-index 40 paints the writing on top.
+  THE PRESENT LISTENER RUNS EMBEDDED TOO: the present inside /ipad's own iframe must shift its scenes
+  the same way or the teacher's slide view would not match the wall - but it does NOT draw
+  `.stage-board-panel` (gated on `!inkOverlay.embed`), because /ipad draws its own `.ip-wb-panel` over
+  the iframe and two panels would double the amber edge. `/board` draws a matching white panel BEHIND
+  its ink (earlier in the DOM, no z-index, so the transparent ink canvases show it through).
+  THE 42% IS A MIRROR on every surface - `.ip-wb-panel`, `.stage-board-panel`, and /board's panel must
+  hold the same side and width or the hand stops matching the wall (Steele is left-handed; the panel
+  is on the LEFT). Move one, move all three.
+  NOT DONE: `/teacher/pace` (the support projector) shows the writing through `ScreenInkOverlay` but
+  has no `board-open`/`.stage-board-panel` structure, so it does not split. If the support screen
+  should split too, that is fresh work on pace's stage.
+  Verified locally 2026-07-30 (dev server, synthetic pen): the toggle splits both /ipad and
+  /teacher/present, the pen writes across the divider onto the white area unchanged, and toggling off
+  reverts both. NOT yet verified on a real iPad + projector.
 - **SCREENS ARE PUSHED, NOT JUST POLLED** (added 2026-07-30, Steele: "is there a way to have the
   screens polled more frequently to reduce the lag in screen changes?"). Measured first: the
   projectors were about 1-1.8s behind the teacher's tap (1500ms poll) and the Chromebooks 2-3s

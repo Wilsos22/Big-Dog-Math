@@ -18,6 +18,7 @@ export default function BoardPage() {
   const [room, setRoom] = useState("main");
   const [attnSignal, setAttnSignal] = useState(0);
   const [paper, setPaper] = useState(false);
+  const [whiteboard, setWhiteboard] = useState(false);
 
   useEffect(() => {
     try {
@@ -32,6 +33,7 @@ export default function BoardPage() {
     const ctrl = joinInkRoom(`${room}__ctrl`, (m) => {
       if (m.t === "attention") setAttnSignal((n) => n + 1);
       else if (m.t === "paper") setPaper(m.on);
+      else if (m.t === "whiteboard") setWhiteboard(m.on);
     });
     ctrl.send({ t: "hello" });
     return () => ctrl.close();
@@ -39,6 +41,15 @@ export default function BoardPage() {
 
   return (
     <main style={{ position: "fixed", inset: 0, background: "#faf6ee" }}>
+      {/* The split whiteboard's white work area, BEHIND the ink (earlier in the
+          DOM, no z-index) so the transparent ink canvases show it through on the
+          left. Same left-42% geometry the pen surface and /teacher/present use. */}
+      {whiteboard && !paper && (
+        <div
+          aria-hidden
+          style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "42%", background: "#fff", borderRight: "5px solid var(--bdb-amber)", boxShadow: "18px 0 40px rgba(40,32,20,0.16)" }}
+        />
+      )}
       <InkBoard room={`${room}__over`} interactive={false} transparent={!paper} paper="dots" />
       <div
         style={{
