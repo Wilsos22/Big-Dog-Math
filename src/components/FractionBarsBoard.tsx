@@ -151,12 +151,24 @@ const estDivWins = (p: EstProblem) => p.bn < p.bd;
 
 // ── Mixed-number problems ───────────────────────────────────────────────────
 interface MixedProblem { w: number; n: number; d: number } // w n/d
+// Kept small on purpose: the walkthrough draws w+1 pie circles split into d
+// slices, so w stays 1-3 and d stays <= 8 or the circles get unreadable.
 const MIXED_PROBLEMS: MixedProblem[] = [
   { w: 2, n: 1, d: 3 },  // 2 1/3 = 7/3
   { w: 1, n: 3, d: 4 },  // 1 3/4 = 7/4
   { w: 3, n: 1, d: 2 },  // 3 1/2 = 7/2
   { w: 2, n: 5, d: 8 },  // 2 5/8 = 21/8
+  { w: 1, n: 2, d: 3 },  // 1 2/3 = 5/3
+  { w: 2, n: 3, d: 5 },  // 2 3/5 = 13/5
+  { w: 3, n: 2, d: 3 },  // 3 2/3 = 11/3
+  { w: 1, n: 5, d: 6 },  // 1 5/6 = 11/6
 ];
+const nextMixedIndex = (prev: number): number => {
+  if (MIXED_PROBLEMS.length < 2) return prev;
+  let i = prev;
+  while (i === prev) i = Math.floor(Math.random() * MIXED_PROBLEMS.length);
+  return i;
+};
 
 // ── Keep-Change-Flip problems ───────────────────────────────────────────────
 interface KcfProblem { a: [number, number]; b: [number, number] } // a divided by b
@@ -203,6 +215,17 @@ const EX_PIECES = [
   { den: 10, label: "1/10", color: "#c25588" },
   { den: 12, label: "1/12", color: "#a06b2a" },
 ];
+
+// One pie wedge: slice i of a circle cut into `count` equal pieces, starting at
+// twelve o'clock and going clockwise. Used by the Mixed-numbers walkthrough.
+const slicePath = (cx: number, cy: number, r: number, i: number, count: number): string => {
+  const a0 = (i / count) * 2 * Math.PI - Math.PI / 2;
+  const a1 = ((i + 1) / count) * 2 * Math.PI - Math.PI / 2;
+  const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
+  const x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+  const large = a1 - a0 > Math.PI ? 1 : 0;
+  return `M ${cx} ${cy} L ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z`;
+};
 
 // Stacked fraction, written the way it looks in a problem. `flipped` swaps the
 // numerator and denominator with a sliding animation (Keep-Change-Flip).
@@ -386,31 +409,63 @@ export function FractionBarsBoard() {
     setEIdx(next);
   };
 
-  // ── mixed-number state ─────────────────────────────────────────────────────
+  // ── mixed-number state (circle walkthrough) ────────────────────────────────
   const [mIdx, setMIdx] = useState(0);
   const mp = MIXED_PROBLEMS[mIdx];
-  const [mPhase, setMPhase] = useState<"intro" | "wholes" | "total" | "done">("intro");
+  const mImproper = mp.w * mp.d + mp.n;         // the numerator of the answer
+  const mCircleCount = mp.w + 1;                // one per whole, plus one for the fraction
+  const mTargetFor = (ci: number) => (ci < mp.w ? mp.d : mp.n); // slices to fill in circle ci
+  // Stages: say how many wholes -> say the denominator (circles split) -> fill
+  // each circle in turn -> add every piece -> the improper fraction.
+  const [mStage, setMStage] = useState<"wholes" | "denom" | "fill" | "total" | "done">("wholes");
   const [mIn, setMIn] = useState("");
-  const [mNums, setMNums] = useState(false); // number the pieces after a miss
+  const [mFillIdx, setMFillIdx] = useState(0);          // which circle is being filled
+  const [mFilled, setMFilled] = useState<number[]>([]); // slices filled in each circle
 
   const startMixed = useCallback((idx: number) => {
-    setMIdx(idx); setMPhase("intro"); setMIn(""); setNote(null); setMNums(false);
+    setMIdx(idx); setMStage("wholes"); setMIn(""); setMFillIdx(0); setMFilled([]); setNote(null);
   }, []);
 
-  const submitMixed = () => {
+  const submitMixedWholes = () => {
     const v = Number(mIn.trim());
     if (!mIn.trim() || !Number.isFinite(v)) return;
-    if (mPhase === "wholes") {
-      if (v === mp.w * mp.d) { setNote(null); setMNums(false); setMIn(""); setMPhase("total"); return; }
-      setNote(`Each whole splits into ${mp.d} pieces — count every piece in the wholes.`);
-      setMNums(true); setMIn("");
+    if (v === mp.w) { setNote(null); setMIn(""); setMStage("denom"); return; }
+    setNote(`Look at the whole-number part of ${mp.w} ${mp.n}/${mp.d} — that is how many whole ones.`);
+    setMIn("");
+  };
+  const submitMixedDenom = () => {
+    const v = Number(mIn.trim());
+    if (!mIn.trim() || !Number.isFinite(v)) return;
+    if (v === mp.d) {
+      setNote(null); setMIn("");
+      setMFilled(Array.from({ length: mCircleCount }, () => 0));
+      setMFillIdx(0); setMStage("fill");
       return;
     }
-    if (mPhase === "total") {
-      if (v === mp.w * mp.d + mp.n) { setNote(null); setMNums(false); setMIn(""); setMPhase("done"); return; }
-      setNote(`Add the extra ${mp.n} piece${mp.n === 1 ? "" : "s"} to the ${mp.w * mp.d} from the wholes.`);
-      setMNums(true); setMIn("");
+    setNote(`The denominator is the bottom number of ${mp.n}/${mp.d} — how many equal pieces each circle splits into.`);
+    setMIn("");
+  };
+  // Click-to-here fill: tapping slice i of the active circle fills 0..i. A whole
+  // is done at d/d; the leftover circle is done at n/d.
+  const fillSlice = (ci: number, i: number) => {
+    if (mStage !== "fill" || ci !== mFillIdx) return;
+    const count = i + 1;
+    setMFilled((prev) => { const next = [...prev]; next[ci] = count; return next; });
+    const target = mTargetFor(ci);
+    if (count === target) {
+      setNote(null);
+      if (ci < mp.w) setMFillIdx(ci + 1);          // next whole, or on to the leftover
+      else window.setTimeout(() => setMStage("total"), 350);
+    } else if (ci === mp.w && count > target) {
+      setNote(`The leftover is ${mp.n}/${mp.d} — fill just ${mp.n} piece${mp.n === 1 ? "" : "s"}.`);
     }
+  };
+  const submitMixedTotal = () => {
+    const v = Number(mIn.trim());
+    if (!mIn.trim() || !Number.isFinite(v)) return;
+    if (v === mImproper) { setNote(null); setMIn(""); setMStage("done"); return; }
+    setNote(`Count every filled piece: ${mp.w} whole${mp.w === 1 ? "" : "s"} of ${mp.d}, plus the ${mp.n} left over.`);
+    setMIn("");
   };
 
   // ── keep-change-flip state ─────────────────────────────────────────────────
@@ -559,6 +614,19 @@ export function FractionBarsBoard() {
         .fb-across-row .k { padding:2px 11px; border-radius:999px; color:#fff; font-size:0.78em; letter-spacing:0.04em; text-transform:uppercase; }
         .fb-across-row .ar { color:var(--bdb-ink-faint); font-weight:900; margin:0 3px; }
         .fb-across-note { margin:5px 0 0; max-width:40ch; text-align:center; color:var(--bdb-ink-soft); font-weight:700; font-size:0.96rem; line-height:1.4; }
+        /* Mixed-numbers walkthrough: the mixed number large, then pie circles */
+        .fb-mixbig { display:flex; align-items:center; justify-content:center; gap:16px; margin:28px 0 10px; font-size:clamp(3rem,9vw,4.6rem); font-weight:900; color:var(--bdb-ink); }
+        .fb-circles { display:flex; flex-wrap:wrap; gap:clamp(12px,3vw,28px); justify-content:center; align-items:flex-end; margin:22px 0 8px; }
+        .fb-circle { display:grid; justify-items:center; gap:8px; }
+        .fb-circlelbl { font-weight:900; font-size:1.15rem; color:var(--bdb-ink); }
+        .fb-piewrap { border-radius:999px; padding:5px; transition:box-shadow .25s ease; }
+        .fb-circle.active .fb-piewrap { box-shadow:0 0 0 4px color-mix(in srgb, ${C_AMBER} 60%, transparent); }
+        .fb-pie { width:clamp(92px,19vw,132px); height:clamp(92px,19vw,132px); display:block; }
+        .fb-outline { fill:var(--bdb-card); stroke:var(--bdb-ink); stroke-width:2.5; }
+        .fb-slice { stroke:var(--bdb-ink); stroke-width:1.5; transition:fill .2s ease; animation:fbSliceIn .34s ease backwards; }
+        .fb-slice.hit { cursor:pointer; }
+        .fb-circle.active .fb-slice { stroke-width:2; }
+        @keyframes fbSliceIn { from { opacity:0; } to { opacity:1; } }
         .fb-note { text-align:center; min-height:26px; margin-top:12px; }
         .fb-note-in { display:inline-block; color:var(--bdb-coral); font-weight:800; font-size:clamp(1rem,3vw,1.3rem); line-height:1.35; padding:8px 16px; border-radius:12px; background:color-mix(in srgb, var(--bdb-coral) 12%, transparent); }
         .fb-done { text-align:center; font-size:clamp(1.2rem,3.6vw,1.8rem); font-weight:900; margin-top:12px; }
@@ -584,7 +652,7 @@ export function FractionBarsBoard() {
         .fb-wbtn { font:inherit; font-weight:800; font-size:0.86rem; min-height:44px; padding:0 13px; border-radius:999px; border:2px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
         .fb-wbtn.on { background:var(--bdb-ink); color:#fff; border-color:var(--bdb-ink); }
         .fb-wline { position:absolute; top:-4px; bottom:-4px; width:2px; background:color-mix(in srgb, var(--bdb-ink) 45%, transparent); }
-        @media (prefers-reduced-motion: reduce) { .fb-piece.pop, .fb-keepring.on, .fb-across { animation:none; } .fb-fn, .fb-fd, .fb-op span, .fb-badge { transition:none; } }
+        @media (prefers-reduced-motion: reduce) { .fb-piece.pop, .fb-keepring.on, .fb-across, .fb-slice { animation:none; } .fb-fn, .fb-fd, .fb-op span, .fb-badge { transition:none; } }
       `}</style>
 
       <LiveToolBanner tool={liveTool} />
@@ -832,85 +900,97 @@ export function FractionBarsBoard() {
       {mode === "mixed" && (
         <>
           <div className="fb-prompt">
-            {mPhase === "done"
-              ? `${mp.w} ${mp.n}/${mp.d} = ${mp.w * mp.d + mp.n}/${mp.d}`
-              : `Turn ${mp.w} ${mp.n}/${mp.d} into ${nths(mp.d)}`}
+            {mStage === "done"
+              ? `${mp.w} ${mp.n}/${mp.d} = ${mImproper}/${mp.d}`
+              : `Break ${mp.w} ${mp.n}/${mp.d} into ${nths(mp.d)}`}
           </div>
           <div className="fb-sub">
-            {mPhase === "intro" && `${mp.w} whole${mp.w === 1 ? "" : "s"} and ${mp.n}/${mp.d} more. Split the wholes to count everything in ${nths(mp.d)}.`}
-            {mPhase === "wholes" && `Every whole just split into ${nths(mp.d)}. How many ${nths(mp.d)} are in the wholes?`}
-            {mPhase === "total" && `Now add the extra pieces for the total.`}
-            {mPhase === "done" && `Same amount — now written as one fraction.`}
+            {mStage === "wholes" && "How many whole ones are in this number?"}
+            {mStage === "denom" && "Each circle splits into equal pieces. What is the denominator?"}
+            {mStage === "fill" && (mFillIdx < mp.w
+              ? `Fill circle ${mFillIdx + 1} completely - a whole is ${mp.d}/${mp.d}.`
+              : `Now the leftover: fill in ${mp.n}/${mp.d}.`)}
+            {mStage === "total" && "Count every filled piece to name the improper fraction."}
+            {mStage === "done" && "Same amount, now written as one fraction."}
           </div>
 
           <div className="fb-probs">
-            {MIXED_PROBLEMS.map((m, i) => (
-              <button key={i} className={`fb-tbtn ${i === mIdx ? "on" : ""}`} onClick={() => startMixed(i)}>
-                {m.w} {m.n}/{m.d}
-              </button>
-            ))}
+            <button className="fb-tbtn" onClick={() => startMixed(nextMixedIndex(mIdx))}>New problem</button>
             <button className="fb-tbtn" onClick={() => startMixed(mIdx)}>Reset</button>
           </div>
 
-          <div className="fb-stage">
-            {Array.from({ length: mp.w }).map((_, wi) => (
-              <div key={wi}>
-                <div className="fb-rowlbl">Whole {wi + 1}</div>
-                <div className="fb-track solid">
-                  {mPhase === "intro" ? (
-                    <div className="fb-piece" style={{ left: 0, width: "100%", background: C_TEAL }}>1</div>
-                  ) : (
-                    Array.from({ length: mp.d }).map((_, i) => (
-                      <div key={i} className="fb-piece pop" style={{ left: `${(i / mp.d) * 100}%`, width: `${100 / mp.d}%`, background: C_TEAL, animationDelay: `${(wi * mp.d + i) * 60}ms` }}>
-                        {mNums ? <span className="fb-tilenum" style={{ color: "#fff" }}>{wi * mp.d + i + 1}</span> : `1/${mp.d}`}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            ))}
-            <div>
-              <div className="fb-rowlbl">And {mp.n}/{mp.d} more</div>
-              <div className="fb-track">
-                {Array.from({ length: mp.n }).map((_, i) => (
-                  <div key={i} className="fb-piece" style={{ left: `${(i / mp.d) * 100}%`, width: `${100 / mp.d}%`, background: C_AMBER, color: "var(--bdb-ink)" }}>
-                    {mNums && mPhase === "total" ? <span className="fb-tilenum">{mp.w * mp.d + i + 1}</span> : `1/${mp.d}`}
+          {mStage === "wholes" ? (
+            <div className="fb-mixbig">
+              <span>{mp.w}</span>
+              <Frac n={mp.n} d={mp.d} big />
+            </div>
+          ) : (
+            <div className="fb-circles">
+              {Array.from({ length: mCircleCount }).map((_, ci) => {
+                const isFrac = ci === mp.w;
+                const filled = mFilled[ci] ?? 0;
+                const active = mStage === "fill" && ci === mFillIdx;
+                const color = isFrac ? C_AMBER : C_TEAL;
+                return (
+                  <div key={ci} className={`fb-circle ${active ? "active" : ""}`}>
+                    <div className="fb-circlelbl">{isFrac ? `${mp.n}/${mp.d}` : "1"}</div>
+                    <span className="fb-piewrap">
+                      <svg className="fb-pie" viewBox="0 0 100 100" role="img"
+                        aria-label={isFrac ? `leftover ${mp.n}/${mp.d}` : `whole number ${ci + 1}`}>
+                        {mStage === "denom" ? (
+                          <circle className="fb-outline" cx="50" cy="50" r="46" />
+                        ) : (
+                          Array.from({ length: mp.d }).map((_, i) => {
+                            const on = i < filled;
+                            return (
+                              <path key={i} className={`fb-slice ${active ? "hit" : ""}`}
+                                d={slicePath(50, 50, 46, i, mp.d)}
+                                style={{ fill: on ? color : "var(--bdb-card)", animationDelay: `${i * 45}ms` }}
+                                onClick={() => fillSlice(ci, i)} />
+                            );
+                          })
+                        )}
+                      </svg>
+                    </span>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          </div>
+          )}
 
-          {mPhase === "intro" && (
-            <div className="fb-bar">
-              <button className="fb-btn" onClick={() => setMPhase("wholes")}>Split the wholes into {nths(mp.d)}</button>
-            </div>
-          )}
-          {mPhase === "wholes" && (
+          {mStage === "wholes" && (
             <div className="fb-formula">
-              <span>{mp.w} whole{mp.w === 1 ? "" : "s"} =</span>
-              <input className="fb-in" value={mIn} inputMode="numeric" autoFocus aria-label={`${nths(mp.d)} in the wholes`}
+              <span>Whole ones:</span>
+              <input className="fb-in" value={mIn} inputMode="numeric" autoFocus aria-label="how many whole ones"
                 onChange={(e) => { setMIn(e.target.value.replace(/\D/g, "")); setNote(null); }}
-                onKeyDown={(e) => e.key === "Enter" && submitMixed()} />
-              <span>/{mp.d}</span>
-              <button className="fb-btn" disabled={!mIn.trim()} onClick={submitMixed}>Enter</button>
+                onKeyDown={(e) => e.key === "Enter" && submitMixedWholes()} />
+              <button className="fb-btn" disabled={!mIn.trim()} onClick={submitMixedWholes}>Enter</button>
             </div>
           )}
-          {mPhase === "total" && (
+          {mStage === "denom" && (
             <div className="fb-formula">
-              <span>{mp.w * mp.d}/{mp.d} + {mp.n}/{mp.d} =</span>
+              <span>Denominator:</span>
+              <input className="fb-in" value={mIn} inputMode="numeric" autoFocus aria-label="the denominator"
+                onChange={(e) => { setMIn(e.target.value.replace(/\D/g, "")); setNote(null); }}
+                onKeyDown={(e) => e.key === "Enter" && submitMixedDenom()} />
+              <button className="fb-btn" disabled={!mIn.trim()} onClick={submitMixedDenom}>Split the circles</button>
+            </div>
+          )}
+          {mStage === "total" && (
+            <div className="fb-formula">
+              <span>{Array.from({ length: mp.w }, () => `${mp.d}/${mp.d}`).join(" + ")} + {mp.n}/{mp.d} =</span>
               <input className="fb-in" value={mIn} inputMode="numeric" autoFocus aria-label={`total ${nths(mp.d)}`}
                 onChange={(e) => { setMIn(e.target.value.replace(/\D/g, "")); setNote(null); }}
-                onKeyDown={(e) => e.key === "Enter" && submitMixed()} />
+                onKeyDown={(e) => e.key === "Enter" && submitMixedTotal()} />
               <span>/{mp.d}</span>
-              <button className="fb-btn" disabled={!mIn.trim()} onClick={submitMixed}>Enter</button>
+              <button className="fb-btn" disabled={!mIn.trim()} onClick={submitMixedTotal}>Enter</button>
             </div>
           )}
-          {mPhase === "done" && (
+          {mStage === "done" && (
             <>
-              <div className="fb-done">{mp.w} {mp.n}/{mp.d} = {mp.w * mp.d}/{mp.d} + {mp.n}/{mp.d} = {mp.w * mp.d + mp.n}/{mp.d}</div>
+              <div className="fb-done">{mp.w} {mp.n}/{mp.d} = {mImproper}/{mp.d}</div>
               <div className="fb-bar">
-                <button className="fb-btn" onClick={() => startMixed((mIdx + 1) % MIXED_PROBLEMS.length)}>Next problem</button>
+                <button className="fb-btn" onClick={() => startMixed(nextMixedIndex(mIdx))}>New problem</button>
               </div>
             </>
           )}
