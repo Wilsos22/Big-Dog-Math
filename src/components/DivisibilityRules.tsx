@@ -29,8 +29,6 @@ const C_CORAL = "#f95335";
 const C_TEAL = "#50a3a4";
 const C_AMBER = "#fcaf38";
 
-const ROW = 62; // rail row height in px; the travelling number steps by this
-
 const RULES: Record<number, string> = {
   1: "Every whole number is divisible by 1.",
   2: "Last digit is even (0, 2, 4, 6, 8).",
@@ -237,56 +235,55 @@ export default function DivisibilityRules() {
   return (
     <div className="dv-wrap">
       <style>{`
-        .dv-wrap { font-family:var(--bdb-font); color:var(--bdb-ink); max-width:1240px; margin:0 auto; padding:12px clamp(10px,2.5vw,20px) 34px; }
+        .dv-wrap { font-family:var(--bdb-font); color:var(--bdb-ink); max-width:min(1500px,96vw); margin:0 auto; padding:12px clamp(10px,2.5vw,20px) 34px; }
         .dv-top { display:flex; gap:10px; justify-content:center; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
         .dv-npill { font:inherit; font-weight:800; font-size:0.92rem; min-height:40px; padding:0 15px; border-radius:999px; border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
         .dv-npill.on { background:var(--bdb-ink); color:#fff; border-color:var(--bdb-ink); }
 
-        .dv-cols { display:grid; grid-template-columns:minmax(280px,1.05fr) minmax(240px,0.95fr) minmax(240px,1fr); gap:clamp(12px,2vw,26px); align-items:start; }
-        .dv-head { font-size:0.72rem; font-weight:800; letter-spacing:0.07em; text-transform:uppercase; color:var(--bdb-ink-faint); margin-bottom:10px; }
-
-        /* LEFT - the rule rail */
-        .dv-rail { position:relative; }
-        .dv-row { display:flex; align-items:center; gap:12px; height:${ROW}px; padding:0 12px; border-bottom:1px solid var(--bdb-line); opacity:0.42; transition:opacity .25s, background .25s; }
-        .dv-row.seen { opacity:1; }
-        .dv-row.now { opacity:1; background:var(--bdb-ground-2); box-shadow:inset 4px 0 0 ${C_TEAL}; }
-        .dv-row.past { opacity:0.22; }
-        .dv-d { font-weight:900; font-size:1.7rem; min-width:56px; letter-spacing:-0.01em; }
-        .dv-row.yes .dv-d { color:${C_GREEN}; }
-        .dv-row.no .dv-d { color:${C_CORAL}; }
-        .dv-rt { font-size:0.95rem; font-weight:600; line-height:1.3; color:var(--bdb-ink-soft); }
-        .dv-row.now .dv-rt { color:var(--bdb-ink); font-weight:700; }
-        .dv-mark { margin-left:auto; font-weight:900; font-size:0.78rem; letter-spacing:0.06em; text-transform:uppercase; }
-        .dv-row.yes .dv-mark { color:${C_GREEN}; }
-        .dv-row.no .dv-mark { color:${C_CORAL}; }
-        .dv-stop { display:flex; align-items:center; gap:10px; padding:10px 12px; margin-top:2px; border:2px dashed color-mix(in srgb, ${C_AMBER} 60%, var(--bdb-line)); background:color-mix(in srgb, ${C_AMBER} 10%, transparent); font-size:0.86rem; font-weight:700; line-height:1.35; color:var(--bdb-ink); }
-
-        /* CENTER - the travelling number */
-        .dv-track { position:relative; min-height:${ROW * RAIL.length}px; }
-        .dv-car { transition:transform .42s cubic-bezier(.34,.75,.3,1); }
-        .dv-num { display:flex; gap:6px; justify-content:center; align-items:center; height:${ROW}px; }
-        .dv-dig { font-weight:900; font-size:clamp(2.8rem,8vw,4.2rem); line-height:1; padding:2px 7px; border-radius:12px; transition:background .25s, box-shadow .25s; }
+        /* THE RULE TABLE - one full-width row per divisor, filling the screen.
+           Columns: the rule, the number under test, the factor it yields. */
+        .dv-table { --dv-cols:minmax(300px,1.5fr) minmax(120px,0.7fr) minmax(240px,1.5fr); display:flex; flex-direction:column; width:100%; min-height:calc(100vh - 210px); border-bottom:1px solid var(--bdb-line); }
+        .dv-table.done { min-height:0; }
+        .dv-thead { flex:0 0 auto; display:grid; grid-template-columns:var(--dv-cols); gap:clamp(12px,2vw,30px); padding:0 clamp(8px,2vw,20px) 8px; }
+        .dv-thead span { font-size:0.68rem; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:var(--bdb-ink-faint); }
+        .dv-thead span:nth-child(2) { text-align:center; }
+        .dv-trow { flex:1 1 0; min-height:92px; display:grid; grid-template-columns:var(--dv-cols); gap:clamp(12px,2vw,30px); align-items:center; padding:10px clamp(8px,2vw,20px); border-top:1px solid var(--bdb-line); opacity:0.4; transition:opacity .3s, background .3s; }
+        .dv-table.done .dv-trow { flex:0 0 auto; min-height:0; }
+        .dv-trow.waiting { opacity:0.5; }
+        .dv-trow.factor, .dv-trow.no { opacity:1; }
+        .dv-trow.past { opacity:0.2; }
+        .dv-trow.active { opacity:1; background:var(--bdb-ground-2); box-shadow:inset 5px 0 0 ${C_TEAL}; }
+        .dv-c-rule { display:flex; align-items:center; gap:14px; }
+        .dv-d { font-weight:900; font-size:clamp(1.7rem,3vw,2.5rem); min-width:64px; letter-spacing:-0.01em; color:var(--bdb-ink); }
+        .dv-trow.factor .dv-d { color:var(--bdb-green-deep); }
+        .dv-trow.no .dv-d { color:var(--bdb-coral-deep); }
+        .dv-trow.active .dv-d { animation:dvPulse 1.4s ease-in-out infinite; }
+        @keyframes dvPulse { 50% { transform:scale(1.14); color:var(--bdb-teal-deep); } }
+        .dv-rt { font-size:clamp(0.95rem,1.5vw,1.2rem); font-weight:600; line-height:1.3; color:var(--bdb-ink-soft); }
+        .dv-trow.active .dv-rt { color:var(--bdb-ink); font-weight:700; }
+        .dv-c-num { display:flex; justify-content:center; align-items:center; }
+        .dv-num { display:flex; gap:4px; align-items:center; }
+        .dv-dig { font-weight:900; font-size:clamp(2.4rem,5vw,3.8rem); line-height:1; padding:2px 6px; border-radius:10px; transition:background .25s, box-shadow .25s; }
         .dv-dig.on { background:color-mix(in srgb, ${C_TEAL} 26%, transparent); box-shadow:inset 0 -5px 0 ${C_TEAL}; }
         .dv-dig.sum { background:color-mix(in srgb, ${C_AMBER} 32%, transparent); box-shadow:inset 0 -5px 0 ${C_AMBER}; }
-        .dv-ask { border:2px solid var(--bdb-ink); background:var(--bdb-card); padding:12px; text-align:center; margin-top:10px; }
-        .dv-q { font-weight:900; font-size:clamp(1rem,2.6vw,1.25rem); margin-bottom:8px; }
-        .dv-ev { font-size:clamp(0.95rem,2.2vw,1.1rem); margin-bottom:12px; line-height:1.4; }
-        .dv-yn { display:flex; gap:10px; justify-content:center; }
-        .dv-yn button { font:inherit; font-weight:900; font-size:1.05rem; min-width:104px; min-height:52px; border-radius:14px; border:2px solid var(--bdb-ink); cursor:pointer; }
-        .dv-yn .yes { background:${C_GREEN}; color:#fff; border-color:${C_GREEN}; }
-        .dv-yn .no { background:var(--bdb-card); color:var(--bdb-ink); }
-
-        /* RIGHT - the factor family */
-        .dv-fam { padding:4px 2px; min-height:180px; }
-        .dv-eq { display:flex; align-items:baseline; gap:9px; padding:10px 6px; border-bottom:1px solid var(--bdb-line); font-weight:900; font-size:clamp(1.5rem,3.6vw,2.1rem); color:var(--bdb-ink); animation:dvIn .34s cubic-bezier(.34,.8,.3,1) backwards; }
-        .dv-eq .op { color:var(--bdb-ink-faint); font-weight:800; }
-        .dv-eq .res { color:${C_GREEN}; }
-        .dv-empty { color:var(--bdb-ink-faint); font-size:0.9rem; line-height:1.5; }
+        .dv-c-res { display:flex; flex-direction:column; gap:7px; align-items:flex-start; }
+        .dv-ev { font-size:clamp(0.92rem,1.5vw,1.1rem); font-weight:700; line-height:1.35; color:var(--bdb-ink); }
+        .dv-q { font-weight:900; font-size:clamp(0.98rem,1.6vw,1.2rem); }
+        .dv-yn { display:flex; gap:10px; }
+        .dv-yn button { font:inherit; font-weight:900; font-size:1rem; min-width:96px; min-height:48px; border-radius:12px; cursor:pointer; }
+        .dv-yn .yes { background:var(--bdb-green-deep); color:#fff; border:2px solid var(--bdb-green-deep); }
+        .dv-yn .no { background:transparent; color:var(--bdb-ink); border:2px solid var(--bdb-ink); }
+        .dv-pair { display:flex; align-items:baseline; gap:8px; font-weight:900; font-size:clamp(1.4rem,2.6vw,2rem); animation:dvIn .34s cubic-bezier(.34,.8,.3,1) backwards; }
+        .dv-pair .op { color:var(--bdb-ink-faint); font-weight:800; }
+        .dv-pair .res { color:var(--bdb-green-deep); }
+        .dv-nofit { font-weight:800; font-size:0.9rem; letter-spacing:0.05em; text-transform:uppercase; color:var(--bdb-coral-deep); }
+        .dv-stop { display:flex; align-items:center; gap:10px; padding:10px 12px; margin-top:14px; border:2px dashed color-mix(in srgb, ${C_AMBER} 60%, var(--bdb-line)); background:color-mix(in srgb, ${C_AMBER} 10%, transparent); font-size:0.86rem; font-weight:700; line-height:1.35; color:var(--bdb-ink); }
         @keyframes dvIn { from { opacity:0; transform:translateX(16px); } to { opacity:1; transform:none; } }
 
-        /* the completed arch - full width under the columns so a ten-factor
-           line stays readable without sideways scrolling */
-        .dv-archwrap { margin:20px auto 0; border:2px solid var(--bdb-line); background:var(--bdb-card); padding:14px clamp(8px,2vw,18px) 10px; }
+        /* the completed arch - full width under the table so a ten-factor
+           line stays readable without sideways scrolling; flat on the ground,
+           no card, so it reads as part of the page */
+        .dv-archwrap { margin:22px auto 0; padding:14px clamp(8px,2vw,18px) 10px; border-top:1px solid var(--bdb-line); }
         .dv-archhead { font-size:0.72rem; font-weight:800; letter-spacing:0.07em; text-transform:uppercase; color:var(--bdb-ink-faint); margin-bottom:6px; text-align:center; }
         .dv-archsvg { display:block; width:100%; height:auto; max-height:56vh; margin:0 auto; overflow:visible; }
         .dv-ap { fill:none; stroke-width:3.5; stroke-linecap:round; stroke-dasharray:1; stroke-dashoffset:1; animation:dvDraw var(--dur) cubic-bezier(.4,.75,.35,1) var(--delay) forwards; }
@@ -325,14 +322,15 @@ export default function DivisibilityRules() {
         .dv-done { font-weight:800; font-size:clamp(1rem,2.5vw,1.2rem); line-height:1.5; text-align:center; margin-top:10px; }
         .dv-done a { color:var(--bdb-teal); font-weight:800; text-decoration:none; border-bottom:2px solid color-mix(in srgb, var(--bdb-teal) 45%, transparent); }
 
-        @media (max-width: 900px) {
-          .dv-cols { grid-template-columns:1fr; }
-          .dv-track { min-height:0; }
-          .dv-car { transform:none !important; }
-          .dv-row { height:auto; padding:10px 12px; }
+        @media (max-width: 760px) {
+          .dv-table, .dv-table.done { --dv-cols:1fr; min-height:0; }
+          .dv-thead { display:none; }
+          .dv-trow { flex:0 0 auto; grid-template-columns:1fr; min-height:0; row-gap:10px; padding:16px clamp(8px,3vw,16px); }
+          .dv-c-num, .dv-c-res { justify-content:flex-start; align-items:flex-start; }
+          .dv-trow:not(.active) .dv-c-num, .dv-trow:not(.active) .dv-c-res { display:none; }
         }
         @media (prefers-reduced-motion: reduce) {
-          .dv-car { transition:none; }
+          .dv-trow.active .dv-d { animation:none; }
           .dv-pair { animation:none; }
           .dv-dig { transition:none; }
           /* completed arches appear at once, already closed; the transient
@@ -351,92 +349,66 @@ export default function DivisibilityRules() {
         ))}
       </div>
 
-      <div className="dv-cols">
-        {/* LEFT: the rule rail */}
-        <div className="dv-rail">
-          <div className="dv-head">The rules</div>
-          {RAIL.map((d) => {
-            const r = results.find((x) => x.d === d);
-            const inRun = sequence.includes(d);
-            const isNow = running && d === currentD;
-            const cls = [
-              r ? "seen" : "",
-              isNow ? "now" : "",
-              !inRun ? "past" : "",
-              r ? (r.isFactor ? "yes" : "no") : "",
-            ].filter(Boolean).join(" ");
-            return (
-              <div key={d} className={`dv-row ${cls}`}>
+      {/* The rule table: one full-width row per divisor. The active rule pulses,
+          the number under test sits in its middle cell, and the factor it yields
+          lands in the third cell - so the factor family builds itself row by row.
+          Rows fill the screen height while running, and compact once the run is
+          done so the closing arch below takes the room. */}
+      <div className={`dv-table ${running ? "" : "done"}`.trim()}>
+        <div className="dv-thead">
+          <span>The rule</span>
+          <span>The number</span>
+          <span>The factor</span>
+        </div>
+        {RAIL.map((d) => {
+          const r = results.find((x) => x.d === d);
+          const inRun = sequence.includes(d);
+          const isActive = running && d === currentD;
+          const state = r ? (r.isFactor ? "factor" : "no") : isActive ? "active" : inRun ? "waiting" : "past";
+          return (
+            <div key={d} className={`dv-trow ${state}`}>
+              <div className="dv-c-rule">
                 <span className="dv-d">÷{d}</span>
                 <span className="dv-rt">{RULES[d]}</span>
-                {r && <span className="dv-mark">{r.isFactor ? "Factor" : "No"}</span>}
               </div>
-            );
-          })}
-          {!running && (
-            <div className="dv-stop">
-              {`Stop at ${stoppedAt}. The next divisor would pass its partner, so every later pair repeats one you already have.`}
+              <div className="dv-c-num">
+                {isActive && (
+                  <span className="dv-num">
+                    {digits.map((dg, i) => (
+                      <span key={i} className={`dv-dig ${ev?.idx.has(i) ? (ev.mode === "sum" ? "sum" : "on") : ""}`}>{dg}</span>
+                    ))}
+                  </span>
+                )}
+              </div>
+              <div className="dv-c-res">
+                {isActive && ev && (
+                  <>
+                    <div className="dv-ev">{ev.card}</div>
+                    <div className="dv-q">Is {N} divisible by {d}?</div>
+                    <div className="dv-yn">
+                      <button className="yes" onClick={() => answer(true)}>Yes</button>
+                      <button className="no" onClick={() => answer(false)}>No</button>
+                    </div>
+                  </>
+                )}
+                {r && r.isFactor && (
+                  <span className="dv-pair">
+                    <span>{d}</span><span className="op">x</span><span>{N / d}</span>
+                    <span className="op">=</span><span className="res">{N}</span>
+                  </span>
+                )}
+                {r && !r.isFactor && <span className="dv-nofit">not a factor</span>}
+              </div>
             </div>
-          )}
-        </div>
-
-        {/* CENTER: the number travelling down the rail */}
-        <div>
-          <div className="dv-head">The number</div>
-          <div className="dv-track">
-            <div className="dv-car" style={{ transform: `translateY(${running ? step * ROW : 0}px)` }}>
-              <div className="dv-num">
-                {digits.map((dg, i) => (
-                  <span key={i} className={`dv-dig ${running && ev?.idx.has(i) ? (ev.mode === "sum" ? "sum" : "on") : ""}`}>{dg}</span>
-                ))}
-              </div>
-
-              {running && ev && (
-                <div className="dv-ask">
-                  <div className="dv-q">Is {N} divisible by {currentD}?</div>
-                  <div className="dv-ev">{ev.card}</div>
-                  <div className="dv-yn">
-                    <button className="yes" onClick={() => answer(true)}>Yes</button>
-                    <button className="no" onClick={() => answer(false)}>No</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT: the factor family */}
-        <div>
-          <div className="dv-head">The factor family</div>
-          <div className="dv-fam">
-            {pairs.length === 0 && (
-              <p className="dv-empty">Every rule that lands adds a pair here. Start with 1.</p>
-            )}
-
-            {running && pairs.map(([a, b]) => (
-              <div className="dv-eq" key={a}>
-                <span>{a}</span>
-                <span className="op">x</span>
-                <span>{b}</span>
-                <span className="op">=</span>
-                <span className="res">{N}</span>
-              </div>
-            ))}
-
-            {assembling && (
-              <p className="dv-empty">
-                You proved {pairs.length} pairs. Now close each arch below.
-              </p>
-            )}
-
-            {finished && (
-              <p className="dv-empty">
-                Every arch is closed below.
-              </p>
-            )}
-          </div>
-        </div>
+          );
+        })}
       </div>
+
+      {!running && (
+        <div className="dv-stop">
+          {`Stop at ${stoppedAt}. The next divisor would pass its partner, so every later pair repeats one you already have.`}
+        </div>
+      )}
 
       {/* The closing step and the finished representation are the same surface:
           every factor on one ascending line. The student clicks the two factors
