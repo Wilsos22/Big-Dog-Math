@@ -1320,8 +1320,25 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   workspace, put the reference in a LARGE LEFT RAIL, the thing being acted on in the center, and the
   product the student is building on the right. Never stack reference material under the workspace or
   pile it into the middle - repeated classroom feedback is "too much stuff in the center, I don't know
-  where to look." `/divisibility` is the reference implementation; `/ladder-method` followed it
-  2026-07-21 (rule rail + Ladder/Factor Trees modes); `/area-model` is still queued.
+  where to look." `/ladder-method` is now the reference implementation of the three-COLUMN form (rule
+  rail + Ladder/Factor Trees modes, 2026-07-21); `/area-model` is still queued.
+  `/divisibility` MOVED OFF the three-column form 2026-07-31 (Steele's annotations) to a full-screen
+  single TABLE - one row per divisor, columns rule | number | factor - keeping the same left-to-right
+  order (reference, the number under test, the product) but as rows so the factor family builds itself
+  down the third column. Same conversation set three design directions that generalise to any
+  manipulative: NO WHITE CARD BOXES (`.dv-ask`/`.dv-fam` question and family cards were the complaint -
+  interactions live flat on the cream ground, only the flat amber stop-note and the deep Yes button
+  keep a fill); the ACTIVE step PULSES (movement reads as "you are here" better than a static
+  highlight); and the content FILLS THE SCREEN height and width (`max-width:min(1500px,96vw)`, rows
+  `flex:1 1 0` to a `min-height:calc(100vh-210px)`, compacting once the run is done so a closing stage
+  gets the room). Do not "restore" the 3-column /divisibility.
+- TACTILE DRAG BEATS CLICKING on any manipulative where a piece goes into a slot (Steele, 2026-07-31:
+  "students need to see the process of pulling the part, just like they would in person. just clicking
+  it doesnt create the same sense of movement and engagement"). `FractionBarsBoard` has the reusable
+  engine: one pointer-events drag (mouse AND Chromebook finger), a `data-drop="<zone>"` id per target,
+  a ghost that rides the pointer, the target highlights, a tap still adds one. Explore drags a palette
+  chip onto a row; How-many-fit drags a `1/d` piece into the total bar and a group tile under it. When
+  a new tool places pieces, reuse this pattern, not a click-to-add button.
 - PRINTED WORKSHEETS MUST LEAVE ROOM TO DO THE WORK (Steele, 2026-07-29, on three sheets in a row:
   "a consistent issue with bunching up all the problems toward the top and not using the space and
   not leaving room to actually do the work"). The `output/worksheets/*.html` sheets put four problems
