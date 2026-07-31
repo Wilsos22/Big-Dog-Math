@@ -183,6 +183,90 @@ export default function IpadPage() {
     return () => { stopped = true; window.clearInterval(interval); };
   }, []);
 
+  // ── The stage: fit to the wall's shape, then pinch the whole thing ─────────
+  // Sized in JS because the CSS version could not letterbox: width:100% plus an
+  // aspect-ratio ran the box taller than the stage, and clamping the height left
+  // the width at 100%, so the box stopped matching the projector and the right
+  // edge simply was not on screen.
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [fit, setFit] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  useEffect(() => {
+    let frame = 0;
+    const measure = () => {
+      const el = stageRef.current;
+      if (!el) return;
+      const cw = el.clientWidth;
+      const ch = el.clientHeight;
+      // A zero rect means the layout has not settled (or this is an iframe that
+      // has not been given a size yet); keep asking rather than baking in 0.
+      if (!cw || !ch) { frame = window.requestAnimationFrame(measure); return; }
+      const w = Math.min(cw, ch * screenAr);
+      setFit({ w, h: w / screenAr });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+    };
+  }, [screenAr]);
+
+  // Two fingers pinch and pan the stage. One finger and the Pencil are left
+  // alone so they still reach the ink canvas - the pen keeps drawing while the
+  // other hand frames the shot. Local only: nothing here is broadcast, so the
+  // wall never moves when he zooms in to write legibly.
+  const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
+  const viewRef = useRef(view);
+  useEffect(() => { viewRef.current = view; }, [view]);
+  const fitRef = useRef(fit);
+  useEffect(() => { fitRef.current = fit; }, [fit]);
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    let start: { d: number; scale: number; cx: number; cy: number; x: number; y: number } | null = null;
+    const spread = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const centre = (t: TouchList) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+    // Never let the stage be dragged off into the dark - the slack is exactly
+    // what the zoom added.
+    const clamp = (scale: number, x: number, y: number) => {
+      const slackX = Math.max(0, (fitRef.current.w * scale - fitRef.current.w) / 2);
+      const slackY = Math.max(0, (fitRef.current.h * scale - fitRef.current.h) / 2);
+      return {
+        scale,
+        x: Math.min(slackX, Math.max(-slackX, x)),
+        y: Math.min(slackY, Math.max(-slackY, y)),
+      };
+    };
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      e.preventDefault();
+      const c = centre(e.touches);
+      const v = viewRef.current;
+      start = { d: spread(e.touches), scale: v.scale, cx: c.x, cy: c.y, x: v.x, y: v.y };
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start || e.touches.length !== 2) return;
+      e.preventDefault();
+      const ratio = spread(e.touches) / (start.d || 1);
+      const scale = Math.min(4, Math.max(1, start.scale * ratio));
+      const c = centre(e.touches);
+      setView(clamp(scale, start.x + (c.x - start.cx), start.y + (c.y - start.cy)));
+    };
+    const onEnd = (e: TouchEvent) => { if (e.touches.length < 2) start = null; };
+    el.addEventListener("touchstart", onStart, { passive: false });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+
   // The projector overlay announces its aspect ratio; letterbox to match so
   // strokes land on the wall exactly where the pen put them.
   useEffect(() => {
@@ -240,8 +324,21 @@ export default function IpadPage() {
         .ip-btn.on { background:var(--bdb-ink); color:#fff; border-color:var(--bdb-ink); }
         .ip-btn.warn { color:var(--bdb-coral); border-color:color-mix(in srgb, var(--bdb-coral) 40%, rgba(32,30,26,0.14)); }
         .ip-divider { width:1px; align-self:stretch; background:rgba(32,30,26,0.12); margin:2px 4px; }
-        .ip-screen-stage { position:absolute; inset:0; display:grid; place-items:center; background:#26221c; }
-        .ip-screen-box { position:relative; width:100%; max-height:100%; }
+        /* touch-action:none stops Safari's own pinch/double-tap page zoom, which
+           fought the pen and could never zoom the slide anyway. The stage owns
+           the gesture now. */
+        .ip-screen-stage { position:absolute; inset:0; display:grid; place-items:center; overflow:hidden; background:#26221c; touch-action:none; }
+        /* The transform lives HERE, above the box, so the slide iframe and the
+           ink layer scale as one object. InkBoard's own allowZoom moved the ink
+           and left the slide behind, which slid the writing off the thing it was
+           annotating. */
+        .ip-screen-view { position:relative; transform-origin:50% 50%; will-change:transform; }
+        /* Sized in JS. width:100% + aspect-ratio let the box run taller than the
+           stage, and max-height then clamped the height while the width stayed
+           100% - so it quietly stopped being the projector's ratio and the right
+           edge of the wall was off screen. */
+        .ip-screen-box { position:relative; }
+        .ip-zoom-reset { position:absolute; z-index:8; left:50%; bottom:14px; transform:translateX(-50%); min-height:40px; padding:0 16px; border-radius:999px; border:1px solid rgba(255,255,255,0.3); background:rgba(32,30,26,0.82); color:#fff; font-family:var(--bdb-font); font-weight:800; font-size:0.8rem; }
         .ip-screen-frame { position:absolute; inset:0; width:100%; height:100%; border:0; pointer-events:none; background:#fff; }
         /* The layer never captures; the ink canvas inside opts back in when it
            is interactive. A plain wrapper div defaults to auto and would
@@ -320,8 +417,12 @@ export default function IpadPage() {
       {/* One stage, letterboxed to the projector's own aspect ratio so what the
           hand sees is what the wall shows. The live screen renders behind; on
           paper the board goes opaque and covers it. */}
-      <div className="ip-screen-stage">
-        <div className="ip-screen-box" style={{ aspectRatio: String(screenAr) }}>
+      <div className="ip-screen-stage" ref={stageRef}>
+        <div
+          className="ip-screen-view"
+          style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
+        >
+        <div className="ip-screen-box" style={fit.w ? { width: fit.w, height: fit.h } : { aspectRatio: String(screenAr), width: "100%" }}>
           <iframe
             className="ip-screen-frame"
             src={`/teacher/present?embed=1${room !== "main" ? `&room=${encodeURIComponent(room)}` : ""}`}
@@ -331,12 +432,10 @@ export default function IpadPage() {
             <InkBoard
               room={`${room}__over`}
               interactive
-              // Pinch to zoom, finger-drag to pan while zoomed - LOCAL to this
-              // iPad. The wall never moves: only a surface with announceView
-              // broadcasts its view, and this one does not. Zooming in is how
-              // handwriting stays legible at speed, so losing this prop cost
-              // the pen surface its whole reason for being an iPad.
-              allowZoom
+              // NO allowZoom. It transforms this canvas alone, and the slide is
+              // a separate iframe underneath - so zooming moved the writing off
+              // the content it was annotating. The stage above owns the gesture
+              // now and scales both together.
               transparent={!paper}
               paper="dots"
               color={color}
@@ -356,6 +455,18 @@ export default function IpadPage() {
             {paper ? "Paper - the wall shows this too" : "Writing over the class screen"}
           </span>
         </div>
+        </div>
+        {/* Only while zoomed. Pinching back to exactly 1 is fiddly on glass, and
+            being left slightly off-centre is how the hand stops matching the
+            wall without it being obvious. */}
+        {view.scale > 1.01 ? (
+          <button
+            className="ip-zoom-reset"
+            onClick={() => setView({ scale: 1, x: 0, y: 0 })}
+          >
+            Fit screen · {view.scale.toFixed(1)}x
+          </button>
+        ) : null}
       </div>
 
       {/* The pen surface never reloads itself - it holds the room's ink - so it
