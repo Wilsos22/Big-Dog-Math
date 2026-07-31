@@ -8,6 +8,20 @@ should update BOTH that database and this mirror when a feature ships.
 Snapshot (2026-07-16):
 
 ## Live
+**Lesson Screen Studio — compose the lesson screens from Notion** (7/31, from
+the "Lesson visual design direction" handoff). `/teacher/studio` now composes
+each lesson's Main / Pace / Student screen automatically from a Notion Lesson
+Step, with a frame palette, two snapping zones, and per-component overrides that
+fall back to the Notion value when blank. The locked band — state word, accent,
+step dots, clock — is always derived from the row and never editable. Layout
+persists as a fourth `AI Context` marker, `[BDM_SCREEN_LAYOUT:...]`, which is the
+studio's only Notion write; every frame edit is a reversible override in that
+blob, so "reset to auto" is free. The prior lesson-content editor is preserved
+at `/teacher/studio/edit`. OPEN: present and pace do not yet render the shared
+`LessonScreen` library — they are fluid, not a 1920x1080 canvas — so the studio
+authors layouts ahead of the projector reading them; that adoption is a separate,
+verified follow-up.
+
 **The classroom state strip — eyes / voice / supplies / body** (7/29, Steele's
 ask). A vertical four-slot group pinned top right of both projectors, modelled
 on a garment care label, authored per Lesson Step from four new Notion selects.

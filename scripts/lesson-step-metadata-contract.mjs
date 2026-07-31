@@ -74,4 +74,51 @@ assert.throws(
   /Create token/,
 );
 
-console.log("PASS - lesson step public-surface metadata preserves teacher text and internal token order.");
+// Screen layout marker: parses out of user text, survives edits, sits before the create token.
+const layoutPayload = "eyJtYWluIjpbW1sicHJvbXB0Il1dXX0";
+const withLayout = [
+  "Ask students what they notice.",
+  "",
+  "[BDM_PUBLIC_SURFACES:split]",
+  "",
+  `[BDM_SCREEN_LAYOUT:${layoutPayload}]`,
+  "",
+  `[BDM_CREATE_TOKEN:${token}]`,
+].join("\n");
+const parsedLayout = metadata.parseLessonStepAiContext(withLayout);
+assert.equal(parsedLayout.userText, "Ask students what they notice.", "Screen layout marker must not leak into user text.");
+assert.equal(parsedLayout.screenLayout, layoutPayload);
+assert.equal(parsedLayout.publicSurfaceMode, "split");
+assert.equal(parsedLayout.createToken, token);
+
+const setLayout = metadata.setScreenLayout(original, layoutPayload);
+assert.match(setLayout, /\[BDM_UNKNOWN:keep-this\]/, "Unknown text must survive a layout save.");
+assert.match(setLayout, new RegExp(`\\[BDM_SCREEN_LAYOUT:${layoutPayload}\\]\\n\\n\\[BDM_CREATE_TOKEN:`), "Layout marker precedes the create token.");
+assert.match(setLayout, new RegExp(`\\[BDM_CREATE_TOKEN:${token}\\]$`), "Create token must remain last after a layout save.");
+assert.equal(metadata.parseLessonStepAiContext(setLayout).publicSurfaceMode, "split", "Layout save preserves the public-surface mode.");
+
+// Editing the layout again replaces it, never stacks a second marker.
+const relayout = metadata.setScreenLayout(setLayout, "bmV3");
+assert.equal((relayout.match(/BDM_SCREEN_LAYOUT/g) || []).length, 1, "A layout re-save collapses to one marker.");
+assert.equal(metadata.parseLessonStepAiContext(relayout).screenLayout, "bmV3");
+
+// Clearing the layout drops the marker but keeps everything else.
+const cleared = metadata.setScreenLayout(setLayout, "");
+assert.doesNotMatch(cleared, /BDM_SCREEN_LAYOUT/, "An empty layout removes the marker.");
+assert.equal(metadata.parseLessonStepAiContext(cleared).createToken, token);
+assert.match(cleared, /\[BDM_UNKNOWN:keep-this\]/);
+
+// Editing user text via replaceLessonStepAiContextText preserves a saved layout.
+const layoutThenText = metadata.replaceLessonStepAiContextText(setLayout, "New teacher note.");
+assert.equal(metadata.parseLessonStepAiContext(layoutThenText).screenLayout, layoutPayload, "Editing text keeps the saved layout.");
+
+assert.throws(
+  () => metadata.serializeLessonStepAiContext({
+    userText: "Teacher note",
+    publicSurfaceMode: null,
+    screenLayout: "not base64url!!",
+  }),
+  /Screen layout/,
+);
+
+console.log("PASS - lesson step public-surface + screen-layout metadata preserves teacher text and internal token order.");
