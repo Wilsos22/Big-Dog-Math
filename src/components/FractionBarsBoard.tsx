@@ -435,14 +435,20 @@ export function FractionBarsBoard() {
   const [exWhole, setExWhole] = useState(1);
   const exWholeColor = EX_PIECES.find((p) => p.den === exWhole)?.color ?? EX_PIECES[0].color;
 
-  // Drag-to-place: a piece is PULLED from the palette down onto a row, the way a
+  // Drag-to-place: a piece is PULLED from its source onto a target, the way a
   // student picks up a rod and sets it down - the movement is the point, so a
-  // click alone never places it. Pointer events so a mouse and a finger on a
-  // Chromebook both work; the window listeners read live state through a ref.
-  const [dragDen, setDragDen] = useState<number | null>(null);
+  // click alone never places it. Pointer events so a mouse and a Chromebook
+  // finger both work; the window listeners read live state through refs. One
+  // mechanism serves every fraction mode: `zone` is the drop-target id (an
+  // Explore row, the total bar, or the groups strip) and `kind` picks the action.
+  type DragItem =
+    | { kind: "ex"; den: number; color: string; label: string }
+    | { kind: "build"; color: string; label: string }
+    | { kind: "tile"; color: string; label: string };
+  const [drag, setDrag] = useState<DragItem | null>(null);
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
-  const [dragOverRow, setDragOverRow] = useState<number | null>(null);
-  const dragDenRef = useRef<number | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const dragRef = useRef<DragItem | null>(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const exStateRef = useRef({ rows: exRows, whole: exWhole, sel: exSel });
   useEffect(() => { exStateRef.current = { rows: exRows, whole: exWhole, sel: exSel }; }, [exRows, exWhole, exSel]);
@@ -463,36 +469,42 @@ export function FractionBarsBoard() {
     setExRows((rs) => rs.map((r, i) => (i === ri ? [...r, den] : r)));
   };
 
-  const startExDrag = (den: number, e: React.PointerEvent) => {
+  const startDrag = (item: DragItem, e: React.PointerEvent) => {
     e.preventDefault();
-    dragDenRef.current = den;
+    dragRef.current = item;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
-    setDragDen(den);
+    setDrag(item);
     setDragPos({ x: e.clientX, y: e.clientY });
-    setDragOverRow(null);
+    setDragOver(null);
   };
 
   useEffect(() => {
-    if (dragDen == null) return;
-    const rowAt = (x: number, y: number) => {
+    if (!drag) return;
+    const zoneAt = (x: number, y: number) => {
       const el = document.elementFromPoint(x, y) as HTMLElement | null;
-      const rowEl = el?.closest?.("[data-exrow]") as HTMLElement | null;
-      return rowEl ? Number(rowEl.dataset.exrow) : null;
+      const z = el?.closest?.("[data-drop]") as HTMLElement | null;
+      return z?.dataset.drop ?? null;
     };
     const move = (e: PointerEvent) => {
       setDragPos({ x: e.clientX, y: e.clientY });
-      setDragOverRow(rowAt(e.clientX, e.clientY));
+      setDragOver(zoneAt(e.clientX, e.clientY));
     };
     const drop = (e: PointerEvent) => {
-      const den = dragDenRef.current;
-      const ri = rowAt(e.clientX, e.clientY);
+      const item = dragRef.current;
+      const zone = zoneAt(e.clientX, e.clientY);
       const moved = Math.hypot(e.clientX - dragStartRef.current.x, e.clientY - dragStartRef.current.y) > 8;
-      if (den != null) {
-        if (ri != null) exPlace(ri, den);
-        else if (!moved) exPlace(exStateRef.current.sel, den); // a tap still drops into the picked row
+      if (item) {
+        if (item.kind === "ex") {
+          if (zone?.startsWith("exrow:")) exPlace(Number(zone.slice(6)), item.den);
+          else if (!moved) exPlace(exStateRef.current.sel, item.den); // a tap drops into the picked row
+        } else if (item.kind === "build") {
+          if (zone === "build" || !moved) addBuilt();
+        } else if (item.kind === "tile") {
+          if (zone === "tile" || !moved) addTile();
+        }
       }
-      dragDenRef.current = null;
-      setDragDen(null); setDragPos(null); setDragOverRow(null);
+      dragRef.current = null;
+      setDrag(null); setDragPos(null); setDragOver(null);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", drop);
@@ -503,7 +515,7 @@ export function FractionBarsBoard() {
       window.removeEventListener("pointercancel", drop);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dragDen]);
+  }, [drag]);
   const exDeclareWhole = (den: number) => {
     setExWhole(den);
     setNote(den === 1
@@ -604,6 +616,10 @@ export function FractionBarsBoard() {
         .fb-pal { font:inherit; font-weight:900; font-size:1rem; min-height:44px; padding:0 16px; border:2px solid var(--bdb-ink); background:var(--bdb-card); color:var(--bdb-ink); cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; transition:transform .12s ease, opacity .12s ease; }
         .fb-pal:active { cursor:grabbing; }
         .fb-pal.dragging { opacity:0.4; transform:scale(0.94); }
+        .fb-src { font:inherit; font-weight:900; font-size:1.05rem; min-height:48px; min-width:66px; padding:0 20px; border:2px solid var(--bdb-ink); border-radius:10px; background:var(--bdb-card); cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; transition:transform .12s ease, opacity .12s ease; }
+        .fb-src:active { cursor:grabbing; }
+        .fb-src.dragging { opacity:0.4; transform:scale(0.94); }
+        .fb-draglbl { font-size:0.72rem; font-weight:800; letter-spacing:0.06em; text-transform:uppercase; color:var(--bdb-ink-faint); }
         .fb-track.dragover { box-shadow:0 0 0 3px color-mix(in srgb, ${C_AMBER} 78%, transparent); }
         .fb-drag { position:fixed; transform:translate(-50%,-52%); pointer-events:none; z-index:80; min-height:42px; min-width:46px; padding:0 14px; display:grid; place-items:center; font-weight:900; font-size:1.05rem; border:2px solid; border-radius:9px; background:var(--bdb-card); box-shadow:0 10px 22px rgba(0,0,0,0.22); }
         .fb-track.exsel { border-style:solid; border-color:var(--bdb-ink); box-shadow:0 0 0 3px color-mix(in srgb, var(--bdb-amber) 55%, transparent); }
@@ -642,7 +658,7 @@ export function FractionBarsBoard() {
             {phase === "done" && `${totalText} ÷ ${divisorText} = ${quotientText}`}
           </div>
           <div className="fb-sub">
-            {phase === "build" && `Tap to add ${nths(prob.d)} until the bar shows ${totalText}.`}
+            {phase === "build" && `Drag ${nths(prob.d)} into the bar until it shows ${totalText}.`}
             {phase === "tile" && (di.exact
               ? `Tile ${divisorText} pieces under it until they fill the SAME length.`
               : `Tile ${divisorText} pieces under it until no more whole groups fit.`)}
@@ -677,7 +693,8 @@ export function FractionBarsBoard() {
             </div>
             <div>
               <div className="fb-rowlbl">The total: {totalText}</div>
-              <div className="fb-track">
+              <div className={`fb-track ${phase === "build" && dragOver === "build" ? "dragover" : ""}`.trim()}
+                data-drop={phase === "build" ? "build" : undefined}>
                 {Array.from({ length: built }).map((_, i) => (
                   <div key={i} className="fb-piece pop" style={{ left: `${(i / prob.d) * 100}%`, width: `${100 / prob.d}%`, background: C_TEAL }}>
                     1/{prob.d}
@@ -689,7 +706,8 @@ export function FractionBarsBoard() {
             {phase !== "build" && (
               <div className={showPartial ? "fb-grouprow" : undefined}>
                 <div className="fb-rowlbl">Groups of {divisorText}</div>
-                <div className="fb-track">
+                <div className={`fb-track ${phase === "tile" && dragOver === "tile" ? "dragover" : ""}`.trim()}
+                  data-drop={phase === "tile" ? "tile" : undefined}>
                   {/* The group the leftover sits inside, drawn full size. Without it
                       the leftover has no referent unit on screen and 1/8 of a group
                       looks exactly like 1/12 of the bar. */}
@@ -726,14 +744,24 @@ export function FractionBarsBoard() {
 
           {phase === "build" && (
             <div className="fb-bar">
-              <button className="fb-btn" onClick={addBuilt}>Add 1/{prob.d}</button>
+              <span className="fb-draglbl">Drag up into the bar</span>
+              <button className={`fb-src ${drag?.kind === "build" ? "dragging" : ""}`.trim()}
+                style={{ borderColor: C_TEAL, color: C_TEAL }} draggable={false}
+                aria-label={`drag a 1/${prob.d} piece into the total`}
+                onPointerDown={(e) => startDrag({ kind: "build", color: C_TEAL, label: `1/${prob.d}` }, e)}>
+                1/{prob.d}
+              </button>
               <button className="fb-btn ghost" disabled={built === 0} onClick={removeBuilt}>Take one off</button>
             </div>
           )}
           {phase === "tile" && (
             <div className="fb-bar">
-              <button className="fb-btn" onClick={addTile}>
-                {!di.exact && tiles === di.whole ? "Add the leftover piece" : `Add a ${divisorText} group`}
+              <span className="fb-draglbl">Drag up under the bar</span>
+              <button className={`fb-src ${drag?.kind === "tile" ? "dragging" : ""}`.trim()}
+                style={{ borderColor: C_AMBER, color: "var(--bdb-ink)" }} draggable={false}
+                aria-label={!di.exact && tiles === di.whole ? "drag the leftover piece under the bar" : `drag a ${divisorText} group under the bar`}
+                onPointerDown={(e) => startDrag({ kind: "tile", color: C_AMBER, label: !di.exact && tiles === di.whole ? "leftover" : divisorText }, e)}>
+                {!di.exact && tiles === di.whole ? "leftover" : divisorText}
               </button>
               <button className="fb-btn ghost" disabled={tiles === 0} onClick={removeTile}>Take one off</button>
             </div>
@@ -1021,10 +1049,10 @@ export function FractionBarsBoard() {
           <div className="fb-palette">
             <span className="fb-wlbl">Drag a piece down</span>
             {EX_PIECES.map((t) => (
-              <button key={t.den} className={`fb-pal ${dragDen === t.den ? "dragging" : ""}`.trim()}
+              <button key={t.den} className={`fb-pal ${drag?.kind === "ex" && drag.den === t.den ? "dragging" : ""}`.trim()}
                 style={{ borderColor: t.color, color: t.color }} draggable={false}
                 aria-label={`drag ${labelFor(t.den, exWhole)} onto a row`}
-                onPointerDown={(e) => startExDrag(t.den, e)}>
+                onPointerDown={(e) => startDrag({ kind: "ex", den: t.den, color: t.color, label: labelFor(t.den, exWhole) }, e)}>
                 {labelFor(t.den, exWhole)}
               </button>
             ))}
@@ -1054,7 +1082,7 @@ export function FractionBarsBoard() {
                     Row {ri + 1}
                     {row.length > 0 && <span className="fb-rowsum">= {sumLabel(rowValue(row, exWhole))}</span>}
                   </div>
-                  <div className={`fb-track ${exSel === ri ? "exsel" : ""} ${dragOverRow === ri ? "dragover" : ""}`.trim()} data-exrow={ri} onClick={() => setExSel(ri)}>
+                  <div className={`fb-track ${exSel === ri ? "exsel" : ""} ${dragOver === `exrow:${ri}` ? "dragover" : ""}`.trim()} data-drop={`exrow:${ri}`} onClick={() => setExSel(ri)}>
                     {row.map((den, pi) => {
                       const left = acc;
                       acc += 1 / den;
@@ -1074,17 +1102,18 @@ export function FractionBarsBoard() {
             })}
           </div>
 
-          {/* the piece riding the pointer while a drag is in flight */}
-          {dragDen != null && dragPos && (
-            <div className="fb-drag" style={{
-              left: dragPos.x, top: dragPos.y,
-              borderColor: EX_PIECES.find((p) => p.den === dragDen)?.color,
-              color: EX_PIECES.find((p) => p.den === dragDen)?.color,
-            }}>
-              {labelFor(dragDen, exWhole)}
-            </div>
-          )}
         </>
+      )}
+
+      {/* the piece riding the pointer while a drag is in flight (any mode) */}
+      {drag && dragPos && (
+        <div className="fb-drag" style={{
+          left: dragPos.x, top: dragPos.y,
+          borderColor: drag.color,
+          color: drag.kind === "tile" ? "var(--bdb-ink)" : drag.color,
+        }}>
+          {drag.kind === "ex" ? labelFor(drag.den, exWhole) : drag.label}
+        </div>
       )}
 
       <div className="fb-note">{note && <span key={note} className="fb-note-in">{note}</span>}</div>
