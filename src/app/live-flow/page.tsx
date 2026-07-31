@@ -17,7 +17,9 @@ import { TIMER_URGENCY_CSS, TIMER_URGENT_SECONDS, timerUrgency, timerUrgencyClas
 import {
   canonicalPairsAnswer,
   canonicalStructuredNumericAnswer,
+  expectedFactorPairs,
   MAX_PAIRS,
+  reviewPairsSubmission,
   structuredNumericBlankCount,
   structuredNumericSegments,
 } from "@/lib/structuredNumeric";
@@ -704,6 +706,16 @@ export default function LiveFlowPage() {
   const pairsMeta = activePoll?.pairs ?? null;
   const isPairsBuilder = activePoll?.kind === "structured-numeric" && Boolean(pairsMeta);
   const pairsAtCap = pairRows.length >= MAX_PAIRS;
+  // The self-check the student sees the instant they submit. Computed on-device
+  // from the target and bank alone - no answer crosses the wire, the factors of
+  // the target are derivable from it. pairKey normalises small-factor-first so
+  // the rainbow and the found set line up.
+  const pairKeyOf = (a: number, b: number) => (a <= b ? `${a}x${b}` : `${b}x${a}`);
+  const pairReview = isPairsBuilder && pairsMeta
+    ? reviewPairsSubmission(pairsMeta.target, pairsMeta.bank, pairRows.flatMap(([a, b]) => [a, b]))
+    : null;
+  const pairRainbow = isPairsBuilder && pairsMeta ? expectedFactorPairs(pairsMeta.target, pairsMeta.bank) : [];
+  const pairFoundKeys = new Set((pairReview?.valid ?? []).map(([a, b]) => pairKeyOf(a, b)));
 
   function tapPairNumber(value: number) {
     // No live validation on purpose: an invented pair (4x4 for 18) must be able
@@ -929,6 +941,19 @@ export default function LiveFlowPage() {
         .lf-pairs-chip { min-height:60px; border:2px solid var(--bdb-line); border-radius:12px; background:#fff; color:var(--bdb-ink); font:inherit; font-size:clamp(1.15rem,2.6vw,1.7rem); font-weight:950; cursor:pointer; box-shadow:var(--bdb-shadow-sm); }
         .lf-pairs-chip:hover, .lf-pairs-chip:focus-visible { border-color:var(--lf-accent); background:color-mix(in srgb,var(--lf-accent) 10%,#fff); outline:none; }
         .lf-pairs-chip:disabled { cursor:not-allowed; opacity:0.55; }
+        .lf-pairs-review { display:grid; gap:12px; justify-items:stretch; }
+        .lf-pairs-verdict { margin:0; color:var(--bdb-ink); font-size:clamp(1.15rem,2.6vw,1.6rem); font-weight:900; }
+        .lf-pairs-verdict.good { color:var(--bdb-green-deep); }
+        .lf-pairs-review-label { margin:0; color:var(--bdb-ink-soft); font-size:0.76rem; font-weight:900; text-transform:uppercase; letter-spacing:0.06em; }
+        .lf-pairs-rainbow { display:flex; flex-wrap:wrap; gap:10px; }
+        .lf-rainbow-pair { display:inline-flex; flex-direction:column; align-items:center; gap:2px; border:2px solid var(--bdb-line); border-radius:12px; padding:10px 16px; background:#fff; box-shadow:var(--bdb-shadow-sm); }
+        .lf-rainbow-pair.found { border-color:var(--bdb-green-deep); background:color-mix(in srgb,var(--bdb-green) 14%,#fff); }
+        .lf-rainbow-pair.missed { border-style:dashed; border-color:var(--bdb-coral-deep); }
+        .lf-rainbow-expr { color:var(--bdb-ink); font-size:clamp(1.2rem,2.8vw,1.8rem); font-weight:900; }
+        .lf-rainbow-tag { font-size:0.68rem; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; }
+        .lf-rainbow-pair.found .lf-rainbow-tag { color:var(--bdb-green-deep); }
+        .lf-rainbow-pair.missed .lf-rainbow-tag { color:var(--bdb-coral-deep); }
+        .lf-pairs-invented { margin:0; color:var(--bdb-coral-deep); font-size:0.98rem; font-weight:800; }
         .lf-fist { width:min(100%,700px); display:grid; gap:14px; }
         .lf-fist-options { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; }
         .lf-fist-option { min-height:72px; border:2px solid var(--bdb-line); border-radius:12px; background:#fff; color:var(--bdb-ink); font:inherit; font-size:clamp(1.35rem,3vw,2.15rem); font-weight:950; cursor:pointer; box-shadow:var(--bdb-shadow-sm); }
@@ -1181,77 +1206,101 @@ export default function LiveFlowPage() {
                   </div>
                 ) : isPairsBuilder && pairsMeta ? (
                   <div className="lf-pairs">
-                    <div className="lf-pairs-rows">
-                      {pairRows.map(([a, b], index) => (
-                        <div className="lf-pair-row committed" key={`${a}x${b}-${index}`}>
-                          <span className="lf-pair-expr">
-                            <span className="lf-pair-num">{a}</span>
-                            <span className="lf-pair-times">&times;</span>
-                            <span className="lf-pair-num">{b}</span>
-                            <span className="lf-pair-eq">= {pairsMeta.target}</span>
-                          </span>
-                          {!pollSubmitted ? (
-                            <button
-                              className="lf-pair-remove"
-                              type="button"
-                              aria-label={`Remove ${a} times ${b}`}
-                              onClick={() => removePairRow(index)}
-                            >
-                              Remove
-                            </button>
-                          ) : null}
+                    {pollSubmitted && pairReview ? (
+                      /* The self-check: the instant they Send, the student sees
+                         the full rainbow with their own pairs marked, so nobody
+                         submits and never learns whether they were right. */
+                      <div className="lf-pairs-review">
+                        <p className={`lf-pairs-verdict${pairReview.complete && pairReview.invented.length === 0 ? " good" : ""}`}>
+                          {pairReview.complete && pairReview.invented.length === 0
+                            ? `You found every factor pair of ${pairsMeta.target}.`
+                            : `You found ${pairReview.valid.length} of ${pairRainbow.length}${pairReview.missing.length ? ` — ${pairReview.missing.length} missed` : ""}.`}
+                        </p>
+                        <p className="lf-pairs-review-label">The factor pairs of {pairsMeta.target}</p>
+                        <div className="lf-pairs-rainbow">
+                          {pairRainbow.map(([a, b]) => {
+                            const found = pairFoundKeys.has(pairKeyOf(a, b));
+                            return (
+                              <span className={`lf-rainbow-pair${found ? " found" : " missed"}`} key={`${a}x${b}`}>
+                                <span className="lf-rainbow-expr">{a} &times; {b}</span>
+                                <span className="lf-rainbow-tag">{found ? "you had it" : "missed"}</span>
+                              </span>
+                            );
+                          })}
                         </div>
-                      ))}
-                      {!pollSubmitted && !pairsAtCap ? (
-                        <div className="lf-pair-row active">
-                          <span className="lf-pair-expr">
-                            <span className={`lf-pair-slot${pairPending === null ? " await" : " filled"}`}>
-                              {pairPending ?? ""}
-                            </span>
-                            <span className="lf-pair-times">&times;</span>
-                            <span className={`lf-pair-slot${pairPending === null ? "" : " await"}`} aria-hidden="true" />
-                            <span className="lf-pair-eq">= {pairsMeta.target}</span>
-                          </span>
-                          {pairPending !== null ? (
-                            <button className="lf-pair-remove" type="button" onClick={() => setPairPending(null)}>
-                              Clear
-                            </button>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                    {!pollSubmitted ? (
-                      <div className="lf-pairs-bank" aria-label={`Numbers 1 to ${pairsMeta.bank}`}>
-                        {Array.from({ length: pairsMeta.bank }, (_, index) => index + 1).map((value) => (
-                          <button
-                            className="lf-pairs-chip"
-                            type="button"
-                            key={value}
-                            disabled={pairsAtCap && pairPending === null}
-                            onClick={() => tapPairNumber(value)}
-                          >
-                            {value}
-                          </button>
+                        {pairReview.invented.map(([a, b]) => (
+                          <p className="lf-pairs-invented" key={`${a}x${b}`}>
+                            {a} &times; {b} is not a factor pair of {pairsMeta.target}.
+                          </p>
                         ))}
                       </div>
-                    ) : null}
-                    {pollSubmitted ? (
-                      <p className="lf-poll-sent">Answer submitted.</p>
                     ) : (
-                      <button
-                        className="lf-poll-send lf-numeric-send"
-                        disabled={pollSaveState === "saving" || pairRows.length < 1}
-                        onClick={submitPairs}
-                      >
-                        Send answer
-                      </button>
+                      <>
+                        <div className="lf-pairs-rows">
+                          {pairRows.map(([a, b], index) => (
+                            <div className="lf-pair-row committed" key={`${a}x${b}-${index}`}>
+                              <span className="lf-pair-expr">
+                                <span className="lf-pair-num">{a}</span>
+                                <span className="lf-pair-times">&times;</span>
+                                <span className="lf-pair-num">{b}</span>
+                                <span className="lf-pair-eq">= {pairsMeta.target}</span>
+                              </span>
+                              <button
+                                className="lf-pair-remove"
+                                type="button"
+                                aria-label={`Remove ${a} times ${b}`}
+                                onClick={() => removePairRow(index)}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                          {!pairsAtCap ? (
+                            <div className="lf-pair-row active">
+                              <span className="lf-pair-expr">
+                                <span className={`lf-pair-slot${pairPending === null ? " await" : " filled"}`}>
+                                  {pairPending ?? ""}
+                                </span>
+                                <span className="lf-pair-times">&times;</span>
+                                <span className={`lf-pair-slot${pairPending === null ? "" : " await"}`} aria-hidden="true" />
+                                <span className="lf-pair-eq">= {pairsMeta.target}</span>
+                              </span>
+                              {pairPending !== null ? (
+                                <button className="lf-pair-remove" type="button" onClick={() => setPairPending(null)}>
+                                  Clear
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="lf-pairs-bank" aria-label={`Numbers 1 to ${pairsMeta.bank}`}>
+                          {Array.from({ length: pairsMeta.bank }, (_, index) => index + 1).map((value) => (
+                            <button
+                              className="lf-pairs-chip"
+                              type="button"
+                              key={value}
+                              disabled={pairsAtCap && pairPending === null}
+                              onClick={() => tapPairNumber(value)}
+                            >
+                              {value}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          className="lf-poll-send lf-numeric-send"
+                          disabled={pollSaveState === "saving" || pairRows.length < 1}
+                          onClick={submitPairs}
+                        >
+                          Send answer
+                        </button>
+                        {pairRows.length < 1 ? (
+                          <p className="lf-poll-help">Tap two numbers to build a pair, then keep going until you have them all.</p>
+                        ) : null}
+                        {pairsAtCap ? (
+                          <p className="lf-poll-help">That is as many pairs as you can build. Send when you are ready.</p>
+                        ) : null}
+                      </>
                     )}
-                    {!pollSubmitted && pairRows.length < 1 ? (
-                      <p className="lf-poll-help">Tap two numbers to build a pair, then keep going until you have them all.</p>
-                    ) : null}
-                    {!pollSubmitted && pairsAtCap ? (
-                      <p className="lf-poll-help">That is as many pairs as you can build. Send when you are ready.</p>
-                    ) : null}
                     {pollSubmitError && <p className="lf-poll-help">{pollSubmitError}</p>}
                   </div>
                 ) : isStructuredNumeric ? (

@@ -516,11 +516,21 @@ function pairKey(a: number, b: number): string {
  * No misconception TAG is attached: the seeded vocabulary is Steele's to extend,
  * and the phrase already separates the two groups, which is all the tally needs.
  */
-function diagnosePairs(
-  spec: StructuredNumericPairsSpec,
+/**
+ * Score a pairs submission against the target's reachable factor pairs.
+ *
+ * Pure, and it needs ONLY the target and the bank - both of which the student
+ * device already holds (they cross studentSafeLiveFlow as poll.pairs). That is
+ * the whole trick behind the feedback loop: the Chromebook can show a student
+ * their own result the instant they submit ("you found 1x18 and 2x9, you missed
+ * 3x6"), and the projector can reveal the full rainbow, with NO answer ever
+ * sent from the server - the factors of 18 are derivable from 18.
+ */
+export function reviewPairsSubmission(
+  target: number,
+  bank: number,
   values: readonly (number | null)[],
-): StructuredNumericDiagnosis {
-  const { target, bank } = spec;
+): StructuredNumericPairsResult {
   const submitted = pairsFromValues(values);
   const isValid = ([a, b]: [number, number]): boolean =>
     a >= 1 && b >= 1 && a <= bank && b <= bank && a * b === target;
@@ -528,18 +538,24 @@ function diagnosePairs(
   const invented = submitted.filter((pair) => !isValid(pair));
   const validKeys = new Set(valid.map(([a, b]) => pairKey(a, b)));
   const missing = expectedFactorPairs(target, bank).filter(([a, b]) => !validKeys.has(pairKey(a, b)));
-  const complete = missing.length === 0;
-  const pairsResult: StructuredNumericPairsResult = { submitted, valid, invented, missing, complete };
+  return { submitted, valid, invented, missing, complete: missing.length === 0 };
+}
+
+function diagnosePairs(
+  spec: StructuredNumericPairsSpec,
+  values: readonly (number | null)[],
+): StructuredNumericDiagnosis {
+  const pairsResult = reviewPairsSubmission(spec.target, spec.bank, values);
   const base = { split: null, splitKey: null, failedRule: null, role: null, pairsResult };
 
-  if (complete && invented.length === 0) {
+  if (pairsResult.complete && pairsResult.invented.length === 0) {
     return { ...base, correct: true, ruleId: null, phrase: "Correct", tier: 4, misconception: null };
   }
-  if (invented.length > 0) {
+  if (pairsResult.invented.length > 0) {
     return {
       ...base,
       correct: false,
-      ruleId: `pairs(${target})`,
+      ruleId: `pairs(${spec.target})`,
       phrase: "Listed a pair that is not a factor pair",
       tier: 2,
       misconception: null,
@@ -548,7 +564,7 @@ function diagnosePairs(
   return {
     ...base,
     correct: false,
-    ruleId: `pairs(${target})`,
+    ruleId: `pairs(${spec.target})`,
     phrase: "Missing a factor pair",
     tier: 3,
     misconception: null,

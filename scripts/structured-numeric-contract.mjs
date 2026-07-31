@@ -15,6 +15,7 @@ import {
   canonicalStructuredNumericAnswer,
   canonicalPairsAnswer,
   expectedFactorPairs,
+  reviewPairsSubmission,
   structuredNumericBlankCount,
   structuredNumericSegments,
   structuredNumericSplitConcentration,
@@ -340,6 +341,25 @@ check("canonicalPairsAnswer is a readable, order-independent, non-empty string",
 check("the values cap covers a full pairs submission", () => {
   // 12 pairs is the ceiling, so the flat array cap must be at least 24.
   assert.ok(MAX_STRUCTURED_NUMERIC_VALUES >= 24);
+});
+
+check("reviewPairsSubmission drives the on-device self-check from target + bank alone", () => {
+  // The student-facing review is computed with NO spec - just the target and
+  // the bank the Chromebook already has, so no answer crosses the wire.
+  const complete = reviewPairsSubmission(18, 20, [1, 18, 2, 9, 3, 6]);
+  assert.equal(complete.complete, true);
+  assert.equal(complete.valid.length, 3);
+  assert.equal(complete.missing.length, 0);
+  assert.equal(complete.invented.length, 0);
+
+  const partial = reviewPairsSubmission(18, 20, [1, 18, 2, 9]);
+  assert.deepEqual(partial.valid, [[1, 18], [2, 9]]);
+  assert.deepEqual(partial.missing, [[3, 6]]);
+  assert.equal(partial.complete, false);
+
+  const withInvented = reviewPairsSubmission(18, 20, [1, 18, 4, 4]);
+  assert.deepEqual(withInvented.invented, [[4, 4]]);
+  assert.deepEqual(withInvented.missing, [[2, 9], [3, 6]]);
 });
 
 console.log(`\n${checks} structured-numeric checks passed`);
