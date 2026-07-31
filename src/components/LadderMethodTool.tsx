@@ -50,7 +50,7 @@ const TREE_STORE_KEY = "bdm-ladder-trees-v1";
 const RULES: [number, string][] = [
   [2, "Last digit is even (0, 2, 4, 6, 8)."],
   [3, "The digit sum is divisible by 3."],
-  [4, "The last two digits make a number divisible by 4."],
+  [4, "Half of the number is even."],
   [5, "Last digit is 0 or 5."],
   [6, "Passes both the rule for 2 and the rule for 3."],
   [7, "No digit shortcut. Divide to check."],
@@ -60,7 +60,7 @@ const PRIME_ROWS = new Set([2, 3, 5, 7]);
 const RULE_HINT: Record<number, string> = {
   2: "the last digit is even",
   3: "the digits add to a multiple of 3",
-  4: "the last two digits divide by 4",
+  4: "half of it is even",
   5: "it ends in 0 or 5",
   6: "it passes the rules for 2 and 3",
   7: "just divide by 7 and check",
