@@ -160,13 +160,29 @@ const MIXED_PROBLEMS: MixedProblem[] = [
 
 // ── Keep-Change-Flip problems ───────────────────────────────────────────────
 interface KcfProblem { a: [number, number]; b: [number, number] } // a divided by b
+// A curated pool the "New problem" generator draws from one at a time - a mix
+// of clean integer quotients and a few that stay a fraction, so the reciprocal
+// step earns its keep instead of always tidying to a whole.
 const KCF_PROBLEMS: KcfProblem[] = [
   { a: [3, 4], b: [1, 8] },   // = 6
   { a: [2, 3], b: [1, 6] },   // = 4
   { a: [5, 6], b: [1, 12] },  // = 10
+  { a: [1, 2], b: [1, 4] },   // = 2
+  { a: [2, 5], b: [1, 10] },  // = 4
+  { a: [4, 5], b: [2, 5] },   // = 2
   { a: [3, 4], b: [2, 3] },   // = 9/8 (stays a fraction)
+  { a: [5, 8], b: [1, 4] },   // = 5/2
+  { a: [7, 8], b: [1, 2] },   // = 7/4
+  { a: [5, 6], b: [1, 3] },   // = 5/2
 ];
 const kcfProduct = (p: KcfProblem): [number, number] => [p.a[0] * p.b[1], p.a[1] * p.b[0]];
+// The generator: a fresh problem each press, never the one already on screen.
+const nextKcfIndex = (prev: number): number => {
+  if (KCF_PROBLEMS.length < 2) return prev;
+  let i = prev;
+  while (i === prev) i = Math.floor(Math.random() * KCF_PROBLEMS.length);
+  return i;
+};
 
 // Plural word for a unit-fraction denominator: 3 -> "thirds", 8 -> "eighths".
 const NTHS: Record<number, string> = {
@@ -190,12 +206,17 @@ const EX_PIECES = [
 
 // Stacked fraction, written the way it looks in a problem. `flipped` swaps the
 // numerator and denominator with a sliding animation (Keep-Change-Flip).
-function Frac({ n, d, color, flipped }: { n: ReactNode; d: ReactNode; color?: string; flipped?: boolean }) {
+function Frac({ n, d, color, flipped, big }: { n: ReactNode; d: ReactNode; color?: string; flipped?: boolean; big?: boolean }) {
+  // Cell height drives the flip distance: the numerator drops one cell-plus-bar
+  // and the denominator rises the same, so they trade places exactly. `big`
+  // scales the whole thing for the Keep-Change-Flip stage.
+  const h = big ? 48 : 30;
+  const shift = h + 3;
   return (
-    <span className="fb-frac" style={color ? { color } : undefined}>
-      <span className="fb-fn" style={{ transform: flipped ? "translateY(33px)" : "none" }}>{n}</span>
+    <span className={`fb-frac${big ? " big" : ""}`} style={color ? { color } : undefined}>
+      <span className="fb-fn" style={{ height: h, transform: flipped ? `translateY(${shift}px)` : "none" }}>{n}</span>
       <span className="fb-fbar" />
-      <span className="fb-fd" style={{ transform: flipped ? "translateY(-33px)" : "none" }}>{d}</span>
+      <span className="fb-fd" style={{ height: h, transform: flipped ? `translateY(-${shift}px)` : "none" }}>{d}</span>
     </span>
   );
 }
@@ -525,8 +546,19 @@ export function FractionBarsBoard() {
         .fb-kcol { display:inline-grid; justify-items:center; gap:6px; }
         .fb-badge { font-size:0.66rem; font-weight:900; letter-spacing:0.1em; text-transform:uppercase; padding:3px 10px; border-radius:999px; color:#fff; opacity:0; transform:translateY(6px); transition:opacity .4s ease, transform .4s ease; }
         .fb-badge.on { opacity:1; transform:none; }
-        .fb-keepring { border-radius:10px; padding:6px 8px; transition:box-shadow .4s ease; }
-        .fb-keepring.on { box-shadow:0 0 0 3px ${C_GREEN}; }
+        .fb-keepring { border-radius:12px; padding:6px 8px; transition:box-shadow .4s ease; }
+        .fb-keepring.on { box-shadow:0 0 0 4px ${C_GREEN}; animation:fbSettle .5s cubic-bezier(.2,.85,.3,1.05); }
+        /* KEEP lands like a weight hitting the ground - a short drop and settle */
+        @keyframes fbSettle { 0% { transform:translateY(-12px) scale(1.05); } 55% { transform:translateY(3px) scale(.98); } 100% { transform:none; } }
+        /* Keep-Change-Flip runs large - it is the whole screen, not a footnote */
+        .fb-kcf { font-size:clamp(2.3rem,7vw,3.4rem); gap:18px; }
+        .fb-kcf .fb-badge { font-size:0.5em; }
+        .fb-frac.big .fb-fn, .fb-frac.big .fb-fd { min-width:42px; padding:0 6px; }
+        .fb-across { display:grid; gap:7px; justify-items:center; margin-top:22px; animation:fbPop .32s ease; }
+        .fb-across-row { display:flex; gap:11px; align-items:center; font-weight:800; font-size:clamp(0.98rem,2.6vw,1.2rem); color:var(--bdb-ink); }
+        .fb-across-row .k { padding:2px 11px; border-radius:999px; color:#fff; font-size:0.78em; letter-spacing:0.04em; text-transform:uppercase; }
+        .fb-across-row .ar { color:var(--bdb-ink-faint); font-weight:900; margin:0 3px; }
+        .fb-across-note { margin:5px 0 0; max-width:40ch; text-align:center; color:var(--bdb-ink-soft); font-weight:700; font-size:0.96rem; line-height:1.4; }
         .fb-note { text-align:center; min-height:26px; margin-top:12px; }
         .fb-note-in { display:inline-block; color:var(--bdb-coral); font-weight:800; font-size:clamp(1rem,3vw,1.3rem); line-height:1.35; padding:8px 16px; border-radius:12px; background:color-mix(in srgb, var(--bdb-coral) 12%, transparent); }
         .fb-done { text-align:center; font-size:clamp(1.2rem,3.6vw,1.8rem); font-weight:900; margin-top:12px; }
@@ -552,7 +584,7 @@ export function FractionBarsBoard() {
         .fb-wbtn { font:inherit; font-weight:800; font-size:0.86rem; min-height:44px; padding:0 13px; border-radius:999px; border:2px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
         .fb-wbtn.on { background:var(--bdb-ink); color:#fff; border-color:var(--bdb-ink); }
         .fb-wline { position:absolute; top:-4px; bottom:-4px; width:2px; background:color-mix(in srgb, var(--bdb-ink) 45%, transparent); }
-        @media (prefers-reduced-motion: reduce) { .fb-piece.pop { animation:none; } .fb-fn, .fb-fd, .fb-op span, .fb-badge { transition:none; } }
+        @media (prefers-reduced-motion: reduce) { .fb-piece.pop, .fb-keepring.on, .fb-across { animation:none; } .fb-fn, .fb-fd, .fb-op span, .fb-badge { transition:none; } }
       `}</style>
 
       <LiveToolBanner tool={liveTool} />
@@ -903,19 +935,15 @@ export function FractionBarsBoard() {
           </div>
 
           <div className="fb-probs">
-            {KCF_PROBLEMS.map((k, i) => (
-              <button key={i} className={`fb-tbtn ${i === kIdx ? "on" : ""}`} onClick={() => startKcf(i)}>
-                {k.a[0]}/{k.a[1]} ÷ {k.b[0]}/{k.b[1]}
-              </button>
-            ))}
+            <button className="fb-tbtn" onClick={() => startKcf(nextKcfIndex(kIdx))}>New problem</button>
             <button className="fb-tbtn" onClick={() => startKcf(kIdx)}>Reset</button>
           </div>
 
-          <div className="fb-formula" style={{ fontSize: "clamp(1.6rem,5vw,2.2rem)", marginTop: 22 }}>
+          <div className="fb-formula fb-kcf" style={{ marginTop: 40 }}>
             <span className="fb-kcol">
               <span className={`fb-badge ${kStep >= 1 ? "on" : ""}`} style={{ background: C_GREEN }}>Keep</span>
               <span className={`fb-keepring ${kStep >= 1 ? "on" : ""}`}>
-                <Frac n={kp.a[0]} d={kp.a[1]} color={C_TEAL} />
+                <Frac n={kp.a[0]} d={kp.a[1]} color={C_TEAL} big />
               </span>
             </span>
             <span className="fb-kcol">
@@ -927,21 +955,21 @@ export function FractionBarsBoard() {
             </span>
             <span className="fb-kcol">
               <span className={`fb-badge ${kStep >= 3 ? "on" : ""}`} style={{ background: C_CORAL }}>Flip</span>
-              <Frac n={kp.b[0]} d={kp.b[1]} color={C_CORAL} flipped={kStep >= 3} />
+              <Frac n={kp.b[0]} d={kp.b[1]} color={C_CORAL} flipped={kStep >= 3} big />
             </span>
             {kStage !== "walk" && (
               <>
                 <span>=</span>
                 {kStage === "product" ? (
                   <span className="fb-kcol" style={{ gap: 2 }}>
-                    <input className="fb-in" style={{ width: 66 }} value={kN} inputMode="numeric" autoFocus aria-label="product numerator"
+                    <input className="fb-in" style={{ width: 80 }} value={kN} inputMode="numeric" autoFocus aria-label="product numerator"
                       onChange={(e) => { setKN(e.target.value.replace(/\D/g, "")); setNote(null); }} />
-                    <input className="fb-in" style={{ width: 66 }} value={kD} inputMode="numeric" aria-label="product denominator"
+                    <input className="fb-in" style={{ width: 80 }} value={kD} inputMode="numeric" aria-label="product denominator"
                       onChange={(e) => { setKD(e.target.value.replace(/\D/g, "")); setNote(null); }}
                       onKeyDown={(e) => e.key === "Enter" && submitKcfProduct()} />
                   </span>
                 ) : (
-                  <Frac n={prodN} d={prodD} />
+                  <Frac n={prodN} d={prodD} big />
                 )}
                 {kStage === "final" && (
                   <>
@@ -956,6 +984,24 @@ export function FractionBarsBoard() {
             )}
           </div>
 
+          {/* Multiply-across cue: once the algorithm is set up, show the two
+              multiplications that build the answer - tops across the top,
+              bottoms across the bottom - and name the thing students forget,
+              that dividing (unlike adding) multiplies the denominators too. */}
+          {(kStage === "product" || kStage === "final" || kStage === "done") && (
+            <div className="fb-across" aria-hidden>
+              <div className="fb-across-row">
+                <span className="k" style={{ background: C_GREEN }}>tops</span>
+                <span>{kp.a[0]} × {kp.b[1]} <span className="ar">&rarr;</span> numerator</span>
+              </div>
+              <div className="fb-across-row">
+                <span className="k" style={{ background: C_CORAL }}>bottoms</span>
+                <span>{kp.a[1]} × {kp.b[0]} <span className="ar">&rarr;</span> denominator</span>
+              </div>
+              <p className="fb-across-note">Unlike adding and subtracting, dividing multiplies the denominators too.</p>
+            </div>
+          )}
+
           <div className="fb-bar">
             {kStage === "walk" && kStep < 3 && (
               <button className="fb-btn" onClick={kcfAdvance}>
@@ -965,7 +1011,7 @@ export function FractionBarsBoard() {
             {kStage === "product" && <button className="fb-btn" disabled={!kN.trim() || !kD.trim()} onClick={submitKcfProduct}>Enter</button>}
             {kStage === "final" && <button className="fb-btn" disabled={!kQ.trim()} onClick={submitKcfFinal}>Enter</button>}
             {kStage === "done" && (
-              <button className="fb-btn" onClick={() => startKcf((kIdx + 1) % KCF_PROBLEMS.length)}>Next problem</button>
+              <button className="fb-btn" onClick={() => startKcf(nextKcfIndex(kIdx))}>Next problem</button>
             )}
           </div>
         </>
