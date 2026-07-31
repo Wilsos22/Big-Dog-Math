@@ -923,7 +923,16 @@ export default function TeacherRemotePage() {
             <button className="remote-write-back" type="button" disabled={controlsDisabled} onClick={() => { void setWritingMode(false); }}>Back to Remote</button>
           </div>
         </header>
-        <iframe className="remote-write-frame" src={`/ipad?room=${encodeURIComponent(session.id)}`} title="iPad writing work space" />
+        {/* NO ?room= - the default "main" is the only room the displays listen
+            on. This embedded the pen on `ink-<session-uuid>__over` while
+            /teacher/present and /board (both opened with a bare URL) render
+            `ink-main__over`, so every stroke went into a room nothing displays
+            and the wall stayed empty through a whole lesson. Same bug CLAUDE.md
+            already records from the other direction, when present keyed its own
+            InkBoards to session.id. A per-session room is never right here:
+            there is one teacher, one pen and one wall, and the projector has no
+            way to learn a session id. */}
+        <iframe className="remote-write-frame" src="/ipad" title="iPad writing work space" />
       </main>
     );
   }
