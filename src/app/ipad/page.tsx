@@ -21,9 +21,11 @@
 // and tells the displays to do the same over the ctrl channel, so the wall and
 // the hand always agree. Same room, same strokes, same undo history.
 //
-// Pencil-first: fingers never mark unless "Finger draws" is switched on, so a
-// resting palm cannot leave ink even before the first pen touch. The screen
-// wake lock keeps the iPad awake through a whole lesson.
+// PENCIL ONLY. Fingers never mark, with no switch to get that wrong - a
+// resting palm cannot leave ink, and there is no state in which it can. That
+// frees the finger to be a gesture: a touch on the stage puts the tool palette
+// away, so the board is never buried under its own toolbar mid-sentence. The
+// screen wake lock keeps the iPad awake through a whole lesson.
 
 import { useEffect, useRef, useState } from "react";
 import InkBoard, { type InkTool } from "@/components/InkBoard";
@@ -51,7 +53,6 @@ export default function IpadPage() {
   const [color, setColor] = useState(COLORS[0]);
   const [tool, setTool] = useState<InkTool>("pen");
   const [penWidth, setPenWidth] = useState(6);
-  const [fingerDraws, setFingerDraws] = useState(false);
   const [clearSignal, setClearSignal] = useState(0);
   const [undoSignal, setUndoSignal] = useState(0);
   const [redoSignal, setRedoSignal] = useState(0);
@@ -107,6 +108,16 @@ export default function IpadPage() {
       if (localStorage.getItem("bdm-ipad-tools-open") === "0") setToolsOpen(false);
     } catch { /* ignore */ }
   }, []);
+
+  // A finger on the writing surface puts the palette away. Safe precisely
+  // because the finger cannot draw: the gesture can never cost a stroke.
+  function closeTools() {
+    setToolsOpen((open) => {
+      if (!open) return open;
+      try { localStorage.setItem("bdm-ipad-tools-open", "0"); } catch { /* ignore */ }
+      return false;
+    });
+  }
 
   function toggleTools() {
     setToolsOpen((v) => {
@@ -359,7 +370,6 @@ export default function IpadPage() {
           {moreOpen && (
             <div className="ip-row">
               <button className="ip-btn" onClick={() => setExportSignal((n) => n + 1)}>Export</button>
-              <button className={`ip-btn${fingerDraws ? " on" : ""}`} onClick={() => setFingerDraws((v) => !v)}>Finger draws</button>
               <button className="ip-btn" onClick={toggleFullscreen}>Full screen</button>
             </div>
           )}
@@ -369,7 +379,11 @@ export default function IpadPage() {
       {/* One stage, letterboxed to the projector's own aspect ratio so what the
           hand sees is what the wall shows. The live screen renders behind; on
           paper the board goes opaque and covers it. */}
-      <div className="ip-screen-stage" ref={stageRef}>
+      <div
+        className="ip-screen-stage"
+        ref={stageRef}
+        onPointerDownCapture={(e) => { if (e.pointerType === "touch") closeTools(); }}
+      >
         <div className="ip-screen-box" style={fit.w ? { width: fit.w, height: fit.h } : { aspectRatio: String(screenAr), width: "100%" }}>
           <iframe
             className="ip-screen-frame"
@@ -394,7 +408,6 @@ export default function IpadPage() {
               color={color}
               tool={tool}
               penWidth={penWidth}
-              fingerDraws={fingerDraws}
               clearSignal={clearSignal}
               undoSignal={undoSignal}
               redoSignal={redoSignal}
