@@ -34,8 +34,38 @@ var BDM_PROFILE_TABS = {
   site: "SiteData",
   behavior: "Behavior",
   contactLog: "ContactLog",
+  grades: "Grades",
   profile: "Profile"
 };
+
+// Grades are a GRID, ONE TAB PER PERIOD ("Grades - Period 1"), because that is
+// how a stack of paper actually gets graded - one class at a time, scores
+// straight across, no filtering or hunting. Columns A and B fill themselves
+// from the roster; assignment columns start at C and you add one by typing its
+// name in row 1. The Profile tab reads a student's row back out of their own
+// period tab, so a score typed once serves both the class view and the
+// individual view.
+var BDM_GRADES_FIXED = ["Name", "Email"];
+var BDM_GRADES_FIRST_ASSIGNMENT_COL = 3; // column C
+
+function bdmGradesTabName_(period) {
+  return "Grades - " + String(period || "").trim();
+}
+
+// Every cell is either a number of points or one of these codes. They are
+// deliberately single letters - fast to type with one hand while reading
+// paper. bdmGradeCodeMeaning_ is the single place their meaning is defined.
+var BDM_GRADE_CODES = {
+  M: "Missing",
+  I: "Incomplete",
+  E: "Excused",
+  X: "Academic integrity"
+};
+
+function bdmGradeCodeMeaning_(value) {
+  const key = String(value || "").trim().toUpperCase();
+  return BDM_GRADE_CODES[key] || "";
+}
 
 // Email is the join key across every tab: it is stable, unique, and already
 // the anchor the AliasMap ledger uses. Never key these tabs on name (changes,
@@ -53,7 +83,14 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("Big Dog Math")
     .addItem("Set up profile workbook", "setupProfileWorkbook")
+    .addItem("Refresh grade rosters", "refreshGradesRoster")
     .addItem("Refresh site data", "refreshSiteData")
+    .addSeparator()
+    // Grades go to Canvas ONLY on this click. Nothing auto-syncs: a typo would
+    // otherwise travel to the gradebook and on to Infinite Campus before you
+    // noticed it.
+    .addItem("Sync grades to Canvas", "pushGradesToCanvas")
+    .addItem("Post today's lesson to Canvas", "syncTodayToCanvas")
     .addSeparator()
     .addItem("Generate aliases", "generateAliases")
     .addItem("Push roster to site", "pushRosterToSite")
@@ -83,6 +120,7 @@ function setupProfileWorkbook() {
   bdmSheet_(BDM_PROFILE_TABS.site, BDM_PROFILE_HEADERS.site);
   bdmSheet_(BDM_PROFILE_TABS.behavior, BDM_PROFILE_HEADERS.behavior);
   bdmSheet_(BDM_PROFILE_TABS.contactLog, BDM_PROFILE_HEADERS.contactLog);
+  refreshGradesRoster();
   bdmBuildProfileTab_();
   SpreadsheetApp.getUi().alert(
     "Profile workbook ready.\n\n" +
@@ -153,30 +191,49 @@ function bdmBuildProfileTab_() {
     );
   }
 
-  // --- Contacts, filtered by email ----------------------------------------
-  section("A15:B15", "CONTACTS");
-  sheet.getRange("A16").setFormula(
+  // EVERY SECTION BELOW USES FILTER, WHICH GROWS DOWNWARD WITHOUT LIMIT, so
+  // each one gets its OWN COLUMN BLOCK. Stacked vertically, a student with
+  // four contacts would collide with the section beneath and Sheets would
+  // refuse to expand the array - a #REF! where a parent's phone number should
+  // be. Horizontal scrolling is the cheaper cost.
+
+  // --- Grades, read from that student's own period tab --------------------
+  // INDIRECT resolves "Grades - " + the period in B3, so one formula serves
+  // every period without duplicating the block per class.
+  const gradeTab = '"\'' + "Grades - " + '"&$B$3&"\'!"';
+  const headerRange = "INDIRECT(" + gradeTab + '&"C1:AZ1")';
+  const scoreRow = "INDEX(INDIRECT(" + gradeTab + '&"C:AZ"),MATCH($B$4,INDIRECT('
+    + gradeTab + '&"B:B"),0))';
+  section("D1:E1", "GRADES");
+  // FILTER rather than QUERY on purpose: a score column holds numbers AND the
+  // letter codes, and QUERY coerces a mixed column to one type, silently
+  // blanking every value that does not match. FILTER preserves both.
+  sheet.getRange("D2").setFormula(
+    '=IF($B$4="","",IFERROR(FILTER(TRANSPOSE({' + headerRange + ";" + scoreRow + "}),TRANSPOSE("
+    + headerRange + ')<>""),"No grades yet"))'
+  );
+
+  section("G1:L1", "CONTACTS");
+  sheet.getRange("G2").setFormula(
     '=IF($B$4="","",IFERROR(FILTER({' + BDM_PROFILE_TABS.contacts + "!B:G},"
     + BDM_PROFILE_TABS.contacts + '!A:A=$B$4),"No contacts on file"))'
   );
 
-  // --- Standardized testing, filtered by email -----------------------------
-  section("A22:B22", "STANDARDIZED TESTING");
-  sheet.getRange("A23").setFormula(
+  section("N1:S1", "STANDARDIZED TESTING");
+  sheet.getRange("N2").setFormula(
     '=IF($B$4="","",IFERROR(FILTER({' + BDM_PROFILE_TABS.testing + "!B:G},"
     + BDM_PROFILE_TABS.testing + '!A:A=$B$4),"No testing on file"))'
   );
 
-  // --- Logs live in their own column blocks so they can grow freely --------
-  section("F1:K1", "BEHAVIOR LOG");
-  sheet.getRange("F2").setFormula(
+  section("U1:Z1", "BEHAVIOR LOG");
+  sheet.getRange("U2").setFormula(
     '=IF($B$4="","",IFERROR(FILTER({' + BDM_PROFILE_TABS.behavior + "!A:A,"
     + BDM_PROFILE_TABS.behavior + "!C:F},"
     + BDM_PROFILE_TABS.behavior + '!B:B=$B$4),"No entries"))'
   );
 
-  section("M1:R1", "CONTACT LOG");
-  sheet.getRange("M2").setFormula(
+  section("AB1:AG1", "CONTACT LOG");
+  sheet.getRange("AB2").setFormula(
     '=IF($B$4="","",IFERROR(FILTER({' + BDM_PROFILE_TABS.contactLog + "!A:A,"
     + BDM_PROFILE_TABS.contactLog + "!C:F},"
     + BDM_PROFILE_TABS.contactLog + '!B:B=$B$4),"No entries"))'
@@ -184,8 +241,11 @@ function bdmBuildProfileTab_() {
 
   sheet.setColumnWidth(1, 210);
   sheet.setColumnWidth(2, 260);
-  sheet.setColumnWidth(5, 24);
-  sheet.setColumnWidth(12, 24);
+  sheet.setColumnWidth(3, 24);
+  sheet.setColumnWidth(6, 24);
+  sheet.setColumnWidth(13, 24);
+  sheet.setColumnWidth(20, 24);
+  sheet.setColumnWidth(27, 24);
   sheet.setFrozenRows(1);
 
   // A weak mastery bar should be visible without reading the number.
@@ -199,6 +259,88 @@ function bdmBuildProfileTab_() {
       .setBackground("#e9f7ef").setFontColor("#1e6b41").setRanges([bars]).build()
   ];
   sheet.setConditionalFormatRules(rules);
+}
+
+// Build or refresh one grade grid per period. Existing scores are preserved:
+// rows are re-matched by EMAIL, so a student who changes period keeps their
+// history, a new student appears with empty cells, and a departed student's
+// row is dropped from the grid without touching anyone else's work.
+function refreshGradesRoster() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const roster = ss.getSheetByName(BDM_PROFILE_TABS.roster);
+  if (!roster) throw new Error('No "Roster" tab found.');
+  const values = roster.getDataRange().getValues();
+  if (values.length < 2) throw new Error("The Roster tab has no students yet.");
+
+  const header = values[0].map(function (c) {
+    return String(c || "").trim().toLowerCase().replace(/[^a-z]/g, "");
+  });
+  const find = function (names) {
+    for (let i = 0; i < header.length; i++) if (names.indexOf(header[i]) !== -1) return i;
+    return -1;
+  };
+  const nameCol = find(["name", "student", "studentname", "fullname"]);
+  const emailCol = find(["email", "studentemail", "emailaddress"]);
+  const periodCol = find(["period", "class", "classperiod"]);
+  if (nameCol === -1 || emailCol === -1 || periodCol === -1) {
+    throw new Error("The Roster tab needs Name, Email, and Period columns.");
+  }
+
+  const byPeriod = {};
+  for (let r = 1; r < values.length; r++) {
+    const name = String(values[r][nameCol] || "").trim();
+    const email = String(values[r][emailCol] || "").trim().toLowerCase();
+    const period = String(values[r][periodCol] || "").trim();
+    if (!name || !email || !period) continue;
+    if (!byPeriod[period]) byPeriod[period] = [];
+    byPeriod[period].push({ name: name, email: email });
+  }
+
+  const periods = Object.keys(byPeriod).sort();
+  for (let p = 0; p < periods.length; p++) {
+    const period = periods[p];
+    const students = byPeriod[period].sort(function (a, b) {
+      return a.name.localeCompare(b.name);
+    });
+    const tabName = bdmGradesTabName_(period);
+    let sheet = ss.getSheetByName(tabName);
+    if (!sheet) {
+      sheet = ss.insertSheet(tabName);
+      sheet.getRange(1, 1, 1, BDM_GRADES_FIXED.length).setValues([BDM_GRADES_FIXED])
+        .setFontWeight("bold");
+      sheet.setFrozenRows(1);
+      sheet.setFrozenColumns(2);
+      sheet.setColumnWidth(1, 180);
+      sheet.setColumnWidth(2, 220);
+    }
+
+    // Preserve whatever has already been entered, keyed on email.
+    const existing = sheet.getDataRange().getValues();
+    const width = Math.max(existing.length ? existing[0].length : 0, BDM_GRADES_FIXED.length);
+    const scoresByEmail = {};
+    for (let r = 1; r < existing.length; r++) {
+      const email = String(existing[r][1] || "").trim().toLowerCase();
+      if (email) scoresByEmail[email] = existing[r].slice(BDM_GRADES_FIRST_ASSIGNMENT_COL - 1);
+    }
+
+    const rows = students.map(function (student) {
+      const kept = scoresByEmail[student.email] || [];
+      const row = [student.name, student.email];
+      for (let c = BDM_GRADES_FIRST_ASSIGNMENT_COL - 1; c < width; c++) {
+        row.push(kept[c - (BDM_GRADES_FIRST_ASSIGNMENT_COL - 1)] === undefined
+          ? "" : kept[c - (BDM_GRADES_FIRST_ASSIGNMENT_COL - 1)]);
+      }
+      return row;
+    });
+
+    if (sheet.getLastRow() > 1) {
+      sheet.getRange(2, 1, sheet.getLastRow() - 1, width).clearContent();
+    }
+    if (rows.length) sheet.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+  }
+
+  Logger.log("refreshGradesRoster: " + periods.length + " period tab(s) refreshed.");
+  return periods;
 }
 
 // Pull pseudonymous mastery from the site and write it to SiteData, keyed by
