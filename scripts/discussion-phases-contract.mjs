@@ -184,6 +184,16 @@ check("every mode maps to a cue, and all four are silent-or-not deliberately", (
   assert.notEqual(DISCUSSION_MODE_STRIP.talk.voice, "0 silent", "talking cannot be silent");
 });
 
+check("Notion's escaped pipe is tolerated, so authored beats survive the round trip", () => {
+  // Notion stores "|" in a text property as "\|" (a markdown table delimiter),
+  // and that backslash can reach the parser. It must not break the beat.
+  const parsed = parseDiscussionPhases("think 30 \\| Picture it.\nwrite 90 \\| Write it down.");
+  assert.equal(parsed.ok, true, parsed.ok ? "" : parsed.errors.join("; "));
+  assert.deepEqual(parsed.phases.map((p) => p.mode), ["think", "write"]);
+  assert.equal(parsed.phases[0].direction, "Picture it.");
+  assert.equal(parsed.phases[1].seconds, 90);
+});
+
 check("activeDiscussionPhase walks the self-running timeline on elapsed seconds", () => {
   // think 30, write 90, talk 60 -> boundaries at 30, 120, 180.
   const phases = parseDiscussionPhases("think 30 | a\nwrite 90 | b\ntalk 60 | c").phases;

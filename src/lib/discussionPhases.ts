@@ -102,7 +102,11 @@ function parseDuration(raw: string): number | null {
 export function parseDiscussionPhases(raw: string | null | undefined): DiscussionPhaseParse {
   const lines = (raw || "")
     .split(/\r?\n/)
-    .map((line) => line.trim())
+    // Notion ESCAPES the pipe to "\|" in a text property (it reads "|" as a
+    // markdown table delimiter). The app's plain_text can carry that backslash
+    // through, which would split the head into three tokens and fail every
+    // authored beat. Strip it here, the way parseHelpPath strips "\[".
+    .map((line) => line.trim().replace(/\\\|/g, "|"))
     .filter(Boolean);
   if (!lines.length) return { ok: true, phases: [], totalSeconds: 0 };
 
