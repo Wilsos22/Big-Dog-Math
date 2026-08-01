@@ -13,7 +13,6 @@ import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
 import { classroomStageTheme, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { parseDiscussionPhases } from "@/lib/discussionPhases";
-import DiscussionTimeline from "@/components/DiscussionTimeline";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { TIMER_URGENCY_CSS, TIMER_URGENT_SECONDS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 import {
@@ -1067,19 +1066,7 @@ export default function LiveFlowPage() {
           ) : (
             <>
             {!activePoll && <h1 className="lf-title">{title}</h1>}
-            {!activePoll && !showDiscussionTimeline && subtitle && <p className="lf-subtitle">{subtitle}</p>}
-            {showDiscussionTimeline ? (
-              <div className="lf-timeline-wrap" style={{ ["--dt-accent" as string]: accent }}>
-                <DiscussionTimeline
-                  phases={discussionTimelinePhases}
-                  totalSeconds={timer?.totalSeconds ?? 0}
-                  secondsLeft={activeTimerSeconds}
-                  endsAt={timer?.endsAt}
-                  running={timerTicking}
-                  sound={false}
-                />
-              </div>
-            ) : null}
+            {!activePoll && subtitle && <p className="lf-subtitle">{subtitle}</p>}
             {!activePoll && phase?.id === "share" && phase.selectedSharer ? (
               <div className="lf-share"><span>Ready to share</span><strong>{phase.selectedSharer}</strong></div>
             ) : null}

@@ -237,7 +237,7 @@ export default function PaceSupportPage() {
     const parsed = parseDiscussionPhases(flow?.presentation?.discussionPhases);
     return parsed.ok && parsed.phases.length > 0;
   })();
-  const isDiscussion = theme.id === "discussion" || Boolean(phase) || hasDiscussionTimeline;
+  const isDiscussion = theme.id === "discussion" || Boolean(phase);
   // The theme gates the LAYOUT; it must not gate the catalog fallback.
   // inferClassroomStage sends any "partner" or "group" step to the discussion
   // theme, and /control deliberately publishes empty arrays for those - so the
@@ -425,6 +425,7 @@ export default function PaceSupportPage() {
         .pw-share span { color:var(--acc-deep); font-size:0.68rem; font-weight:900; letter-spacing:0.12em; text-transform:uppercase; }
         .pw-share strong { color:var(--head); font-size:clamp(1.8rem,4vw,3.6rem); line-height:1; font-weight:800; }
         .pw-stems { display:grid; gap:7px; margin:0; padding-left:1.1rem; color:var(--ink); font-size:clamp(0.92rem,1.5vw,1.15rem); line-height:1.3; font-weight:700; }
+        .pw-stems-lg { gap:16px; padding-left:1.3rem; font-size:clamp(1.5rem,3vw,2.6rem); line-height:1.2; font-weight:800; }
         @media (max-width:820px) { .pw-cols { grid-template-columns:1fr; overflow:auto; } .pw-lesson { display:none; } }
         @media (max-height:640px) { .pace-page { grid-template-rows:52px minmax(0,1fr); } .pw-cols { padding:18px 26px; } }
       `}</style>
@@ -566,6 +567,33 @@ export default function PaceSupportPage() {
                   <p className="pw-check-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received. Names stay private.</p>
                 </>
               )}
+            </div>
+          </div>
+        ) : hasDiscussionTimeline ? (
+          /* Concrete-phase timeline step: the SEQUENCE lives only on the main
+             projector. The support screen carries the language - big sentence
+             stems and the vocabulary - not the pacing directions dump. */
+          <div className="pw-cols">
+            <div className="pw-left">
+              <p className="pw-callout-label">Sentence stems</p>
+              <ul className="pw-stems pw-stems-lg">
+                {discussionStems.slice(0, 6).map((stem) => <li key={stem}>{stem}</li>)}
+              </ul>
+              {timer ? (
+                <div className="pw-pace">
+                  <span className={`pw-bigtimer${timerFinished ? " finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`}>{formatTime(timerSeconds)}</span>
+                  <span className="pw-pace-copy"><b>{flow.presentation?.title || state.label}</b><span>Shared class clock</span></span>
+                </div>
+              ) : null}
+            </div>
+            <div className="pw-right">
+              {vocabCards.map((card) => (
+                <div className="pw-vocab" key={card.term}>
+                  <span className="pw-tape" aria-hidden="true" />
+                  <div className="pw-term"><span className="pw-term-dot" />{card.term}</div>
+                  {card.def ? <p className="pw-def">{card.def}</p> : null}
+                </div>
+              ))}
             </div>
           </div>
         ) : isDiscussion ? (
