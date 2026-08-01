@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   if (!periodId) return Response.json({ error: "periodId required" }, { status: 400 });
 
   const { data: students, error: sErr } = await db
-    .from("students").select("id,full_name").eq("period_id", periodId).order("full_name");
+    .from("students").select("id,alias").eq("period_id", periodId).order("alias");
   if (sErr) return Response.json({ error: sErr.message }, { status: 500 });
   const ids = (students || []).map((s) => s.id);
   if (!ids.length) return Response.json({ clusters: [], nonSubmitters: [], possibleDays: 0 });
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
 
   const byStudent = new Map<string, StudentWork>();
   const days = new Set<string>();
-  for (const s of students || []) byStudent.set(s.id, { studentId: s.id, name: s.full_name, events: [] });
+  for (const s of students || []) byStudent.set(s.id, { studentId: s.id, name: s.alias || "Unnamed student", events: [] });
   for (const r of resp || []) {
     // Standard-scoped rows (per-question Q4/Q5 evidence) feed the stage gates,
     // not archetype stats — their binary 0/5 would skew daily averages. The

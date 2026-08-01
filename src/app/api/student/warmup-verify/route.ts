@@ -1,32 +1,21 @@
-import type { User } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { recordSecurityEvent } from "@/lib/securityAudit";
 import { canonicalGoogleFormResource, currentWarmupResourceKey } from "@/lib/warmupResource";
+import { isEmailHmac, looksIdentified } from "@/lib/pseudonym";
 import type { LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function normalizedEmail(value: unknown): string {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
+// The ONE seam where a warm-up submission becomes a site identity. Apps Script
+// verifies the district Google sign-in inside Workspace, then posts the HMAC
+// of the respondent email - never the email itself. The HMAC key lives only in
+// Script Properties, so this route (and everything behind it) can match roster
+// rows without ever being able to name a student. See src/lib/pseudonym.ts.
 
 function validUuid(value: unknown): value is string {
   return typeof value === "string"
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
-function providersFor(user: User): string[] {
-  const providers = user.app_metadata?.providers;
-  if (Array.isArray(providers)) {
-    return providers.filter((value): value is string => typeof value === "string");
-  }
-  return typeof user.app_metadata?.provider === "string" ? [user.app_metadata.provider] : [];
-}
-
-function verifiedGoogleEmail(user: User): string {
-  const email = normalizedEmail(user.email);
-  return providersFor(user).includes("google") && email && user.email_confirmed_at ? email : "";
 }
 
 export async function POST(request: Request) {
@@ -39,20 +28,30 @@ export async function POST(request: Request) {
   if (!db) return Response.json({ error: "Database not configured." }, { status: 503 });
 
   const body = await request.json().catch(() => ({})) as {
+    emailHmac?: unknown;
     email?: unknown;
     warmupToken?: unknown;
     authUserId?: unknown;
     formUrl?: unknown;
   };
-  const email = normalizedEmail(body.email);
+  // A raw email here means the Apps Script side is running a pre-FERPA build.
+  // Refuse loudly instead of matching - the boundary must not accept identity.
+  if (looksIdentified(typeof body.email === "string" ? body.email : "")
+    || looksIdentified(typeof body.emailHmac === "string" ? body.emailHmac : "")) {
+    return Response.json(
+      { error: "Raw emails are not accepted. Update warmup-evidence.gs to send the email HMAC.", code: "raw_email_rejected" },
+      { status: 422 },
+    );
+  }
+  const emailHmac = typeof body.emailHmac === "string" ? body.emailHmac.trim().toLowerCase() : "";
   const resourceKey = canonicalGoogleFormResource(body.formUrl);
   // The legacy Apps Script property name is accepted during the rollout, but
   // the value is now an opaque, session-scoped receipt token rather than a
   // persistent auth user ID.
   const warmupToken = body.warmupToken ?? body.authUserId;
-  if (!email || !resourceKey || !validUuid(warmupToken)) {
+  if (!isEmailHmac(emailHmac) || !resourceKey || !validUuid(warmupToken)) {
     return Response.json(
-      { error: "A verified email and valid Big Dog warm-up connection are required." },
+      { error: "A verified email HMAC and valid Big Dog warm-up connection are required." },
       { status: 400 },
     );
   }
@@ -108,26 +107,18 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
-
+  // Only anonymous device sessions exist under the pseudonymous model - a
+  // provider-linked auth user would mean an identified sign-in reached the site.
   if (!authData.user.is_anonymous) {
-    const googleEmail = verifiedGoogleEmail(authData.user);
-    if (!googleEmail) {
-      return Response.json(
-        { error: "The Big Dog session is not a verified Google account.", code: "google_identity_required" },
-        { status: 403 },
-      );
-    }
-    if (googleEmail !== email) {
-      return Response.json(
-        { error: "The warm-up email does not match this Google account.", code: "google_email_mismatch" },
-        { status: 409 },
-      );
-    }
+    return Response.json(
+      { error: "This Big Dog session uses a retired sign-in method. Rejoin with the class code.", code: "identified_signin_retired" },
+      { status: 403 },
+    );
   }
 
   const { data: existingLink, error: existingLinkError } = await db
     .from("students")
-    .select("id,email,period_id")
+    .select("id,email_hmac,period_id")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
   if (existingLinkError) {
@@ -136,7 +127,7 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
-  if (existingLink && normalizedEmail(existingLink.email) !== email) {
+  if (existingLink && existingLink.email_hmac !== emailHmac) {
     return Response.json(
       { error: "This browser session is already linked to another roster account.", code: "identity_link_conflict" },
       { status: 409 },
@@ -145,12 +136,12 @@ export async function POST(request: Request) {
 
   const { data: periodRoster, error: rosterError } = await db
     .from("students")
-    .select("id,email,period_id,auth_user_id")
+    .select("id,email_hmac,period_id,auth_user_id")
     .eq("period_id", session.period_id);
   if (rosterError) {
     return Response.json({ error: "Roster lookup failed.", code: "roster_lookup_failed" }, { status: 500 });
   }
-  const rosterMatches = (periodRoster ?? []).filter((student) => normalizedEmail(student.email) === email);
+  const rosterMatches = (periodRoster ?? []).filter((student) => student.email_hmac === emailHmac);
   if (rosterMatches.length !== 1) {
     return Response.json(
       { matched: false, code: rosterMatches.length ? "duplicate_roster_email" : "not_on_roster" },
@@ -180,7 +171,7 @@ export async function POST(request: Request) {
     p_session_id: sessionId,
     p_warmup_resource_key: resourceKey,
     p_student_id: rosterMatch.id,
-    p_student_email: email,
+    p_student_email_hmac: emailHmac,
     p_auth_user_id: authUserId,
     p_expected_student_auth_user_id: rosterMatch.auth_user_id,
   });

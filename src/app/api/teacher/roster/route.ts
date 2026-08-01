@@ -1,12 +1,17 @@
 import { recordSecurityEvent } from "@/lib/securityAudit";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
+import { isStudentAlias, looksIdentified } from "@/lib/pseudonym";
 
 export const dynamic = "force-dynamic";
 
+// The roster on the site is PSEUDONYMOUS: aliases only, no names, no emails
+// (see src/lib/pseudonym.ts). Names live in the Workspace roster Sheet, which
+// is also where new students normally arrive (warmup-roster-push.gs). Hand
+// edits here exist for quick fixes and carry aliases only.
 type RosterAction =
   | { action: "create-period"; name?: unknown; sortOrder?: unknown }
-  | { action: "create-student"; periodId?: unknown; fullName?: unknown; email?: unknown }
-  | { action: "update-student"; studentId?: unknown; periodId?: unknown; fullName?: unknown; email?: unknown }
+  | { action: "create-student"; periodId?: unknown; alias?: unknown }
+  | { action: "update-student"; studentId?: unknown; periodId?: unknown; alias?: unknown }
   | { action: "delete-student"; studentId?: unknown; expectedName?: unknown; confirm?: unknown }
   | { action: "delete-period"; periodId?: unknown; expectedName?: unknown; confirm?: unknown };
 
@@ -26,11 +31,10 @@ function uuid(value: unknown): string {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : "";
 }
 
-function email(value: unknown): string | null {
-  const normalized = text(value, 254).toLowerCase();
-  if (!normalized) return null;
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return null;
-  return normalized;
+function validAlias(value: unknown): string | null {
+  const alias = text(value, 60);
+  if (!isStudentAlias(alias) || looksIdentified(alias)) return null;
+  return alias;
 }
 
 function isMissingRosterDeletionRpc(code?: string): boolean {
@@ -54,7 +58,7 @@ export async function GET() {
 
   const [periodResult, studentResult] = await Promise.all([
     db.from("periods").select("id,name,sort_order").order("sort_order"),
-    db.from("students").select("id,period_id,full_name,email,auth_user_id").order("full_name"),
+    db.from("students").select("id,period_id,alias,auth_user_id").order("alias"),
   ]);
   if (periodResult.error) return Response.json({ error: periodResult.error.message }, { status: 500 });
   if (studentResult.error) return Response.json({ error: studentResult.error.message }, { status: 500 });
@@ -65,8 +69,7 @@ export async function GET() {
       students: (studentResult.data ?? []).map((student) => ({
         id: student.id,
         periodId: student.period_id,
-        fullName: student.full_name,
-        email: student.email,
+        alias: student.alias,
         identityLinked: Boolean(student.auth_user_id),
       })),
     },
@@ -95,14 +98,17 @@ export async function POST(request: Request) {
 
   if (body.action === "create-student") {
     const periodId = text(body.periodId, 80);
-    const fullName = text(body.fullName, 120);
-    const studentEmail = email(body.email);
-    if (!periodId || !fullName) return Response.json({ error: "Period and student name are required." }, { status: 400 });
-    if (text(body.email, 254) && !studentEmail) return Response.json({ error: "Enter a valid school email." }, { status: 400 });
+    const alias = validAlias(body.alias);
+    if (!periodId || !alias) {
+      return Response.json(
+        { error: "Period and a valid alias are required. Aliases are pseudonyms like Amber Fox - never a real name or email." },
+        { status: 400 },
+      );
+    }
     const { data, error: insertError } = await db
       .from("students")
-      .insert({ period_id: periodId, full_name: fullName, email: studentEmail })
-      .select("id,period_id,full_name,email")
+      .insert({ period_id: periodId, alias })
+      .select("id,period_id,alias")
       .single();
     if (insertError) return Response.json({ error: insertError.message }, { status: 500 });
     void recordSecurityEvent({
@@ -117,17 +123,18 @@ export async function POST(request: Request) {
   if (body.action === "update-student") {
     const studentId = text(body.studentId, 80);
     const periodId = text(body.periodId, 80);
-    const fullName = text(body.fullName, 120);
-    const studentEmail = email(body.email);
-    if (!studentId || !periodId || !fullName) {
-      return Response.json({ error: "Student, period, and name are required." }, { status: 400 });
+    const alias = validAlias(body.alias);
+    if (!studentId || !periodId || !alias) {
+      return Response.json(
+        { error: "Student, period, and a valid alias are required. Aliases are pseudonyms - never a real name or email." },
+        { status: 400 },
+      );
     }
-    if (text(body.email, 254) && !studentEmail) return Response.json({ error: "Enter a valid school email." }, { status: 400 });
     const { data, error: updateError } = await db
       .from("students")
-      .update({ period_id: periodId, full_name: fullName, email: studentEmail })
+      .update({ period_id: periodId, alias })
       .eq("id", studentId)
-      .select("id,period_id,full_name,email")
+      .select("id,period_id,alias")
       .maybeSingle();
     if (updateError) return Response.json({ error: updateError.message }, { status: 500 });
     if (!data) return Response.json({ error: "Student not found." }, { status: 404 });
@@ -145,7 +152,7 @@ export async function POST(request: Request) {
     const expectedName = text(body.expectedName, 120);
     if (!studentId || !expectedName || body.confirm !== true) {
       return Response.json(
-        { error: "Deleting a student requires a valid ID, the current name, and explicit confirmation." },
+        { error: "Deleting a student requires a valid ID, the current alias, and explicit confirmation." },
         { status: 400 },
       );
     }
@@ -174,7 +181,7 @@ export async function POST(request: Request) {
         details: { action: body.action, reason: resolution.outcome, requestedStudentId: studentId },
       });
       return Response.json(
-        { error: "The student name changed. Refresh the roster before deleting." },
+        { error: "The student alias changed. Refresh the roster before deleting." },
         { status: 409 },
       );
     }
@@ -223,7 +230,7 @@ export async function POST(request: Request) {
     const expectedName = text(body.expectedName, 80);
     if (!periodId || !expectedName || body.confirm !== true) {
       return Response.json(
-        { error: "Deleting a class requires a valid ID, the current name, and explicit confirmation." },
+        { error: "Deleting a class requires a valid ID, the current alias, and explicit confirmation." },
         { status: 400 },
       );
     }

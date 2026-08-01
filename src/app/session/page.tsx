@@ -3,9 +3,10 @@
 // Teacher live session — pick a period, start a join code, watch students join
 // in real time (polls every 3s). Backed by Supabase (sessions + session_joins).
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { teacherApiRequest, teacherPost } from "@/lib/teacherApi";
 import SiteNav from "@/components/SiteNav";
+import { aliasToNameMap, labelFor, loadNameKey } from "@/lib/teacherNameKey";
 import {
   LIVE_FLOW_MODE,
   clearStoredTeacherSession,
@@ -30,8 +31,7 @@ interface Answer { id: string; display_name: string | null; answer: string | nul
 interface RosterStudent {
   id: string;
   periodId: string;
-  fullName: string;
-  email: string | null;
+  alias: string | null;
   identityLinked: boolean;
 }
 interface AdmissionRequest { id: string; requestCode: string; requestedAt: string; }
@@ -97,6 +97,8 @@ function ScreenPreview({ label, note, href, src }: { label: string; note: string
 
 export default function SessionPage() {
   const supabase = TEACHER_SERVER_CLIENT;
+  // Device-local alias-to-name key (loaded on /roster); render-time only.
+  const names = useMemo(() => aliasToNameMap(loadNameKey()), []);
   const [periods, setPeriods] = useState<Period[]>([]);
   const [periodId, setPeriodId] = useState("");
   const [session, setSession] = useState<{ id: string; code: string; periodName: string; periodId: string } | null>(null);
@@ -411,8 +413,8 @@ export default function SessionPage() {
   }
   async function admitStudent(request: AdmissionRequest) {
     if (!session || admittingRequestCode) return;
-    const studentEmail = admissionSelections[request.id];
-    if (!studentEmail) {
+    const studentId = admissionSelections[request.id];
+    if (!studentId) {
       setAdmissionError("Choose the student whose Chromebook shows this approval code.");
       return;
     }
@@ -423,7 +425,7 @@ export default function SessionPage() {
         action: "admit",
         sessionId: session.id,
         requestCode: request.requestCode,
-        studentEmail,
+        studentId,
       });
       setAdmissionSelections((current) => {
         const next = { ...current };
@@ -820,7 +822,6 @@ export default function SessionPage() {
                   {admissionRequests.map((request) => {
                     const availableStudents = rosterStudents.filter((student) =>
                       student.periodId === session.periodId &&
-                      Boolean(student.email) &&
                       !joins.some((join) => join.student_id === student.id),
                     );
                     return (
@@ -837,7 +838,7 @@ export default function SessionPage() {
                         >
                           <option value="">Choose student</option>
                           {availableStudents.map((student) => (
-                            <option key={student.id} value={student.email || ""}>{student.fullName}</option>
+                            <option key={student.id} value={student.id}>{labelFor(names, student.alias)}</option>
                           ))}
                         </select>
                         <button
@@ -859,7 +860,7 @@ export default function SessionPage() {
                 {rosterStale && <span style={{ marginLeft: 10, fontWeight: 700, color: "#b8860b" }}>Roster is not refreshing - showing the last good list</span>}
               </div>
               {joins.length === 0 ? <span className="se-empty">Waiting for students to join…</span>
-                : <div className="se-joins">{joins.map((j) => <span className="se-chip" key={j.id}>{j.display_name || "Student"}</span>)}</div>}
+                : <div className="se-joins">{joins.map((j) => <span className="se-chip" key={j.id}>{labelFor(names, j.display_name)}</span>)}</div>}
               {signalState ? (() => {
                 if (signalState.signalsOff) {
                   return (
@@ -885,7 +886,7 @@ export default function SessionPage() {
                       {label}{" "}
                       {list.map((s) => (
                         <span className="se-signal-name" key={`${s.student_id || s.display_name}`}>
-                          {s.display_name || "Student"}
+                          {labelFor(names, s.display_name)}
                           {signalState.controls && s.student_id ? (
                             <button
                               className="se-signal-mute"
@@ -1027,7 +1028,7 @@ export default function SessionPage() {
                   <span className="se-empty">Waiting for answers…</span>
                 ) : (
                   <div className="se-joins">
-                    {answers.map((a) => <span className="se-chip" key={a.id} style={{ background: "#eef6ff", borderColor: "#d7e6fb", color: "#1d4ed8" }}>{a.display_name || "Student"}: {a.answer}</span>)}
+                    {answers.map((a) => <span className="se-chip" key={a.id} style={{ background: "#eef6ff", borderColor: "#d7e6fb", color: "#1d4ed8" }}>{labelFor(names, a.display_name)}: {a.answer}</span>)}
                   </div>
                 )}
               </div>

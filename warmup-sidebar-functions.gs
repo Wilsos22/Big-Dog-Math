@@ -12,13 +12,13 @@ function onOpen() {
     .createMenu("Big Dog Math")
     .addItem("Warm-Up Builder", "showWarmupBuilder")
     .addSeparator()
-    .addItem("Install Response + Notion Sync", "installNotionSyncTrigger")
+    .addItem("Install Response Export Trigger", "installNotionSyncTrigger")
     .addItem("Repair Existing Form Triggers", "installWarmupFormTriggersFromKnownForms")
     .addItem("Backfill Scores from Forms", "backfillWarmupScoresFromForms")
-    .addItem("Set Notion Properties", "promptForWarmupNotionProperties")
-    .addItem("Test Notion Setup", "testWarmupNotionSetup")
-    .addItem("Backfill Export Rows to Notion", "backfillWarmupSubmissionExportsToNotion")
     .addToUi();
+  // The per-student Notion sync menu items are RETIRED (FERPA boundary,
+  // 2026-07-31): student data stays inside Workspace. The lesson-content
+  // Notion sync (notion-warmup-requests.gs) is unaffected.
 }
 
 function showWarmupBuilder() {

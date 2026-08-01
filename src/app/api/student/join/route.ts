@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       p_session_id: session.id,
       p_student_id: student.id,
       p_auth_user_id: student.authUserId,
-      p_display_name: student.fullName,
+      p_display_name: student.alias,
     });
 
     if (resolutionResult.error) {
@@ -123,7 +123,7 @@ export async function POST(request: Request) {
         session: {
           sessionId: session.id,
           studentId: student.id,
-          name: student.fullName,
+          name: student.alias,
           syncKey: code,
         },
       },

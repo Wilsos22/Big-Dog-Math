@@ -30,11 +30,11 @@ async function identify(
   request: Request,
   sessionId: string,
   claimedStudentId: string,
-): Promise<{ id: string; fullName: string | null }> {
+): Promise<{ id: string; alias: string | null }> {
   if (SECURE_STUDENT_DATA) {
     const student: VerifiedStudent = await requireVerifiedStudent(request);
     await requireOpenJoinedSession(student, sessionId);
-    return { id: student.id, fullName: student.fullName };
+    return { id: student.id, alias: student.alias };
   }
   if (!claimedStudentId) {
     throw new StudentIdentityError("Join the class before playing.", 403, "session_join_required");
@@ -51,9 +51,9 @@ async function identify(
     .eq("session_id", sessionId).eq("student_id", claimedStudentId);
   if (!count) throw new StudentIdentityError("Join the class before playing.", 403, "session_join_required");
 
-  const { data: student } = await db.from("students").select("id,full_name").eq("id", claimedStudentId).maybeSingle();
+  const { data: student } = await db.from("students").select("id,alias").eq("id", claimedStudentId).maybeSingle();
   if (!student) throw new StudentIdentityError("We could not find you on the roster.", 403, "student_not_found");
-  return { id: student.id, fullName: student.full_name };
+  return { id: student.id, alias: student.alias };
 }
 
 async function currentGameId(db: ReturnType<typeof getSupabaseAdmin>, sessionId: string): Promise<string | null> {

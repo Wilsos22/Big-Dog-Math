@@ -44,11 +44,11 @@ async function identify(
   request: Request,
   sessionId: string,
   claimedStudentId: string,
-): Promise<{ id: string; fullName: string | null }> {
+): Promise<{ id: string; alias: string | null }> {
   if (SECURE_STUDENT_DATA) {
     const student: VerifiedStudent = await requireVerifiedStudent(request);
     await requireOpenJoinedSession(student, sessionId);
-    return { id: student.id, fullName: student.fullName };
+    return { id: student.id, alias: student.alias };
   }
 
   if (!claimedStudentId) {
@@ -74,11 +74,11 @@ async function identify(
 
   const { data: student } = await db
     .from("students")
-    .select("id,full_name")
+    .select("id,alias")
     .eq("id", claimedStudentId)
     .maybeSingle();
   if (!student) throw new StudentIdentityError("We could not find you on the roster.", 403, "student_not_found");
-  return { id: student.id, fullName: student.full_name };
+  return { id: student.id, alias: student.alias };
 }
 
 /** The live game for a session, if there is one. */

@@ -9,6 +9,7 @@ import {
 import { TeacherApiError, teacherApiRequest } from "@/lib/teacherApi";
 import type { TeacherRemoteCommand } from "@/lib/liveClassFlow";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
+import { firstNameLabelMap, loadNameKey } from "@/lib/teacherNameKey";
 
 export type ClassroomSpinnerMode = "readers" | "ipad";
 
@@ -121,6 +122,18 @@ export default function ClassroomSpinner({
   const storageKey = useMemo(
     () => `${FAIR_ROTATION_KEY}:${periodId || "no-period"}:${mode}`,
     [mode, periodId],
+  );
+
+  // FERPA boundary, spinner exception (Steele, 2026-07-31): the room sees a
+  // FIRST NAME on the wall - kids disown an alias and derail the spin, and the
+  // teacher says the first name aloud anyway. Aliases stay on the wire: the
+  // roster fetch, the fair rotation, and every sync snapshot carry aliases,
+  // and this map resolves them only at the glass, from the device-local name
+  // key (loaded once on /roster in this browser). No key loaded = aliases.
+  const firstNames = useMemo(() => firstNameLabelMap(loadNameKey()), []);
+  const spinnerLabel = useCallback(
+    (value: string) => firstNames.get(value.toLowerCase()) ?? value,
+    [firstNames],
   );
 
   const reels = mode === "readers"
@@ -490,7 +503,7 @@ export default function ClassroomSpinner({
             <p className="classroom-spinner-label">{reel.label}</p>
             <p className="classroom-spinner-target">{reel.target}</p>
             <div className={`classroom-spinner-window${spinning && !landed[index] ? " spinning" : ""}${landed[index] && !spinning ? " landed" : ""}`}>
-              <span className="classroom-spinner-name">{displayNames[index] || "Ready"}</span>
+              <span className="classroom-spinner-name">{spinnerLabel(displayNames[index] || "Ready")}</span>
             </div>
           </article>
         ))}

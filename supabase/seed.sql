@@ -8,20 +8,21 @@
 insert into periods (name, sort_order)
 values ('Period 1 — TEST', 1);
 
--- A fake roster for that period (totally made-up names)
-insert into students (period_id, full_name)
-select p.id, name
+-- A fake roster for that period. Pseudonymous (FERPA model): the site's
+-- students table carries aliases only - see supabase/ferpa-pseudonym-schema.sql.
+insert into students (period_id, alias)
+select p.id, alias
 from periods p,
      (values
-        ('Ada Lovelace'),
-        ('Blake Rivera'),
-        ('Carmen Soto'),
-        ('Diego Martin'),
-        ('Evelyn Tran'),
-        ('Frank Okafor'),
-        ('Grace Kim'),
-        ('Hassan Ali')
-     ) as roster(name)
+        ('Amber Fox'),
+        ('Bold Badger'),
+        ('Calm Condor'),
+        ('Daring Dolphin'),
+        ('Eager Eagle'),
+        ('Fearless Falcon'),
+        ('Golden Gecko'),
+        ('Happy Heron')
+     ) as roster(alias)
 where p.name = 'Period 1 — TEST';
 
 -- A few sample problems on the fraction-bars manipulative (with answer key)

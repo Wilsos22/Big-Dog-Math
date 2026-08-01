@@ -2,16 +2,21 @@
 
 // Checkpoint CSV upload — drop in a Tier-2 checkpoint (or Tier-1 practice check)
 // results file and mastery updates immediately: bars move, stages gate
-// (Approaching → Mastered → Complete). Format = checkpoint_results_sample.csv:
-// Date, Student, Email, Checkpoint, Item #, Lesson, CCSS, Correct (Y/N), Misconception.
+// (Approaching → Mastered → Complete).
+//
+// FERPA boundary: the server accepts ALIASES only. A grading export that
+// carries emails is translated to aliases RIGHT HERE in the browser, using
+// the name key loaded on /roster - the emails never leave this page, and the
+// upload is blocked until every row translates.
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import SiteNav from "@/components/SiteNav";
-import { parseCheckpointCsv } from "@/lib/checkpointCsv";
+import { parseCheckpointCsv, serializeAliasCsv, translateRowsToAliases } from "@/lib/checkpointCsv";
+import { emailToAliasMap, loadNameKey } from "@/lib/teacherNameKey";
 
 interface UploadResult {
   checkpoints: string[]; tier: number; itemRuns: number; resultsInserted: number;
-  skippedExisting: number; studentsMatched: number; unmatchedEmails: string[];
+  skippedExisting: number; studentsMatched: number; unmatchedAliases: string[];
   parseWarnings: string[]; periodsRecomputed: number; error?: string;
 }
 
@@ -25,6 +30,12 @@ export default function CheckpointUpload() {
   const [error, setError] = useState<string | null>(null);
 
   const preview = csv.trim() ? parseCheckpointCsv(csv) : null;
+  const translation = useMemo(() => {
+    if (!preview || preview.rows.length === 0) return null;
+    return translateRowsToAliases(preview.rows, emailToAliasMap(loadNameKey()));
+  }, [preview]);
+  const untranslated = translation?.unmatchedEmails.length ?? 0;
+  const readyRows = translation ? translation.translated.filter((row) => row.alias) : [];
 
   const onFile = useCallback((f: File | undefined) => {
     if (!f) return;
@@ -35,20 +46,20 @@ export default function CheckpointUpload() {
   }, []);
 
   const upload = useCallback(async () => {
-    if (!csv.trim() || busy) return;
+    if (!translation || untranslated > 0 || readyRows.length === 0 || busy) return;
     setBusy(true); setError(null); setResult(null);
     try {
       const res = await fetch("/api/checkpoints/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv, tier, sbacItem: sbacItem ? Number(sbacItem) : undefined }),
+        body: JSON.stringify({ csv: serializeAliasCsv(readyRows), tier, sbacItem: sbacItem ? Number(sbacItem) : undefined }),
       });
       const d = await res.json();
       if (!res.ok || d.error) setError(d.error || `Upload failed (${res.status}).`);
       else setResult(d);
     } catch { setError("Network error."); }
     finally { setBusy(false); }
-  }, [csv, tier, sbacItem, busy]);
+  }, [translation, untranslated, readyRows, tier, sbacItem, busy]);
 
   return (
     <div className="cu-page">
@@ -79,7 +90,8 @@ export default function CheckpointUpload() {
         <div className="cu-sub">
           Upload a checkpoint (or practice-day) results CSV and mastery updates instantly — checkpoints are
           the produced-work evidence, so this is what moves students into <b>Mastered</b> and <b>Complete</b>.
-          Columns: Date, Student, Email, Checkpoint, Item #, Lesson, CCSS, Correct (Y/N), Misconception.
+          Columns: Date, Alias (or Email — translated to aliases in this browser before upload),
+          Checkpoint, Item #, Lesson, CCSS, Correct (Y/N), Misconception. Emails never leave this page.
         </div>
 
         <div className="cu-card">
@@ -104,10 +116,17 @@ export default function CheckpointUpload() {
             <div className="cu-note" style={{ margin: "10px 0" }}>
               Preview: <b>{preview.rows.length}</b> item results · checkpoints: <b>{preview.checkpoints.join(", ") || "—"}</b>
               {preview.errors.length > 0 && <div className="cu-warn">{preview.errors.slice(0, 5).join(" ")}</div>}
+              {untranslated > 0 && (
+                <div className="cu-warn">
+                  {untranslated} email{untranslated === 1 ? "" : "s"} could not be translated to an alias.
+                  Load (or refresh) your name key on the Rosters page, then re-paste this file.
+                  Nothing uploads until every row is an alias.
+                </div>
+              )}
             </div>
           )}
 
-          <button className="cu-btn" disabled={busy || !preview || preview.rows.length === 0} onClick={() => void upload()}>
+          <button className="cu-btn" disabled={busy || !translation || untranslated > 0 || readyRows.length === 0} onClick={() => void upload()}>
             {busy ? "Uploading + recomputing…" : "Upload → update mastery"}
           </button>
         </div>
@@ -119,8 +138,8 @@ export default function CheckpointUpload() {
             {" "}{result.resultsInserted} results across {result.itemRuns} items, {result.studentsMatched} students matched
             {result.skippedExisting > 0 && <> · {result.skippedExisting} already existed (skipped)</>}
             {" "}· {result.periodsRecomputed} period(s) recomputed.
-            {result.unmatchedEmails.length > 0 && (
-              <div className="cu-warn">Unmatched emails (no student row — fix in Rosters and re-upload): {result.unmatchedEmails.join(", ")}</div>
+            {result.unmatchedAliases.length > 0 && (
+              <div className="cu-warn">Unmatched aliases (no student row — push the roster from the Workspace Sheet and re-upload): {result.unmatchedAliases.join(", ")}</div>
             )}
             {result.parseWarnings.length > 0 && <div className="cu-warn">{result.parseWarnings.slice(0, 5).join(" ")}</div>}
             <div className="cu-links" style={{ marginTop: 10 }}>

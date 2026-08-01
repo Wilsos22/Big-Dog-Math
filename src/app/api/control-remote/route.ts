@@ -578,23 +578,23 @@ async function chooseSharerName(
   if (joinedIds.length) {
     const joinedStudentsResult = await db
       .from("students")
-      .select("full_name")
+      .select("alias")
       .eq("period_id", session.period_id)
       .in("id", joinedIds)
-      .order("full_name");
+      .order("alias");
     if (joinedStudentsResult.error) throw new Error("The joined student roster could not be loaded.");
-    joinedNames = (joinedStudentsResult.data ?? []).map((student) => student.full_name || "");
+    joinedNames = (joinedStudentsResult.data ?? []).map((student) => student.alias || "");
   }
 
   let rosterNames: string[] = [];
   if (!joinedNames.length) {
     const rosterResult = await db
       .from("students")
-      .select("full_name")
+      .select("alias")
       .eq("period_id", session.period_id)
-      .order("full_name");
+      .order("alias");
     if (rosterResult.error) throw new Error("The class roster could not be loaded.");
-    rosterNames = (rosterResult.data ?? []).map((student) => student.full_name || "");
+    rosterNames = (rosterResult.data ?? []).map((student) => student.alias || "");
   }
 
   const selectedName = pickRemoteSharerName(joinedNames, rosterNames);

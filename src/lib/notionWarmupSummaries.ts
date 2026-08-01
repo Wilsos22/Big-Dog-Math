@@ -1,37 +1,17 @@
 // Formative warm-up analytics data layer.
 //
-// Two cheap sources instead of crunching every raw submission:
-//   1. getWeeklySummaries() — the pre-computed "Warm-Up Weekly Summaries" DB
-//      (per student / week: submitted vs expected, missing days, weekly avg,
-//      completion, status). Small and purpose-built for triage.
-//   2. getRecentWarmupForms() — the "Warm up Links" DB, so each day's form can
-//      link straight to its Google Forms summary page (the rich native charts).
+// One source: getRecentWarmupForms() reads the "Warm up Links" DB, so each
+// day's form links straight to its Google Forms summary page (the rich native
+// charts). Filtered server-side to a recent window and cached briefly.
 //
-// Both are filtered server-side to a recent window and cached briefly, so the
-// page loads fast and never does per-row relation lookups.
+// The per-student weekly-summaries read is RETIRED (FERPA boundary,
+// 2026-07-31): student data may not live in Notion. The Warm up Links DB
+// carries only form metadata - no student data - which is why it survives.
 
 const NOTION_API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2025-09-03";
 
-const FALLBACK_SUMMARIES_DATABASE_ID = "c5d7898bef0141bca60bf0398a2871a9";
 const FALLBACK_LINKS_DATABASE_ID = "3142eba1de3780a29feedf404459c05b";
-
-export interface WeeklySummary {
-  id: string;
-  student: string;
-  studentEmail: string;
-  period: string;
-  week: string;
-  weekNumber: number | null;
-  weekStart: string;
-  expectedDays: string;
-  expectedNum: number | null;
-  submittedCount: number | null;
-  missingDays: string;
-  weeklyAvgScore: number | null;
-  completion: number | null; // normalized 0..100
-  status: string; // "Complete" | "Missing Days" | "No Submissions"
-}
 
 export interface WarmupForm {
   id: string;
@@ -141,54 +121,13 @@ function cutoffIso(sinceDays: number): string {
 // --- tiny in-memory cache (per warm serverless instance) ---
 interface CacheEntry<T> { at: number; key: string; data: T }
 const TTL_MS = 5 * 60 * 1000;
-let summariesCache: CacheEntry<WeeklySummary[]> | null = null;
 let formsCache: CacheEntry<WarmupForm[]> | null = null;
 
-export async function getWeeklySummaries(sinceDays = 14): Promise<WeeklySummary[]> {
-  const cutoff = cutoffIso(sinceDays);
-  const cacheKey = `s:${cutoff}`;
-  if (summariesCache && summariesCache.key === cacheKey && Date.now() - summariesCache.at < TTL_MS) {
-    return summariesCache.data;
-  }
-  const token = getToken();
-  const dataSourceIds = await resolveDataSourceIds(
-    token,
-    process.env.NOTION_WARMUP_SUMMARIES_DATABASE_ID ?? FALLBACK_SUMMARIES_DATABASE_ID,
-    process.env.NOTION_WARMUP_SUMMARIES_DATA_SOURCE_IDS,
-  );
-  const filter = { property: "Week Start", date: { on_or_after: cutoff } };
-
-  const rows: WeeklySummary[] = [];
-  for (const dsId of dataSourceIds) {
-    const pages = await queryAll(token, dsId, { filter });
-    for (const page of pages) {
-      const p = page.properties;
-      const submittedCount = num(p["Submitted Count"]);
-      const expectedDays = txt(p["Expected Days"]);
-      const expectedNum = num(p["Expected Days"]);
-      let completion = num(p["Completion"]);
-      if (completion !== null && completion <= 1) completion = completion * 100;
-      rows.push({
-        id: page.id,
-        student: txt(p["Summary"]),
-        studentEmail: txt(p["Student Email"]),
-        period: txt(p["Period"]),
-        week: txt(p["Week"]),
-        weekNumber: num(p["Week Number"]),
-        weekStart: txt(p["Week Start"]),
-        expectedDays,
-        expectedNum,
-        submittedCount,
-        missingDays: txt(p["Missing Days"]),
-        weeklyAvgScore: num(p["Weekly Avg Score"]),
-        completion: completion === null ? null : Math.round(completion),
-        status: txt(p["Status"]),
-      });
-    }
-  }
-  summariesCache = { at: Date.now(), key: cacheKey, data: rows };
-  return rows;
-}
+// RETIRED (FERPA boundary, 2026-07-31): the weekly-summaries read pulled the
+// Notion "Warm-Up Weekly Summaries" database - per-student rows with names
+// and district emails. Student data may not live in Notion; the weekly triage
+// now belongs in the Workspace response spreadsheet, next to the export
+// sheets that feed it. Only the form-links read (no student data) survives.
 
 export async function getRecentWarmupForms(sinceDays = 14): Promise<WarmupForm[]> {
   const cutoff = cutoffIso(sinceDays);

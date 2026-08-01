@@ -10,9 +10,15 @@
 // PRIVACY: teacher-only, always. No student ever sees their own tier, another
 // student's status, a group name, or a count, and none of this may reach a
 // public projector. It renders only inside the private Remote.
+//
+// FERPA boundary: the server knows students by ALIAS. Real names appear here
+// only through the browser-local name key (load it once on /roster on this
+// device), and every write back to the server carries the alias, never the
+// resolved name.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VisitCheckInStatus, VisitList, VisitTier } from "@/lib/visitList";
+import { aliasToNameMap, labelFor, loadNameKey } from "@/lib/teacherNameKey";
 
 type PanelState = VisitList & {
   lessonCode: string;
@@ -43,6 +49,8 @@ export default function VisitListPanel({ sessionId }: { sessionId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Device-local alias-to-name key; render-time only, never sent anywhere.
+  const names = useMemo(() => aliasToNameMap(loadNameKey()), []);
 
   const refresh = useCallback(async () => {
     try {
@@ -181,7 +189,7 @@ export default function VisitListPanel({ sessionId }: { sessionId: string }) {
             >
               <div className="vlp-row-head">
                 <span className="vlp-tier">{row.tierLabel}</span>
-                <p className="vlp-names">{row.students.map((student) => student.name).join(", ")}</p>
+                <p className="vlp-names">{row.students.map((student) => labelFor(names, student.name)).join(", ")}</p>
               </div>
               <p className="vlp-headline">{row.headline}</p>
               {/* A row that is not where the answers alone would put it has to
@@ -199,7 +207,7 @@ export default function VisitListPanel({ sessionId }: { sessionId: string }) {
                 <div className="vlp-group-taps">
                   {row.students.map((student) => (
                     <div className="vlp-group-row" key={student.studentKey}>
-                      <span className="vlp-group-name">{student.name}</span>
+                      <span className="vlp-group-name">{labelFor(names, student.name)}</span>
                       {CHECK_IN_ORDER.map((status) => (
                         <button
                           className={`vlp-tap ${status}`}
@@ -238,7 +246,7 @@ export default function VisitListPanel({ sessionId }: { sessionId: string }) {
         <div className="vlp-cleared">
           {state.cleared.map((entry) => (
             <span className="vlp-cleared-chip" key={entry.studentKey}>
-              {entry.name}: {CHECK_IN_LABEL[entry.status]}
+              {labelFor(names, entry.name)}: {CHECK_IN_LABEL[entry.status]}
             </span>
           ))}
         </div>

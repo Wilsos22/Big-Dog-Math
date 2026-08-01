@@ -131,7 +131,14 @@ bars and live misconception grouping).
    teacher-side re-identification happens only through `src/lib/teacherNameKey.ts`
    (browser localStorage, loaded by pasting from the roster Sheet on /roster) and that module may
    NEVER be imported by anything under `src/app/api`; anything a teacher tap or write sends back to
-   the server carries the ALIAS, never a resolved name (VisitListPanel is the pattern). Mock/test
+   the server carries the ALIAS, never a resolved name (VisitListPanel is the pattern).
+   ONE deliberate room-facing exception (Steele, 2026-07-31): the classroom SPINNER shows FIRST
+   names on the wall - kids disown an alias and derail the spin, and the teacher says the first
+   name aloud anyway. `ClassroomSpinner` resolves via `firstNameLabelMap` at render only; the
+   roster fetch, fair rotation, and spinner-sync snapshots still carry aliases, so the wire and
+   server never see a name. The projector tab needs the name key loaded in ITS browser (present
+   runs on the classroom laptop, so one paste on /roster covers it); without the key the spinner
+   falls back to aliases. Mock/test
    identities stay fully fictional AND pseudonymous-shaped (the mock class is Amber Fox and
    friends). Built 2026-07-31 on branch claude/website-data-ferpa-compliance-42829d; the CUTOVER is
    Steele's, in order, per `supabase/FERPA-CUTOVER.md` (schema migration, deploy, Apps Script

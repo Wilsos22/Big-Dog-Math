@@ -1,8 +1,14 @@
 // =====================================================================
 // BIG DOG MATH - WARM-UP RESPONSE/LINK SYNC HELPERS
-// Form submissions are always written to backup export sheets first.
-// If Notion settings are present, the same submission is also upserted
-// into the Warm up Submissions database.
+// Form submissions are written to backup export sheets INSIDE Workspace.
+//
+// FERPA boundary (2026-07-31): the per-student Notion sync is RETIRED.
+// Student data - emails, scores, submission rows - may not leave the
+// district Google Workspace for Notion. The export sheets in this
+// spreadsheet are the permanent record; the site receives only pseudonymous
+// evidence through warmup-evidence.gs. The Notion helpers below survive
+// ONLY for the lesson-content sync (notion-warmup-requests.gs), which
+// carries no student data.
 // =====================================================================
 
 const BDM_WARMUP_LINKS_EXPORT_SHEET = "Warm Up Links Export";
@@ -24,7 +30,6 @@ const WARMUP_NOTION_PROP_KEYS = {
   submissionsDb: "NOTION_WARMUP_SUBMISSIONS_DB_ID"
 };
 
-const WARMUP_STUDENT_EMAIL_PROPS = ["Email Address", "Email", "Student Email"];
 const WARMUP_FORM_KEY_PROPS = ["Warm Up Key", "Form ID", "Key"];
 const WARMUP_FORM_TITLE_PROPS = ["Name", "Warm Up", "Title"];
 
@@ -457,229 +462,18 @@ function isWarmupItemCorrect_(itemResponse, item) {
   }
 }
 
+// RETIRED (FERPA boundary, 2026-07-31): per-student warm-up submissions are
+// no longer written to Notion. The export sheets in this spreadsheet are the
+// record; delete the Notion "Warm up Submissions" database and the Students
+// database's submission relations after cutover. This stub keeps every old
+// call site and trigger harmless - it never contacts Notion.
 function syncWarmupSubmissionToNotionSafely_(data) {
-  try {
-    const config = getWarmupNotionConfig_();
-    if (!config.token || (!config.submissionsDataSource && !config.submissionsDb)) {
-      return {
-        ok: false,
-        skipped: true,
-        status: "not configured",
-        error: "Set NOTION_TOKEN and NOTION_WARMUP_SUBMISSIONS_DATA_SOURCE_ID in Script properties."
-      };
-    }
-
-    return syncWarmupSubmissionToNotion_(data, config);
-  } catch (err) {
-    return {
-      ok: false,
-      status: "failed",
-      error: String(err && err.message ? err.message : err),
-      syncedAt: new Date()
-    };
-  }
-}
-
-function syncWarmupSubmissionToNotion_(data, config) {
-  const submissionsDataSourceId = getNotionDataSourceId_("submissions", config);
-  const submissionSchema = getNotionDataSourceSchema_(submissionsDataSourceId, config);
-  const submissionKey = data.submissionKey || buildWarmupSubmissionKey_(data.date, data.topic, data.email, data.formTitle);
-  const scoreInfo = getWarmupScoreInfo_(data.score);
-  const warnings = [];
-
-  let studentPage = null;
-  if ((config.studentsDataSource || config.studentsDb) && data.email) {
-    const studentsDataSourceId = getNotionDataSourceId_("students", config);
-    const studentSchema = getNotionDataSourceSchema_(studentsDataSourceId, config);
-    studentPage = findNotionPageByAnyProperty_(studentsDataSourceId, studentSchema, WARMUP_STUDENT_EMAIL_PROPS, data.email, config);
-    if (!studentPage) warnings.push(`student not found for ${data.email}`);
-  }
-
-  let warmupPage = null;
-  if (config.warmupsDataSource || config.warmupsDb) {
-    const warmupsDataSourceId = getNotionDataSourceId_("warmups", config);
-    const warmupSchema = getNotionDataSourceSchema_(warmupsDataSourceId, config);
-    if (data.formId) {
-      warmupPage = findNotionPageByAnyProperty_(warmupsDataSourceId, warmupSchema, WARMUP_FORM_KEY_PROPS, data.formId, config);
-    }
-    if (!warmupPage && data.formTitle) {
-      warmupPage = findNotionPageByAnyProperty_(warmupsDataSourceId, warmupSchema, WARMUP_FORM_TITLE_PROPS, data.formTitle, config);
-    }
-    if (!warmupPage) warnings.push("warm-up page not found");
-  }
-
-  const properties = {};
-  setNotionTitleProperty_(submissionSchema, properties, "Submission Key", submissionKey);
-  putNotionProperty_(submissionSchema, properties, "Submission Key", submissionKey);
-  putNotionProperty_(submissionSchema, properties, "Email Address", data.email || "");
-  putNotionProperty_(submissionSchema, properties, "Submitted", data.submittedAt || new Date());
-  putNotionProperty_(submissionSchema, properties, "Period", data.period || "");
-  putNotionProperty_(submissionSchema, properties, "Score", data.score);
-  putNotionProperty_(submissionSchema, properties, "Class", "Math 6");
-  putNotionProperty_(submissionSchema, properties, "Week", data.week || "");
-  putNotionProperty_(submissionSchema, properties, "Warm Up Key", data.formId || data.formTitle || "");
-  putNotionProperty_(submissionSchema, properties, "Group", scoreInfo.group);
-  putNotionProperty_(submissionSchema, properties, "Needs Follow-Up", scoreInfo.needsFollowUp);
-  putNotionProperty_(submissionSchema, properties, "Teacher Notes", warnings.join("; "));
-  putNotionMultiSelect_(submissionSchema, properties, "Missed Questions", data.missedQuestions);
-  putNotionMultiSelect_(submissionSchema, properties, "Missed Categories", data.missedCategories);
-
-  if (studentPage) putNotionRelation_(submissionSchema, properties, "Student", studentPage.id);
-  if (warmupPage) putNotionRelation_(submissionSchema, properties, "Warm Up", warmupPage.id);
-
-  const titleName = getNotionTitlePropertyName_(submissionSchema);
-  const existingPage = findNotionPageByAnyProperty_(
-    submissionsDataSourceId,
-    submissionSchema,
-    ["Submission Key", titleName, "Name"].filter(Boolean),
-    submissionKey,
-    config
-  );
-
-  let page;
-  let action;
-  if (existingPage) {
-    page = updateNotionPage_(existingPage.id, properties, config);
-    action = "updated";
-  } else {
-    page = createNotionPage_(submissionsDataSourceId, properties, config);
-    action = "created";
-  }
-
   return {
-    ok: true,
-    status: warnings.length ? `${action} with warning` : action,
-    pageId: page.id,
-    error: warnings.join("; "),
+    ok: false,
+    skipped: true,
+    status: "retired",
+    error: "Student data no longer syncs to Notion (FERPA boundary). The export sheet is the record.",
     syncedAt: new Date()
-  };
-}
-
-function testWarmupNotionSetup() {
-  const config = getWarmupNotionConfig_();
-  const missing = [];
-  if (!config.token) missing.push(WARMUP_NOTION_PROP_KEYS.token);
-  if (!config.submissionsDataSource && !config.submissionsDb) {
-    missing.push(`${WARMUP_NOTION_PROP_KEYS.submissionsDataSource} or ${WARMUP_NOTION_PROP_KEYS.submissionsDb}`);
-  }
-  if (!config.studentsDataSource && !config.studentsDb) {
-    missing.push(`${WARMUP_NOTION_PROP_KEYS.studentsDataSource} or ${WARMUP_NOTION_PROP_KEYS.studentsDb}`);
-  }
-
-  if (missing.length) {
-    SpreadsheetApp.getUi().alert(`Missing Script Properties:\n\n${missing.join("\n")}`);
-    return;
-  }
-
-  const submissionsDataSourceId = getNotionDataSourceId_("submissions", config);
-  const studentsDataSourceId = getNotionDataSourceId_("students", config);
-  const submissionSchema = getNotionDataSourceSchema_(submissionsDataSourceId, config);
-  const studentSchema = getNotionDataSourceSchema_(studentsDataSourceId, config);
-  const warmupMessage = (config.warmupsDataSource || config.warmupsDb)
-    ? `Warm-up data source: ${Object.keys(getNotionDataSourceSchema_(getNotionDataSourceId_("warmups", config), config).properties || {}).length} properties`
-    : "Warm-up data source: not configured; Warm Up relation will be skipped";
-
-  SpreadsheetApp.getUi().alert(
-    "Notion setup can be reached.\n\n" +
-    `Submissions data source: ${Object.keys(submissionSchema.properties || {}).length} properties\n` +
-    `Students data source: ${Object.keys(studentSchema.properties || {}).length} properties\n` +
-    warmupMessage
-  );
-}
-
-function promptForWarmupNotionProperties() {
-  const ui = SpreadsheetApp.getUi();
-  const props = PropertiesService.getScriptProperties();
-  const fields = [
-    { key: WARMUP_NOTION_PROP_KEYS.token, label: "Notion internal integration token" },
-    { key: WARMUP_NOTION_PROP_KEYS.submissionsDataSource, label: "Warm up Submissions data source ID" },
-    { key: WARMUP_NOTION_PROP_KEYS.studentsDataSource, label: "Students data source ID" },
-    { key: WARMUP_NOTION_PROP_KEYS.warmupsDataSource, label: "Warm-up/Form Links data source ID (optional)" },
-    { key: WARMUP_NOTION_PROP_KEYS.submissionsDataSourceName, label: "Submissions data source name, only needed if you pasted a multi-source database ID (optional)" },
-    { key: WARMUP_NOTION_PROP_KEYS.studentsDataSourceName, label: "Students data source name, only needed if you pasted a multi-source database ID (optional)" },
-    { key: WARMUP_NOTION_PROP_KEYS.warmupsDataSourceName, label: "Warm-up data source name, only needed if you pasted a multi-source database ID (optional)" }
-  ];
-
-  fields.forEach(field => {
-    const existing = props.getProperty(field.key);
-    const message = existing
-      ? `${field.label}\n\nA value is already saved. Leave blank to keep it.`
-      : `${field.label}\n\nPaste the value here.`;
-    const response = ui.prompt("Big Dog Math Notion Setup", message, ui.ButtonSet.OK_CANCEL);
-
-    if (response.getSelectedButton() !== ui.Button.OK) {
-      throw new Error("Notion setup was canceled.");
-    }
-
-    const value = String(response.getResponseText() || "").trim();
-    if (value) props.setProperty(field.key, value);
-  });
-
-  ui.alert("Notion properties were saved. Run Test Notion Setup next.");
-}
-
-function backfillWarmupSubmissionExportsToNotion() {
-  const ss = SpreadsheetApp.openById(RESPONSE_SS_ID);
-  const sheet = ss.getSheetByName(BDM_WARMUP_SUBMISSIONS_EXPORT_SHEET);
-  if (!sheet || sheet.getLastRow() < 2) {
-    SpreadsheetApp.getUi().alert("No exported warm-up submissions were found to backfill.");
-    return;
-  }
-
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const statusCol = ensureExportColumn_(sheet, headers, "Notion Status");
-  const pageIdCol = ensureExportColumn_(sheet, headers, "Notion Page ID");
-  const errorCol = ensureExportColumn_(sheet, headers, "Notion Error");
-  const syncedAtCol = ensureExportColumn_(sheet, headers, "Notion Synced At");
-  const freshHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getValues();
-
-  let createdOrUpdated = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  rows.forEach((row, index) => {
-    const data = submissionDataFromExportRow_(freshHeaders, row);
-    if (!data.submissionKey || !data.email) {
-      skipped++;
-      return;
-    }
-
-    const result = syncWarmupSubmissionToNotionSafely_(data);
-    if (result.ok) createdOrUpdated++;
-    else failed++;
-
-    const rowNumber = index + 2;
-    sheet.getRange(rowNumber, statusCol).setValue(result.status || "");
-    sheet.getRange(rowNumber, pageIdCol).setValue(result.pageId || "");
-    sheet.getRange(rowNumber, errorCol).setValue(result.error || "");
-    sheet.getRange(rowNumber, syncedAtCol).setValue(result.syncedAt || new Date());
-  });
-
-  SpreadsheetApp.getUi().alert(
-    `Backfill finished.\n\nSynced: ${createdOrUpdated}\nFailed: ${failed}\nSkipped: ${skipped}`
-  );
-}
-
-function submissionDataFromExportRow_(headers, row) {
-  const value = name => {
-    const index = headers.indexOf(name);
-    return index >= 0 ? row[index] : "";
-  };
-  return {
-    submittedAt: value("Submitted") || new Date(),
-    submissionKey: value("Submission Key") || "",
-    formId: value("Form ID") || "",
-    formTitle: value("Warm Up") || "",
-    email: String(value("Email Address") || "").trim().toLowerCase(),
-    period: value("Period") || "",
-    score: value("Score"),
-    week: value("Week") || "",
-    date: value("Date") || "",
-    topic: value("Topic") || "",
-    missedQuestions: splitExportList_(value("Missed Questions")),
-    missedCategories: splitExportList_(value("Missed Categories")),
-    source: value("Source") || getWarmupSourceName_()
   };
 }
 

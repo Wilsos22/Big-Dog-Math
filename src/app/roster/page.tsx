@@ -1,27 +1,29 @@
 "use client";
 
 // Teacher rosters are loaded through the protected server API.
+//
+// FERPA boundary: the site's roster is PSEUDONYMOUS - aliases only. Real
+// names and district emails live in the Workspace roster Sheet, which pushes
+// { alias, emailHmac, period } rows here via Apps Script. The NAME KEY panel
+// below stores the alias-to-name mapping in THIS browser's localStorage only,
+// so teacher surfaces can show real names without the server ever holding
+// them. See src/lib/pseudonym.ts and src/lib/teacherNameKey.ts.
 
 import { useEffect, useState, useCallback } from "react";
 import { teacherApiRequest, teacherPost } from "@/lib/teacherApi";
 import SiteNav from "@/components/SiteNav";
+import {
+  aliasToNameMap,
+  clearNameKey,
+  labelFor,
+  loadNameKey,
+  parseNameKey,
+  saveNameKey,
+  type NameKey,
+} from "@/lib/teacherNameKey";
 
 interface Period { id: string; name: string; sort_order: number; }
-interface Student { id: string; period_id: string; full_name: string; email: string | null; }
-interface SiteOnlyPeriod { id: string; name: string; studentCount: number; }
-interface SiteOnlyStudent { id: string; fullName: string; email: string | null; periodId: string; periodName: string; }
-interface SyncResult {
-  notionRows: number;
-  periodsCreated: number;
-  created: number;
-  updated: number;
-  unchanged: number;
-  skipped: number;
-  siteOnlyPeriods?: SiteOnlyPeriod[];
-  siteOnlyStudents?: SiteOnlyStudent[];
-  onSiteNotInNotion?: string[];
-  reconciliationMode?: "report-only";
-}
+interface Student { id: string; period_id: string; alias: string | null; }
 
 export default function RosterPage() {
   const [periods, setPeriods] = useState<Period[]>([]);
@@ -29,25 +31,27 @@ export default function RosterPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newPeriod, setNewPeriod] = useState("");
-  const [nameInputs, setNameInputs] = useState<Record<string, string>>({});
-  const [syncing, setSyncing] = useState(false);
-  const [syncMsg, setSyncMsg] = useState<string | null>(null);
-  const [syncReport, setSyncReport] = useState<{ periods: SiteOnlyPeriod[]; students: SiteOnlyStudent[] } | null>(null);
+  const [aliasInputs, setAliasInputs] = useState<Record<string, string>>({});
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [nameKey, setNameKey] = useState<NameKey | null>(null);
+  const [keyPaste, setKeyPaste] = useState("");
+  const [keyMsg, setKeyMsg] = useState<string | null>(null);
+
+  useEffect(() => { setNameKey(loadNameKey()); }, []);
+  const names = aliasToNameMap(nameKey);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       const result = await teacherApiRequest<{
         periods: Period[];
-        students: Array<{ id: string; periodId: string; fullName: string; email: string | null }>;
+        students: Array<{ id: string; periodId: string; alias: string | null }>;
       }>("/api/teacher/roster");
       setPeriods(result.periods);
       setStudents(result.students.map((student) => ({
         id: student.id,
         period_id: student.periodId,
-        full_name: student.fullName,
-        email: student.email,
+        alias: student.alias,
       })));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Roster could not be loaded.");
@@ -57,6 +61,19 @@ export default function RosterPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  function importNameKey() {
+    const { entries, error: parseError } = parseNameKey(keyPaste);
+    if (parseError) { setKeyMsg(parseError); return; }
+    setNameKey(saveNameKey(entries));
+    setKeyPaste("");
+    setKeyMsg(`Name key loaded: ${entries.length} students. It stays on this device only.`);
+  }
+  function forgetNameKey() {
+    clearNameKey();
+    setNameKey(null);
+    setKeyMsg("Name key removed from this device.");
+  }
+
   async function addPeriod() {
     if (!newPeriod.trim()) return;
     try {
@@ -65,17 +82,17 @@ export default function RosterPage() {
     setNewPeriod(""); load();
   }
   async function addStudent(periodId: string) {
-    const name = (nameInputs[periodId] || "").trim();
-    if (!name) return;
+    const alias = (aliasInputs[periodId] || "").trim();
+    if (!alias) return;
     try {
-      await teacherPost("/api/teacher/roster", { action: "create-student", periodId, fullName: name });
+      await teacherPost("/api/teacher/roster", { action: "create-student", periodId, alias });
     } catch (actionError) { setError(actionError instanceof Error ? actionError.message : "Student could not be added."); return; }
-    setNameInputs((m) => ({ ...m, [periodId]: "" })); load();
+    setAliasInputs((m) => ({ ...m, [periodId]: "" })); load();
   }
   async function removeStudent(student: Student, periodName: string) {
-    if (pendingDelete) return;
+    if (pendingDelete || !student.alias) return;
     const confirmed = window.confirm(
-      `Delete ${student.full_name} from ${periodName}? This only works when the student has no saved instructional history.`,
+      `Delete ${labelFor(names, student.alias)} from ${periodName}? This only works when the student has no saved instructional history.`,
     );
     if (!confirmed) return;
     setPendingDelete(`student:${student.id}`);
@@ -84,7 +101,7 @@ export default function RosterPage() {
       await teacherPost("/api/teacher/roster", {
         action: "delete-student",
         studentId: student.id,
-        expectedName: student.full_name,
+        expectedName: student.alias,
         confirm: true,
       });
       await load();
@@ -116,20 +133,6 @@ export default function RosterPage() {
       setPendingDelete(null);
     }
   }
-  async function syncFromNotion() {
-    if (syncing) return;
-    setSyncing(true); setSyncMsg("Reading the Notion roster...");
-    setSyncReport(null);
-    try {
-      const d = await teacherApiRequest<SyncResult>("/api/roster/sync", { method: "POST" });
-      setSyncMsg(`Synced ${d.notionRows} Notion rows: ${d.created} added, ${d.updated} updated, ${d.unchanged} unchanged${d.periodsCreated ? `, ${d.periodsCreated} new period(s)` : ""}${d.skipped ? `, ${d.skipped} skipped` : ""}.`);
-      setSyncReport({ periods: d.siteOnlyPeriods ?? [], students: d.siteOnlyStudents ?? [] });
-      await load();
-    } catch (syncError) {
-      setSyncMsg(syncError instanceof Error ? `Sync failed: ${syncError.message}` : "Sync failed: network error.");
-    }
-    finally { setSyncing(false); }
-  }
 
   return (
     <main className="rs-page">
@@ -147,25 +150,24 @@ export default function RosterPage() {
         .rs-card-head h2 { margin:0; }
         .rs-row { display:flex; gap:8px; flex-wrap:wrap; }
         .rs-in { flex:1; min-width:160px; border:2px solid #e7dec9; border-radius:11px; padding:10px 13px; font-size:1rem; font-weight:700; color:#2a2a2e; background:#fbf7ef; }
-        .rs-btn { background:#34c759; color:#063; border:none; border-radius:11px; padding:0 18px; font-weight:900; cursor:pointer; }
+        .rs-key-paste { width:100%; min-height:96px; border:2px solid #e7dec9; border-radius:11px; padding:10px 13px; font-size:0.9rem; font-weight:600; color:#2a2a2e; background:#fbf7ef; box-sizing:border-box; font-family:inherit; }
+        .rs-btn { background:#34c759; color:#063; border:none; border-radius:11px; padding:10px 18px; font-weight:900; cursor:pointer; }
         .rs-btn:disabled, .rs-delete:disabled { cursor:not-allowed; opacity:0.55; }
+        .rs-btn-quiet { background:#fff; border:1px solid #e7dec9; color:#7a7468; border-radius:11px; padding:10px 18px; font-weight:800; cursor:pointer; }
         .rs-chip { display:inline-flex; align-items:center; gap:8px; background:#f6f1e6; border:1px solid #efe7d6; border-radius:999px; padding:7px 8px 7px 14px; font-weight:700; color:#4a4636; margin:4px 6px 0 0; }
         .rs-delete { background:#fff; border:1px solid #e7b9b1; color:#b42318; border-radius:9px; padding:7px 10px; cursor:pointer; font-weight:900; font-size:0.78rem; line-height:1; }
         .rs-chip .rs-delete { border-radius:999px; padding:5px 9px; }
         .rs-students { margin-top:12px; }
         .rs-empty { color:#b3aa97; font-weight:600; font-size:0.9rem; }
         .rs-err { background:#fdecea; border:1px solid #f5c6c0; color:#b91c1c; border-radius:12px; padding:12px 16px; font-weight:700; }
-        .rs-warn { background:#fff7e6; border:1px solid #ffe2a8; color:#92660a; border-radius:14px; padding:16px 18px; font-weight:700; line-height:1.6; }
-        .rs-sync-review { margin-top:14px; border-top:1px solid #efe7d6; padding-top:14px; color:#4a4636; }
-        .rs-sync-review h3 { margin:0 0 6px; font-size:0.96rem; color:#2a2a2e; }
-        .rs-sync-review p { margin:0 0 8px; font-size:0.86rem; font-weight:650; line-height:1.45; }
-        .rs-sync-review ul { margin:4px 0 10px; padding-left:20px; font-size:0.86rem; line-height:1.55; }
+        .rs-note { margin:0 0 12px; color:#7a7468; font-weight:600; font-size:0.9rem; line-height:1.5; }
+        .rs-key-msg { margin:10px 0 0; font-weight:700; color:#4a4636; font-size:0.9rem; }
       `}</style>
 
       <SiteNav variant="teacher" />
       <div className="rs-wrap">
         <h1 className="rs-h1">Class rosters</h1>
-        <p className="rs-sub">Your periods and students, saved in Supabase.</p>
+        <p className="rs-sub">Aliases only on the site. Names stay in your Workspace Sheet and, if you load the key, on this device.</p>
 
         {error && <div className="rs-err">{error}</div>}
         {loading && <p className="rs-empty">Loading...</p>}
@@ -173,51 +175,41 @@ export default function RosterPage() {
         {!loading && (
           <>
             <div className="rs-card">
-              <h2>Sync from Notion</h2>
-              <p style={{ margin: "0 0 12px", color: "#7a7468", fontWeight: 600, fontSize: "0.9rem" }}>
-                Pulls your Notion contact-info roster onto the site — new rows become students, periods are
-                created automatically. Sync never deletes site records; it reports extras for review below. Runs by itself daily too.
+              <h2>Where the roster comes from</h2>
+              <p className="rs-note">
+                The roster Sheet in your district Google Workspace is the source of truth. Run
+                pushRosterToSite() in its Apps Script (or wait for its daily trigger) and each student
+                arrives here as an alias plus a one-way email code. No name or district email ever
+                reaches the site, and nothing here can compute one.
               </p>
-              <div className="rs-row">
-                <button className="rs-btn" style={{ minHeight: 42 }} onClick={syncFromNotion} disabled={syncing}>
-                  {syncing ? "Syncing..." : "Sync from Notion"}
-                </button>
-              </div>
-              {syncMsg && <p style={{ margin: "12px 0 0", fontWeight: 700, color: "#4a4636", fontSize: "0.9rem" }}>{syncMsg}</p>}
-              {syncReport && (
-                <div className="rs-sync-review">
-                  <h3>Site-only roster review</h3>
-                  <p>Report only. Sync did not delete these records.</p>
-                  {syncReport.periods.length === 0 && syncReport.students.length === 0 ? (
-                    <p>No site-only classes or students were found.</p>
-                  ) : (
-                    <>
-                      {syncReport.periods.length > 0 && (
-                        <div>
-                          <p>Classes on the site but not in Notion:</p>
-                          <ul>
-                            {syncReport.periods.map((period) => (
-                              <li key={period.id}>{period.name} - {period.studentCount} student{period.studentCount === 1 ? "" : "s"}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {syncReport.students.length > 0 && (
-                        <div>
-                          <p>Students on the site but not in Notion:</p>
-                          <ul>
-                            {syncReport.students.map((student) => (
-                              <li key={student.id}>
-                                {student.fullName} - {student.periodName}{student.email ? ` - ${student.email}` : " - no email"}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </>
-                  )}
+            </div>
+
+            <div className="rs-card">
+              <h2>Name key (this device only)</h2>
+              <p className="rs-note">
+                Paste the Alias, Name, and Email columns from the roster Sheet to see real names on
+                teacher pages. The key lives in this browser&apos;s local storage - it is never sent
+                anywhere, and clearing it leaves only aliases.
+              </p>
+              {nameKey ? (
+                <div className="rs-row">
+                  <span className="rs-chip">Key loaded: {nameKey.entries.length} students</span>
+                  <button className="rs-btn-quiet" onClick={forgetNameKey}>Remove key from this device</button>
                 </div>
+              ) : (
+                <>
+                  <textarea
+                    className="rs-key-paste"
+                    placeholder={"Alias\tName\tEmail\nAmber Fox\t(student name)\t(district email)"}
+                    value={keyPaste}
+                    onChange={(event) => setKeyPaste(event.target.value)}
+                  />
+                  <div className="rs-row" style={{ marginTop: 8 }}>
+                    <button className="rs-btn" onClick={importNameKey} disabled={!keyPaste.trim()}>Load name key</button>
+                  </div>
+                </>
               )}
+              {keyMsg && <p className="rs-key-msg">{keyMsg}</p>}
             </div>
 
             <div className="rs-card">
@@ -246,8 +238,8 @@ export default function RosterPage() {
                     </button>
                   </div>
                   <div className="rs-row">
-                    <input className="rs-in" placeholder="Add a student name" value={nameInputs[p.id] || ""}
-                      onChange={(e) => setNameInputs((m) => ({ ...m, [p.id]: e.target.value }))}
+                    <input className="rs-in" placeholder="Add a student alias (never a real name)" value={aliasInputs[p.id] || ""}
+                      onChange={(e) => setAliasInputs((m) => ({ ...m, [p.id]: e.target.value }))}
                       onKeyDown={(e) => { if (e.key === "Enter") addStudent(p.id); }} />
                     <button className="rs-btn" onClick={() => addStudent(p.id)}>Add</button>
                   </div>
@@ -255,12 +247,12 @@ export default function RosterPage() {
                     {roster.length === 0 ? <span className="rs-empty">No students yet.</span>
                       : roster.map((s) => (
                         <span className="rs-chip" key={s.id}>
-                          {s.full_name}
+                          {labelFor(names, s.alias)}
                           <button
                             className="rs-delete"
                             onClick={() => removeStudent(s, p.name)}
                             disabled={Boolean(pendingDelete)}
-                            aria-label={`Delete ${s.full_name}`}
+                            aria-label={`Delete ${s.alias || "student"}`}
                           >
                             {pendingDelete === `student:${s.id}` ? "Deleting..." : "Delete"}
                           </button>

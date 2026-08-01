@@ -6,6 +6,11 @@
 // Setup (Script Properties, Project Settings):
 //   BDM_EVIDENCE_KEY is the same value as EVIDENCE_INGEST_KEY in Vercel (required)
 //   BDM_EVIDENCE_URL is optional and defaults to https://bigdogmath.com/api/evidence
+//   BDM_ROSTER_HMAC_KEY is the FERPA boundary key (required). Student emails
+//     NEVER leave Workspace: every post carries HMAC-SHA256(email, this key)
+//     instead. The key exists ONLY here and in the roster Sheet's push script
+//     (same Script Properties) - never in Vercel, Supabase, or the repo. The
+//     site stores the hashes and cannot reverse or recompute them.
 //
 // What gets posted per submission:
 //   1) ONE aggregate event: score 0-5 plus the day's domain and the primary
@@ -17,6 +22,26 @@
 
 var BDM_META_PREFIX = "bdm_meta_";
 var BDM_WARMUP_IDENTITY_FIELD_TITLE = "Big Dog connection";
+
+// --- FERPA boundary: one-way email disguise -------------------------------
+// Returns lowercase hex HMAC-SHA256 of the normalized email, or "" when the
+// key property is missing. Callers must SKIP the post on "" - falling back to
+// the raw email would put identity on the wire, and the site rejects it.
+
+function bdmEmailHmac_(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized) return "";
+  const key = PropertiesService.getScriptProperties().getProperty("BDM_ROSTER_HMAC_KEY");
+  if (!key) {
+    Logger.log("BDM_ROSTER_HMAC_KEY not set; refusing to post identity. Set it in Script Properties (same value as the roster Sheet script).");
+    return "";
+  }
+  const bytes = Utilities.computeHmacSha256Signature(normalized, key);
+  return bytes.map(function (b) {
+    const v = (b + 256) % 256;
+    return (v < 16 ? "0" : "") + v.toString(16);
+  }).join("");
+}
 
 // --- Form metadata (CCSS plus distractor-to-misconception maps), saved at build time ---
 
@@ -117,6 +142,11 @@ function postWarmupIdentity_(data, form, response) {
   if (!email || !formUrl || !isWarmupIdentityUuid_(warmupToken)) {
     return { ok: false, skipped: true, error: "verified respondent email, assigned Form, or Big Dog connection missing" };
   }
+  // The email never leaves Workspace - only its HMAC does (FERPA boundary).
+  const emailHmac = bdmEmailHmac_(email);
+  if (!emailHmac) {
+    return { ok: false, skipped: true, error: "BDM_ROSTER_HMAC_KEY not set - identity post refused" };
+  }
 
   const props = PropertiesService.getScriptProperties();
   const key = props.getProperty("BDM_EVIDENCE_KEY");
@@ -131,7 +161,7 @@ function postWarmupIdentity_(data, form, response) {
     contentType: "application/json",
     muteHttpExceptions: true,
     headers: { "x-bdm-key": key },
-    payload: JSON.stringify({ email: email, warmupToken: warmupToken, formUrl: formUrl })
+    payload: JSON.stringify({ emailHmac: emailHmac, warmupToken: warmupToken, formUrl: formUrl })
   });
   const code = res.getResponseCode();
   Logger.log("Warm-up identity post " + code + ": " + res.getContentText().slice(0, 200));
@@ -168,6 +198,9 @@ function postWarmupEvidence_(data, form, response) {
 
   const email = String(data && data.email || "").trim().toLowerCase();
   if (!email) return { ok: false, error: "no student email on submission" };
+  // The email never leaves Workspace - only its HMAC does (FERPA boundary).
+  const emailHmac = bdmEmailHmac_(email);
+  if (!emailHmac) return { ok: false, error: "BDM_ROSTER_HMAC_KEY not set - evidence post refused" };
 
   const formId = String(data && data.formId || (form && form.getId()) || "");
   const at = (data && data.submittedAt ? new Date(data.submittedAt) : new Date()).toISOString();
@@ -191,14 +224,14 @@ function postWarmupEvidence_(data, form, response) {
     if (tag && !primaryTag) primaryTag = tag;
     if (qMeta && qMeta.ccss) {
       events.push({
-        studentEmail: email,
+        studentEmailHmac: emailHmac,
         source: "warmup",
         isCorrect: d.correct,
         standardId: qMeta.ccss,
         misconception: tag,
         itemRef: formId + ":q" + (i + 1),
         at: at,
-        dedupeKey: "warmup:" + formId + ":q" + (i + 1) + ":" + email
+        dedupeKey: "warmup:" + formId + ":q" + (i + 1) + ":" + emailHmac
       });
     }
   });
@@ -207,14 +240,14 @@ function postWarmupEvidence_(data, form, response) {
   const score = Number(data && data.score);
   if (isFinite(score)) {
     events.push({
-      studentEmail: email,
+      studentEmailHmac: emailHmac,
       source: "warmup",
       score0to5: Math.max(0, Math.min(5, score)),
       domain: topicToDomain_(data && data.topic),
       misconception: primaryTag,
       itemRef: formId || undefined,
       at: at,
-      dedupeKey: "warmup:" + formId + ":agg:" + email
+      dedupeKey: "warmup:" + formId + ":agg:" + emailHmac
     });
   }
 

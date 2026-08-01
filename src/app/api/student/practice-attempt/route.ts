@@ -45,7 +45,7 @@ export async function GET(request: Request) {
         assignments,
         assignment: assignmentId ? assignments[0] ?? null : null,
         attemptCount,
-        student: { id: student.id, fullName: student.fullName },
+        student: { id: student.id, alias: student.alias },
       },
       { headers: { "cache-control": "no-store" } },
     );
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     const { error: saveError } = await db.from("practice_assignment_attempts").insert({
       assignment_id: assignment.id,
       student_id: student.id,
-      display_name: student.fullName,
+      display_name: student.alias,
       skill: assignment.skill,
       prompt,
       correct_answer: correctAnswer,

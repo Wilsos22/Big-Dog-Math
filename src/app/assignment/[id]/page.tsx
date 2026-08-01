@@ -21,7 +21,7 @@ import { SECURE_STUDENT_DATA } from "@/lib/studentApi";
 
 type View = "loading" | "notfound" | "identify" | "playing" | "done";
 interface Period { id: string; name: string; }
-interface Student { id: string; full_name: string; }
+interface Student { id: string; alias: string | null; }
 
 const NAME_KEY = "bdm-student-name";
 const SID_KEY = "bdm-student-id";
@@ -68,7 +68,7 @@ export default function AssignmentPlayerPage() {
         const context = await getSecureAssignmentContext(assignmentId);
         if (!context?.assignment) { setView("notfound"); return; }
         setAssignment(context.assignment);
-        setName(context.student.fullName);
+        setName(context.student.alias);
         setStudentId(context.student.id);
         doneRef.current = context.attemptCount;
         setDoneCount(context.attemptCount);
@@ -108,7 +108,7 @@ export default function AssignmentPlayerPage() {
 
   async function loadStudents(pid: string) {
     if (!supabase) return;
-    const { data } = await supabase.from("students").select("id,full_name").eq("period_id", pid).order("full_name");
+    const { data } = await supabase.from("students").select("id,alias").eq("period_id", pid).order("alias");
     setStudents((data as Student[]) || []);
   }
 
@@ -134,10 +134,10 @@ export default function AssignmentPlayerPage() {
   }, [supabase, newProblem]);
 
   function pickStudent(s: Student) {
-    setName(s.full_name);
+    setName(s.alias || "Student");
     setStudentId(s.id);
-    try { localStorage.setItem(NAME_KEY, s.full_name); localStorage.setItem(SID_KEY, s.id); } catch { /* ignore */ }
-    if (assignment) void beginFor(assignment, s.id, s.full_name);
+    try { localStorage.setItem(NAME_KEY, s.alias || "Student"); localStorage.setItem(SID_KEY, s.id); } catch { /* ignore */ }
+    if (assignment) void beginFor(assignment, s.id, s.alias || "Student");
   }
 
   const grade = useCallback((answerStr: string) => {
@@ -230,7 +230,7 @@ export default function AssignmentPlayerPage() {
             <p className="as-soft">No names in this class yet.</p>
           ) : (
             <div className="as-names">
-              {students.map((s) => <button key={s.id} className="as-name" onClick={() => pickStudent(s)}>{s.full_name}</button>)}
+              {students.map((s) => <button key={s.id} className="as-name" onClick={() => pickStudent(s)}>{s.alias || "Student"}</button>)}
             </div>
           )}
         </div>
