@@ -5,21 +5,28 @@
 // Auth: server-to-server key (the Apps Script warm-up sync sends it). Set
 // EVIDENCE_INGEST_KEY in Vercel and send it as the `x-bdm-key` header.
 //
+// FERPA boundary: identity arrives as studentId or studentEmailHmac - the
+// HMAC of the district email computed in Apps Script (see warmup-evidence.gs
+// and src/lib/pseudonym.ts). Raw emails are refused, and dedupe keys must not
+// embed them either.
+//
 // POST body: { events: [{
-//   studentId? | studentEmail?,          // one required; email → students.email
+//   studentId? | studentEmailHmac?,      // one required; hmac → students.email_hmac
 //   source: 'warmup' | 'tool',
 //   domain?, standardId?, misconception?,
 //   score0to5?, isCorrect?,              // warm-ups send 0–5; tools send correct/incorrect
 //   itemRef?, sessionId?, at?, dedupeKey?
-// }] } → { inserted, skipped, unmatched: [emails] }
+// }] } → { inserted, skipped, unmatched: [hmacs] }
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
+import { isEmailHmac, looksIdentified } from "@/lib/pseudonym";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 interface EvidenceIn {
   studentId?: string;
-  studentEmail?: string;
+  studentEmailHmac?: string;
+  studentEmail?: string; // rejected - present only to catch pre-FERPA senders
   source?: string;
   domain?: string;
   standardId?: string;
@@ -45,12 +52,26 @@ export async function POST(req: Request) {
   const events = Array.isArray(body.events) ? body.events.slice(0, 500) : [];
   if (!events.length) return Response.json({ error: "No events." }, { status: 400 });
 
-  // Resolve emails → student ids in one query.
-  const emails = [...new Set(events.map((e) => e.studentEmail).filter(Boolean))] as string[];
-  const emailToId = new Map<string, string>();
-  if (emails.length) {
-    const { data } = await db.from("students").select("id,email").in("email", emails);
-    for (const s of data || []) if (s.email) emailToId.set(String(s.email).toLowerCase(), s.id);
+  // A raw email anywhere in the payload means a pre-FERPA Apps Script build is
+  // still running. Refuse the whole batch loudly instead of storing identity.
+  if (events.some((e) => e.studentEmail
+    || looksIdentified(e.studentEmailHmac ?? "")
+    || looksIdentified(e.dedupeKey ?? ""))) {
+    return Response.json(
+      { error: "Raw emails are not accepted. Update warmup-evidence.gs to send studentEmailHmac.", code: "raw_email_rejected" },
+      { status: 422 },
+    );
+  }
+
+  // Resolve email HMACs → student ids in one query.
+  const hmacs = [...new Set(
+    events.map((e) => (typeof e.studentEmailHmac === "string" ? e.studentEmailHmac.trim().toLowerCase() : ""))
+      .filter((value) => isEmailHmac(value)),
+  )];
+  const hmacToId = new Map<string, string>();
+  if (hmacs.length) {
+    const { data } = await db.from("students").select("id,email_hmac").in("email_hmac", hmacs);
+    for (const s of data || []) if (s.email_hmac) hmacToId.set(String(s.email_hmac), s.id);
   }
 
   const rows = [];
@@ -60,10 +81,11 @@ export async function POST(req: Request) {
   // said success. warmup-evidence.gs can now surface these.
   const dropped: { itemRef: string | null; reason: string }[] = [];
   for (const e of events) {
-    const studentId = e.studentId || (e.studentEmail ? emailToId.get(e.studentEmail.toLowerCase()) : undefined);
+    const hmac = typeof e.studentEmailHmac === "string" ? e.studentEmailHmac.trim().toLowerCase() : "";
+    const studentId = e.studentId || (hmac ? hmacToId.get(hmac) : undefined);
     if (!studentId) {
-      if (e.studentEmail) unmatched.push(e.studentEmail);
-      dropped.push({ itemRef: e.itemRef || null, reason: e.studentEmail ? "email_not_on_roster" : "no_student_identity" });
+      if (hmac) unmatched.push(hmac);
+      dropped.push({ itemRef: e.itemRef || null, reason: hmac ? "hmac_not_on_roster" : "no_student_identity" });
       continue;
     }
     if (e.source !== "warmup" && e.source !== "tool") {

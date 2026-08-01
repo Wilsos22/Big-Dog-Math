@@ -153,11 +153,12 @@ interface AdmissionRequest {
   requestedAt: string;
 }
 
+// Pseudonymous roster: the site knows students by alias only. The teacher can
+// resolve real names via the device-local name key (loaded on /roster).
 interface AdmissionRosterStudent {
   id: string;
   periodId: string;
-  fullName: string;
-  email: string | null;
+  alias: string | null;
 }
 
 const TEACHER_SERVER_CLIENT = {} as never;
@@ -2917,8 +2918,8 @@ export default function ControlPage() {
   }
 
   async function admitWaitingStudent(request: AdmissionRequest) {
-    const studentEmail = admissionSelections[request.id];
-    if (!teacherSession || !studentEmail || admittingRequestCode) return;
+    const studentId = admissionSelections[request.id];
+    if (!teacherSession || !studentId || admittingRequestCode) return;
 
     setAdmittingRequestCode(request.requestCode);
     setAdmissionError(null);
@@ -2929,7 +2930,7 @@ export default function ControlPage() {
         action: "admit",
         sessionId: teacherSession.id,
         requestCode: request.requestCode,
-        studentEmail,
+        studentId,
       });
       setAdmissionRequests((current) => current.filter((candidate) => candidate.id !== request.id));
       setAdmissionJoinedStudentIds((current) => current.includes(result.sessionJoin.studentId)
@@ -3982,8 +3983,8 @@ export default function ControlPage() {
               {admissionError && <p className="cx-admission-error" role="alert">{admissionError}</p>}
               <div className="cx-admission-list">
                 {admissionRequests.map((request) => {
-                  const rosterWithEmail = admissionRoster.filter((student) =>
-                    Boolean(student.email) && !admissionJoinedStudentIds.includes(student.id),
+                  const availableRoster = admissionRoster.filter((student) =>
+                    !admissionJoinedStudentIds.includes(student.id),
                   );
                   const isAdmitting = admittingRequestCode === request.requestCode;
                   return (
@@ -4001,12 +4002,12 @@ export default function ControlPage() {
                             ...current,
                             [request.id]: event.target.value,
                           }))}
-                          disabled={rosterWithEmail.length === 0 || Boolean(admittingRequestCode)}
+                          disabled={availableRoster.length === 0 || Boolean(admittingRequestCode)}
                         >
-                          <option value="">{rosterWithEmail.length ? "Choose a student" : "No unjoined students available"}</option>
-                          {rosterWithEmail.map((student) => (
-                            <option value={student.email || ""} key={student.id}>
-                              {student.fullName}{student.email ? ` - ${student.email}` : ""}
+                          <option value="">{availableRoster.length ? "Choose a student" : "No unjoined students available"}</option>
+                          {availableRoster.map((student) => (
+                            <option value={student.id} key={student.id}>
+                              {student.alias || "Unnamed student"}
                             </option>
                           ))}
                         </select>

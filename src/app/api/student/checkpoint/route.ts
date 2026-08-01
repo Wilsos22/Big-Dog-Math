@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         run_id: run.id,
         session_id: sessionId,
         student_id: student.id,
-        display_name: student.fullName,
+        display_name: student.alias,
         answer,
         is_correct: isCorrect,
         misconception,

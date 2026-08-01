@@ -59,29 +59,34 @@ begin
   values (v_session, 'Fist to five: how ready do you feel to build ratio tables on your own?', null, 'fist-to-five', 'closed')
   returning id into v_fist;
 
-  -- Everyone in the room (Kai joins but never answers).
+  -- Everyone in the room (Keen Kestrel joins but never answers). The fictional
+  -- mock emails exist only inside this file as authoring keys; the site rows
+  -- carry aliases and fake sha256 "hmacs" (see mock-classroom-seed.sql).
   insert into session_joins (session_id, student_id, display_name)
-  select v_session, s.id, s.full_name
+  select v_session, s.id, s.alias
   from students s
   where s.period_id = v_period
-    and s.email in (
-    'ada.acosta@mock.bigdogmath.example',
-    'esme.everhart@mock.bigdogmath.example',
-    'jade.juniper@mock.bigdogmath.example',
-    'cora.calloway@mock.bigdogmath.example',
-    'diego.delgado@mock.bigdogmath.example',
-    'finn.fairbanks@mock.bigdogmath.example',
-    'ivan.ishikawa@mock.bigdogmath.example',
-    'ben.beckett@mock.bigdogmath.example',
-    'greta.guzman@mock.bigdogmath.example',
-    'hana.holloway@mock.bigdogmath.example',
-    'kai.kensington@mock.bigdogmath.example'
+    and s.email_hmac in (
+      select encode(sha256(convert_to(m.email, 'UTF8')), 'hex')
+      from ( values
+        ('ada.acosta@mock.bigdogmath.example'),
+        ('esme.everhart@mock.bigdogmath.example'),
+        ('jade.juniper@mock.bigdogmath.example'),
+        ('cora.calloway@mock.bigdogmath.example'),
+        ('diego.delgado@mock.bigdogmath.example'),
+        ('finn.fairbanks@mock.bigdogmath.example'),
+        ('ivan.ishikawa@mock.bigdogmath.example'),
+        ('ben.beckett@mock.bigdogmath.example'),
+        ('greta.guzman@mock.bigdogmath.example'),
+        ('hana.holloway@mock.bigdogmath.example'),
+        ('kai.kensington@mock.bigdogmath.example')
+      ) as m(email)
     );
 
   -- Each student's readiness answers.
   insert into poll_answers (poll_id, student_id, display_name, answer)
   select case ans.q when 'q1' then v_q1 when 'q2' then v_q2 else v_fist end,
-         s.id, s.full_name, ans.answer
+         s.id, s.alias, ans.answer
   from students s
   join ( values
     ('ada.acosta@mock.bigdogmath.example', 'q1', '12'),
@@ -114,7 +119,8 @@ begin
     ('hana.holloway@mock.bigdogmath.example', 'q1', '9'),
     ('hana.holloway@mock.bigdogmath.example', 'q2', '3:4'),
     ('hana.holloway@mock.bigdogmath.example', 'fist', '1')
-  ) as ans(email, q, answer) on ans.email = s.email
+  ) as ans(email, q, answer)
+    on s.email_hmac = encode(sha256(convert_to(ans.email, 'UTF8')), 'hex')
   where s.period_id = v_period;
 
   raise notice 'Seeded mock live session % (join code MOCKLV) for City Routes.', v_session;

@@ -43,7 +43,6 @@ const MANAGE: LinkItem[] = [
   { href: "/teacher/slides", label: "Slide extras", letter: "X", color: "#7c5cd6", desc: "Place text, equations, shapes, and images over any slide" },
   { href: "/teacher/audio", label: "Audio library", letter: "A", color: "#7c5cd6", desc: "Upload music and timer sounds for this classroom laptop" },
   { href: "/roster", label: "Rosters", letter: "R", color: "#50a3a4", desc: "Periods and students" },
-  { href: "/teacher/parent-outreach", label: "Parent outreach", letter: "@", color: "#f95335", desc: "Draft notes home — nudges and praise" },
   { href: "/teacher/checkpoint-upload", label: "Upload checkpoints", letter: "U", color: "#fcaf38", desc: "Import checkpoint CSVs" },
   { href: "/builder", label: "Sequence builder", letter: "B", color: "#674a40", desc: "Build a timed state lineup" },
 ];

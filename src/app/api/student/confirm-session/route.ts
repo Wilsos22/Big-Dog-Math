@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     }
 
     const { error: joinError } = await db.from("session_joins").upsert(
-      { session_id: session.id, student_id: student.id, display_name: student.fullName },
+      { session_id: session.id, student_id: student.id, display_name: student.alias },
       { onConflict: "session_id,student_id" },
     );
     if (joinError) throw new StudentIdentityError("The verified class join could not be saved.", 500, "join_save_failed");
@@ -40,10 +40,10 @@ export async function POST(request: Request) {
         session: {
           sessionId: session.id,
           studentId: student.id,
-          name: student.fullName,
+          name: student.alias,
           syncKey: session.join_code,
         },
-        student: { id: student.id, name: student.fullName, email: student.email },
+        student: { id: student.id, name: student.alias },
       },
       { headers: { "cache-control": "no-store" } },
     );

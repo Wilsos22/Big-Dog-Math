@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   if (!periodId) return Response.json({ error: "periodId required" }, { status: 400 });
 
   const { data: students, error: sErr } = await db
-    .from("students").select("id,full_name").eq("period_id", periodId).order("full_name");
+    .from("students").select("id,alias").eq("period_id", periodId).order("alias");
   if (sErr) return Response.json({ error: sErr.message }, { status: 500 });
   const ids = (students || []).map((s) => s.id);
   if (!ids.length) return Response.json({ students: [] });
@@ -51,7 +51,7 @@ export async function GET(req: Request) {
     standardId: standardId || null,
     students: (students || []).map((s) => ({
       studentId: s.id,
-      name: s.full_name,
+      name: s.alias || "Unnamed student",
       evidence: counts.get(s.id) || 0,
       mastery: byStudent.get(s.id) || [],
     })),

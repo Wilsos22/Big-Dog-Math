@@ -1,10 +1,9 @@
-// Teacher-only evidence roll-up into the Notion Student Submissions database.
-// It keeps paper-first lessons lightweight while retaining digital checks on
-// the related student profile: tool summaries, live questions, Fist to Five,
-// and exit-ticket responses.
+// Teacher-only roll-up of today's digital checks: tool summaries, live
+// questions, Fist to Five, and exit-ticket responses, by student ALIAS.
+// The old POST that pushed this into a Notion "Student Submissions" database
+// is deleted - student work may not leave the site for Notion (FERPA
+// boundary). Grade-book export happens in the district Google Workspace.
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
-import { fetchNotionRoster } from "@/lib/notionRoster";
-import { submissionsConfigured, fetchTodaysSubmissionTitles, createSubmissionRow } from "@/lib/notionSubmissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,13 +52,13 @@ async function collect(): Promise<{ today: string; activities: Activity[] } | { 
   const today = classroomDate();
   try {
     const [{ data: students }, { data: periods }] = await Promise.all([
-      db.from("students").select("id,full_name,period_id"),
+      db.from("students").select("id,alias,period_id"),
       db.from("periods").select("id,name"),
     ]);
     const periodName = new Map(((periods || []) as { id: string; name: string }[]).map((period) => [period.id, period.name]));
-    const studentInfo = new Map(((students || []) as { id: string; full_name: string; period_id: string }[]).map((student) => [
+    const studentInfo = new Map(((students || []) as { id: string; alias: string | null; period_id: string }[]).map((student) => [
       student.id,
-      { name: student.full_name, period: periodTag(periodName.get(student.period_id) || "") },
+      { name: student.alias || "Unnamed student", period: periodTag(periodName.get(student.period_id) || "") },
     ]));
     const since = new Date(Date.now() - 18 * 3600 * 1000).toISOString();
     const activities: Activity[] = [];
@@ -192,46 +191,10 @@ export async function GET() {
   return Response.json({ connected: true, today: result.today, activities: result.activities });
 }
 
+// The POST that pushed today's student work into Notion is intentionally gone.
 export async function POST() {
-  if (!submissionsConfigured()) return Response.json({ error: "Notion is not configured (NOTION_TOKEN)." }, { status: 503 });
-  const result = await collect();
-  if ("error" in result) return Response.json({ error: result.error }, { status: 500 });
-  try {
-    const [existing, roster] = await Promise.all([
-      fetchTodaysSubmissionTitles(result.today),
-      fetchNotionRoster(),
-    ]);
-    const rosterByName = new Map(roster.map((student) => [normalized(student.name), student]));
-    let written = 0;
-    let skipped = 0;
-    for (const activity of result.activities) {
-      const title = `${activity.label} — ${activity.student} — ${result.today} — ${activity.responseKey.split(":").pop()}`;
-      if (existing.has(title)) {
-        skipped++;
-        continue;
-      }
-      const rosterStudent = rosterByName.get(normalized(activity.student));
-      await createSubmissionRow({
-        title,
-        student: activity.student,
-        studentPageId: rosterStudent?.pageId || null,
-        period: activity.period,
-        response: activity.response,
-        misconception: Boolean(activity.misconception),
-        dateIso: result.today,
-        evidenceType: activity.evidenceType,
-        lessonCode: activity.lessonCode,
-        sessionId: activity.sessionId,
-        prompt: activity.prompt,
-        responseValue: activity.responseValue,
-        correct: activity.correct,
-        standard: activity.standard,
-        responseKey: activity.responseKey,
-      });
-      written++;
-    }
-    return Response.json({ ok: true, written, skipped, total: result.activities.length });
-  } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Push failed." }, { status: 500 });
-  }
+  return Response.json(
+    { error: "Student work may not be pushed to Notion. Export happens in the district Google Workspace." },
+    { status: 410 },
+  );
 }

@@ -54,7 +54,7 @@ export interface AssignmentMissAgg {
 export interface SecureAssignmentContext {
   assignment: Assignment | null;
   attemptCount: number;
-  student: { id: string; fullName: string };
+  student: { id: string; alias: string };
 }
 
 export async function getSecureAssignmentContext(id: string): Promise<SecureAssignmentContext | null> {

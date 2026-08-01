@@ -1,9 +1,11 @@
 "use client";
 
 // Day review — what each student did in the in-app tools today (across all
-// periods), read from the proficiency spine. One button pushes the day into the
-// Notion "Student Submissions" database so it lands on each lesson page after
-// school. Reads only through the gated /api/submissions route.
+// periods), read from the proficiency spine. Reads only through the gated
+// /api/submissions route. The old push-to-Notion button is gone for good:
+// student work may not leave the site for Notion (FERPA boundary). Grade-book
+// export happens in the district Google Workspace, where aliases resolve back
+// to names.
 
 import { useCallback, useEffect, useState } from "react";
 import SiteNav from "@/components/SiteNav";
@@ -14,7 +16,6 @@ interface Data { connected?: boolean; today?: string; activities: Activity[]; er
 export default function DayReviewPage() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
-  const [push, setPush] = useState<{ busy?: boolean; msg?: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -23,15 +24,6 @@ export default function DayReviewPage() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); }, [load]);
-
-  const pushToNotion = useCallback(async () => {
-    setPush({ busy: true });
-    try {
-      const r = await fetch("/api/submissions", { method: "POST" });
-      const d = await r.json();
-      setPush({ msg: d.error ? d.error : `Pushed ${d.written} to Notion${d.skipped ? ` (${d.skipped} already there)` : ""}.` });
-    } catch { setPush({ msg: "Couldn't reach the sync." }); }
-  }, []);
 
   const d = data;
   return (
@@ -42,10 +34,6 @@ export default function DayReviewPage() {
         .dr-wrap { max-width:960px; margin:0 auto; padding:20px clamp(16px,3vw,28px); }
         .dr-h1 { font-size:1.7rem; font-weight:700; letter-spacing:-0.02em; margin:6px 0 2px; }
         .dr-sub { color:var(--bdb-ink-soft); font-size:0.95rem; margin:0 0 16px; }
-        .dr-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
-        .dr-btn { font:inherit; font-weight:700; font-size:0.88rem; padding:10px 16px; border-radius:12px; border:1px solid var(--bdb-line); background:var(--bdb-ink); color:#fff; cursor:pointer; }
-        .dr-btn:disabled { opacity:0.55; cursor:default; }
-        .dr-msg { font-size:0.88rem; font-weight:700; color:var(--bdb-green); }
         .dr-note { background:var(--bdb-card); border:1px solid var(--bdb-line); border-left:5px solid var(--bdb-amber); border-radius:var(--bdb-r); padding:12px 16px; margin:0 0 16px; font-size:0.9rem; color:var(--bdb-ink-soft); }
         .dr-empty { color:var(--bdb-ink-faint); font-size:0.92rem; padding:8px 2px; }
         table.dr-t { width:100%; border-collapse:collapse; background:var(--bdb-card); border:1px solid var(--bdb-line); border-radius:var(--bdb-r); overflow:hidden; }
@@ -58,7 +46,7 @@ export default function DayReviewPage() {
 
       <div className="dr-wrap">
         <h1 className="dr-h1">Day review</h1>
-        <p className="dr-sub">What each student did in the tools today{d?.today ? ` (${d.today})` : ""}. Push it to your Notion Student Submissions and it lands on each lesson page.</p>
+        <p className="dr-sub">What each student did in the tools today{d?.today ? ` (${d.today})` : ""}. Students appear by alias; the roster Sheet in Google Workspace is the key.</p>
 
         {loading && <div className="dr-empty">Loading.</div>}
         {d && !d.connected && !d.error && <div className="dr-note">Supabase isn&apos;t connected yet — add the keys in Vercel and redeploy.</div>}
@@ -66,11 +54,6 @@ export default function DayReviewPage() {
 
         {d && (d.connected || d.activities.length > 0) && (
           <>
-            <div className="dr-bar">
-              <button className="dr-btn" disabled={push?.busy || d.activities.length === 0} onClick={pushToNotion}>{push?.busy ? "Pushing…" : "Push today to Notion"}</button>
-              {push?.msg && <span className="dr-msg">{push.msg}</span>}
-            </div>
-
             {d.activities.length === 0 ? (
               <div className="dr-empty">No in-app tool work recorded today yet. (Students need to have joined a session; the Area Model, Equation Builder, GEMS, Combine Like Terms, and Balance Beam log their work.)</div>
             ) : (

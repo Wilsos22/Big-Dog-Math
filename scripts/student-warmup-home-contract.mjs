@@ -123,12 +123,16 @@ if (!warmupVerify.includes('.eq("verification_token", warmupToken)')
   || !warmupVerify.includes("receipt.warmup_resource_key !== resourceKey")
   || !warmupVerify.includes("currentWarmupResourceKey(session.live_flow")
   || !warmupVerify.includes('db.rpc("bdm_complete_warmup_identity"')
-  || !warmupVerify.includes("p_student_email: email")
-  || warmupVerify.includes('.ilike("email", email)')) {
-  throw new Error("Google Form verification must consume the exact token once for the exact assigned Form and normalized same-period roster email.");
+  || !warmupVerify.includes("p_student_email_hmac: emailHmac")) {
+  throw new Error("Google Form verification must consume the exact token once for the exact assigned Form and the same-period roster email HMAC.");
 }
-if (warmupVerify.includes('.ilike("email"') || studentIdentity.includes('.ilike("email"')) {
-  throw new Error("Roster identity lookup must compare normalized emails exactly, without SQL wildcard matching.");
+// FERPA boundary: the verify seam carries the HMAC, never the raw email, and
+// refuses identified payloads outright.
+if (!warmupVerify.includes("raw_email_rejected")
+  || warmupVerify.includes('.ilike("email"')
+  || studentIdentity.includes('.ilike("email"')
+  || /students"\)[\s\S]{0,120}?select\("[^"]*[^_]email[,"]/.test(warmupVerify)) {
+  throw new Error("Roster identity lookup must match by email_hmac exactly and refuse raw emails.");
 }
 
 const admitPath = sliceBetween(teacherSession, 'if (body.action === "admit")', 'if (body.action === "start")');
@@ -138,7 +142,7 @@ if (!admitPath.includes('db.rpc("bdm_admit_student_join_request_with_warmup"')
   throw new Error("The explicit teacher recovery must atomically complete the same session receipt.");
 }
 
-const warmupPollingEffect = sliceBetween(home, "const refreshWarmup = async", "async function signInWithGoogle");
+const warmupPollingEffect = sliceBetween(home, "const refreshWarmup = async", "async function requestTeacherHelp");
 if (!warmupPollingEffect.includes("setWarmupHref(result.href)")
   || !warmupPollingEffect.includes("setWarmupToken(result.warmupToken)")
   || !warmupPollingEffect.includes("That session ended. Enter the new class code.")) {
@@ -188,6 +192,22 @@ for (const requiredSql of [
 ]) {
   if (!migration.toLowerCase().includes(requiredSql)) {
     throw new Error(`The warm-up receipt migration is missing: ${requiredSql}`);
+  }
+}
+
+// The FERPA migration re-points the identity RPCs at the email HMAC. Both SQL
+// files exist by design - run order is student-warmup-sessions.sql first, then
+// ferpa-pseudonym-schema.sql replaces the functions (supabase/FERPA-CUTOVER.md).
+const ferpaMigration = read("supabase/ferpa-pseudonym-schema.sql");
+for (const requiredSql of [
+  "add column if not exists alias text",
+  "students_email_hmac_idx",
+  "p_student_email_hmac",
+  "v_student_email_hmac is distinct from lower(btrim(p_student_email_hmac))",
+  "bdm_admit_student_join_request_with_warmup",
+]) {
+  if (!ferpaMigration.toLowerCase().includes(requiredSql)) {
+    throw new Error(`The FERPA pseudonym migration is missing: ${requiredSql}`);
   }
 }
 

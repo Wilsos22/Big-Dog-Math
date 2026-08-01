@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 type SpinnerStudentRow = {
   id: string;
-  full_name: string;
+  alias: string | null;
 };
 
 function uuid(value: string | null): string {
@@ -15,7 +15,7 @@ function uuid(value: string | null): string {
 function spinnerStudents(rows: SpinnerStudentRow[]) {
   return rows.map((student) => ({
     id: student.id,
-    fullName: student.full_name,
+    fullName: student.alias || "Unnamed student",
   }));
 }
 
@@ -60,10 +60,10 @@ export async function GET(request: Request) {
     if (joinedIds.length >= minimum) {
       const { data: joinedStudents, error: joinedStudentError } = await db
         .from("students")
-        .select("id,full_name")
+        .select("id,alias")
         .eq("period_id", periodId)
         .in("id", joinedIds)
-        .order("full_name");
+        .order("alias");
       if (joinedStudentError) return Response.json({ error: joinedStudentError.message }, { status: 500 });
       if ((joinedStudents ?? []).length >= minimum) {
         return Response.json(
@@ -76,9 +76,9 @@ export async function GET(request: Request) {
 
   const { data: students, error: studentError } = await db
     .from("students")
-    .select("id,full_name")
+    .select("id,alias")
     .eq("period_id", periodId)
-    .order("full_name");
+    .order("alias");
   if (studentError) return Response.json({ error: studentError.message }, { status: 500 });
   return Response.json(
     { students: spinnerStudents(students ?? []), source: "period" },

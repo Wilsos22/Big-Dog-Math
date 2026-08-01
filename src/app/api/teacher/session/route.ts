@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 type SessionAction =
   | { action: "start"; periodId?: unknown; joinCode?: unknown; assignmentId?: unknown }
   | { action: "update"; sessionId?: unknown; broadcast?: unknown; liveFlow?: unknown; expectedLiveFlowUpdatedAt?: unknown; remoteCommand?: unknown; expectedRemoteCommandNonce?: unknown }
-  | { action: "admit"; sessionId?: unknown; requestCode?: unknown; studentEmail?: unknown }
+  | { action: "admit"; sessionId?: unknown; requestCode?: unknown; studentId?: unknown }
   | { action: "close"; sessionId?: unknown };
 
 type AdmissionResolution = {
@@ -156,11 +156,13 @@ export async function POST(request: Request) {
   if (body.action === "admit") {
     const sessionId = text(body.sessionId, 80);
     const requestCode = text(body.requestCode, 6).toUpperCase();
-    const studentEmail = text(body.studentEmail, 320).toLowerCase();
-    if (!sessionId || !/^[A-HJ-NP-Z2-9]{6}$/.test(requestCode) || !/^[^\s@]+@[^\s@]+$/.test(studentEmail)) {
+    // Admission is keyed by roster student id - the site has no student emails
+    // to match against (pseudonymous roster; see src/lib/pseudonym.ts).
+    const studentId = text(body.studentId, 80);
+    if (!sessionId || !/^[A-HJ-NP-Z2-9]{6}$/.test(requestCode) || !studentId) {
       return admissionFailure({
         status: 400,
-        message: "A session, request code, and roster email are required.",
+        message: "A session, request code, and roster student are required.",
         reason: "invalid_admission_request",
         outcome: "denied",
         sessionId: sessionId || null,
@@ -191,10 +193,11 @@ export async function POST(request: Request) {
       });
     }
 
-    const { data: periodStudents, error: studentError } = await db
+    const { data: student, error: studentError } = await db
       .from("students")
-      .select("id,period_id,full_name,email,auth_user_id")
-      .eq("period_id", session.period_id);
+      .select("id,period_id,alias,email_hmac,auth_user_id")
+      .eq("id", studentId)
+      .maybeSingle();
     if (studentError) {
       return admissionFailure({
         status: 500,
@@ -204,15 +207,11 @@ export async function POST(request: Request) {
         sessionId,
       });
     }
-    const studentMatches = (periodStudents ?? []).filter(
-      (candidate) => text(candidate.email, 320).toLowerCase() === studentEmail,
-    );
-    const student = studentMatches.length === 1 ? studentMatches[0] : null;
-    if (!student || !student.email) {
+    if (!student || student.period_id !== session.period_id) {
       return admissionFailure({
         status: 403,
         message: "Choose a student from this session's roster.",
-        reason: studentMatches.length > 1 ? "duplicate_roster_email" : "roster_period_mismatch",
+        reason: "roster_period_mismatch",
         outcome: "denied",
         sessionId,
         studentId: student?.id ?? null,
@@ -340,10 +339,10 @@ export async function POST(request: Request) {
       p_session_id: sessionId,
       p_request_code: requestCode,
       p_student_id: student.id,
-      p_student_email: student.email,
+      p_student_email_hmac: student.email_hmac,
       p_auth_user_id: pending.auth_user_id,
       p_expected_student_auth_user_id: student.auth_user_id,
-      p_display_name: student.full_name,
+      p_display_name: student.alias || "Student",
     });
     if (resolutionResult.error) {
       if (isMissingAdmissionSchema(resolutionResult.error.code)) {
@@ -400,7 +399,7 @@ export async function POST(request: Request) {
         sessionJoin: {
           id: resolution.join_id,
           studentId: resolution.resolved_student_id,
-          displayName: resolution.resolved_display_name || student.full_name,
+          displayName: resolution.resolved_display_name || student.alias || "Student",
           joinedAt: resolution.resolved_joined_at,
         },
       },

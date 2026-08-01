@@ -99,7 +99,7 @@ export async function POST(request: Request) {
       challenge_id: challenge.id,
       session_id: sessionId,
       student_id: student.id,
-      display_name: student.fullName,
+      display_name: student.alias,
       prompt,
       correct_answer: correctAnswer,
       answer,

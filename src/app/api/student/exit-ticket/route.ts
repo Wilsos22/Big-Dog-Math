@@ -65,7 +65,7 @@ export async function POST(request: Request) {
         exit_ticket_id: ticket.id,
         session_id: sessionId,
         student_id: student.id,
-        display_name: student.fullName,
+        display_name: student.alias,
         response,
       },
       { onConflict: "exit_ticket_id,student_id" },

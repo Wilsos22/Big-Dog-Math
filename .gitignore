@@ -47,8 +47,15 @@ repomix-output.*
 # that legitimately carry it.
 *roster*
 *Roster*
+!src/app/roster/
 !src/app/roster/**
+!src/app/api/roster/
 !src/app/api/roster/**
+!src/app/api/teacher/roster/
+!src/app/api/teacher/roster/**
+!src/app/api/teacher/spinner-roster/
+!src/app/api/teacher/spinner-roster/**
+!warmup-roster-push.gs
 !scripts/import-roster.py
 !scripts/fixtures/*roster*
 # The other shapes district student data arrives in.

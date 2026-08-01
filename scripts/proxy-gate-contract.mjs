@@ -25,7 +25,9 @@ const prefixes = extractStrings("const PROTECTED_PREFIXES = [");
 const rollout = extractStrings("const SECURE_ROLLOUT_PREFIXES = [");
 const matcher = extractStrings("matcher: [");
 
-if (prefixes.length < 18 || rollout.length < 2 || matcher.length < prefixes.length) {
+// 16 prefixes since the FERPA cutover removed /api/iready (Notion sync
+// deleted) and /api/outreach (Notion-backed parent outreach retired).
+if (prefixes.length < 16 || rollout.length < 2 || matcher.length < prefixes.length) {
   throw new Error("proxy.ts parse looks wrong - the gate contract itself needs updating.");
 }
 

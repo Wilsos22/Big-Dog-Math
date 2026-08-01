@@ -1,14 +1,21 @@
 import type { User } from "@supabase/supabase-js";
-import { recordSecurityEvent } from "@/lib/securityAudit";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
+
+// Student identity is PSEUDONYMOUS on the site (see src/lib/pseudonym.ts).
+// A student row carries an alias and an email_hmac - never a name or email -
+// and the ONLY way a device links to a roster row is the Google warm-up
+// receipt chain: Apps Script verifies the district sign-in inside Workspace
+// and posts the HMAC of the respondent email to /api/student/warmup-verify.
+// The old direct Google OAuth sign-in path is deliberately gone: it put
+// district emails into Supabase Auth, which the FERPA boundary forbids.
 
 export type VerifiedStudent = {
   id: string;
-  fullName: string;
+  alias: string;
   periodId: string;
-  email: string;
+  emailHmac: string | null;
   authUserId: string;
-  identityMethod: "google" | "verified-warmup";
+  identityMethod: "verified-warmup";
 };
 
 export type VerifiedStudentSession = {
@@ -28,9 +35,9 @@ export type StudentAuth = {
 
 type StudentRow = {
   id: string;
-  full_name: string;
+  alias: string | null;
   period_id: string;
-  email: string | null;
+  email_hmac: string | null;
   auth_user_id: string | null;
 };
 
@@ -69,22 +76,16 @@ async function authenticatedUser(request: Request): Promise<User> {
   return authData.user;
 }
 
-function providersFor(user: User): string[] {
-  const providers = user.app_metadata?.providers;
-  if (Array.isArray(providers)) return providers.filter((value): value is string => typeof value === "string");
-  return typeof user.app_metadata?.provider === "string" ? [user.app_metadata.provider] : [];
-}
-
-function verifiedGoogleEmail(user: User): string {
-  const email = user.email?.trim().toLowerCase();
-  if (!providersFor(user).includes("google") || !email || !user.email_confirmed_at) {
+// Only anonymous Supabase Auth users exist under the pseudonymous model - a
+// Google-provider user would carry a district email into Supabase Auth.
+function assertAnonymousUser(user: User): void {
+  if (!user.is_anonymous) {
     throw new StudentIdentityError(
-      "Use your verified school Google account.",
+      "This sign-in method is no longer used. Enter the class code to rejoin.",
       403,
-      "google_identity_required",
+      "identified_signin_retired",
     );
   }
-  return email;
 }
 
 async function linkedStudent(authUserId: string): Promise<StudentRow | null> {
@@ -93,126 +94,56 @@ async function linkedStudent(authUserId: string): Promise<StudentRow | null> {
 
   const { data, error } = await db
     .from("students")
-    .select("id,full_name,period_id,email,auth_user_id")
+    .select("id,alias,period_id,email_hmac,auth_user_id")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
   if (error) throw new StudentIdentityError("Student account lookup failed.", 500, "linked_lookup_failed");
   return data as StudentRow | null;
 }
 
-async function claimGoogleRosterRow(user: User): Promise<StudentRow> {
-  const db = getSupabaseAdmin();
-  if (!db) throw new StudentIdentityError("Student sign-in is not configured.", 503, "identity_not_configured");
-
-  const email = verifiedGoogleEmail(user);
-  const { data, error } = await db
-    .from("students")
-    .select("id,full_name,period_id,email,auth_user_id");
-  if (error) throw new StudentIdentityError("Student account lookup failed.", 500, "roster_lookup_failed");
-  const matches = (data ?? []).filter((row) => row.email?.trim().toLowerCase() === email);
-  if (matches.length !== 1) {
-    throw new StudentIdentityError(
-      matches.length ? "This Google email appears more than once on the roster." : "This Google account is not on a class roster.",
-      matches.length ? 409 : 403,
-      matches.length ? "duplicate_roster_email" : "not_on_roster",
-    );
-  }
-
-  const candidate = matches[0] as StudentRow;
-  if (candidate.auth_user_id === user.id) return candidate;
-
-  if (candidate.auth_user_id) {
-    const { data: previous } = await db.auth.admin.getUserById(candidate.auth_user_id);
-    if (!previous.user?.is_anonymous) {
-      throw new StudentIdentityError(
-        "This roster account is already linked to another sign-in.",
-        409,
-        "roster_already_claimed",
-      );
-    }
-  }
-
-  let claim = db
-    .from("students")
-    .update({ auth_user_id: user.id, auth_claimed_at: new Date().toISOString() })
-    .eq("id", candidate.id);
-  claim = candidate.auth_user_id
-    ? claim.eq("auth_user_id", candidate.auth_user_id)
-    : claim.is("auth_user_id", null);
-
-  const { data: claimed, error: claimError } = await claim
-    .select("id,full_name,period_id,email,auth_user_id")
-    .maybeSingle();
-  if (claimError) throw new StudentIdentityError("Student account linking failed.", 500, "claim_failed");
-  if (!claimed) {
-    throw new StudentIdentityError(
-      "Student account linking changed. Sign in again.",
-      409,
-      "claim_conflict",
-    );
-  }
-  void recordSecurityEvent({
-    eventType: "google_identity_linked",
-    outcome: "allowed",
-    authUserId: user.id,
-    studentId: (claimed as StudentRow).id,
-  });
-  return claimed as StudentRow;
-}
-
 export async function requireVerifiedStudent(request: Request): Promise<VerifiedStudent> {
   const user = await authenticatedUser(request);
-  let student = await linkedStudent(user.id);
-  let identityMethod: VerifiedStudent["identityMethod"];
+  assertAnonymousUser(user);
+  const student = await linkedStudent(user.id);
 
-  if (user.is_anonymous) {
-    if (!student) {
-      throw new StudentIdentityError(
-        "Finish the Google warm-up so Big Dog can verify your school account.",
-        428,
-        "warmup_verification_required",
-      );
-    }
-    identityMethod = "verified-warmup";
-  } else {
-    verifiedGoogleEmail(user);
-    student = student ?? await claimGoogleRosterRow(user);
-    identityMethod = "google";
+  if (!student) {
+    throw new StudentIdentityError(
+      "Finish the Google warm-up so Big Dog can verify your school account.",
+      428,
+      "warmup_verification_required",
+    );
   }
-
-  if (!student.email) {
-    throw new StudentIdentityError("Your roster record is missing a school email.", 409, "roster_email_missing");
+  if (!student.alias) {
+    throw new StudentIdentityError(
+      "Your roster record is missing its alias. Ask your teacher to re-run the roster push.",
+      409,
+      "roster_alias_missing",
+    );
   }
 
   return {
     id: student.id,
-    fullName: student.full_name,
+    alias: student.alias,
     periodId: student.period_id,
-    email: student.email,
+    emailHmac: student.email_hmac,
     authUserId: user.id,
-    identityMethod,
+    identityMethod: "verified-warmup",
   };
 }
 
 export async function requireStudentAuth(request: Request): Promise<StudentAuth> {
   const user = await authenticatedUser(request);
-  if (!user.is_anonymous) verifiedGoogleEmail(user);
+  assertAnonymousUser(user);
 
   return {
     authUserId: user.id,
-    isAnonymous: Boolean(user.is_anonymous),
+    isAnonymous: true,
   };
 }
 
 export async function requireAnonymousStudentAuth(request: Request): Promise<AnonymousStudentAuth> {
   const user = await authenticatedUser(request);
-  if (!user.is_anonymous) {
-    throw new StudentIdentityError(
-      "Your verified account can join the class directly.",
-      409,
-      "verified_student_admission_not_needed",
-    );
-  }
+  assertAnonymousUser(user);
   return { authUserId: user.id };
 }
 

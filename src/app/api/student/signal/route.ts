@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       {
         session_id: session.id,
         student_id: student.id,
-        display_name: student.fullName,
+        display_name: student.alias,
         signal,
         step_index: stepIndex,
         updated_at: new Date().toISOString(),

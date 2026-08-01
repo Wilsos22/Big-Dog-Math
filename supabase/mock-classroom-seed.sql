@@ -44,24 +44,33 @@ update periods
      where name <> 'BDM Mock Class' and upper(class_code) = 'MOCK'
    );
 
-insert into students (period_id, full_name, email)
-select p.id, r.full_name, r.email
+-- Pseudonymous roster (FERPA model): the site stores aliases + email HMACs
+-- only. The fictional mock emails below exist ONLY inside this file as stable
+-- authoring keys - each becomes a fake "hmac" via plain sha256 (fine for mock
+-- rows: they never need to match a real Workspace HMAC). The alias keeps the
+-- old mock student's initial so practice-run notes still line up
+-- (Amber Fox = the student formerly seeded as Ada A., and so on).
+insert into students (period_id, alias, email_hmac)
+select p.id, r.alias, encode(sha256(convert_to(r.email, 'UTF8')), 'hex')
 from periods p
 join ( values
-  ('Ada Acosta',     'ada.acosta@mock.bigdogmath.example'),
-  ('Ben Beckett',    'ben.beckett@mock.bigdogmath.example'),
-  ('Cora Calloway',  'cora.calloway@mock.bigdogmath.example'),
-  ('Diego Delgado',  'diego.delgado@mock.bigdogmath.example'),
-  ('Esme Everhart',  'esme.everhart@mock.bigdogmath.example'),
-  ('Finn Fairbanks', 'finn.fairbanks@mock.bigdogmath.example'),
-  ('Greta Guzman',   'greta.guzman@mock.bigdogmath.example'),
-  ('Hana Holloway',  'hana.holloway@mock.bigdogmath.example'),
-  ('Ivan Ishikawa',  'ivan.ishikawa@mock.bigdogmath.example'),
-  ('Jade Juniper',   'jade.juniper@mock.bigdogmath.example'),
-  ('Kai Kensington', 'kai.kensington@mock.bigdogmath.example')
-) as r(full_name, email) on true
+  ('Amber Fox',       'ada.acosta@mock.bigdogmath.example'),
+  ('Bold Badger',     'ben.beckett@mock.bigdogmath.example'),
+  ('Calm Condor',     'cora.calloway@mock.bigdogmath.example'),
+  ('Daring Dolphin',  'diego.delgado@mock.bigdogmath.example'),
+  ('Eager Eagle',     'esme.everhart@mock.bigdogmath.example'),
+  ('Fearless Falcon', 'finn.fairbanks@mock.bigdogmath.example'),
+  ('Golden Gecko',    'greta.guzman@mock.bigdogmath.example'),
+  ('Happy Heron',     'hana.holloway@mock.bigdogmath.example'),
+  ('Icy Ibex',        'ivan.ishikawa@mock.bigdogmath.example'),
+  ('Jolly Jaguar',    'jade.juniper@mock.bigdogmath.example'),
+  ('Keen Kestrel',    'kai.kensington@mock.bigdogmath.example')
+) as r(alias, email) on true
 where p.name = 'BDM Mock Class'
-  and not exists (select 1 from students s where s.email = r.email);
+  and not exists (
+    select 1 from students s
+    where s.email_hmac = encode(sha256(convert_to(r.email, 'UTF8')), 'hex')
+  );
 
 -- ── Part B: i-Ready Fall baselines ──────────────────────────────────────────
 -- Initializes each mastery bar and drives the "i-Ready agrees" corroboration on
@@ -122,7 +131,8 @@ join ( values
   ('ivan.ishikawa@mock.bigdogmath.example','Algebra and Algebraic Thinking', 600),
   ('ivan.ishikawa@mock.bigdogmath.example','Measurement and Data',           515),
   ('ivan.ishikawa@mock.bigdogmath.example','Geometry',                       525)
-) as ir(email, domain, scale) on ir.email = s.email
+) as ir(email, domain, scale)
+  on s.email_hmac = encode(sha256(convert_to(ir.email, 'UTF8')), 'hex')
 where s.period_id = (select id from periods where name = 'BDM Mock Class');
 
 commit;
@@ -208,7 +218,8 @@ begin
       ('ivan.ishikawa@mock.bigdogmath.example', 'Algebra and Algebraic Thinking', 4, 0.0, null),
       ('ivan.ishikawa@mock.bigdogmath.example', 'Measurement and Data',           1, 0.6, 'confuses mean and median'),
       ('ivan.ishikawa@mock.bigdogmath.example', 'Geometry',                       2, 0.0, 'confuses area vs perimeter')
-    ) as prof(email, domain, base, trend, miss_tag) on prof.email = s.email
+    ) as prof(email, domain, base, trend, miss_tag)
+      on s.email_hmac = encode(sha256(convert_to(prof.email, 'UTF8')), 'hex')
     where s.period_id = v_period
   loop
     for v_day in 0..5 loop

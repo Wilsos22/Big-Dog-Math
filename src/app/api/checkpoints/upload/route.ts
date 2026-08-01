@@ -10,6 +10,7 @@
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { parseCheckpointCsv } from "@/lib/checkpointCsv";
 import { recomputePeriod } from "@/lib/recompute";
+import { looksIdentified } from "@/lib/pseudonym";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,13 +29,27 @@ export async function POST(req: Request) {
   const { rows, errors, checkpoints } = parseCheckpointCsv(body.csv);
   if (!rows.length) return Response.json({ error: `No usable rows. ${errors.join(" ")}` }, { status: 422 });
 
-  // Resolve students by email.
-  const emails = [...new Set(rows.map((r) => r.email))];
+  // FERPA boundary: this route accepts ALIASES only. A CSV still carrying
+  // emails means the browser-side translation was skipped - refuse the whole
+  // upload rather than store identity.
+  if (rows.some((r) => !r.alias || r.email || looksIdentified(r.alias))) {
+    return Response.json(
+      { error: "This CSV still carries emails. Load your name key on the upload page so rows translate to aliases first.", code: "identified_csv_rejected" },
+      { status: 422 },
+    );
+  }
+
+  // Resolve students by alias (case-insensitive).
+  const aliases = [...new Set(rows.map((r) => r.alias.toLowerCase()))];
   const { data: students, error: sErr } = await db
-    .from("students").select("id,email,period_id,full_name").in("email", emails);
+    .from("students").select("id,alias,period_id");
   if (sErr) return Response.json({ error: sErr.message }, { status: 500 });
-  const byEmail = new Map((students || []).map((s) => [String(s.email).toLowerCase(), s]));
-  const unmatched = emails.filter((e) => !byEmail.has(e));
+  const byAlias = new Map(
+    (students || [])
+      .filter((s) => s.alias)
+      .map((s) => [String(s.alias).toLowerCase(), s]),
+  );
+  const unmatched = aliases.filter((a) => !byAlias.has(a));
 
   // One run per (checkpoint × item): reuse existing runs so re-uploads are idempotent.
   const { data: existingRuns } = await db
@@ -72,7 +87,7 @@ export async function POST(req: Request) {
   const inserts = [];
   let skippedExisting = 0;
   for (const r of rows) {
-    const stu = byEmail.get(r.email);
+    const stu = byAlias.get(r.alias.toLowerCase());
     if (!stu) continue;
     const rid = runId.get(runKey(r.checkpoint, r.item))!;
     if (have.has(`${rid}|${stu.id}`)) { skippedExisting += 1; continue; }
@@ -80,7 +95,7 @@ export async function POST(req: Request) {
     inserts.push({
       run_id: rid,
       student_id: stu.id,
-      display_name: stu.full_name,
+      display_name: stu.alias,
       answer: null,
       is_correct: r.correct,
       misconception: r.misconception,
@@ -94,7 +109,8 @@ export async function POST(req: Request) {
   }
 
   // Recompute every affected period so bars + stages move now.
-  const periodIds = [...new Set((students || []).map((s) => s.period_id).filter(Boolean))];
+  const matchedStudents = aliases.map((a) => byAlias.get(a)).filter(Boolean) as { period_id: string }[];
+  const periodIds = [...new Set(matchedStudents.map((s) => s.period_id).filter(Boolean))];
   const recomputed = [];
   for (const pid of periodIds) {
     const result = await recomputePeriod(db, pid);
@@ -107,8 +123,8 @@ export async function POST(req: Request) {
     itemRuns: runId.size,
     resultsInserted: inserts.length,
     skippedExisting,
-    studentsMatched: emails.length - unmatched.length,
-    unmatchedEmails: unmatched,
+    studentsMatched: aliases.length - unmatched.length,
+    unmatchedAliases: unmatched,
     parseWarnings: errors,
     periodsRecomputed: recomputed.length,
   });

@@ -25,7 +25,13 @@ delete from recommendations;
 delete from student_warmup_sessions;
 
 -- Student work and participation
-delete from abbie_questions;
+-- (abbie_questions is dropped entirely by ferpa-pii-scrub.sql; the guard keeps
+-- this wipe runnable both before and after that migration.)
+do $$ begin
+  if to_regclass('public.abbie_questions') is not null then
+    delete from abbie_questions;
+  end if;
+end $$;
 delete from challenge_attempts;
 delete from checkpoint_results;
 delete from exit_ticket_responses;

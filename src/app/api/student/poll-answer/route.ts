@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     const base = {
       poll_id: poll.id,
       student_id: student.id,
-      display_name: student.fullName,
+      display_name: student.alias,
       answer,
       // Only sent when present so plain polls keep working before the
       // poll-explanations.sql / poll-structured-numeric.sql migrations have
