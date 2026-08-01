@@ -328,6 +328,34 @@ export default function SessionPage() {
     setSession({ id: sessionId, code, periodName, periodId });
     setJoins([]); setAdmissionRequests([]); setBroadcast(data.broadcast || "free");
     setOpenCount(1); setEndNotice(null);
+
+    // Starting a class starts today's lesson - there is no separate "Start
+    // lesson" tap anymore. This arms step 0, the warm-up state; ClassSync holds
+    // students on the homepage through warm-up (it only moves the room on the
+    // first Advance past it), so auto-starting does NOT pull anyone off the
+    // warm-up card - it just means the teacher's first Next moves the class
+    // instead of a second launch button. If nothing is published today, the
+    // start-lesson call is skipped and the session stays in free mode exactly
+    // as before; if it errors, the "Start today's lesson" button is still there.
+    // Uses the fresh sessionId directly - session state is not set yet, so
+    // sendFlowAction (which gates on it) would bail here.
+    if (todayLesson?.id || todayLesson?.lessonCode) {
+      try {
+        const started = await teacherPost<{
+          session?: { liveFlow: LiveClassFlowSnapshot | null };
+          liveFlow?: LiveClassFlowSnapshot | null;
+        }>("/api/control-remote", {
+          action: "start-lesson",
+          sessionId,
+          notionLessonId: todayLesson?.id || "",
+          lessonCode: todayLesson?.lessonCode || "",
+        });
+        const nextFlow = started.session?.liveFlow || started.liveFlow || null;
+        if (nextFlow) { setLiveFlow(nextFlow); setBroadcast(LIVE_FLOW_MODE); }
+      } catch {
+        // Leave the session in free mode - the Start today's lesson button remains.
+      }
+    }
   }
   function adoptOpenSession(row: TeacherSessionRow) {
     const periodName = periods.find((period) => period.id === row.period_id)?.name || "Class";
