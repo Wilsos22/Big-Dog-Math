@@ -52,6 +52,31 @@ function playDing() {
   }
 }
 
+// A single short blip for the last-five-seconds countdown. Deliberately lighter
+// and higher than the ding, so a tick never gets mistaken for the beat change.
+function playTick() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const start = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 1046;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.2, start + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + 0.14);
+    window.setTimeout(() => { try { void ctx.close(); } catch { /* ignore */ } }, 300);
+  } catch {
+    /* audio unavailable - the highlight is the primary cue */
+  }
+}
+
 export interface DiscussionTimelineProps {
   phases: AuthoredDiscussionPhase[];
   totalSeconds: number;
@@ -73,6 +98,7 @@ export default function DiscussionTimeline({
 }: DiscussionTimelineProps) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const lastPhaseRef = useRef<number>(-1);
+  const lastTickRef = useRef<number | null>(null);
 
   // Tick locally only while running and anchored to a shared endsAt, so the
   // bars move smoothly and identically on every device. Paused or un-anchored,
@@ -104,6 +130,24 @@ export default function DiscussionTimeline({
       else if (progress.done) playDing();
     }
   }, [progress.index, progress.done, sound]);
+
+  // The last five seconds of each beat tick once per second, so the room hears
+  // the wrap-up coming before the ding lands. Projector only (sound), like the
+  // ding - never thirty Chromebooks. Re-arms above 5s so every beat counts down.
+  const activePhase = !progress.done ? phases[progress.index] : undefined;
+  const phaseSecondsLeft = activePhase
+    ? Math.max(0, Math.ceil(activePhase.seconds - progress.phaseElapsed))
+    : 0;
+  useEffect(() => {
+    if (!sound || progress.done || phaseSecondsLeft > 5) {
+      lastTickRef.current = null;
+      return;
+    }
+    if (phaseSecondsLeft > 0 && phaseSecondsLeft !== lastTickRef.current) {
+      lastTickRef.current = phaseSecondsLeft;
+      playTick();
+    }
+  }, [phaseSecondsLeft, sound, progress.done]);
 
   return (
     <div className="dt-root" aria-label="Discussion protocol">
