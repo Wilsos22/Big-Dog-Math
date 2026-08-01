@@ -264,6 +264,107 @@ function bdmCanvasPageSlug_(lesson) {
   return ("bdm-" + base).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+// Parse at NOON so a timezone offset can never roll the date to the day
+// before, which would file a Monday lesson under the previous week.
+function bdmParseIsoDate_(value) {
+  const m = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0) : null;
+}
+
+function bdmMondayOf_(date) {
+  const d = new Date(date.getTime());
+  const day = d.getDay(); // 0 = Sunday
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+  return d;
+}
+
+// Canvas MODULES are weeks here. Note the name collision to watch for: the
+// lesson payload's own `module` field is the CURRICULUM module (M1, M2) and
+// has nothing to do with this.
+//
+// Week numbering needs BDM_SCHOOL_YEAR_START (e.g. "2026-08-10"). Without it
+// the module is still created, just labelled by date instead of number - a
+// missing property should not stop the day from posting.
+function bdmWeekInfo_(lessonDate) {
+  const date = bdmParseIsoDate_(lessonDate);
+  if (!date) return null;
+  const monday = bdmMondayOf_(date);
+  const friday = new Date(monday.getTime());
+  friday.setDate(friday.getDate() + 4);
+
+  const start = bdmParseIsoDate_(
+    PropertiesService.getScriptProperties().getProperty("BDM_SCHOOL_YEAR_START")
+  );
+  let number = null;
+  if (start) {
+    const weeks = Math.round((monday.getTime() - bdmMondayOf_(start).getTime()) / 604800000);
+    if (weeks >= 0) number = weeks + 1;
+  }
+
+  const tz = Session.getScriptTimeZone();
+  const span = Utilities.formatDate(monday, tz, "MMM d") + " - "
+    + Utilities.formatDate(friday, tz, "MMM d");
+  return {
+    number: number,
+    label: (number ? "Week " + number + ": " : "Week of ") + span,
+    position: number || null
+  };
+}
+
+function bdmFindOrCreateModule_(config, courseId, week) {
+  const list = bdmCanvasFetch_(config,
+    "/api/v1/courses/" + encodeURIComponent(courseId) + "/modules?per_page=100", { method: "get" });
+  if (list.getResponseCode() === 200) {
+    const modules = JSON.parse(list.getContentText());
+    for (let i = 0; i < modules.length; i++) {
+      if (String(modules[i].name || "").trim() === week.label.trim()) return modules[i];
+    }
+  }
+  const payload = { module: { name: week.label, published: true } };
+  if (week.position) payload.module.position = week.position;
+  const created = bdmCanvasFetch_(config,
+    "/api/v1/courses/" + encodeURIComponent(courseId) + "/modules",
+    { method: "post", payload: JSON.stringify(payload) });
+  const code = created.getResponseCode();
+  if (code < 200 || code >= 300) {
+    Logger.log("Module create failed on course " + courseId + " (" + code + "): "
+      + created.getContentText().slice(0, 160));
+    return null;
+  }
+  const made = JSON.parse(created.getContentText());
+  // Some Canvas versions ignore published on create, so publish explicitly.
+  bdmCanvasFetch_(config, "/api/v1/courses/" + encodeURIComponent(courseId)
+    + "/modules/" + made.id, { method: "put", payload: JSON.stringify({ module: { published: true } }) });
+  return made;
+}
+
+// Idempotent by page_url: the day is added to its week once, and re-running
+// the sync never stacks duplicate items under the module.
+function bdmEnsureModuleItem_(config, courseId, moduleId, pageSlug, title) {
+  const list = bdmCanvasFetch_(config, "/api/v1/courses/" + encodeURIComponent(courseId)
+    + "/modules/" + moduleId + "/items?per_page=100", { method: "get" });
+  if (list.getResponseCode() === 200) {
+    const items = JSON.parse(list.getContentText());
+    for (let i = 0; i < items.length; i++) {
+      if (String(items[i].page_url || "") === pageSlug) return items[i];
+    }
+  }
+  const res = bdmCanvasFetch_(config, "/api/v1/courses/" + encodeURIComponent(courseId)
+    + "/modules/" + moduleId + "/items", {
+    method: "post",
+    payload: JSON.stringify({
+      module_item: { title: title, type: "Page", page_url: pageSlug, published: true }
+    })
+  });
+  const code = res.getResponseCode();
+  if (code < 200 || code >= 300) {
+    Logger.log("Module item failed on course " + courseId + " (" + code + "): "
+      + res.getContentText().slice(0, 160));
+    return null;
+  }
+  return JSON.parse(res.getContentText());
+}
+
 // Posts the day's lesson as an UNGRADED Canvas page. Runs whether or not there
 // is a turn-in assignment - every teaching day should be visible in Canvas.
 function syncLessonPageToCanvas() {
@@ -281,6 +382,8 @@ function syncLessonPageToCanvas() {
   const slug = bdmCanvasPageSlug_(lesson);
   const body = bdmLessonPageBody_(lesson, siteUrl);
 
+  const week = bdmWeekInfo_(lesson.date);
+
   let posted = 0;
   const failures = [];
   for (let i = 0; i < config.courseIds.length; i++) {
@@ -293,12 +396,20 @@ function syncLessonPageToCanvas() {
       payload: JSON.stringify({ wiki_page: { title: title, body: body, published: true } })
     });
     const code = result.getResponseCode();
-    if (code >= 200 && code < 300) {
-      posted++;
-      Logger.log("Course " + courseId + ": page \"" + title + "\"");
-    } else {
+    if (code < 200 || code >= 300) {
       failures.push(courseId + " (" + code + "): " + result.getContentText().slice(0, 200));
+      continue;
     }
+    posted++;
+
+    // File the day under its week module. A module failure must not undo the
+    // page - the page is the thing students actually need.
+    if (week) {
+      const module = bdmFindOrCreateModule_(config, courseId, week);
+      if (module) bdmEnsureModuleItem_(config, courseId, module.id, slug, title);
+    }
+    Logger.log("Course " + courseId + ": page \"" + title + "\""
+      + (week ? " filed under " + week.label : ""));
   }
   if (failures.length) Logger.log("Page failures: " + failures.join(" | "));
   Logger.log("syncLessonPageToCanvas: " + posted + "/" + config.courseIds.length + " course(s).");
