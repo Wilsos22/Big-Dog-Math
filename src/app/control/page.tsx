@@ -75,6 +75,7 @@ import {
 } from "@/lib/structuredNumeric";
 import { normalizeDistributiveSet, parseDistributiveSet } from "@/lib/distributiveProblems";
 import { normalizeFactorTreeSet, parseFactorTreeSet } from "@/lib/factorTreeSet";
+import { normalizeFractionSet, parseFractionRounds } from "@/lib/fractionOrderSet";
 import {
   listLessonPresets,
   getLessonPreset,
@@ -196,6 +197,7 @@ interface ToolSetupValues {
   prompt: string;
   numberLineStart: string;
   numberLineChange: string;
+  numberLineFractionSet: string;
   percentWhole: string;
   percentValue: string;
   percentPart: string;
@@ -269,6 +271,7 @@ const DEFAULT_TOOL_SETUP: ToolSetupValues = {
   prompt: "",
   numberLineStart: "-3",
   numberLineChange: "6",
+  numberLineFractionSet: "",
   percentWhole: "80",
   percentValue: "25",
   percentPart: "20",
@@ -352,12 +355,14 @@ function buildLiveToolConfig(stateId: ToolStateId, values: ToolSetupValues): Liv
     case "tool-number-line": {
       const start = Math.round(clamp(numericValue(values.numberLineStart, -3), -10, 10));
       const change = Math.round(clamp(numericValue(values.numberLineChange, 6), -10 - start, 10 - start));
+      // Empty fraction set is meaningful: the tool runs the integer hop problem.
       return {
         ...base,
         route: "/number-line-plus",
         config: {
           start,
           change,
+          fractionSet: normalizeFractionSet(values.numberLineFractionSet),
         },
       };
     }
@@ -3544,6 +3549,17 @@ export default function ControlPage() {
                         </label>
                         <label className="cx-tool-field" htmlFor="number-line-change">Change by
                           <input id="number-line-change" className="cx-tool-input" inputMode="decimal" value={toolSetup.numberLineChange} onChange={(event) => updateToolSetup("numberLineChange", event.target.value)} />
+                        </label>
+                        <label className="cx-tool-field wide" htmlFor="number-line-fractions">
+                          Fractions to order on a 0 to 5 line (semicolon starts another round)
+                          <input id="number-line-fractions" className="cx-tool-input" value={toolSetup.numberLineFractionSet} onChange={(event) => updateToolSetup("numberLineFractionSet", event.target.value)} placeholder="1/2, 7/3, 2 1/4, 3" />
+                          <span className="cx-tool-hint">
+                            {(() => {
+                              const rounds = parseFractionRounds(toolSetup.numberLineFractionSet);
+                              if (!rounds.length) return "Leave blank for the hop problem above. Cards may be fractions, mixed numbers, decimals, or percents.";
+                              return `${rounds.length} round${rounds.length === 1 ? "" : "s"}: ${rounds.map((r) => r.map((c) => c.text).join(" ")).join(" | ")}`;
+                            })()}
+                          </span>
                         </label>
                       </>
                     )}

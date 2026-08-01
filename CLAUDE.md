@@ -286,6 +286,24 @@ bars and live misconception grouping).
   `/coordinate-grid`, `/ladder-method`, `/multiplication-fluency`, `/term-identifier`,
   `/divisibility`, `/distributive-area`, `/area-explorer`, `/balance-beam`, `/long-division`,
   `/place-value`, `/place-value-mirror`, `/timer`.
+- `/number-line-plus` HAS THREE MODES, and the third is a different kind of tool. Integers and Parts
+  of a whole are one draggable dot on a readout; **Order fractions** (added 2026-08-01 on Steele's
+  ask) is a board where students drag a SET of cards onto a 0-to-5 line with a tick every half.
+  `FractionOrderLine.tsx` renders it, `src/lib/fractionOrderSet.ts` owns the format and the judging,
+  `npm run test:fraction-order` pins both. The rules are Steele's and are load-bearing:
+  POSITIVE NUMBERS ONLY, 0 to 5, ticks every half; cards may be whole numbers, proper or improper
+  fractions, mixed numbers, decimals or percents; a card is judged placed if it lands within
+  `PLACEMENT_TOLERANCE` (0.5, the tick spacing) of where it truly sits, and the REAL verdict is that
+  the cards read in ascending order left to right ("they just need to make sure they are ordered").
+  Two things follow that look like bugs and are not. Cards do NOT snap to the half ticks - snapping
+  would drop 7/3 and 5/2 onto the same mark and make ordering unexpressible, so placement is
+  continuous and the tolerance does the forgiving. And EQUIVALENT cards are a tie: 3/2 beside 6/4
+  passes in either order, which is the reason to put both in a set. Crowded cards stack into lanes
+  above the line, each keeping a stem to its exact point. Nothing reveals a true position while a
+  board is wrong - a check that answers itself gets used instead of the thinking - so a failed check
+  only names how many cards to move (the smallest set that fixes it, not everything after the first
+  mistake). DECIMALS AND PERCENTS ALREADY WORK: the compare-the-forms lesson Steele wants "later"
+  needs no code, only a set like `0.75, 1/2, 60%, 1 1/4, 250%`.
 - Room/display surfaces: `/warmup` and `/live-flow` are public; `/board` + `/ipad` (pen-to-board)
   are TEACHER-GATED by the proxy (they are in PROTECTED_PREFIXES - an anonymous fetch redirects to
   /teacher-login, so curl probes of them return no page markup).
@@ -539,15 +557,20 @@ Divisibility Rules" resolves, ClassSync target, tool-divisibility bank state, co
 banner on DivisibilityRules) - a NEW
 route is the case to watch, so wire the component in the same change that extends `LiveToolRoute`.
 Where a route's `LiveToolConfig` arm carries a typed payload (`/number-line-plus`, `/percent-bar`,
-`/equation-builder`, `/order-of-operations`, `/algebra-tiles`, plus two teacher-set sequence arms:
-`/distributive-area` `{ set }` - "24x7,16x8" via `src/lib/distributiveProblems.ts` - and
-`/ladder-method` `{ set }` - "24,36,60" for Factor Trees via `src/lib/factorTreeSet.ts`) the tool
+`/equation-builder`, `/order-of-operations`, `/algebra-tiles`, plus THREE teacher-set sequence arms:
+`/distributive-area` `{ set }` - "24x7,16x8" via `src/lib/distributiveProblems.ts`,
+`/ladder-method` `{ set }` - "24,36,60" for Factor Trees via `src/lib/factorTreeSet.ts` - and
+`/number-line-plus` `{ start, change, fractionSet? }` - "1/2, 7/3, 2 1/4" via
+`src/lib/fractionOrderSet.ts`, where a `;` or newline starts another round) the tool
 also applies `tool.config` to its own state - always in an effect keyed on `tool.id`, never on the
 tool object (`useLiveToolConfig` re-reads every second, so object identity churns and an
-object-keyed effect restarts the student's problem mid-answer; `PercentBar` is the pattern). Both
-sequence tools also take the same string as a `?set=` URL param, resume progress per device from
-localStorage, and treat an empty set as free play. The remaining arms are `Record<string, never>`,
-where the prompt is all there is - do not invent config behavior for them.
+object-keyed effect restarts the student's problem mid-answer; `PercentBar` is the pattern). All
+three sequence tools also take the same string as a `?set=` URL param, resume progress per device
+from localStorage, and treat an empty set as free play. The remaining arms are
+`Record<string, never>`, where the prompt is all there is - do not invent config behavior for them.
+`/number-line-plus` is the one arm carrying TWO independent configs: a non-empty `fractionSet` wins
+and opens the ordering board, an empty one leaves the integer hop problem exactly as it was, so the
+field is optional and pre-existing snapshots still parse.
 
 Counting those arms, `LiveToolRoute` has 22, not 19: `/challenge`, `/exit-ticket` and `/checkpoint`
 ride the same union so `/control` can publish them, but they deliberately do NOT call
@@ -1427,7 +1450,14 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   engine: one pointer-events drag (mouse AND Chromebook finger), a `data-drop="<zone>"` id per target,
   a ghost that rides the pointer, the target highlights, a tap still adds one. Explore drags a palette
   chip onto a row; How-many-fit drags a `1/d` piece into the total bar and a group tile under it. When
-  a new tool places pieces, reuse this pattern, not a click-to-add button.
+  a new tool places pieces, reuse this pattern, not a click-to-add button. `FractionOrderLine` is the
+  second user of it (2026-08-01) and found the one trap the pattern has: **test the TAP before the
+  drop zones.** Its tray is itself a `data-drop` target (drag a placed card back down to take it off),
+  so a zone-first drop handler read every tap on a tray card as "dropped on the tray" and silently
+  swallowed it - the tap-to-place path never armed, on exactly the touch devices that need it most.
+  Fraction Bars is not affected only because its sources sit outside their targets. Order the drop
+  handler `if (!moved) ... else if (zone === ...)`, and note the fault was invisible: the card stayed
+  put, which is also what a normal missed drop looks like.
 - PRINTED WORKSHEETS MUST LEAVE ROOM TO DO THE WORK (Steele, 2026-07-29, on three sheets in a row:
   "a consistent issue with bunching up all the problems toward the top and not using the space and
   not leaving room to actually do the work"). The `output/worksheets/*.html` sheets put four problems
@@ -1449,7 +1479,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 27 golden/contract suites, run with typecheck by
+  2026-07-27 `npm test` - the aggregate of all 30 golden/contract suites, run with typecheck by
   GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.
