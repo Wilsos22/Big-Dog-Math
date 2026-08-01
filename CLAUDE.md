@@ -216,8 +216,20 @@ bars and live misconception grouping).
   alias may become a name, so named analytics belong there, not on the site. It is NOT a
   replacement for Infinite Campus: IC stays the system of record and cannot be auto-synced by a
   teacher (its OneRoster API needs an administrator to register the app with the district's IC
-  rep), so IC data arrives by CSV export. Canvas MAY be automatable via a teacher-minted personal
-  access token - unverified for CCSD as of this writing.
+  rep), so IC data arrives by CSV export.
+  `warmup-canvas-sync.gs` posts TURN-IN ASSIGNMENTS to Canvas (2026-08-01). THE SCOPE IS A POLICY
+  RULE, NOT A TECHNICAL ONE (Steele: "only assignments that students must turn in even if they were
+  absent... the in lesson work isnt that"): warm-ups, tool work, exit tickets, learning checks and
+  discussion are formative, cannot be made up by an absent student, and MUST NOT reach the Canvas
+  gradebook. A lesson is treated as having a turn-in assignment when Notion gives it an
+  `Assignment Link` or a `Due and Turn In` value; otherwise the sync posts nothing. It reads only
+  the PUBLIC `/api/today` payload, so this integration carries zero student data. Canvas is reached
+  with a teacher-minted personal access token in Script Properties, which needs no district
+  approval; grade passback Canvas -> Infinite Campus is ON for Steele's courses, so THE GRADE PATH
+  IS site -> Workspace Sheet -> Canvas -> IC and the site never talks to Canvas or IC directly.
+  The script creates the gradebook COLUMN only - posting scores is a deliberate separate step,
+  because it needs the alias -> email -> Canvas-student join that only the roster spreadsheet can
+  do, and a broken grade push must never damage the assignment absent students rely on.
 - `scripts/` - golden-file tests + fixtures for the mastery/grouping engines.
 - `public/` - assets. Inline square mark: `big-dog-mark.png`; wordmark/banner: `big-dog-logo.svg` /
   `big-dog-logo.png`.
