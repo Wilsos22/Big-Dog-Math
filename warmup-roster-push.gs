@@ -96,10 +96,50 @@ function generateAliases() {
   const cols = bdmRosterColumns_(values[0]);
   if (cols.alias === -1) throw new Error("Add an Alias column to the Roster tab first.");
 
+  // AliasMap is the permanent email -> alias ledger. Aliases are pinned to a
+  // student's EMAIL, not to a row, so you can paste a fresh district export
+  // over the Roster tab whenever the office moves kids around and every
+  // returning student keeps the alias their evidence is filed under. Without
+  // this, a re-paste that reorders rows silently reassigns aliases, which
+  // creates duplicate students on the site and orphans their history.
+  const mapSheet = bdmAliasMapSheet_();
+  const mapValues = mapSheet.getLastRow() > 1
+    ? mapSheet.getRange(2, 1, mapSheet.getLastRow() - 1, 2).getValues()
+    : [];
+  const aliasByEmail = {};
   const taken = {};
+  for (let i = 0; i < mapValues.length; i++) {
+    const email = String(mapValues[i][0] || "").trim().toLowerCase();
+    const alias = String(mapValues[i][1] || "").trim();
+    if (!email || !alias) continue;
+    aliasByEmail[email] = alias;
+    taken[alias.toLowerCase()] = true;
+  }
   for (let r = 1; r < values.length; r++) {
     const existing = String(values[r][cols.alias] || "").trim();
     if (existing) taken[existing.toLowerCase()] = true;
+  }
+
+  // Pass 1: restore known aliases by email, so a re-pasted export re-attaches
+  // itself. This also repairs rows where a paste misaligned the alias column.
+  let restored = 0;
+  const newMapRows = [];
+  if (cols.email !== -1) {
+    for (let r = 1; r < values.length; r++) {
+      const email = String(values[r][cols.email] || "").trim().toLowerCase();
+      if (!email) continue;
+      const known = aliasByEmail[email];
+      const current = String(values[r][cols.alias] || "").trim();
+      if (known && current !== known) {
+        sheet.getRange(r + 1, cols.alias + 1).setValue(known);
+        values[r][cols.alias] = known;
+        restored++;
+      } else if (!known && current) {
+        // First run after an upgrade: adopt the alias already on the row.
+        aliasByEmail[email] = current;
+        newMapRows.push([email, current]);
+      }
+    }
   }
 
   let filled = 0;
@@ -123,9 +163,41 @@ function generateAliases() {
     }
     taken[alias.toLowerCase()] = true;
     sheet.getRange(r + 1, cols.alias + 1).setValue(alias);
+    values[r][cols.alias] = alias;
     filled++;
+    if (cols.email !== -1) {
+      const email = String(values[r][cols.email] || "").trim().toLowerCase();
+      if (email) {
+        aliasByEmail[email] = alias;
+        newMapRows.push([email, alias]);
+      }
+    }
   }
-  Logger.log("generateAliases: filled " + filled + " blank alias cell(s).");
+
+  if (newMapRows.length) {
+    mapSheet.getRange(mapSheet.getLastRow() + 1, 1, newMapRows.length, 2).setValues(newMapRows);
+  }
+  Logger.log("generateAliases: filled " + filled + " new alias(es), restored "
+    + restored + " by email, ledger now holds " + Object.keys(aliasByEmail).length + ".");
+}
+
+// The permanent email -> alias ledger. Hidden by default: it is the one tab
+// that ties a real email to a site alias, so it is re-identification key
+// material and belongs nowhere but this Workspace file.
+function bdmAliasMapSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName("AliasMap");
+  if (!sheet) {
+    sheet = ss.insertSheet("AliasMap");
+    sheet.getRange(1, 1, 1, 2).setValues([["Email", "Alias"]]);
+    sheet.setFrozenRows(1);
+    sheet.hideSheet();
+  }
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, 2).setValues([["Email", "Alias"]]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
 }
 
 // Push the pseudonymous roster to the site. Names and emails stay here.
