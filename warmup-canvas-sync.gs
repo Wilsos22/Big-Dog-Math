@@ -1,18 +1,28 @@
 // =====================================================================
-// BIG DOG MATH - TURN-IN ASSIGNMENTS -> CANVAS
+// BIG DOG MATH - NOTION LESSONS -> CANVAS
 //
-// Creates a Canvas assignment for work students must turn in EVEN IF THEY
-// WERE ABSENT. That is the only thing district policy requires in Canvas, and
-// it is deliberately the only thing this posts.
+// TWO SEPARATE THINGS, and the distinction is the whole design:
 //
-// WHAT IS EXCLUDED, ON PURPOSE: warm-ups, tool work, exit tickets, learning
-// checks, discussion - everything that only exists inside a live lesson. That
-// work is formative, it cannot be made up by an absent student, and putting it
-// in the gradebook would bury the grades that matter in noise. It stays in Big
-// Dog Math where it belongs.
+//   syncAssignmentToCanvas()  -> a GRADED Canvas assignment, created only for
+//                                work students must turn in EVEN IF THEY WERE
+//                                ABSENT. This is the district requirement, and
+//                                its grade reaches Infinite Campus by passback.
+//
+//   syncLessonPageToCanvas()  -> an UNGRADED Canvas page holding the day's
+//                                lesson information, so the course is visible
+//                                in Canvas to students and parents. No
+//                                gradebook column, nothing to turn in.
+//
+//   syncTodayToCanvas()       -> runs both. Put this one on the trigger.
+//
+// GRADEBOOK SCOPE IS A POLICY RULE, NOT PLUMBING: warm-ups, tool work, exit
+// tickets, learning checks and discussion are formative, cannot be made up by
+// an absent student, and MUST NOT become Canvas assignments - they would bury
+// the grades that matter. They may still be DESCRIBED on the lesson page,
+// which is information rather than a grade.
 //
 // A lesson is treated as HAVING a turn-in assignment when Notion gives it an
-// Assignment Link or a "Due and Turn In" value. No assignment, no Canvas post.
+// Assignment Link or a "Due and Turn In" value. No assignment, no graded post.
 //
 // ZERO STUDENT DATA. It reads https://bigdogmath.com/api/today, the PUBLIC
 // student-facing lesson payload - no roster, names, aliases, or evidence. The
@@ -29,9 +39,10 @@
 //   BDM_CANVAS_POINTS     optional, default 10
 //   BDM_SITE_URL          optional, defaults to https://bigdogmath.com
 //
-// USE: run testCanvasConnection() once, then syncAssignmentToCanvas() - or put
-// it on an early-morning time trigger. Re-running is safe: it matches the
-// existing assignment by name and updates it instead of creating a duplicate.
+// USE: run testCanvasConnection() once, then syncTodayToCanvas() - or put that
+// on an early-morning time trigger. Re-running is safe: the assignment is
+// matched by name and the page by a stable per-lesson slug, so both update in
+// place instead of creating duplicates.
 // =====================================================================
 
 function bdmCanvasConfig_() {
@@ -58,6 +69,22 @@ function bdmCanvasFetch_(config, path, options) {
   merged.headers = { Authorization: "Bearer " + config.token };
   if (merged.payload) merged.contentType = "application/json";
   return UrlFetchApp.fetch(config.base + path, merged);
+}
+
+function bdmSiteUrl_() {
+  return String(
+    PropertiesService.getScriptProperties().getProperty("BDM_SITE_URL") || "https://bigdogmath.com"
+  ).replace(/\/+$/, "");
+}
+
+// /api/today is PUBLIC and carries no student data - the same payload a
+// student's browser gets. No key is needed or wanted here.
+function bdmFetchTodayLesson_(siteUrl) {
+  const res = UrlFetchApp.fetch(siteUrl + "/api/today", { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) {
+    throw new Error("Could not read today's lesson (" + res.getResponseCode() + ").");
+  }
+  return JSON.parse(res.getContentText());
 }
 
 function bdmEscapeHtml_(value) {
@@ -124,15 +151,8 @@ function bdmFindAssignmentByName_(config, courseId, name) {
 
 function syncAssignmentToCanvas() {
   const config = bdmCanvasConfig_();
-  const siteUrl = String(
-    PropertiesService.getScriptProperties().getProperty("BDM_SITE_URL") || "https://bigdogmath.com"
-  ).replace(/\/+$/, "");
-
-  const res = UrlFetchApp.fetch(siteUrl + "/api/today", { muteHttpExceptions: true });
-  if (res.getResponseCode() !== 200) {
-    throw new Error("Could not read today's lesson (" + res.getResponseCode() + ").");
-  }
-  const payload = JSON.parse(res.getContentText());
+  const siteUrl = bdmSiteUrl_();
+  const payload = bdmFetchTodayLesson_(siteUrl);
   const lesson = payload.lesson;
   if (!lesson) {
     Logger.log("No lesson published for " + payload.date + ". Nothing posted.");
@@ -187,6 +207,110 @@ function syncAssignmentToCanvas() {
   if (failures.length) Logger.log("Failed: " + failures.join(" | "));
   Logger.log("syncAssignmentToCanvas: " + posted + "/" + config.courseIds.length + " course(s).");
   return { posted: posted, failures: failures };
+}
+
+function bdmSection_(heading, html) {
+  if (!html) return "";
+  return "<h3>" + bdmEscapeHtml_(heading) + "</h3>" + html;
+}
+
+function bdmParagraph_(value) {
+  const text = String(value || "").trim();
+  return text ? "<p>" + bdmEscapeHtml_(text) + "</p>" : "";
+}
+
+// The lesson page is INFORMATION, not a grade: what we did, what we were
+// learning, what you needed, and where to go if you missed it. Anything Notion
+// left blank is omitted - an empty heading reads as a mistake to a parent.
+function bdmLessonPageBody_(lesson, siteUrl) {
+  const parts = [];
+  if (lesson.learningIntention) {
+    parts.push(bdmSection_("Today we are learning", bdmParagraph_(lesson.learningIntention)));
+  }
+  if (lesson.selectedSuccessCriterion) {
+    parts.push(bdmSection_("You've got it when", bdmParagraph_(lesson.selectedSuccessCriterion)));
+  }
+  if (lesson.essentialIdeas) {
+    parts.push(bdmSection_("The big idea", bdmParagraph_(lesson.essentialIdeas)));
+  }
+  if (lesson.agenda) parts.push(bdmSection_("Plan for the day", bdmHtmlList_(lesson.agenda)));
+  if (lesson.supplies) parts.push(bdmSection_("What you need", bdmHtmlList_(lesson.supplies)));
+  if (lesson.requiredPaperWork) {
+    parts.push(bdmSection_("Work from this lesson", bdmHtmlList_(lesson.requiredPaperWork)));
+  }
+
+  const links = [];
+  links.push('<li><a href="' + siteUrl + '/lesson">The lesson page on Big Dog Math</a></li>');
+  links.push('<li><a href="' + siteUrl
+    + '/homework-help">Stuck? Walk through it one step at a time</a></li>');
+  if (lesson.assignmentLink) {
+    links.push('<li><a href="' + bdmEscapeHtml_(lesson.assignmentLink) + '">Assignment</a></li>');
+  }
+  parts.push(bdmSection_("Links", "<ul>" + links.join("") + "</ul>"));
+
+  if (lesson.standard) {
+    parts.push("<p><em>Standard: " + bdmEscapeHtml_(lesson.standard) + "</em></p>");
+  }
+  parts.push("<p><em>Posted automatically from Big Dog Math. Edit the lesson in "
+    + "Notion rather than here - this page is rewritten on each sync.</em></p>");
+  return parts.filter(Boolean).join("\n");
+}
+
+// A stable slug per lesson makes the page sync idempotent: the same lesson
+// always targets the same Canvas page, so re-running updates rather than
+// piling up near-duplicates across a semester.
+function bdmCanvasPageSlug_(lesson) {
+  const base = String(lesson.lessonCode || "").trim() || String(lesson.date || "").trim() || "lesson";
+  return ("bdm-" + base).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+// Posts the day's lesson as an UNGRADED Canvas page. Runs whether or not there
+// is a turn-in assignment - every teaching day should be visible in Canvas.
+function syncLessonPageToCanvas() {
+  const config = bdmCanvasConfig_();
+  const siteUrl = bdmSiteUrl_();
+  const payload = bdmFetchTodayLesson_(siteUrl);
+  const lesson = payload.lesson;
+  if (!lesson) {
+    Logger.log("No lesson published for " + payload.date + ". No page posted.");
+    return { posted: 0, reason: "no lesson published" };
+  }
+
+  const title = (lesson.lessonCode ? lesson.lessonCode + " - " : "")
+    + (lesson.title || "Lesson");
+  const slug = bdmCanvasPageSlug_(lesson);
+  const body = bdmLessonPageBody_(lesson, siteUrl);
+
+  let posted = 0;
+  const failures = [];
+  for (let i = 0; i < config.courseIds.length; i++) {
+    const courseId = config.courseIds[i];
+    // PUT to a page url creates it when absent and updates it when present,
+    // which is what makes a re-run safe.
+    const result = bdmCanvasFetch_(config, "/api/v1/courses/" + encodeURIComponent(courseId)
+      + "/pages/" + encodeURIComponent(slug), {
+      method: "put",
+      payload: JSON.stringify({ wiki_page: { title: title, body: body, published: true } })
+    });
+    const code = result.getResponseCode();
+    if (code >= 200 && code < 300) {
+      posted++;
+      Logger.log("Course " + courseId + ": page \"" + title + "\"");
+    } else {
+      failures.push(courseId + " (" + code + "): " + result.getContentText().slice(0, 200));
+    }
+  }
+  if (failures.length) Logger.log("Page failures: " + failures.join(" | "));
+  Logger.log("syncLessonPageToCanvas: " + posted + "/" + config.courseIds.length + " course(s).");
+  return { posted: posted, failures: failures };
+}
+
+// The one to put on a morning trigger: lesson page always, graded assignment
+// only when today's lesson actually has turn-in work.
+function syncTodayToCanvas() {
+  const page = syncLessonPageToCanvas();
+  const assignment = syncAssignmentToCanvas();
+  return { page: page, assignment: assignment };
 }
 
 // Read-only check. Run this once before trusting a trigger.
