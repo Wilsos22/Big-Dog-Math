@@ -156,10 +156,17 @@ export type LiveToolConfig =
     }
   | {
       id: string;
+      // `start`/`change` drive the integer hop problem (−3 + 6).
+      //
+      // `fractionSet` is the shared "1/2, 7/3, 2 1/4" ordering set (see
+      // lib/fractionOrderSet; `;` or a newline starts another round). When it
+      // parses to at least one round it WINS over the integer problem and opens
+      // the tool on the 0-to-5 ordering board. Optional, so snapshots written
+      // before it existed still parse.
       route: "/number-line-plus";
       label: string;
       prompt: string;
-      config: { start: number; change: number };
+      config: { start: number; change: number; fractionSet?: string };
     }
   | {
       id: string;

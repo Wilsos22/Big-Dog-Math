@@ -8,6 +8,20 @@ should update BOTH that database and this mirror when a feature ships.
 Snapshot (2026-07-16):
 
 ## Live
+**Order fractions on the number line** (8/1, Steele's ask). `/number-line-plus`
+gains a third mode: students drag a set of cards onto a 0-to-5 line with a tick
+every half and put them in order, smallest to largest. Mixed numbers and
+improper fractions both, positive numbers only. A card counts as placed if it
+lands within half a unit of where it truly sits — the verdict is the ORDER, and
+a failed check names only the smallest set of cards that would fix it, never a
+true position. Equivalent cards (3/2 beside 6/4) are a tie and pass either way.
+The set is one string the teacher types once — `1/2, 7/3, 2 1/4; 3/4, 3`, where
+a semicolon starts another round — and it travels the same three ways as the
+Distributive and Factor Tree series: the `/control` tool setup, a `?set=` link
+for work at home, and the live tool config. Cards may be fractions, mixed
+numbers, decimals or percents, so comparing the three forms on one line is a set
+to type, not code to write. `npm run test:fraction-order`.
+
 **FERPA data boundary — pseudonymous student identity** (7/31, Steele's
 directive: student data cannot go to Notion and must be disguised everywhere
 outside Google Workspace). The site now knows students only as a Workspace-
