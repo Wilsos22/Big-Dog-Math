@@ -420,9 +420,18 @@ export default function LessonScreenStudioPage() {
         const usable = (result.lessons || []).filter((item) => item.id && (item.lessonCode || item.title));
         setPublishedLessons(usable);
         const requested = new URLSearchParams(window.location.search).get("lessonId") || "";
+        // With no explicit request, open on TODAY's lesson (the one /api/today
+        // serves), matched by its exact id - not the first archive row, which
+        // is why the studio kept opening on a different lesson.
+        let todayId = "";
+        try {
+          const today = await fetch("/api/today", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null));
+          if (!cancelled) todayId = today?.lesson?.id || "";
+        } catch { /* fall back to the archive order */ }
+        if (cancelled) return;
         const initial = requested
           ? usable.some((item) => item.id === requested) ? requested : ""
-          : usable[0]?.id || "";
+          : usable.find((item) => item.id === todayId)?.id || usable[0]?.id || "";
         setSelectedLessonId(initial);
         if (requested && !initial) setMessage("That requested lesson is not in the published lesson archive. Choose the exact lesson before editing.");
         else if (!initial) setMessage("No published lessons are available.");

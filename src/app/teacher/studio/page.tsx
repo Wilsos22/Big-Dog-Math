@@ -149,7 +149,20 @@ function StudioInner() {
         if (!active) return;
         const usable = (result.lessons ?? []).filter((item) => item.id);
         setLessons(usable);
-        const initial = usable.find((item) => item.id === requestedLessonId)?.id || usable[0]?.id || "";
+        // Default to TODAY's lesson - the exact one /api/today serves - not the
+        // first row in the archive. Several lessons can share a date, so match
+        // its id, never usable[0]. This is why the studio was opening on a
+        // different lesson than the teacher was teaching.
+        let todayId = "";
+        try {
+          const today = await fetch("/api/today", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null));
+          if (active) todayId = today?.lesson?.id || "";
+        } catch { /* fall back to the archive order */ }
+        if (!active) return;
+        const initial = usable.find((item) => item.id === requestedLessonId)?.id
+          || usable.find((item) => item.id === todayId)?.id
+          || usable[0]?.id
+          || "";
         setSelectedLessonId(initial);
       } catch (error) {
         if (active) setLessonsError(error instanceof TeacherApiError ? error.message : "Could not load lessons.");
