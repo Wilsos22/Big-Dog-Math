@@ -201,6 +201,23 @@ bars and live misconception grouping).
   Editor). `supabase/SETUP.md` documents env setup.
 - `warmup-*.gs` (repo root) - Google Apps Script warm-up pipeline (generator, Notion sync, evidence
   poster, week builder, pools). Steele pastes these into the Apps Script editor.
+  TWO SEPARATE APPS SCRIPT PROJECTS, and pasting a file into the wrong one breaks things:
+  the WARM-UP response spreadsheet holds `warmup-evidence.gs`, `warmup-notion-sync.gs`,
+  `warmup-sidebar-functions.gs`, the generators and the engine; the ROSTER spreadsheet
+  ("26-27 Rosters") holds `warmup-roster-push.gs` and `warmup-student-profile.gs`. Both projects
+  need `BDM_ROSTER_HMAC_KEY` set to the IDENTICAL value - a mismatch is invisible until a real
+  warm-up returns "not on roster". Note both `warmup-sidebar-functions.gs` and
+  `warmup-student-profile.gs` define `onOpen()`, which is only safe because they live in
+  different projects.
+  `warmup-student-profile.gs` is the WORKSPACE-SIDE student profile workbook (2026-08-01): a
+  Profile tab with a student dropdown joining Contacts / Testing / Behavior / ContactLog (all keyed
+  on EMAIL) plus `SiteData` pulled from the site's gated `/api/teacher/roster` + `/api/mastery` and
+  joined on ALIAS. It exists because the site is pseudonymous - Workspace is the only zone where an
+  alias may become a name, so named analytics belong there, not on the site. It is NOT a
+  replacement for Infinite Campus: IC stays the system of record and cannot be auto-synced by a
+  teacher (its OneRoster API needs an administrator to register the app with the district's IC
+  rep), so IC data arrives by CSV export. Canvas MAY be automatable via a teacher-minted personal
+  access token - unverified for CCSD as of this writing.
 - `scripts/` - golden-file tests + fixtures for the mastery/grouping engines.
 - `public/` - assets. Inline square mark: `big-dog-mark.png`; wordmark/banner: `big-dog-logo.svg` /
   `big-dog-logo.png`.
