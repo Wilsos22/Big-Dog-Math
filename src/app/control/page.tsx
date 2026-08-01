@@ -124,6 +124,7 @@ interface LineupItem {
   slideOverlay?: string;
   discussionStems?: string;
   vocabulary?: string;
+  discussionPhases?: string;
   responseMode?: string;
   workSpaceAvailable?: boolean;
   publicSurfaceMode?: PublicSurfaceMode;
@@ -499,6 +500,7 @@ interface TodayLessonStep {
   remoteActions: string;
   discussionStems: string;
   vocabulary: string;
+  discussionPhases: string;
   responseMode: string;
   workSpaceAvailable?: boolean;
   publicSurfaceMode?: PublicSurfaceMode;
@@ -1767,6 +1769,7 @@ export default function ControlPage() {
           routineConfig: activeItem?.routineConfig || null,
           discussionStems,
           vocabulary,
+          discussionPhases: activeItem?.discussionPhases || undefined,
           scoreboardStage: canRevealM2T1L1FinalScore(activeLessonContext?.code, activeState.id, state?.semantic)
             ? scoreboardStage
             : undefined,
@@ -2169,6 +2172,7 @@ export default function ControlPage() {
           remoteActions: step.remoteActions || step.teacherNotes,
           discussionStems: step.discussionStems,
           vocabulary: step.vocabulary,
+          discussionPhases: step.discussionPhases,
           responseMode: step.responseMode,
           workSpaceAvailable: step.workSpaceAvailable,
           slideOverlay: step.slideOverlay || undefined,

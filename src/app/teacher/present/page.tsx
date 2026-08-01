@@ -15,6 +15,8 @@ import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
 import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { resolveLessonVisual } from "@/lib/lessonVisuals";
+import { parseDiscussionPhases } from "@/lib/discussionPhases";
+import DiscussionTimeline from "@/components/DiscussionTimeline";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { teacherApiRequest } from "@/lib/teacherApi";
 import {
@@ -449,6 +451,10 @@ export default function ClassroomStagePage() {
   const resource = flow?.resource ?? null;
   const presentation = flow?.presentation ?? null;
   const lesson = flow?.lesson ?? null;
+  // The self-running concrete-phase timeline (authored Discussion Phases). On
+  // the projector it walks with a ding at each new beat through the room speakers.
+  const discussionTimelineParse = parseDiscussionPhases(presentation?.discussionPhases);
+  const discussionTimelinePhases = discussionTimelineParse.ok ? discussionTimelineParse.phases : [];
   const phase = normalizeDiscussionPhaseSnapshot(flow?.phase);
   // Fallback through the inferrer if the semantic is unknown - a stray value
   // in a snapshot must never crash the projector (found 2026-07-27 when a
@@ -1104,6 +1110,35 @@ export default function ClassroomStagePage() {
               </article>
               <article><p>Group task</p><strong>{routineConfig.publicTask}</strong></article>
             </section>
+          ) : discussionTimelinePhases.length > 0 ? (
+            <div
+              className="stage-timeline"
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "grid",
+                alignContent: "safe center",
+                justifyItems: "center",
+                overflowY: "auto",
+                padding: "clamp(34px,6vw,80px)",
+                fontSize: "clamp(1.2rem,1.9vw,2.2rem)",
+                ["--dt-accent" as string]: "var(--acc)",
+                ["--dt-accent-text" as string]: "var(--acc-deep)",
+                ["--dt-ink" as string]: "var(--ink)",
+                ["--dt-line" as string]: "var(--hair)",
+                ["--dt-card" as string]: "var(--card)",
+                ["--dt-soft" as string]: "var(--soft)",
+              }}
+            >
+              <DiscussionTimeline
+                phases={discussionTimelinePhases}
+                totalSeconds={timer?.totalSeconds ?? 0}
+                secondsLeft={timerSeconds}
+                endsAt={timer?.endsAt}
+                running={Boolean(timer?.running)}
+                sound
+              />
+            </div>
           ) : showPollPanel && poll ? (
             poll.kind === "structured-numeric" ? (
               /* Structured-numeric (the pairs / boxes readiness) is a

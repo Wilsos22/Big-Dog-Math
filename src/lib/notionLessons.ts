@@ -54,6 +54,7 @@ export interface LessonStepData {
   remoteActions: string;
   discussionStems: string;
   vocabulary: string;
+  discussionPhases: string;
   responseMode: string;
   slideOverlay: string;
   workSpaceAvailable?: boolean;
@@ -525,6 +526,7 @@ async function mapPage(
       remoteActions: extractText(step["Remote Actions"]),
       discussionStems: extractText(step["Discussion Stems"]),
       vocabulary: extractText(step["Vocabulary"]),
+      discussionPhases: extractText(step["Discussion Phases"]),
       responseMode: extractText(step["Response Mode"]),
       slideOverlay: extractText(step["Slide Overlay"]),
       workSpaceAvailable: step["Work Space Available"]?.type === "checkbox"

@@ -233,6 +233,9 @@ export interface LiveFlowSequenceStep {
   remoteActions?: string;
   discussionStems?: string[];
   vocabulary?: string[];
+  // Raw authored `Discussion Phases` text (one beat per line). Parsed by the
+  // surfaces with parseDiscussionPhases; drives the self-running timeline.
+  discussionPhases?: string;
   responseMode?: string;
   workSpaceAvailable?: boolean;
   publicSurfaceMode?: PublicSurfaceMode;
@@ -312,6 +315,8 @@ export interface LiveClassFlowSnapshot {
     routineConfig?: PublicLessonRoutineConfig | null;
     discussionStems?: string[];
     vocabulary?: string[];
+    // Raw authored discussion phases, public (students walk the timeline too).
+    discussionPhases?: string;
     scoreboardStage?: "halftime" | "final";
     // The active step's authored strip, so a projector never has to reach into
     // sequence.steps for it (students do not receive that array at all).

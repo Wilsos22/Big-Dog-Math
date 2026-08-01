@@ -28,6 +28,7 @@ import {
   parseDiscussionPhases,
   discussionPhaseMinutes,
   stripForPhase,
+  activeDiscussionPhase,
 } from "../.tmp-mastery/discussionPhases.js";
 
 let checks = 0;
@@ -181,6 +182,30 @@ check("every mode maps to a cue, and all four are silent-or-not deliberately", (
   assert.equal(DISCUSSION_MODE_STRIP.listen.voice, "0 silent", "listening is silent by definition");
   assert.equal(DISCUSSION_MODE_STRIP.write.voice, "0 silent");
   assert.notEqual(DISCUSSION_MODE_STRIP.talk.voice, "0 silent", "talking cannot be silent");
+});
+
+check("activeDiscussionPhase walks the self-running timeline on elapsed seconds", () => {
+  // think 30, write 90, talk 60 -> boundaries at 30, 120, 180.
+  const phases = parseDiscussionPhases("think 30 | a\nwrite 90 | b\ntalk 60 | c").phases;
+  // Start: first beat, nothing elapsed.
+  const start = activeDiscussionPhase(phases, 0);
+  assert.equal(start.index, 0);
+  assert.equal(start.phaseFraction, 0);
+  assert.equal(start.done, false);
+  // Halfway through the write beat (30 + 45 = 75s in).
+  const mid = activeDiscussionPhase(phases, 75);
+  assert.equal(mid.index, 1);
+  assert.ok(Math.abs(mid.phaseFraction - 0.5) < 1e-9, "45s into a 90s beat is half full");
+  // Exactly on a boundary rolls to the next beat, never sticks on the old one.
+  assert.equal(activeDiscussionPhase(phases, 30).index, 1);
+  assert.equal(activeDiscussionPhase(phases, 120).index, 2);
+  // Past the end: done, and the index points past the last beat.
+  const over = activeDiscussionPhase(phases, 500);
+  assert.equal(over.done, true);
+  assert.equal(over.index, phases.length);
+  assert.equal(over.phaseFraction, 1);
+  // Negative or NaN-ish elapsed clamps to the start rather than throwing.
+  assert.equal(activeDiscussionPhase(phases, -10).index, 0);
 });
 
 console.log(`\n${checks} discussion phase checks passed`);

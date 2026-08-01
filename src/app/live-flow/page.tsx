@@ -12,6 +12,8 @@ import { useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
 import { classroomStageTheme, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
+import { parseDiscussionPhases } from "@/lib/discussionPhases";
+import DiscussionTimeline from "@/components/DiscussionTimeline";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { TIMER_URGENCY_CSS, TIMER_URGENT_SECONDS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 import {
@@ -775,8 +777,15 @@ export default function LiveFlowPage() {
   // state deliberately, so an ungated check put the stems-and-vocabulary panel
   // on every Chromebook for every non-poll state from warm-up to closeout.
   const runsDiscussionProtocol = Boolean(phase) || usesDiscussionProtocol(flow?.state?.id, flow?.state?.label);
+  // The self-running concrete-phase timeline: authored `Discussion Phases`
+  // become one screen of bars that walks itself on the step's shared clock.
+  const discussionTimelineParse = parseDiscussionPhases(flow?.presentation?.discussionPhases);
+  const discussionTimelinePhases = discussionTimelineParse.ok ? discussionTimelineParse.phases : [];
+  const showDiscussionTimeline = !activePoll && discussionTimelinePhases.length > 0;
+  // A concrete-phase timeline step is a discussion too - it wants the stems and
+  // vocabulary beside it, so students have the language for the Talk beats.
   const showDiscussionSupports = !activePoll
-    && runsDiscussionProtocol
+    && (runsDiscussionProtocol || showDiscussionTimeline)
     && (sentenceStems.length > 0 || keyVocabulary.length > 0);
   const resource = flow?.resource ?? null;
   const linkedSpinnerMode = !activePoll && !resource && publicSurfacesLinked && flow?.state?.id === "learning-target-readers"
@@ -1058,7 +1067,19 @@ export default function LiveFlowPage() {
           ) : (
             <>
             {!activePoll && <h1 className="lf-title">{title}</h1>}
-            {!activePoll && subtitle && <p className="lf-subtitle">{subtitle}</p>}
+            {!activePoll && !showDiscussionTimeline && subtitle && <p className="lf-subtitle">{subtitle}</p>}
+            {showDiscussionTimeline ? (
+              <div className="lf-timeline-wrap" style={{ ["--dt-accent" as string]: accent }}>
+                <DiscussionTimeline
+                  phases={discussionTimelinePhases}
+                  totalSeconds={timer?.totalSeconds ?? 0}
+                  secondsLeft={activeTimerSeconds}
+                  endsAt={timer?.endsAt}
+                  running={timerTicking}
+                  sound={false}
+                />
+              </div>
+            ) : null}
             {!activePoll && phase?.id === "share" && phase.selectedSharer ? (
               <div className="lf-share"><span>Ready to share</span><strong>{phase.selectedSharer}</strong></div>
             ) : null}

@@ -161,6 +161,40 @@ export function discussionPhaseMinutes(totalSeconds: number): number {
   return Math.ceil(totalSeconds / 60);
 }
 
+export interface DiscussionPhaseProgress {
+  /** Active phase index, or phases.length once the whole sequence is done. */
+  index: number;
+  /** Seconds into the active phase (0 when done). */
+  phaseElapsed: number;
+  /** 0-1 fill of the active phase (1 when done). */
+  phaseFraction: number;
+  /** Every phase is complete. */
+  done: boolean;
+}
+
+/**
+ * Map elapsed seconds onto the authored sequence: which phase is live, and how
+ * far into it. This is the whole engine behind the self-running timeline - one
+ * screen of bars that walks itself, driven by the step's shared clock so every
+ * device agrees. Pure, so the contract can pin it.
+ */
+export function activeDiscussionPhase(
+  phases: readonly AuthoredDiscussionPhase[],
+  elapsedSeconds: number,
+): DiscussionPhaseProgress {
+  const elapsed = Math.max(0, elapsedSeconds);
+  let acc = 0;
+  for (let index = 0; index < phases.length; index += 1) {
+    const seconds = phases[index].seconds;
+    if (elapsed < acc + seconds) {
+      const phaseElapsed = elapsed - acc;
+      return { index, phaseElapsed, phaseFraction: seconds > 0 ? phaseElapsed / seconds : 1, done: false };
+    }
+    acc += seconds;
+  }
+  return { index: phases.length, phaseElapsed: 0, phaseFraction: 1, done: true };
+}
+
 /** The strip for a beat: the step's authored strip with the mode's cue applied. */
 export function stripForPhase(
   strip: ClassroomStateStrip | null,

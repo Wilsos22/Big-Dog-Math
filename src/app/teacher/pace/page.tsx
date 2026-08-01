@@ -10,6 +10,7 @@ import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerU
 import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
 import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
+import { parseDiscussionPhases } from "@/lib/discussionPhases";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { teacherApiRequest } from "@/lib/teacherApi";
 import { LIVE_FLOW_MODE, getStoredTeacherSessionId, liveTimerSeconds, type LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
@@ -229,7 +230,14 @@ export default function PaceSupportPage() {
   const poll = flow?.poll ?? null;
   const phase = normalizeDiscussionPhaseSnapshot(flow?.phase);
   const isLearningCheck = theme.id === "learning-check";
-  const isDiscussion = theme.id === "discussion" || Boolean(phase);
+  // A concrete-phase timeline step is a discussion too: it wants the support
+  // screen's stems + vocabulary layout, so the room has the language for its
+  // Talk beats. phase stays null, so the phase-specific bits fall back cleanly.
+  const hasDiscussionTimeline = (() => {
+    const parsed = parseDiscussionPhases(flow?.presentation?.discussionPhases);
+    return parsed.ok && parsed.phases.length > 0;
+  })();
+  const isDiscussion = theme.id === "discussion" || Boolean(phase) || hasDiscussionTimeline;
   // The theme gates the LAYOUT; it must not gate the catalog fallback.
   // inferClassroomStage sends any "partner" or "group" step to the discussion
   // theme, and /control deliberately publishes empty arrays for those - so the

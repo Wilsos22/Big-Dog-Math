@@ -153,6 +153,8 @@ function stepsFromLesson(lesson: LessonData): LiveFlowSequenceStep[] {
   return lesson.steps.map((step) => {
     const state = DEFAULT_STATES.find((candidate) => candidate.id === step.stateId);
     const isDiscussion = usesDiscussionProtocol(step.stateId, step.title || state?.label || "");
+    // A concrete-phase timeline step wants its authored stems + vocabulary too.
+    const hasDiscussionPhases = Boolean(step.discussionPhases && step.discussionPhases.trim());
     const configuredDiscussionSupports = discussionSupportsForLesson(lesson.lessonCode);
     const resourceUrl = (step.responseMode.trim().toLowerCase() === "assigned tool" ? liveAssignedToolRoute(step.tool) : null)
       || step.linkUrl
@@ -188,11 +190,16 @@ function stepsFromLesson(lesson: LessonData): LiveFlowSequenceStep[] {
       discussionStems: isDiscussion
         ? splitLiveFlowLines(step.discussionStems || lesson.discussionStems)
           .concat(step.discussionStems || lesson.discussionStems ? [] : configuredDiscussionSupports.sentenceStems)
-        : [],
+        : hasDiscussionPhases
+          ? splitLiveFlowLines(step.discussionStems || lesson.discussionStems)
+          : [],
       vocabulary: isDiscussion
         ? splitLiveFlowVocabulary(step.vocabulary || lesson.discussionVocabulary)
           .concat(step.vocabulary || lesson.discussionVocabulary ? [] : configuredDiscussionSupports.keyVocabulary)
-        : [],
+        : hasDiscussionPhases
+          ? splitLiveFlowVocabulary(step.vocabulary || lesson.discussionVocabulary)
+          : [],
+      discussionPhases: step.discussionPhases || undefined,
       responseMode: step.responseMode || "",
       workSpaceAvailable: step.workSpaceAvailable,
       slideOverlay: step.slideOverlay || undefined,
@@ -420,6 +427,7 @@ async function navigateFlow(
         routineConfig: step.routineConfig || null,
         discussionStems: step.discussionStems || [],
         vocabulary: step.vocabulary || [],
+        discussionPhases: step.discussionPhases || undefined,
         scoreboardStage: canRevealM2T1L1FinalScore(step.lessonCode, step.stateId, step.semantic)
           ? "halftime"
           : undefined,
