@@ -441,8 +441,165 @@ function testCanvasConnection() {
   }
 }
 
-// GRADES ARE NOT POSTED HERE, and that is deliberate. This script creates the
-// gradebook column; scores are a separate step that must join alias -> email
-// -> Canvas student, which only the roster spreadsheet can do. Keeping the two
-// apart means a broken grade push can never damage the assignment students
-// depend on for make-up work.
+// =====================================================================
+// GRADES: spreadsheet grid -> Canvas gradebook -> Infinite Campus
+//
+// Runs ONLY when you pick "Sync grades to Canvas" from the menu. Nothing about
+// grades is automatic or triggered: a typo in a score would otherwise reach
+// the Canvas gradebook and pass on to Infinite Campus before you noticed it.
+//
+// Reads every "Grades - <period>" tab. Column A is name, B is email, and each
+// column from C onward is an assignment whose header must match the Canvas
+// assignment name exactly. A cell is either a number of points or one of four
+// codes. HOW EACH CODE REACHES CANVAS - change these if your grading policy
+// differs, they are judgement calls, not facts:
+//
+//   M  Missing              -> flagged missing in Canvas, scored 0
+//   I  Incomplete           -> left UNGRADED (no score posted), flagged missing
+//                              so it shows in your to-do rather than counting
+//                              as a zero against the student
+//   E  Excused              -> Canvas "EX" - excluded from the average entirely
+//   X  Academic integrity   -> scored 0, and NOT flagged missing (the work was
+//                              turned in; the issue is not absence)
+//
+// Students are matched to Canvas by EMAIL, across every course in
+// BDM_CANVAS_COURSE_IDS, so no period-to-course mapping is needed - whichever
+// course a student is enrolled in is the one that receives their score.
+// =====================================================================
+
+function bdmCanvasStudentIndex_(config) {
+  const index = {};
+  for (let i = 0; i < config.courseIds.length; i++) {
+    const courseId = config.courseIds[i];
+    let page = 1;
+    while (page <= 10) {
+      const res = bdmCanvasFetch_(config, "/api/v1/courses/" + encodeURIComponent(courseId)
+        + "/users?enrollment_type[]=student&include[]=email&per_page=100&page=" + page, { method: "get" });
+      if (res.getResponseCode() !== 200) break;
+      const users = JSON.parse(res.getContentText());
+      if (!users.length) break;
+      for (let u = 0; u < users.length; u++) {
+        const email = String(users[u].email || users[u].login_id || "").trim().toLowerCase();
+        if (email && !index[email]) index[email] = { courseId: courseId, userId: users[u].id };
+      }
+      if (users.length < 100) break;
+      page++;
+    }
+  }
+  return index;
+}
+
+function bdmFindCanvasAssignments_(config, courseId) {
+  const byName = {};
+  let page = 1;
+  while (page <= 10) {
+    const res = bdmCanvasFetch_(config, "/api/v1/courses/" + encodeURIComponent(courseId)
+      + "/assignments?per_page=100&page=" + page, { method: "get" });
+    if (res.getResponseCode() !== 200) break;
+    const list = JSON.parse(res.getContentText());
+    if (!list.length) break;
+    for (let i = 0; i < list.length; i++) {
+      byName[String(list[i].name || "").trim()] = list[i].id;
+    }
+    if (list.length < 100) break;
+    page++;
+  }
+  return byName;
+}
+
+// Returns null when the cell should not be posted at all (blank, or a code
+// meaning "no score yet"). Anything unrecognised is reported, never guessed.
+function bdmGradePayloadFor_(raw) {
+  const value = String(raw == null ? "" : raw).trim();
+  if (!value) return null;
+
+  const code = value.toUpperCase();
+  if (code === "E") return { posted_grade: "EX" };
+  if (code === "M") return { posted_grade: "0", late_policy_status: "missing" };
+  if (code === "I") return { late_policy_status: "missing" };
+  if (code === "X") return { posted_grade: "0", late_policy_status: "none" };
+
+  const number = Number(value);
+  if (isFinite(number) && number >= 0) return { posted_grade: String(number) };
+  return { invalid: true };
+}
+
+function pushGradesToCanvas() {
+  const config = bdmCanvasConfig_();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets().filter(function (s) {
+    return s.getName().indexOf("Grades - ") === 0;
+  });
+  if (!sheets.length) throw new Error('No "Grades - <period>" tabs found. Run "Refresh grade rosters" first.');
+
+  const students = bdmCanvasStudentIndex_(config);
+  const assignmentsByCourse = {};
+  const problems = [];
+  let posted = 0;
+  let unmatchedStudents = 0;
+
+  for (let s = 0; s < sheets.length; s++) {
+    const sheet = sheets[s];
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) continue;
+    const header = values[0];
+
+    for (let c = BDM_GRADES_FIRST_ASSIGNMENT_COL - 1; c < header.length; c++) {
+      const assignmentName = String(header[c] || "").trim();
+      if (!assignmentName) continue;
+
+      // grade_data is built per course, since a Canvas assignment id only
+      // exists within its own course.
+      const perCourse = {};
+      for (let r = 1; r < values.length; r++) {
+        const email = String(values[r][1] || "").trim().toLowerCase();
+        if (!email) continue;
+        const payload = bdmGradePayloadFor_(values[r][c]);
+        if (!payload) continue;
+        if (payload.invalid) {
+          problems.push(sheet.getName() + " " + assignmentName + ": \"" + values[r][c]
+            + "\" for " + values[r][0] + " is not a number or M/I/E/X");
+          continue;
+        }
+        const canvas = students[email];
+        if (!canvas) { unmatchedStudents++; continue; }
+        if (!perCourse[canvas.courseId]) perCourse[canvas.courseId] = {};
+        perCourse[canvas.courseId][canvas.userId] = payload;
+      }
+
+      const courseIds = Object.keys(perCourse);
+      for (let i = 0; i < courseIds.length; i++) {
+        const courseId = courseIds[i];
+        if (!assignmentsByCourse[courseId]) {
+          assignmentsByCourse[courseId] = bdmFindCanvasAssignments_(config, courseId);
+        }
+        const assignmentId = assignmentsByCourse[courseId][assignmentName];
+        if (!assignmentId) {
+          problems.push("Course " + courseId + ": no Canvas assignment named \""
+            + assignmentName + "\"");
+          continue;
+        }
+        const res = bdmCanvasFetch_(config, "/api/v1/courses/" + encodeURIComponent(courseId)
+          + "/assignments/" + assignmentId + "/submissions/update_grades", {
+          method: "post",
+          payload: JSON.stringify({ grade_data: perCourse[courseId] })
+        });
+        const code = res.getResponseCode();
+        if (code >= 200 && code < 300) {
+          posted += Object.keys(perCourse[courseId]).length;
+        } else {
+          problems.push("Course " + courseId + " / " + assignmentName + " (" + code + "): "
+            + res.getContentText().slice(0, 160));
+        }
+      }
+    }
+  }
+
+  const summary = "Synced " + posted + " score(s) to Canvas."
+    + (unmatchedStudents ? "\n\n" + unmatchedStudents
+      + " score(s) skipped - those students were not found in any Canvas course." : "")
+    + (problems.length ? "\n\nProblems:\n" + problems.slice(0, 12).join("\n") : "");
+  Logger.log(summary);
+  try { SpreadsheetApp.getUi().alert(summary); } catch (err) { /* no UI when triggered */ }
+  return { posted: posted, problems: problems };
+}

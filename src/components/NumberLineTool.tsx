@@ -6,11 +6,17 @@
 //   −3, drag the dot and watch hops + a running expression until you land on the answer.
 // • Parts mode: 0…1 split into 16ths; the dot snaps to the nearest 16th and the
 //   readout rotates between fraction, decimal, and percent.
+// • Order mode: 0…5 with a tick every half; students drag a set of fractions,
+//   mixed numbers and improper fractions onto the line in order. The set is a
+//   string (lib/fractionOrderSet) that arrives from the teacher's control panel,
+//   a ?set= link, or the tool's own rounds — see FractionOrderLine.
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import FractionOrderLine from "./FractionOrderLine";
+import { parseFractionRounds } from "@/lib/fractionOrderSet";
 import { LiveToolBanner, useLiveToolConfig } from "./useLiveToolConfig";
 
-type Mode = "int" | "parts";
+type Mode = "int" | "parts" | "order";
 type Rep = "fraction" | "decimal" | "percent";
 const W = 760, L = 44, R = 716, Y = 168, H = 230;
 
@@ -24,6 +30,7 @@ export default function NumberLineTool() {
   const [rep, setRep] = useState<Rep>("fraction");
   const [absVal, setAbsVal] = useState(false);
   const [problem, setProblem] = useState<[number, number] | null>(null);
+  const [fractionSet, setFractionSet] = useState<string | null>(null);
   const [value, setValue] = useState(0);
   const [dragging, setDragging] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -71,10 +78,29 @@ export default function NumberLineTool() {
     setAbsVal(false);
   }, []);
 
+  // A published fraction set wins over the integer problem: a teacher who typed
+  // one is running the ordering board, not −3 + 6. Keyed on the config id, not
+  // the object, so the 1s poll behind useLiveToolConfig cannot restart a
+  // student's board mid-placement.
   useEffect(() => {
     if (!liveTool || liveTool.route !== "/number-line-plus") return;
+    if (parseFractionRounds(liveTool.config.fractionSet).length) {
+      setProblem(null);
+      setFractionSet(liveTool.config.fractionSet ?? null);
+      setMode("order");
+      return;
+    }
     startProblem([liveTool.config.start, liveTool.config.change]);
   }, [liveTool?.id, startProblem]);
+
+  // The same set also arrives in the URL (?set=1/2,7/3,3) so it can be pasted
+  // into Notion or handed out as a link for work at home.
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get("set");
+    if (!parseFractionRounds(raw).length) return;
+    setFractionSet(raw);
+    setMode("order");
+  }, []);
 
   // labels
   function repLabel(v: number): string {
@@ -129,6 +155,8 @@ export default function NumberLineTool() {
         .nl-btn { font-size:0.8rem; font-weight:700; color:var(--bdb-ink-soft); background:var(--bdb-card); border:1px solid var(--bdb-line); border-radius:999px; padding:8px 13px; cursor:pointer; text-decoration:none; }
         .nl-btn:hover { border-color:var(--bdb-teal); color:var(--bdb-ink); }
         .nl-main { padding:22px 18px; display:grid; gap:18px; justify-items:center; max-width:920px; margin:0 auto; width:100%; }
+        /* The ordering board is a workspace, not a readout — it gets the room. */
+        .nl-main.wide { max-width:min(1500px,96vw); align-content:start; }
         .nl-controls { display:flex; gap:16px; flex-wrap:wrap; justify-content:center; align-items:center; }
         .nl-seg { display:inline-flex; border:1px solid var(--bdb-line); border-radius:9px; overflow:hidden; }
         .nl-seg button { background:var(--bdb-card); border:none; color:var(--bdb-ink-soft); font-weight:700; font-size:0.84rem; padding:8px 13px; cursor:pointer; }
@@ -149,12 +177,13 @@ export default function NumberLineTool() {
         <a className="nl-btn" href="/">Home</a>
       </header>
 
-      <main className="nl-main">
+      <main className={`nl-main${mode === "order" ? " wide" : ""}`}>
         <LiveToolBanner tool={liveTool} />
         <div className="nl-controls">
           <div className="nl-seg">
             <button className={mode === "int" ? "on" : ""} onClick={() => { setMode("int"); setProblem(null); }}>Integers</button>
             <button className={mode === "parts" ? "on" : ""} onClick={() => { setMode("parts"); setProblem(null); setValue(0); }}>Parts of a whole</button>
+            <button className={mode === "order" ? "on" : ""} onClick={() => { setMode("order"); setProblem(null); }}>Order fractions</button>
           </div>
           {mode === "parts" && (
             <div className="nl-seg">
@@ -167,6 +196,7 @@ export default function NumberLineTool() {
           {problem && <button className="nl-btn" onClick={() => setProblem(null)}>Exit problem</button>}
         </div>
 
+        {mode === "order" ? <FractionOrderLine set={fractionSet} /> : <>
         <div className="nl-readout">
           {problem
             ? <>{problem[0]} {problem[1] >= 0 ? "+" : "−"} {Math.abs(problem[1])} = {solvedProblem ? <span style={{ color: "var(--bdb-green)" }}>{target} ✓</span> : <span style={{ color: "var(--bdb-ink-soft)" }}>?</span>}</>
@@ -213,10 +243,15 @@ export default function NumberLineTool() {
           <span style={{ color: "var(--bdb-ink-soft)", fontWeight: 800, fontSize: "0.8rem", alignSelf: "center" }}>Problems:</span>
           {PROBLEMS.map((p, i) => <button className="nl-preset" key={i} onClick={() => startProblem(p)}>{p[0]} {p[1] >= 0 ? "+" : "−"} {Math.abs(p[1])}</button>)}
         </div>
+        </>}
       </main>
 
       <footer className="nl-foot">
-        <span className="nl-btn" style={{ borderColor: "transparent", cursor: "default" }}>Drag the blue dot. Green arcs = the hops you make.</span>
+        <span className="nl-btn" style={{ borderColor: "transparent", cursor: "default" }}>
+          {mode === "order"
+            ? "Drag each card onto the line. Ticks are every half."
+            : "Drag the blue dot. Green arcs = the hops you make."}
+        </span>
         <a className="nl-btn" href="/control">Control panel</a>
       </footer>
     </div>
