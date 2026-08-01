@@ -5,6 +5,30 @@ Student data cannot go to Notion, and identities must be disguised for
 everything the website collects, with real names living only in the district
 Google Workspace.
 
+## STATUS - server side EXECUTED 2026-08-01 (on Steele's go)
+
+Done, in order, and verified against the live database and site:
+- `ferpa-pseudonym-schema.sql` applied (alias + email_hmac, RPCs on the HMAC).
+- The FERPA branch merged to `main` and deployed (build `c1d9c6d`); the daily
+  Notion roster cron is gone with it.
+- `end-of-year-student-wipe.sql` run: the 174 real-name rows (zero evidence
+  attached - verified first) and all test data deleted.
+- `ferpa-pii-scrub.sql` run: `students` now carries ONLY
+  `id, period_id, created_at, auth_user_id, auth_claimed_at, alias,
+  email_hmac`; `abbie_questions` and `sessions.abbie` are gone. The live DB
+  also had a generated `email_normalized` column - dropped (the scrub file
+  now includes it).
+- Mock class reseeded pseudonymously (Amber Fox and friends, 11 students,
+  i-Ready baselines + six warm-up days). The mock LIVE session seed was
+  deliberately not run - run `mock-live-session-seed.sql` when you want a
+  visit-list practice session.
+
+REMAINING - the Workspace side (steps 1, 2, 5, 6, 8 below): the roster Sheet
++ `BDM_ROSTER_HMAC_KEY` + `BDM_CRON_SECRET`, the `.gs` paste-ins, the roster
+push, a real warm-up verification, and hand-archiving the Notion student
+databases. Until step 2 lands, a warm-up submission posts a raw email and the
+site REFUSES it (by design) - so do steps 1-2 before the first class day.
+
 ## The model after cutover
 
 - **Google Workspace (district)** is the ONLY identified zone: the roster

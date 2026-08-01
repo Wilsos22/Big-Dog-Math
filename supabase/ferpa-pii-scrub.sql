@@ -68,9 +68,13 @@ where dedupe_key like '%@%';
 drop table if exists public.abbie_questions;
 alter table public.sessions drop column if exists abbie;
 
--- 4. The identity columns themselves.
+-- 4. The identity columns themselves. email_normalized is a generated column
+--    derived from email in the live database (it never appears in schema.sql)
+--    - derived PII goes with its source, and it must drop first or the email
+--    drop fails on the dependency.
 drop index if exists public.students_email_idx;
 drop index if exists public.students_normalized_email_idx;
+alter table public.students drop column if exists email_normalized;
 alter table public.students drop column if exists full_name;
 alter table public.students drop column if exists email;
 

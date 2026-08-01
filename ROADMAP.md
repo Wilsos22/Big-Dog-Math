@@ -18,10 +18,13 @@ summaries, day-review push, parent outreach - and the dormant Google OAuth
 student sign-in are all gone). Ingest routes refuse identified payloads
 (`npm run test:ferpa-boundary`), the teacher re-identifies via a browser-local
 name key pasted from the Sheet (`/roster`), and the checkpoint CSV translates
-emails to aliases in the browser before upload. BUILT ON BRANCH
-claude/website-data-ferpa-compliance-42829d, awaiting Steele's cutover per
-`supabase/FERPA-CUTOVER.md` (schema migration + deploy + Apps Script paste-ins
-+ roster push + destructive PII scrub + hand-archiving the Notion student DBs).
+emails to aliases in the browser before upload. The classroom spinner is the
+one room-facing exception: it shows FIRST names, resolved at render from the
+browser-local key, with aliases still on the wire. SERVER SIDE CUT OVER
+2026-08-01: schema migrated, deployed to main, every real-name row wiped, PII
+scrub run (no name or email column survives), mock class reseeded. Remaining:
+Steele's Workspace steps per `supabase/FERPA-CUTOVER.md` (roster Sheet, HMAC
+key, Apps Script paste-ins, roster push, archiving the Notion student DBs).
 
 **Lesson Screen Studio — compose the lesson screens from Notion** (7/31, from
 the "Lesson visual design direction" handoff). `/teacher/studio` now composes

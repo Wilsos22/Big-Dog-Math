@@ -140,12 +140,16 @@ bars and live misconception grouping).
    runs on the classroom laptop, so one paste on /roster covers it); without the key the spinner
    falls back to aliases. Mock/test
    identities stay fully fictional AND pseudonymous-shaped (the mock class is Amber Fox and
-   friends). Built 2026-07-31 on branch claude/website-data-ferpa-compliance-42829d; the CUTOVER is
-   Steele's, in order, per `supabase/FERPA-CUTOVER.md` (schema migration, deploy, Apps Script
-   paste-ins, roster push, then the destructive `ferpa-pii-scrub.sql` and hand-archiving the Notion
-   student databases). Until the scrub runs, `students` still holds ~170 real names and district
-   emails re-synced daily at 13:00 UTC from the Notion roster - the deploy is what stops that cron.
-   The old hold on new student-data plumbing is LIFTED; build against the pseudonymous model.
+   friends). Built 2026-07-31; SERVER SIDE CUT OVER 2026-08-01 on Steele's go: schema migration
+   applied, branch merged and deployed (the Notion roster cron is gone), all real-name rows wiped
+   (they held zero evidence), `ferpa-pii-scrub.sql` run - the live `students` table now carries
+   ONLY id/period_id/created_at/auth_user_id/auth_claimed_at/alias/email_hmac - and the mock class
+   reseeded pseudonymously. REMAINING is the Workspace side, Steele's hands only, per
+   `supabase/FERPA-CUTOVER.md`: roster Sheet + `BDM_ROSTER_HMAC_KEY` + Apps Script paste-ins +
+   roster push + archiving the Notion student databases. Until those paste-ins land, warm-up
+   identity posts carry a raw email and the site REFUSES them by design - do them before the first
+   class day. The old hold on new student-data plumbing is LIFTED; build against the pseudonymous
+   model.
    Pseudonymized is not anonymized - Steele holds the key, and the posture still needs CCSD's
    sign-off; if CCSD requires even pseudonymous records in-district, that is a new project.
 9. KEEP THIS FILE TRUE, IMMEDIATELY. The moment you discover something that would have prevented a bug
