@@ -54,11 +54,13 @@ an alias on the wall, and the teacher says the first name aloud anyway.
 
 ## Cutover steps, in order (do this out of class time)
 
-Everything below is inert until you do it. As of the build date the DB still
-holds 170 real names and district emails, re-synced daily at 13:00 UTC from
-the Notion roster - step 4 is what ends that.
+READ THE STATUS BLOCK ABOVE FIRST. Steps 3, 4, 7 and 9 are marked **[DONE -
+DO NOT RE-RUN]** below because they were executed on 2026-08-01. Re-running
+the SQL ones now FAILS (they reference `full_name`, which the scrub dropped)
+- harmless, since each file is wrapped in a transaction and rolls back, but
+it costs you a confusing error. Only the steps marked **[TODO]** remain.
 
-1. **Create the roster Sheet in your district Workspace.** A spreadsheet with
+1. **[TODO] Create the roster Sheet in your district Workspace.** A spreadsheet with
    a tab named `Roster`, header row `Name | Email | Period | Alias`, one row
    per student for the new year. Open its Apps Script editor and paste in
    `warmup-roster-push.gs`. In Project Settings > Script Properties set:
@@ -68,41 +70,41 @@ the Notion roster - step 4 is what ends that.
      or this repo.
    - `BDM_CRON_SECRET` - the same value as `CRON_SECRET` in Vercel.
    Run `generateAliases()` once to fill the Alias column.
-2. **Update the warm-up Apps Script project** (the response spreadsheet's
+2. **[TODO] Update the warm-up Apps Script project** (the response spreadsheet's
    script): paste the updated `warmup-evidence.gs`, `warmup-notion-sync.gs`,
    and `warmup-sidebar-functions.gs`, and add `BDM_ROSTER_HMAC_KEY` to ITS
    Script Properties with the SAME value as step 1. From this moment the
    warm-up bridge sends HMACs, never emails, and no student row goes to
    Notion.
-3. **Run `supabase/ferpa-pseudonym-schema.sql`** in the Supabase SQL Editor
-   (additive: alias + email_hmac columns, and every identity RPC re-pointed
-   at the HMAC).
-4. **Merge and deploy the FERPA branch.** This ships the alias-based code,
-   removes the Notion roster pull AND the daily Vercel cron that drove it,
-   and turns on the identified-payload refusals. (Old code cannot call the
-   new RPCs and vice versa, which is why steps 3 and 4 happen in one sitting,
-   out of class time.)
-5. **Push the roster:** run `pushRosterToSite()` in the roster Sheet's Apps
+3. **[DONE - DO NOT RE-RUN] `supabase/ferpa-pseudonym-schema.sql`** (applied
+   2026-08-01: alias + email_hmac columns, every identity RPC re-pointed at
+   the HMAC).
+4. **[DONE - DO NOT RE-RUN] Merge and deploy the FERPA branch.** Shipped
+   2026-08-01 as build `c1d9c6d`; the Notion roster pull and its daily Vercel
+   cron are gone, and the identified-payload refusals are live.
+5. **[TODO] Push the roster:** run `pushRosterToSite()` in the roster Sheet's Apps
    Script. Check the log: created/updated counts, no skipped rows. Optional:
    add a daily time trigger on it.
-6. **Verify before scrubbing:**
+6. **[TODO] Verify after pushing:**
    - `/roster` shows aliases; paste the name key and names resolve.
    - Complete one warm-up with a test district account; the device verifies
      and joins (the whole receipt chain now rides the HMAC).
    - `select count(*) from students where alias is null` is 0 for current
      students.
-7. **Run `supabase/ferpa-pii-scrub.sql`** (DESTRUCTIVE - read its header).
-   Drops `students.full_name` and `students.email`, rewrites every stored
-   display_name to the alias, scrubs emails out of old dedupe keys, and drops
-   the `abbie_questions` table plus the dormant `sessions.abbie` column.
-8. **Clean up Notion by hand** (the site cannot do this for you): archive or
+7. **[DONE - DO NOT RE-RUN] `supabase/ferpa-pii-scrub.sql`** (run 2026-08-01,
+   after the student wipe). Dropped `students.full_name`, `students.email`
+   and the generated `email_normalized`, rewrote stored display_names to the
+   alias, scrubbed emails out of old dedupe keys, and dropped the
+   `abbie_questions` table plus the dormant `sessions.abbie` column.
+8. **[TODO] Clean up Notion by hand** (the site cannot do this for you): archive or
    delete the "All Contact Information" roster database, the "Warm up
    Submissions" database, the "Warm-Up Weekly Summaries" database, the
    i-Ready Evaluations database, and any student-profile pages. Lesson
    content stays.
-9. **Re-seed the mock class if you want practice data:** the updated
-   `mock-classroom-seed.sql` and `mock-live-session-seed.sql` are already
-   pseudonymous (Amber Fox and friends).
+9. **[DONE] Mock class re-seeded** 2026-08-01 from `mock-classroom-seed.sql`
+   (Amber Fox and friends, pseudonymous). `mock-live-session-seed.sql` was
+   deliberately NOT run - it opens a live session; run it only when you want
+   a visit-list practice session.
 
 ## What changed on the site (summary)
 

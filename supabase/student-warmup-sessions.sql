@@ -1,3 +1,12 @@
+-- DO NOT RE-RUN AFTER THE FERPA CUTOVER (2026-08-01).
+-- This file is the PRE-FERPA definition. Its bdm_complete_warmup_identity
+-- takes p_student_email and reads students.email - a column the scrub
+-- dropped. The argument TYPES are unchanged, so re-running would silently
+-- REPLACE the live, correct function with this broken one, and every warm-up
+-- verification would then fail at runtime. The current definitions live in
+-- supabase/ferpa-pseudonym-schema.sql. Kept only as setup history for a
+-- from-scratch environment, where it runs BEFORE that migration.
+--
 -- Big Dog Math: one warm-up completion receipt per student auth identity and class session.
 -- Server routes are the only access path; browser roles receive no table privileges.
 -- Prerequisite: student-admission-override.sql, which defines

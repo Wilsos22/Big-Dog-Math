@@ -22,8 +22,20 @@ alter table public.students
   add column if not exists email_hmac text;
 
 -- full_name is dropped by the scrub; until then alias-only inserts must work.
-alter table public.students
-  alter column full_name drop not null;
+-- Guarded so this file stays re-runnable AFTER the scrub has dropped the
+-- column - an unguarded ALTER throws 42703 and rolls the whole file back,
+-- which reads like a broken migration when it is only a no-op.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'students'
+      and column_name = 'full_name'
+  ) then
+    alter table public.students alter column full_name drop not null;
+  end if;
+end $$;
 
 create unique index if not exists students_alias_idx
   on public.students(lower(btrim(alias)))

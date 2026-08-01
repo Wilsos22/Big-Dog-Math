@@ -1,3 +1,11 @@
+-- DO NOT RE-RUN AFTER THE FERPA CUTOVER (2026-08-01).
+-- This file is the PRE-FERPA definition. Its bdm_admit_student_join_request
+-- takes p_student_email and reads students.email - a column the scrub
+-- dropped. Same argument types as the live version, so re-running would
+-- silently REPLACE the correct function with this broken one. The current
+-- definitions live in supabase/ferpa-pseudonym-schema.sql. Kept only as setup
+-- history for a from-scratch environment, where it runs BEFORE that migration.
+--
 -- Big Dog Math: teacher-approved warm-up admission override.
 --
 -- Run this additive migration in the Supabase SQL Editor before deploying the

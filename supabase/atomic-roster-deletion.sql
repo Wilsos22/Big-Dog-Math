@@ -1,3 +1,10 @@
+-- DO NOT RE-RUN AFTER THE FERPA CUTOVER (2026-08-01).
+-- This file is the PRE-FERPA definition: bdm_delete_unused_roster_student
+-- guards on students.full_name, a column the scrub dropped. Re-running would
+-- replace the live function (which guards on alias) with this broken one.
+-- The current definition lives in supabase/ferpa-pseudonym-schema.sql. Kept
+-- only as setup history for a from-scratch environment.
+--
 -- Big Dog Math: atomic, server-only roster deletion.
 --
 -- Run this additive migration in the Supabase SQL Editor before deploying the
