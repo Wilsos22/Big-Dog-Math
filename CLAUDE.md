@@ -116,21 +116,31 @@ bars and live misconception grouping).
    already on the iPad and it is what changes the next teacher move.
 7. Verify the build before reporting "done" (`npm run typecheck` at minimum, `npm run build` for
    anything non-trivial). Do not rely on file edits alone.
-8. Do not store real student PII until RLS is tightened. Mock/test identities must be fully fictional.
-   OPEN AS OF 2026-07-29: Steele is checking CCSD's privacy requirements and whether student data can
-   live in Supabase at all. **Until he has that answer, do not build new student-data plumbing** - that
-   explicitly defers bridging `poll_answers` into `responses` (the exit-ticket-to-mastery gap) and the
-   `session_joins.last_seen_at` column the participation view wants. UX work is unblocked and is the
-   agreed priority meanwhile.
-   The facts he needs, verified 2026-07-29: `students` holds `full_name`, `email` and
-   `email_normalized` - real names and district emails, re-synced daily by the 13:00 UTC roster cron.
-   `session_joins` and `poll_answers` hold `display_name`. `poll_answers` holds `answer`,
-   `explanation`, `values`; `responses` holds `answer`, `work_snapshot`, `misconception` - student work
-   product. Two points in his favour: RLS is locked down and verified (anon gets permission-denied on
-   `students`, `sessions`, `responses` and the rest), and NO student PII reaches the Anthropic API -
-   `/api/live/next-move` sends `studentCount` only. If the sticking point turns out to be names plus
-   district emails in a third-party cloud, the mitigation is a pseudonymous roster keyed to a district
-   id with names resolved only in the teacher's browser - a real project, not a patch.
+8. **THE FERPA BOUNDARY** (Steele's answer arrived 2026-07-31, replacing the 2026-07-29 hold:
+   "It cant go to notion. It needs to follow ferpa. I need to create a way to disguise their
+   identities for anything collected from the website until it gets to the google workplace app").
+   Student names, district emails, and every piece of re-identification key material live ONLY in
+   the district Google Workspace (roster Sheet + Apps Script + Form exports) and, for live-teaching
+   convenience, the teacher's own browser. The SITE knows each student as an `alias` ("Amber Fox")
+   plus an `email_hmac` (HMAC-SHA256 of the district email, computed in Apps Script with
+   `BDM_ROSTER_HMAC_KEY`, which exists ONLY in Script Properties - never in Vercel, so the site
+   cannot compute, reverse, or enumerate the hashes). NOTION HOLDS ZERO STUDENT DATA - lesson
+   content only. Standing rules for any new code: no name or email column or payload field
+   server-side; ingest routes REFUSE identified payloads (see `src/lib/pseudonym.ts` -
+   `assertPseudonymousRoster`, `looksIdentified`; `npm run test:ferpa-boundary` pins the boundary);
+   teacher-side re-identification happens only through `src/lib/teacherNameKey.ts`
+   (browser localStorage, loaded by pasting from the roster Sheet on /roster) and that module may
+   NEVER be imported by anything under `src/app/api`; anything a teacher tap or write sends back to
+   the server carries the ALIAS, never a resolved name (VisitListPanel is the pattern). Mock/test
+   identities stay fully fictional AND pseudonymous-shaped (the mock class is Amber Fox and
+   friends). Built 2026-07-31 on branch claude/website-data-ferpa-compliance-42829d; the CUTOVER is
+   Steele's, in order, per `supabase/FERPA-CUTOVER.md` (schema migration, deploy, Apps Script
+   paste-ins, roster push, then the destructive `ferpa-pii-scrub.sql` and hand-archiving the Notion
+   student databases). Until the scrub runs, `students` still holds ~170 real names and district
+   emails re-synced daily at 13:00 UTC from the Notion roster - the deploy is what stops that cron.
+   The old hold on new student-data plumbing is LIFTED; build against the pseudonymous model.
+   Pseudonymized is not anonymized - Steele holds the key, and the posture still needs CCSD's
+   sign-off; if CCSD requires even pseudonymous records in-district, that is a new project.
 9. KEEP THIS FILE TRUE, IMMEDIATELY. The moment you discover something that would have prevented a bug
    - a stale reference, a silent failure mode, an undocumented constraint - correct this file in the
    same turn you discovered it, as its own small commit, and get that commit onto `main` without
@@ -510,8 +520,9 @@ references on sight). Without `TEACHER_PASSWORD` set, protected APIs return 503 
 redirect to `/teacher-login?error=configuration`. It gates a request when the path matches
 `PROTECTED_PREFIXES` (`/teacher`, `/control`, `/session`, `/roster`, `/ipad`, `/board`,
 `/start-question`, `/api/form-responses`, `/api/mastery`, `/api/live`, `/api/roster`,
-`/api/checkpoints`, `/api/outreach`, `/api/submissions`, `/api/teacher`, `/api/control-remote`,
-`/api/iready`, `/api/warmup-summaries`) - plus, when `NEXT_PUBLIC_SECURE_STUDENT_DATA=true`
+`/api/checkpoints`, `/api/submissions`, `/api/teacher`, `/api/control-remote`,
+`/api/warmup-summaries` - `/api/iready` and `/api/outreach` left the list 2026-07-31 when their
+Notion-backed routes were deleted in the FERPA cutover) - plus, when `NEXT_PUBLIC_SECURE_STUDENT_DATA=true`
 (production has this ON), `SECURE_ROLLOUT_PREFIXES` `/api/session` and `/api/warmup`. Student-facing
 endpoints therefore live under `/api/student/*` (never gated here) and are dual-mode: secure rollout
 authenticates via `requireVerifiedStudent()` in `src/lib/studentIdentity.ts`; transitional mode
@@ -595,10 +606,10 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   INSERT - the GRANT is revoked at the role level, so no policy is even evaluated. The reference
   group returning 200 in the same sweep is the control that proves the probe was live. If an audit
   claims `prototype_all` is still open, it is reading a pre-hardening snapshot: re-run the sweep
-  before believing it. THE AUDIT WAS RIGHT ABOUT ONE THING - `students.full_name` / `email` are real
-  names and district emails, which is precisely the open CCSD question in rule 8. Its proposed fix
-  (drop both columns) would break `/api/roster/sync`, which UPSERTs both from Notion every morning
-  at 13:00 UTC; a pseudonymous roster is a project, not a column drop.
+  before believing it. THE AUDIT WAS RIGHT ABOUT ONE THING - `students.full_name` / `email` were
+  real names and district emails; that project is now BUILT (rule 8, 2026-07-31): the FERPA branch
+  replaces them with `alias` + `email_hmac`, and `ferpa-pii-scrub.sql` drops both columns at
+  cutover.
 - `supabase/audit-exposure.sql` IS THE SELF-AUDIT - run it in the SQL Editor instead of trusting
   anyone's summary. Read-only: anon and authenticated grants with policy counts, policies that
   filter by nothing, every column whose name suggests an identifier, row counts, and a direct
@@ -611,12 +622,15 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   deliberately, and running it in the SQL Editor. Order matters: `schema.sql` -> `proficiency.sql` ->
   `evidence.sql` (which makes `responses.problem_id` nullable and adds `source/domain/standard_id/
   item_ref/dedupe_key`).
-- Roster sync is an UPSERT that NEVER deletes (`/api/roster/sync`, Vercel cron daily 13:00 UTC).
-  Students missing from Notion are reported, not removed. Consequence: wiping `students` in Supabase
-  without first clearing the Notion roster database silently undoes itself the next morning - the
-  cron recreates every student, name and district email included. Clear Notion first, then run
-  `supabase/end-of-year-student-wipe.sql` (which also deletes child rows explicitly, because several
-  FKs are ON DELETE SET NULL and would otherwise strand rows still carrying `display_name`).
+- Roster sync is a PSEUDONYMOUS PUSH from the Workspace roster Sheet (rule 8, 2026-07-31):
+  `warmup-roster-push.gs` POSTs `{alias, emailHmac, period}` rows to `/api/roster/sync` with Bearer
+  CRON_SECRET, and the route REFUSES anything identified. It is still an UPSERT that NEVER deletes
+  (missing rows are reported by alias). The Notion pull, `notionRoster.ts`, and the daily Vercel
+  cron are GONE - `vercel.json` has no crons, and a GET on the route returns 410. PRE-CUTOVER TRAP:
+  until the FERPA deploy ships, production still runs the old Notion cron at 13:00 UTC, so wiping
+  `students` still undoes itself unless Notion is cleared first; after the deploy that hazard is
+  dead. `supabase/end-of-year-student-wipe.sql` still deletes child rows explicitly (several FKs
+  are ON DELETE SET NULL and would otherwise strand rows still carrying `display_name`).
 - Student PII never leaves district systems. `/api/live/next-move` used to send student NAMES to the
   Anthropic API with their misconception; it now sends `studentCount` only (2026-07-22). Any new
   outbound call must pass counts/archetypes, never names or student work.
@@ -1413,7 +1427,8 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   tsconfig path aliases or new imports to those two files, and regenerate `scripts/fixtures/*.json` if
   you change algorithm behavior.
 - Deploy: edit -> commit (explicit paths) -> Steele pushes -> Vercel builds `main`. Env-var changes need
-  a redeploy to take effect. `vercel.json` has one cron: `/api/roster/sync` at 13:00 UTC daily.
+  a redeploy to take effect. `vercel.json` has NO crons since the FERPA cutover (the daily
+  `/api/roster/sync` Notion pull is gone; the roster pushes from Workspace Apps Script instead).
 - Classroom DISPLAY tabs stay open across deploys and never pick up new builds on their own - that
   is how "the wall is missing the feature" happens (cost a live confusion 2026-07-22: the
   projector's present tab predated the glass sheet entirely). `DeployRefresh` (root layout) polls
