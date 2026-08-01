@@ -65,6 +65,44 @@ export function labelFor(map: Map<string, string>, alias: string | null | undefi
   return name ? `${name} (${alias})` : alias;
 }
 
+function splitName(name: string): { first: string; lastInitial: string } {
+  const trimmed = name.trim();
+  const comma = trimmed.indexOf(",");
+  if (comma > 0) {
+    // District exports often arrive "Last, First".
+    const first = trimmed.slice(comma + 1).trim().split(/\s+/)[0] || "";
+    const last = trimmed.slice(0, comma).trim();
+    return { first, lastInitial: last ? last[0].toUpperCase() : "" };
+  }
+  const parts = trimmed.split(/\s+/);
+  return {
+    first: parts[0] || "",
+    lastInitial: parts.length > 1 ? parts[parts.length - 1][0].toUpperCase() : "",
+  };
+}
+
+// Alias -> first name, for the room-facing spinner (Steele's call, 2026-07-31:
+// kids disown an alias on the wall and derail the spin; a first name is what
+// he would say aloud anyway). Two students sharing a first name get a last
+// initial ("Marcus J."). Like every resolver here this is render-time only -
+// the wire and the server keep the alias.
+export function firstNameLabelMap(key: NameKey | null): Map<string, string> {
+  const parsed = (key?.entries ?? [])
+    .filter((entry) => entry.alias && entry.name)
+    .map((entry) => ({ alias: entry.alias, ...splitName(entry.name) }))
+    .filter((entry) => entry.first);
+  const counts = new Map<string, number>();
+  for (const entry of parsed) {
+    counts.set(entry.first.toLowerCase(), (counts.get(entry.first.toLowerCase()) || 0) + 1);
+  }
+  const map = new Map<string, string>();
+  for (const entry of parsed) {
+    const needsInitial = (counts.get(entry.first.toLowerCase()) || 0) > 1 && entry.lastInitial;
+    map.set(entry.alias.toLowerCase(), needsInitial ? `${entry.first} ${entry.lastInitial}.` : entry.first);
+  }
+  return map;
+}
+
 // Parse the pasted key. Accepts the Workspace roster Sheet's columns copied
 // straight out (tab-separated) or a CSV export. Needs a header row naming at
 // least Alias and Name; Email is optional but recommended (it powers the

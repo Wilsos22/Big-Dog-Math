@@ -23,8 +23,10 @@ Google Workspace.
   checkpoint upload translation) resolve names locally. The key lives in
   localStorage on that device and is never sent anywhere.
 
-Students see aliases ("Hey Swift Otter!") - on their own screens, the
-spinner, and the projector, which is strictly better than names on the wall.
+Students see aliases ("Hey Swift Otter!") on their own screens. One deliberate
+exception: the classroom SPINNER shows first names (resolved at render from
+the browser-local name key, so the wire still carries aliases) - kids disown
+an alias on the wall, and the teacher says the first name aloud anyway.
 
 ## Cutover steps, in order (do this out of class time)
 
