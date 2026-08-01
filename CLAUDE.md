@@ -217,12 +217,17 @@ bars and live misconception grouping).
   replacement for Infinite Campus: IC stays the system of record and cannot be auto-synced by a
   teacher (its OneRoster API needs an administrator to register the app with the district's IC
   rep), so IC data arrives by CSV export.
-  `warmup-canvas-sync.gs` posts TURN-IN ASSIGNMENTS to Canvas (2026-08-01). THE SCOPE IS A POLICY
-  RULE, NOT A TECHNICAL ONE (Steele: "only assignments that students must turn in even if they were
-  absent... the in lesson work isnt that"): warm-ups, tool work, exit tickets, learning checks and
-  discussion are formative, cannot be made up by an absent student, and MUST NOT reach the Canvas
-  gradebook. A lesson is treated as having a turn-in assignment when Notion gives it an
-  `Assignment Link` or a `Due and Turn In` value; otherwise the sync posts nothing. It reads only
+  `warmup-canvas-sync.gs` mirrors Notion lessons into Canvas (2026-08-01) as TWO DISTINCT THINGS,
+  and conflating them is the mistake to avoid. `syncLessonPageToCanvas()` posts an UNGRADED page
+  for EVERY published teaching day, so the course is visible to students and parents in Canvas.
+  `syncAssignmentToCanvas()` creates a GRADED assignment ONLY for turn-in work. `syncTodayToCanvas()`
+  runs both and is what belongs on the morning trigger.
+  THE GRADEBOOK SCOPE IS A POLICY RULE, NOT A TECHNICAL ONE (Steele: "only assignments that
+  students must turn in even if they were absent... the in lesson work isnt that"): warm-ups, tool
+  work, exit tickets, learning checks and discussion are formative, cannot be made up by an absent
+  student, and MUST NOT become Canvas assignments - though they may be DESCRIBED on the lesson
+  page, which is information rather than a grade. A lesson is treated as having a turn-in
+  assignment when Notion gives it an `Assignment Link` or a `Due and Turn In` value. It reads only
   the PUBLIC `/api/today` payload, so this integration carries zero student data. Canvas is reached
   with a teacher-minted personal access token in Script Properties, which needs no district
   approval; grade passback Canvas -> Infinite Campus is ON for Steele's courses, so THE GRADE PATH
