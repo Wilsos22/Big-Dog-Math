@@ -250,9 +250,17 @@ bars and live misconception grouping).
   whatever the assignment is, with no live session and no join (it runs at 8pm from a kitchen table).
   Steele's constraint: sixth graders ignore a wall of supports and A LIST IS A WALL. Never turn it
   into a list, and never add an "I am stuck, skip it" exit - an escape hatch cheaper than the work
-  gets used instead of the work. Reached from the third `.st-explore` button on the landing page.
+  gets used instead of the work. REACHED FROM TWO ENTRIES ON THE LANDING (moved 2026-08-01, Steele:
+  "the stuck? button should be on the students homepage not on the log in page"): the `Stuck on the
+  assignment?` chip is on the POST-code home base (the in-class student's homepage), and the
+  PRE-code code-entry screen carries an `Absent or doing homework?` chip pointing at the SAME route.
+  Both are `.st-explore` buttons. The pre-code one is deliberately NOT removed and NOT a "Stuck?"
+  label: an absent kid at 8pm has no live class code and can never open one (the period-code
+  fallback is gated on school hours AND a district account), so the code-entry screen is their ONLY
+  path to this route - stripping it there to honour "not on the log in page" literally would break
+  the documented absent flow, so it was RELABELLED to serve them instead.
   THE STUCK BUTTON IS THIS ROUTE AND ONLY THIS ROUTE (Steele, 2026-07-29): the walkthrough belongs
-  behind the homepage `Stuck on the assignment?` chip, NOT on a lesson or tool surface. A `Stuck?`
+  behind the landing chips, NOT on a lesson or tool surface. A `Stuck?`
   chip was briefly added to `/distributive-area` and removed the same day - "not part of the lesson.
   its for absent kids and kids doing homework."
 - `/homework-help` ANIMATES the Help Path when it can (2026-07-29, from the Claude Design handoff
