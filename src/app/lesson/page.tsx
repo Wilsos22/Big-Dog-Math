@@ -120,7 +120,6 @@ export default function LessonPage() {
   const [lesson, setLesson] = useState<LessonData | null>(null);
   const [date, setDate] = useState("");
   const [loading, setLoading] = useState(true);
-  const [firstName, setFirstName] = useState("");
   const supabase = getSupabase();
   const [sess, setSess] = useState<{ sessionId: string; studentId: string; name: string } | null>(null);
   const [activePoll, setActivePoll] = useState<{ id: string; question: string; choices: string[] | null } | null>(null);
@@ -132,7 +131,9 @@ export default function LessonPage() {
 
   useEffect(() => {
     try {
-      const n = localStorage.getItem("bdm-student-name"); if (n) setFirstName(n.trim().split(/\s+/)[0]);
+      // No student name of any kind renders on student devices (Steele,
+      // 2026-08-01) - the stored session's name field is the internal alias
+      // and is never displayed.
       const s = localStorage.getItem("bdm-student-session"); if (s) setSess(JSON.parse(s));
     } catch { /* ignore */ }
   }, []);
@@ -323,7 +324,6 @@ export default function LessonPage() {
       <div className="ls-wrap">
         <div className="ls-hero">
           <section className="ls-hero-main">
-            {firstName && <p className="ls-hey">Hey {firstName}.</p>}
             <div className="ls-kicker">Student lesson page</div>
             <h1 className="ls-title">{loading ? "Loading..." : lesson?.title || "Today's Lesson"}</h1>
             {lesson?.subtitle && <p className="ls-sub">{lesson.subtitle}</p>}

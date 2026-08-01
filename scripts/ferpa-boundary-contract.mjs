@@ -138,4 +138,20 @@ const vercelJson = JSON.parse(fs.readFileSync(path.join(root, "vercel.json"), "u
 ok(!(vercelJson.crons || []).some((cron) => cron.path === "/api/roster/sync"),
   "vercel.json must not cron the roster sync (roster is pushed from Workspace)");
 
+// Student devices render no student name or alias (Steele, 2026-08-01): the
+// join and confirm flows must never write the dead greeting key, and the two
+// student greetings stay gone. (The legacy /join typed-name flow is exempt -
+// pre-boundary, superseded, and the landing purges its stored key.)
+const liveClassFlowSrc = fs.readFileSync(path.join(root, "src/lib/liveClassFlow.ts"), "utf8");
+const liveFlowPage = fs.readFileSync(path.join(root, "src/app/live-flow/page.tsx"), "utf8");
+const landing = fs.readFileSync(path.join(root, "src/app/page.tsx"), "utf8");
+const lessonPage = fs.readFileSync(path.join(root, "src/app/lesson/page.tsx"), "utf8");
+ok(!liveClassFlowSrc.includes('setItem("bdm-student-name"')
+  && !liveFlowPage.includes('setItem("bdm-student-name"'),
+  "join/confirm flows must not write the greeting key (no name ever renders on a student device)");
+ok(landing.includes('removeItem("bdm-student-name")'),
+  "the landing must purge the dead greeting key from devices that still carry one");
+ok(!landing.includes("Hey ${name}") && !lessonPage.includes("Hey {firstName}"),
+  "student greetings must not render a name or alias");
+
 console.log(`PASS - ${checks} FERPA boundary checks: the site holds aliases and one-way hashes only, refuses identified payloads, and cannot compute or reverse the hashes.`);

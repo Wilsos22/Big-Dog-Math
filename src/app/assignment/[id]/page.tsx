@@ -23,7 +23,11 @@ type View = "loading" | "notfound" | "identify" | "playing" | "done";
 interface Period { id: string; name: string; }
 interface Student { id: string; alias: string | null; }
 
-const NAME_KEY = "bdm-student-name";
+// Stores the ALIAS for attempt attribution at home. It is never rendered -
+// student devices show no name of any kind (Steele, 2026-08-01) - and it is
+// deliberately NOT "bdm-student-name": the landing page purges that dead
+// greeting key on every visit.
+const NAME_KEY = "bdm-assignment-alias";
 const SID_KEY = "bdm-student-id";
 
 function scorePoints(isCorrect: boolean, timeMs: number): number {
@@ -239,7 +243,6 @@ export default function AssignmentPlayerPage() {
       {view === "playing" && problem && assignment && (
         <div className="as-play">
           <div className="as-hud">
-            <span className="as-who">{name?.split(" ")[0]}</span>
             <span className="as-prog-txt">{doneCount} / {target}</span>
           </div>
           <div className="as-bar"><div className="as-bar-fill" style={{ width: `${pct}%` }} /></div>

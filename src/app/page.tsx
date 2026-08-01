@@ -43,7 +43,6 @@ const HOME_LINKS = [
 export default function StudentLanding() {
   const router = useRouter();
   const supabase = getSupabase();
-  const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [joinSess, setJoinSess] = useState<{ id: string; periodId: string; syncKey: string } | null>(null);
   const [roster, setRoster] = useState<{ id: string; alias: string | null }[]>([]);
@@ -60,7 +59,10 @@ export default function StudentLanding() {
   const [requestingHelp, setRequestingHelp] = useState(false);
 
   useEffect(() => {
-    try { const n = localStorage.getItem("bdm-student-name"); if (n) setName(n.trim().split(/\s+/)[0]); } catch { /* ignore */ }
+    // No student name of any kind on student devices (Steele, 2026-08-01) -
+    // no alias, no typed name, nothing to perform with. Purge the old
+    // greeting key from devices that still carry one.
+    try { localStorage.removeItem("bdm-student-name"); } catch { /* ignore */ }
     try { setWarmupOpenedFor(sessionStorage.getItem("bdm-warmup-opened")); } catch { /* ignore */ }
     if (SECURE_STUDENT_DATA) {
       void (async () => {
@@ -84,8 +86,7 @@ export default function StudentLanding() {
               setIdentityReady(true);
             } else {
               setIdentityReady(false);
-              const storedName = (localStorage.getItem("bdm-student-name") || "").trim();
-              saveProvisionalStudentSession(link.sessionId, storedName, pending);
+              saveProvisionalStudentSession(link.sessionId, "", pending);
             }
             setWarmupHref(link.href);
           }
@@ -198,9 +199,8 @@ export default function StudentLanding() {
           // The teacher replaced the assigned form: verification restarts, but
           // the screen keeps FOLLOWING via a provisional session instead of
           // being dropped from class mode entirely.
-          const storedName = (localStorage.getItem("bdm-student-name") || "").trim();
           clearStoredStudentSession();
-          saveProvisionalStudentSession(result.sessionId, storedName, pendingCode);
+          saveProvisionalStudentSession(result.sessionId, "", pendingCode);
           setIdentityReady(false);
           setHelpRequestCode(null);
         }
@@ -294,7 +294,7 @@ export default function StudentLanding() {
         // Provisional session: the screen follows the class from the moment
         // the code is accepted, even before the warm-up verifies. The global
         // WarmupJoinSync upgrades it to the verified identity.
-        saveProvisionalStudentSession(link.sessionId, name, c);
+        saveProvisionalStudentSession(link.sessionId, "", c);
         setWarmupHref(link.href);
       } catch (error) {
         sessionStorage.removeItem("bdm-pending-class-code");
@@ -323,7 +323,6 @@ export default function StudentLanding() {
     }
     try {
       clearClassModeExitMarker();
-      localStorage.setItem("bdm-student-name", alias);
       if (joinSess) {
         localStorage.setItem("bdm-student-session", JSON.stringify({
           sessionId: joinSess.id,
@@ -427,7 +426,7 @@ export default function StudentLanding() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/big-dog-logo.svg" alt="Big Dog Math" />
       </div>
-      <h1 className="st-hello">{name ? `Hey ${name}!` : "Welcome!"}</h1>
+      <h1 className="st-hello">Welcome!</h1>
       <p className="st-hello-sub">
         {pendingCode
           ? "This is your home base. Start with the warm-up when it opens."

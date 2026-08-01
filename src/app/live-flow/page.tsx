@@ -360,8 +360,9 @@ export default function LiveFlowPage() {
       };
       if (!result.session) return;
       try {
+        // result.session.name is the ALIAS - it stays out of the greeting key
+        // (see src/lib/studentLocalName.ts).
         localStorage.setItem(STUDENT_SESSION_KEY, JSON.stringify(result.session));
-        localStorage.setItem("bdm-student-name", result.session.name);
       } catch { /* ignore */ }
       setIdentityConfirmed(true);
     };

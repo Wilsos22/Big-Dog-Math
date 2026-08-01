@@ -445,7 +445,10 @@ export const STUDENT_SESSION_READY_EVENT_NAME = "bdm-student-session-ready";
 export function saveVerifiedStudentJoin(session: StoredStudentSession): void {
   clearClassModeExitMarker();
   try {
-    localStorage.setItem("bdm-student-name", session.name);
+    // session.name is the server-assigned ALIAS, kept for identity only.
+    // Student devices render NO student name or alias anywhere (Steele,
+    // 2026-08-01) - a name on a kid's own screen is disruption material,
+    // same as on the board - so nothing here writes a greeting key.
     localStorage.setItem(STUDENT_SESSION_KEY, JSON.stringify(session));
     if (session.syncKey) sessionStorage.setItem("bdm-pending-class-code", session.syncKey);
   } catch { /* storage unavailable - the polling surfaces will retry */ }

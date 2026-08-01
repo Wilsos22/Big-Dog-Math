@@ -138,7 +138,16 @@ bars and live misconception grouping).
    roster fetch, fair rotation, and spinner-sync snapshots still carry aliases, so the wire and
    server never see a name. The projector tab needs the name key loaded in ITS browser (present
    runs on the classroom laptop, so one paste on /roster covers it); without the key the spinner
-   falls back to aliases. Mock/test
+   falls back to aliases.
+   STUDENT DEVICES RENDER NO STUDENT NAME OR ALIAS AT ALL (Steele, 2026-08-01: "they never have
+   their names on their device" - a name on a kid's own screen is disruption material, same as on
+   the board; an alias doubly so). Identity is NOT anonymous - the alias still rides every join,
+   answer, and evidence row, and the teacher still resolves names via the key - it just never
+   RENDERS on a student screen. The landing and /lesson greetings are name-free, the landing
+   PURGES the dead `bdm-student-name` greeting key on every visit (so /assignment stores its
+   at-home attribution alias under `bdm-assignment-alias` instead), and the boundary contract
+   pins all of it. The legacy /join typed-name flow (JoinQuestion + /api/session/responses,
+   superseded by live-flow polls) is deliberately left as-is. Mock/test
    identities stay fully fictional AND pseudonymous-shaped (the mock class is Amber Fox and
    friends). Built 2026-07-31; SERVER SIDE CUT OVER 2026-08-01 on Steele's go: schema migration
    applied, branch merged and deployed (the Notion roster cron is gone), all real-name rows wiped
