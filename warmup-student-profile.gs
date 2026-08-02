@@ -76,7 +76,9 @@ var BDM_PROFILE_HEADERS = {
   site: ["Alias", "Period", "Evidence", "Number and Operations", "Algebra and Algebraic Thinking",
          "Measurement and Data", "Geometry", "Updated"],
   behavior: ["Date", "Email", "Type", "What happened", "Action taken", "Followed up"],
-  contactLog: ["Date", "Email", "Method", "Spoke with", "Summary", "Outcome"]
+  // "Ref" holds the Gmail message id for scanned threads, which is what makes
+  // a re-scan idempotent. Leave it blank on rows you type by hand.
+  contactLog: ["Date", "Email", "Method", "Spoke with", "Summary", "Outcome", "Ref"]
 };
 
 function onOpen() {
@@ -91,6 +93,11 @@ function onOpen() {
     // noticed it.
     .addItem("Sync grades to Canvas", "pushGradesToCanvas")
     .addItem("Post today's lesson to Canvas", "syncTodayToCanvas")
+    .addSeparator()
+    // Parent contact. Everything DRAFTS by default - see warmup-parent-contact.gs.
+    .addItem("Draft missing-work emails", "draftMissingAssignmentEmails")
+    .addItem("Draft email about selected student", "draftParentEmailForStudent")
+    .addItem("Scan Gmail for parent contact", "scanGmailForParentContacts")
     .addSeparator()
     .addItem("Generate aliases", "generateAliases")
     .addItem("Push roster to site", "pushRosterToSite")
