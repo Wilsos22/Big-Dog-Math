@@ -10,7 +10,7 @@ import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerU
 import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
 import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
-import { parseDiscussionPhases } from "@/lib/discussionPhases";
+import { parseDiscussionPhases, discussionStageCountdown, DISCUSSION_MODE_LABEL } from "@/lib/discussionPhases";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { teacherApiRequest } from "@/lib/teacherApi";
 import { LIVE_FLOW_MODE, getStoredTeacherSessionId, liveTimerSeconds, type LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
@@ -77,6 +77,13 @@ function requestedSessionId() {
 export default function PaceSupportPage() {
   const [session, setSession] = useState<PaceSession | null>(null);
   const reloadRef = useRef<(() => void) | null>(null);
+  // A 1s heartbeat so the beat countdown re-renders every second, independent of
+  // the ~1.2s session poll - otherwise a big clock skips seconds.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setClockTick((t) => (t + 1) % 3600), 1000);
+    return () => window.clearInterval(id);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [sessionMessage, setSessionMessage] = useState("Connecting to the confirmed class session.");
   const [pollAnswers, setPollAnswers] = useState<PollAnswer[]>([]);
@@ -233,10 +240,21 @@ export default function PaceSupportPage() {
   // A concrete-phase timeline step is a discussion too: it wants the support
   // screen's stems + vocabulary layout, so the room has the language for its
   // Talk beats. phase stays null, so the phase-specific bits fall back cleanly.
-  const hasDiscussionTimeline = (() => {
+  const timelinePhases = (() => {
     const parsed = parseDiscussionPhases(flow?.presentation?.discussionPhases);
-    return parsed.ok && parsed.phases.length > 0;
+    return parsed.ok ? parsed.phases : [];
   })();
+  const hasDiscussionTimeline = timelinePhases.length > 0;
+  // During a self-running timeline, the number the room works against is the
+  // CURRENT beat's remaining time (think 30, write 90, ...), not the whole-state
+  // clock - and the red-at-15 warning keys off that beat too.
+  const discussionStage = hasDiscussionTimeline
+    ? discussionStageCountdown(timelinePhases, timer?.totalSeconds ?? 0, timerSeconds)
+    : null;
+  const stageSeconds = discussionStage && !discussionStage.done ? discussionStage.secondsLeft : timerSeconds;
+  const stageUrgency = hasDiscussionTimeline
+    ? timerUrgency(stageSeconds, { running: Boolean(timer?.running), finished: timerFinished })
+    : currentTimerUrgency;
   const isDiscussion = theme.id === "discussion" || Boolean(phase);
   // The theme gates the LAYOUT; it must not gate the catalog fallback.
   // inferClassroomStage sends any "partner" or "group" step to the discussion
@@ -398,6 +416,9 @@ export default function PaceSupportPage() {
         .pw-stepn { flex:none; min-width:1.5ch; color:var(--acc-deep); font-weight:800; font-variant-numeric:tabular-nums; }
         .pw-pace { margin-top:auto; display:inline-flex; align-items:center; gap:18px; width:fit-content; border:1px solid var(--hair); border-radius:16px; background:var(--card); padding:14px 22px; box-shadow:0 2px 10px rgba(40,32,20,0.06); }
         .pw-bigtimer { color:var(--head); font-size:clamp(2.6rem,5vw,4.4rem); line-height:0.9; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-0.03em; }
+        /* The discussion-beat clock is the one the room paces against, so it
+           reads bigger than the ordinary shared-clock chip. */
+        .pw-bigtimer-stage { font-size:clamp(3.6rem,8vw,7rem); }
         .pw-bigtimer.finished { color:#A82C15; }
         .pw-pace-copy { display:grid; gap:3px; }
         .pw-pace-copy b { color:var(--ink); font-size:clamp(0.95rem,1.4vw,1.2rem); }
@@ -581,8 +602,11 @@ export default function PaceSupportPage() {
               </ul>
               {timer ? (
                 <div className="pw-pace">
-                  <span className={`pw-bigtimer${timerFinished ? " finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`}>{formatTime(timerSeconds)}</span>
-                  <span className="pw-pace-copy"><b>{flow.presentation?.title || state.label}</b><span>Shared class clock</span></span>
+                  <span className={`pw-bigtimer pw-bigtimer-stage${timerFinished ? " finished" : ""} ${timerUrgencyClass(stageUrgency)}`}>{formatTime(stageSeconds)}</span>
+                  <span className="pw-pace-copy">
+                    <b>{discussionStage?.phase ? DISCUSSION_MODE_LABEL[discussionStage.phase.mode] : (flow.presentation?.title || state.label)}</b>
+                    <span>{discussionStage && !discussionStage.done ? "Left in this beat" : "Shared class clock"}</span>
+                  </span>
                 </div>
               ) : null}
             </div>

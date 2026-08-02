@@ -199,6 +199,45 @@ export function activeDiscussionPhase(
   return { index: phases.length, phaseElapsed: 0, phaseFraction: 1, done: true };
 }
 
+export interface DiscussionStageCountdown {
+  /** Active phase index, or phases.length once every beat is done. */
+  index: number;
+  /** The active beat, or null when the whole sequence is done. */
+  phase: AuthoredDiscussionPhase | null;
+  /** Whole seconds left IN THE ACTIVE BEAT (not the whole state), floored at 0. */
+  secondsLeft: number;
+  /** 0-1 fill of the active beat. */
+  fraction: number;
+  /** Every beat is complete. */
+  done: boolean;
+}
+
+/**
+ * The current beat's REMAINING seconds, derived from the state clock the same way
+ * on every surface: elapsed = the state's total minus its seconds left, mapped
+ * into the authored beats. The projector timeline, the pacing slide and the
+ * student screen all read this so the number they show agrees to the second - and
+ * it counts down WITHIN the active beat (think 30, write 90, ...), which is the
+ * time a student is actually working against, not the whole-state clock. Returns
+ * null when there are no authored beats, so a caller falls back to the state
+ * timer. Pure, so `test:discussion-phases` pins it.
+ */
+export function discussionStageCountdown(
+  phases: readonly AuthoredDiscussionPhase[],
+  totalSeconds: number,
+  stateSecondsLeft: number,
+): DiscussionStageCountdown | null {
+  if (!phases.length) return null;
+  const elapsed = Math.max(0, totalSeconds - Math.max(0, stateSecondsLeft));
+  const progress = activeDiscussionPhase(phases, elapsed);
+  if (progress.done) {
+    return { index: phases.length, phase: null, secondsLeft: 0, fraction: 1, done: true };
+  }
+  const phase = phases[progress.index] ?? null;
+  const secondsLeft = phase ? Math.max(0, Math.ceil(phase.seconds - progress.phaseElapsed)) : 0;
+  return { index: progress.index, phase, secondsLeft, fraction: progress.phaseFraction, done: false };
+}
+
 /** The strip for a beat: the step's authored strip with the mode's cue applied. */
 export function stripForPhase(
   strip: ClassroomStateStrip | null,
