@@ -37,7 +37,12 @@ export default function BruhAdminPage() {
 
   const [sourceKey, setSourceKey] = useState("mixed");
   const [bankName, setBankName] = useState("Mixed Review");
-  const [bankText, setBankText] = useState(() => bankToText(BRUH_PRESETS[0].questions));
+  // The question bank is edited as rows (topic / question / answer), NOT as a
+  // pipe-delimited blob. Rows keep in-progress blank entries alive; bankText is
+  // derived from them so save/launch/parsing stay exactly as they were.
+  const [rows, setRows] = useState<{ topic: string; q: string; a: string }[]>(
+    () => BRUH_PRESETS[0].questions.map(({ topic, q, a }) => ({ topic, q, a })),
+  );
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
 
   const [teams, setTeams] = useState<string[]>(DEFAULT_TEAMS);
@@ -50,7 +55,18 @@ export default function BruhAdminPage() {
   const [soundNames, setSoundNames] = useState<Record<string, string>>({});
   const soundRef = useRef<BruhSound | null>(null);
 
+  const bankText = useMemo(
+    () => bankToText(rows.map((r, i) => ({ n: i + 1, topic: r.topic, q: r.q, a: r.a }))),
+    [rows],
+  );
   const parsed = useMemo(() => parseBank(bankText), [bankText]);
+
+  const setRow = (index: number, field: "topic" | "q" | "a", value: string) => {
+    setRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+    setSourceKey("custom");
+  };
+  const addRow = () => { setRows((prev) => [...prev, { topic: "", q: "", a: "" }]); setSourceKey("custom"); };
+  const removeRow = (index: number) => { setRows((prev) => prev.filter((_, i) => i !== index)); setSourceKey("custom"); };
 
   const loadSets = useCallback(async () => {
     try {
@@ -113,14 +129,14 @@ export default function BruhAdminPage() {
     setSourceKey(key);
     setEditingSetId(null);
     setBankName(preset.label);
-    setBankText(bankToText(preset.questions));
+    setRows(preset.questions.map(({ topic, q, a }) => ({ topic, q, a })));
   };
 
   const pickSaved = (set: SavedSet) => {
     setSourceKey(`saved:${set.id}`);
     setEditingSetId(set.id);
     setBankName(set.name);
-    setBankText(bankToText(set.questions));
+    setRows(set.questions.map(({ topic, q, a }) => ({ topic, q, a })));
   };
 
   const saveSet = async (asNew: boolean) => {
@@ -214,6 +230,11 @@ export default function BruhAdminPage() {
           .br-admin input, .br-admin textarea, .br-admin select { background:#14110c; border:1px solid #34301f; border-radius:7px; color:#efe9df; font-family:inherit; font-size:14px; padding:10px 12px; width:100%; }
           .br-admin textarea { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; line-height:1.65; min-height:300px; resize:vertical; }
           .br-admin input:focus-visible, .br-admin textarea:focus-visible, .br-admin select:focus-visible { outline:3px solid #fcaf38; outline-offset:2px; }
+          .br-qrows { display:grid; gap:8px; }
+          .br-qhead, .br-qrow { display:grid; grid-template-columns:30px minmax(84px,1fr) minmax(150px,2.6fr) minmax(90px,1.1fr) 32px; gap:8px; align-items:center; }
+          .br-qhead { font-size:10px; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#7c7363; padding:0 2px; }
+          .br-qn { text-align:center; font-size:12px; font-weight:800; color:#a39a88; }
+          .br-qcell { min-width:0; }
 
           .br-row { display:flex; gap:9px; flex-wrap:wrap; }
           .br-btn { padding:11px 20px; border-radius:8px; border:1px solid #34301f; background:#1a160f; color:#efe9df; font-size:12px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; font-family:inherit; }
@@ -269,19 +290,25 @@ export default function BruhAdminPage() {
             <div className="br-card">
               <h2>Class session</h2>
               <p className="br-hint">
-                The game rides on an open session. Start one on the Session page if the list is empty.
+                The game rides on an open class session.{" "}
+                {sessions.length ? "Pick the class you are running." : "There is no open session yet."}
               </p>
-              <div className="br-field">
-                <label htmlFor="br-session">Deploy to</label>
-                <select id="br-session" value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
-                  {!sessions.length && <option value="">No open session</option>}
-                  {sessions.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.join_code ? `${s.join_code} - ` : ""}{s.id.slice(0, 8)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {sessions.length ? (
+                <div className="br-field">
+                  <label htmlFor="br-session">Deploy to</label>
+                  <select id="br-session" value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
+                    {sessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.join_code ? `Class ${s.join_code}` : `Session ${s.id.slice(0, 8)}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <a className="br-btn primary" href="/session" style={{ marginTop: 6, textDecoration: "none", display: "inline-block" }}>
+                  Start a class on the Session page
+                </a>
+              )}
             </div>
 
             <div className="br-card" style={{ marginTop: 18 }}>
@@ -336,7 +363,7 @@ export default function BruhAdminPage() {
           <div className="br-card">
             <h2>Question bank</h2>
             <p className="br-hint">
-              One question per line: <span className="br-kbd">number | topic | question | answer</span>
+              One row per question - the number is set for you. Start from a preset above, or build your own.
             </p>
 
             <div className="br-chips">
@@ -365,12 +392,31 @@ export default function BruhAdminPage() {
               <input id="br-name" type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} />
             </div>
 
-            <textarea
-              value={bankText}
-              spellCheck={false}
-              aria-label="Question bank"
-              onChange={(e) => { setBankText(e.target.value); setSourceKey("custom"); }}
-            />
+            <div className="br-qrows">
+              <div className="br-qhead" aria-hidden="true">
+                <span className="br-qn">#</span>
+                <span>Topic</span>
+                <span>Question</span>
+                <span>Answer</span>
+                <span />
+              </div>
+              {rows.map((row, i) => (
+                <div className="br-qrow" key={i}>
+                  <span className="br-qn">{i + 1}</span>
+                  <input className="br-qcell" type="text" value={row.topic} placeholder="e.g. Unit rate"
+                    aria-label={`Question ${i + 1} topic`} onChange={(e) => setRow(i, "topic", e.target.value)} />
+                  <input className="br-qcell" type="text" value={row.q} placeholder="What students see"
+                    aria-label={`Question ${i + 1}`} onChange={(e) => setRow(i, "q", e.target.value)} />
+                  <input className="br-qcell" type="text" value={row.a} placeholder="Accepted answer"
+                    aria-label={`Question ${i + 1} answer`} onChange={(e) => setRow(i, "a", e.target.value)} />
+                  <button className="br-kill" type="button" aria-label={`Remove question ${i + 1}`}
+                    onClick={() => removeRow(i)}>&times;</button>
+                </div>
+              ))}
+            </div>
+            <div className="br-row" style={{ marginTop: 12 }}>
+              <button className="br-btn" type="button" onClick={addRow}>Add a question</button>
+            </div>
             <p className="br-count">
               <b>{parsed.questions.length}</b> question{parsed.questions.length === 1 ? "" : "s"} ready
               {parsed.skipped > 0 && <span className="warn"> &middot; {parsed.skipped} line{parsed.skipped === 1 ? "" : "s"} skipped</span>}
