@@ -654,13 +654,28 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   purpose - as the frame+imported-slide model lands, those surfaces should mirror the main slide and
   keep only the timer + a one-line "do this now" as an overlay. When you add a pace/student scene, ask
   first "is this a real second purpose, or should it just mirror main?"
-- OPEN / NOT DONE: present and pace do NOT yet consume `LessonScreen`. They render FLUID
-  (`position:fixed`, `clamp()` + a `zoom` multiplier), not on a 1920x1080 canvas, and cover scenes the
-  9 components do not (tool/spinner/discussion/ink/success-criterion), so adopting the library there is
-  a fluid->fixed rewrite of the two most classroom-critical surfaces and was NOT shippable unverified.
-  Until it lands, the studio's saved layouts author-ahead - nothing on the projector reads the blob yet.
-  NOTE the DIRECTION above reframes this: the fluid->fixed rewrite should target the FRAME wrapping an
-  imported slide, not a native 9-component grid.
+- PARTLY DONE (2026-08-03): present AND pace now render the studio's `LessonScreen` for a PLAIN
+  worded/info state, at a literal 1920x1080 scaled to the viewport, so what the Lesson Screen Studio
+  composes finally reaches the wall. The renderer is `src/components/screen/LessonSlideStage.tsx` - an
+  ADDITIVE overlay both surfaces mount via a `showLessonSlide` gate (build `ScreenStepData` from the
+  live snapshot + `defaultZones`), so it covers present/pace's own frame ONLY for slide states and
+  leaves every other scene untouched. pace passes `screen="main"` too, so it MIRRORS the main projector
+  for these states. Three things this deliberately did NOT do, and the traps that go with them:
+  (1) STILL FLUID everywhere else - interactive scenes (tool/poll/discussion/spinner/board/ink) and the
+  bespoke info states (anchor/warm-up/independent/exit) keep the surfaces' own `position:fixed` /
+  `clamp()` / `zoom` rendering. This is NOT the full fluid->fixed rewrite; do not assume a state renders
+  LessonScreen unless it falls through to the plain branch.
+  (2) AUTO-DEFAULT ONLY - it renders `defaultZones` derived from the Notion step; the studio's SAVED
+  drag-drop layout blob (`BDM_SCREEN_LAYOUT`) is still not threaded through the live flow, so a
+  hand-composed layout does not show on the wall yet. That threading is the next piece.
+  (3) LessonScreen's EDITOR-ONLY affordances are now gated on `editing` (the empty-zone dashed
+  placeholder and the screen-name label) and empty zones COLLAPSE to full width on the live wall - do
+  not reintroduce either unguarded, or an editor artifact lands on a projector. The classroom state
+  strip is drawn by the overlay (top-right, filling the collapsed zone) and each surface's OWN strip is
+  suppressed while the overlay is up (`!showLessonSlide`), so they never double.
+  NOTE the DIRECTION above still holds: the eventual full rewrite should target the FRAME wrapping an
+  imported slide, not a native 9-component grid - this step just put the auto-composed native slide on
+  the wall first.
 
 The lesson-content editor's previews are the REAL surfaces, not copies: `/teacher/studio/edit` embeds
 `/teacher/present?studioPreview=1` and `/teacher/pace?studioPreview=1` in scaled iframes and posts
