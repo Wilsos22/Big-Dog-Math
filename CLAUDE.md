@@ -557,6 +557,18 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry them or a reconnect erases the
   slide mid-lesson. Watch the indentation trap when adding the next such field: the 8-space and
   10-space mapping lines are substrings of each other, so a naive replace double-applies.
+  THE NOTION PROPERTY IS `Slide Url`, NOT `Slide URL`, AND IT IS A FILE PROPERTY. Read it through
+  `propByName` (notionLessons.ts), which normalizes case and punctuation - an exact-string property
+  lookup fails SILENTLY, the site reads "" and the screen renders as though nothing was authored.
+  That is the whole class of bug: verified live 2026-08-02, the property Steele created was `Slide
+  Url` and the exact-match read would have found nothing with no error anywhere. Prefer `propByName`
+  for any new property.
+  UNSOLVED, AND IT WILL BITE ON A REAL TEACHING DAY: a Notion-UPLOADED file resolves to a
+  short-lived SIGNED S3 url (about an hour), and Control builds its lineup ONCE at load and then
+  republishes that frozen url every second. A lesson opened at 7:30 has a dead image url by period
+  4, and the projector shows the four-second fallback card. An EXTERNAL link pasted into the
+  property has no expiry and is safe. The fix is a proxy route that re-resolves the step's file from
+  Notion per request so the snapshot carries a stable path; not built, needs Steele's word.
 - THREE DEMONSTRATION OBJECTS (`manipSplit` / `manipSnap` / `manipFree`) are a SEPARATE, EPHEMERAL
   palette (main projector only) the teacher drags live during class. Their type union is distinct from
   the 10 persisted component types, their live position lives in the studio's in-memory `manip` map

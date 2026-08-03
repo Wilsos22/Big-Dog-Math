@@ -246,6 +246,21 @@ function extractNumber(prop: NotionProperty | undefined): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+// Notion property names are whatever the teacher typed, and a lookup keyed on an exact string
+// fails SILENTLY - the site reads "" and the screen renders as though nothing was authored. The
+// slide property came back as `Slide Url`, not `Slide URL`, and cost a whole build to notice. Match
+// on a normalized name so casing and spacing can never break the read again.
+function propByName(
+  properties: Record<string, NotionProperty>,
+  names: string[],
+): NotionProperty | undefined {
+  const wanted = names.map((name) => name.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  for (const [key, value] of Object.entries(properties)) {
+    if (wanted.includes(key.toLowerCase().replace(/[^a-z0-9]/g, ""))) return value;
+  }
+  return undefined;
+}
+
 function firstUrlFromText(text: string): string {
   return text.match(/https?:\/\/\S+/)?.[0]?.replace(/[),.;]+$/, "") ?? "";
 }
@@ -570,7 +585,7 @@ async function mapPage(
       discussionPhases: extractText(step["Discussion Phases"]),
       responseMode: extractText(step["Response Mode"]),
       slideOverlay: extractText(step["Slide Overlay"]),
-      slideUrl: slideFrame.url || extractUrl(step["Slide URL"]) || extractUrl(step["Slide Image"]),
+      slideUrl: slideFrame.url || extractUrl(propByName(step, ["Slide URL", "Slide Image"])),
       slideMirror: slideFrame.mirror,
       workSpaceAvailable: step["Work Space Available"]?.type === "checkbox"
         ? step["Work Space Available"].checkbox
