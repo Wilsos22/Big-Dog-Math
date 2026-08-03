@@ -285,7 +285,35 @@ bars and live misconception grouping).
   `/order-of-operations` (GEMS), `/combine-like-terms`, `/proportions`, `/area-model`,
   `/coordinate-grid`, `/ladder-method`, `/multiplication-fluency`, `/term-identifier`,
   `/divisibility`, `/distributive-area`, `/area-explorer`, `/balance-beam`, `/long-division`,
-  `/place-value`, `/place-value-mirror`, `/timer`.
+  `/place-value`, `/place-value-mirror`, `/timer`, `/decimal-steps`.
+- `/decimal-steps` IS ITS OWN TOOL, NOT PART OF `/long-division` (Steele, 2026-08-02, unprompted:
+  "this is its own tool from long division"). `/long-division` (`LongDivisionHouse`) is a
+  WHOLE-NUMBER choreographed demo with no scoring, built for M1.T3.L4; `/decimal-steps`
+  (`DecimalStepsBoard` + `src/lib/decimalSteps.ts`) is a guided DECIMAL tool covering all four
+  operations where every step is a multiple-choice decision. They both draw a long-division house
+  and that is the only thing they share - do not merge them, and do not "fix" one by pointing it at
+  the other.
+  THE SET-UP QUESTION IS THE WHOLE POINT AND ITS ANSWER CHANGES WITH THE OPERATION: `+`/`-` line up
+  the decimal points, `x` lines up the RIGHT EDGES and ignores the decimals until you count places
+  at the end, `/` moves the decimal until the divisor is whole. A student who answers "line up the
+  decimals" for all four has exactly the misconception this tool exists to catch, so the adding rule
+  is deliberately OFFERED as a wrong choice on the multiply board. `npm run test:decimal-steps` pins
+  all four, and a change making one answer serve every operation has broken the tool's reason to
+  exist. Same rule for counting places: the answer ADDS the two factors' decimal counts, and
+  "whichever number has more" is the offered trap - except when the two numbers agree (6.2 x 3),
+  where the trap would be a right answer marked wrong and drops out.
+  DIVISION MAKES THEM ACTUALLY MOVE THE DECIMAL. Naming the number of places is a separate step from
+  doing it: after answering "how many places", the student hops the divisor's decimal that many
+  times, then answers what happens to the dividend and hops it too (moving only the divisor is the
+  error being caught). Each hop draws the caret arc you would draw on the board. Then divide /
+  multiply / subtract / bring down run with the equations down the LEFT rail.
+  Two layout rules that were bugs first. The product and the difference are SEPARATE rows
+  (`work<i>` and `rest<i>`) - one row put them in the same grid columns and the product silently
+  vanished under the difference. And nothing is written above the bracket until the divisor actually
+  fits, so `7.35 / 2.1` reads `3.5`, not `03.5`. Arithmetic is integer-scaled, never float, so
+  `0.1 + 0.2` is `0.3`. A problem the board cannot walk - a repeating quotient, a negative
+  difference, divide by zero - is REFUSED with a reason the `/control` field prints, never silently
+  dropped.
 - `/number-line-plus` HAS THREE MODES, and the third is a different kind of tool. Integers and Parts
   of a whole are one draggable dot on a readout; **Order fractions** (added 2026-08-01 on Steele's
   ask) is a board where students drag a SET of cards onto a 0-to-5 line with a tick every half.
@@ -551,7 +579,7 @@ Adding a tool: also add a lowercase entry to `TOOL_ROUTES` in `src/app/lesson/pa
 Same trap on the live-session side: listing a route in `LiveToolRoute` (`src/lib/liveClassFlow.ts`)
 only lets the teacher PUBLISH a task to it. The tool component must also call
 `useLiveToolConfig("/route")` and render `<LiveToolBanner tool={...} />`, or the published directions
-are silently dropped and students see nothing. All 19 tool routes are wired as of 2026-07-26
+are silently dropped and students see nothing. All 20 tool routes are wired as of 2026-08-02
 (/divisibility joined the union that day, end to end: ASSIGNED_TOOL_ROUTES so Notion "Tool:
 Divisibility Rules" resolves, ClassSync target, tool-divisibility bank state, control map, and the
 banner on DivisibilityRules) - a NEW
@@ -570,9 +598,11 @@ from localStorage, and treat an empty set as free play. The remaining arms are
 `Record<string, never>`, where the prompt is all there is - do not invent config behavior for them.
 `/number-line-plus` is the one arm carrying TWO independent configs: a non-empty `fractionSet` wins
 and opens the ordering board, an empty one leaves the integer hop problem exactly as it was, so the
-field is optional and pre-existing snapshots still parse.
+field is optional and pre-existing snapshots still parse. A FOURTH sequence arm joined 2026-08-02:
+`/decimal-steps` `{ set }` - "12.4 + 3.75, 9.6 / 0.4" via `src/lib/decimalSteps.ts`, any of the four
+operations in one string.
 
-Counting those arms, `LiveToolRoute` has 22, not 19: `/challenge`, `/exit-ticket` and `/checkpoint`
+Counting those arms, `LiveToolRoute` has 23, not 20: `/challenge`, `/exit-ticket` and `/checkpoint`
 ride the same union so `/control` can publish them, but they deliberately do NOT call
 `useLiveToolConfig` - do not "fix" them by wiring the banner. Each has its own launch path
 (`launchChallenge`, `launchExitTicket`, `launchCheckpoint`) writing the real content to `challenges` /
@@ -1479,7 +1509,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 30 golden/contract suites, run with typecheck by
+  2026-07-27 `npm test` - the aggregate of all 31 golden/contract suites, run with typecheck by
   GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.
