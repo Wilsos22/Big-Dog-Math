@@ -138,7 +138,12 @@ bars and live misconception grouping).
    roster fetch, fair rotation, and spinner-sync snapshots still carry aliases, so the wire and
    server never see a name. The projector tab needs the name key loaded in ITS browser (present
    runs on the classroom laptop, so one paste on /roster covers it); without the key the spinner
-   falls back to aliases.
+   falls back to aliases. SAME EXCEPTION, SECOND SURFACE (2026-08-02): `SpeakerSpinner` is the
+   on-demand cold-call - the iPad's persistent `Pick a speaker` deck button sends the `spin-speaker`
+   remote action (any state, unlike `spin-spinner` which is scoped to the readers/iPad-Kid slides),
+   and the overlay on `/teacher/present` ONLY (never a student device) spins to one first name. Fair
+   rotation lives in the projector's localStorage (`bdm-speaker-spinner-fair-v1`) and the remaining
+   count is deliberately never shown; the alias is what rides the wire, first name only at render.
    STUDENT DEVICES RENDER NO STUDENT NAME OR ALIAS AT ALL (Steele, 2026-08-01: "they never have
    their names on their device" - a name on a kid's own screen is disruption material, same as on
    the board; an alias doubly so). Identity is NOT anonymous - the alias still rides every join,

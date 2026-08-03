@@ -43,6 +43,17 @@ export const TRANSITION_NOW_BUTTONS: readonly RemoteDeckButton[] = [
   { action: "transition-now", label: "Settle 30s", detail: "Bring it down", tone: "teal", payload: { vibe: "settle", seconds: 30 } },
 ];
 
+// On-demand cold-call. Persistent on the deck (unlike the readers/iPad-Kid Spin,
+// which only appears on those slides): tap it in any state and the main projector
+// spins to one student. Fair rotation and the FERPA first-name lookup live on the
+// projector; this button is just the trigger.
+export const SPEAKER_REMOTE_BUTTON: RemoteDeckButton = {
+  action: "spin-speaker",
+  label: "Pick a speaker",
+  detail: "Random student to share",
+  tone: "teal",
+};
+
 /**
  * Arm a clock over an UNTIMED state - a slide deck you are talking through, a hook you want them
  * sitting with - without changing the step or its pacing. Shown only when the current state has no

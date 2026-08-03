@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useLiveFlowPing } from "@/lib/liveFlowPing";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
+import SpeakerSpinner from "@/components/SpeakerSpinner";
 import InkBoard from "@/components/InkBoard";
 import LessonVisual from "@/components/LessonVisual";
 import AttentionListener from "@/components/AttentionListener";
@@ -1375,6 +1376,12 @@ export default function ClassroomStagePage() {
               Pinned top right INSIDE the stage rather than in the topbar, where
               the clock already lives. */}
           <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} />
+          {/* On-demand speaker spinner: pops over any scene when the iPad sends
+              spin-speaker, lands on one first name, then clears itself. Projector
+              only - never mounted on a student device. */}
+          {session && !isStudioPreviewMode && (
+            <SpeakerSpinner sessionId={session.id} periodId={session.period_id} remoteCommand={session.remote_command} />
+          )}
         </section>
         {/* The Abbie broadcast bubble used to sit here, pinned bottom-centre over
             the stage, reading sessions.abbie. The Abbie AI feature is off the site

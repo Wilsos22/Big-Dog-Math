@@ -62,6 +62,10 @@ export const TEACHER_REMOTE_ACTIONS = [
   "set-behavior",
   "clear-behavior",
   "spin-spinner",
+  // On-demand "pick a speaker" from the iPad, usable in ANY state (unlike
+  // spin-spinner, which is scoped to the readers / iPad-Kid slide). The projector
+  // owns the fair rotation client-side; this command is just the trigger.
+  "spin-speaker",
   ...DISCUSSION_REMOTE_ACTIONS,
   "reveal-results",
   "reveal-final-score",
