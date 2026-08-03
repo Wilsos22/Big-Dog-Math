@@ -21,6 +21,7 @@ const TOOLS: Tool[] = [
   { href: "/ladder-method", label: "Ladder Method", letter: "L", color: "#674a40", desc: "GCF, LCM, prime factors" },
   { href: "/algebra-tiles", label: "Algebra Tiles", letter: "A", color: "#2f9e6f", desc: "Build and simplify expressions" },
   { href: "/multiplication-fluency", label: "Multiplication Facts", letter: "×", color: "#4d8df6", desc: "Fast facts practice" },
+  { href: "/decimal-steps", label: "Decimals, step by step", letter: "D", color: "#674a40", desc: "Add, subtract, multiply, divide" },
 ];
 
 export default function ExplorePage() {

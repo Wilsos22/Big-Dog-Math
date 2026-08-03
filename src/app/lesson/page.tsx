@@ -48,6 +48,8 @@ const TOOL_ROUTES: Record<string, string> = {
   "place value": "/place-value", "place value reader": "/place-value",
   "place value mirror": "/place-value-mirror", "place value chart": "/place-value-mirror",
   "long division": "/long-division", "dividend in the house": "/long-division",
+  "decimals": "/decimal-steps", "decimal steps": "/decimal-steps", "decimals step by step": "/decimal-steps",
+  "decimal operations": "/decimal-steps",
 };
 function lines(text?: string) {
   return (text || "").split(/[\n,]/).map((s) => s.trim()).filter(Boolean);

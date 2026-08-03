@@ -57,6 +57,7 @@ const CLASS_MODE_TARGETS = new Set([
   "/proportions",
   "/coordinate-grid",
   "/term-identifier",
+  "/decimal-steps",
   "/exit-ticket",
   "/checkpoint",
   "/bruh",

@@ -127,6 +127,7 @@ export type LiveToolRoute =
   | "/proportions"
   | "/coordinate-grid"
   | "/term-identifier"
+  | "/decimal-steps"
   | "/challenge"
   | "/exit-ticket"
   | "/checkpoint";
@@ -215,6 +216,16 @@ export type LiveToolConfig =
       label: string;
       prompt: string;
       config: { set: string; bothModes?: boolean };
+    }
+  | {
+      id: string;
+      // `set` is a "12.4 + 3.75, 9.6 / 0.4" problem series (see lib/decimalSteps)
+      // covering all four operations. Empty means the tool's built-in series -
+      // one of each operation - same as visiting the route directly.
+      route: "/decimal-steps";
+      label: string;
+      prompt: string;
+      config: { set: string };
     };
 
 export interface LiveFlowSequenceStep {

@@ -76,6 +76,7 @@ import {
 import { normalizeDistributiveSet, parseDistributiveSet } from "@/lib/distributiveProblems";
 import { normalizeFactorTreeSet, parseFactorTreeSet } from "@/lib/factorTreeSet";
 import { normalizeFractionSet, parseFractionRounds } from "@/lib/fractionOrderSet";
+import { normalizeDecimalSet, parseDecimalSet } from "@/lib/decimalSteps";
 import {
   listLessonPresets,
   getLessonPreset,
@@ -185,6 +186,7 @@ const TOOL_STATE_INFO = {
   "tool-group-bars": { route: "/group-bars", label: "Group Bars" },
   "tool-coordinate-grid": { route: "/coordinate-grid", label: "Coordinate Grid" },
   "tool-term-identifier": { route: "/term-identifier", label: "Identify Terms" },
+  "tool-decimal-steps": { route: "/decimal-steps", label: "Decimals, step by step" },
   "tool-multiplication": { route: "/multiplication-fluency", label: "Multiplication Facts" },
   "tool-game": { route: "/challenge", label: "Live Game" },
   "tool-exit-ticket": { route: "/exit-ticket", label: "Exit Ticket" },
@@ -208,6 +210,7 @@ interface ToolSetupValues {
   gemsExpression: string;
   algebraExpression: string;
   distributiveSet: string;
+  decimalSet: string;
   ladderTreeSet: string;
   ladderBothModes: boolean;
   gameSkill: string;
@@ -282,6 +285,7 @@ const DEFAULT_TOOL_SETUP: ToolSetupValues = {
   gemsExpression: "3 + 4 × 2",
   algebraExpression: "2x + 3 = 11",
   distributiveSet: "14x6, 18x5, 24x7",
+  decimalSet: "",
   ladderTreeSet: "24, 36, 60",
   ladderBothModes: false,
   gameSkill: SKILLS[0].key,
@@ -418,6 +422,9 @@ function buildLiveToolConfig(stateId: ToolStateId, values: ToolSetupValues): Liv
       return { ...base, route: "/coordinate-grid", config: {} };
     case "tool-term-identifier":
       return { ...base, route: "/term-identifier", config: {} };
+    case "tool-decimal-steps":
+      // Empty set is meaningful: the tool runs its built-in one-of-each series.
+      return { ...base, route: "/decimal-steps", config: { set: normalizeDecimalSet(values.decimalSet) } };
     case "tool-multiplication":
       return { ...base, route: "/multiplication-fluency", config: {} };
     case "tool-game":
@@ -584,6 +591,10 @@ const LESSON_TOOL_ALIASES: Record<string, string> = {
   shapes: "tool-area-explorer",
   divisibility: "tool-divisibility",
   divisibilityrules: "tool-divisibility",
+  decimals: "tool-decimal-steps",
+  decimalsteps: "tool-decimal-steps",
+  decimaloperations: "tool-decimal-steps",
+  decimalsstepbystep: "tool-decimal-steps",
   combineliketerms: "tool-combine",
   combiningliketerms: "tool-combine",
   liketerms: "tool-combine",
@@ -3622,6 +3633,21 @@ export default function ControlPage() {
                             const set = parseDistributiveSet(toolSetup.distributiveSet);
                             if (!set.length) return "Leave blank to let students pick their own numbers.";
                             return `${set.length} problem${set.length === 1 ? "" : "s"}: ${set.map((p) => `${p.top} x ${p.side} = ${p.top * p.side}`).join(", ")}`;
+                          })()}
+                        </span>
+                      </label>
+                    )}
+
+                    {activeToolState === "tool-decimal-steps" && (
+                      <label className="cx-tool-field wide" htmlFor="decimal-set">
+                        Decimal problems, any of the four operations
+                        <input id="decimal-set" className="cx-tool-input" value={toolSetup.decimalSet} onChange={(event) => updateToolSetup("decimalSet", event.target.value)} placeholder="12.4 + 3.75, 8.3 - 4.68, 6.2 x 0.4, 9.6 / 0.4" />
+                        <span className="cx-tool-hint">
+                          {(() => {
+                            const { problems, rejected } = parseDecimalSet(toolSetup.decimalSet);
+                            const bad = rejected.length ? ` Skipped: ${rejected.map((r) => `${r.text} (${r.reason})`).join("; ")}.` : "";
+                            if (!problems.length) return `Leave blank for one of each operation.${bad}`;
+                            return `${problems.length} problem${problems.length === 1 ? "" : "s"}.${bad}`;
                           })()}
                         </span>
                       </label>

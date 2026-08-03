@@ -8,6 +8,22 @@ should update BOTH that database and this mirror when a feature ships.
 Snapshot (2026-07-16):
 
 ## Live
+**Decimals, step by step** (8/2, Steele's ask). `/decimal-steps` is a new guided
+tool covering all four operations, one decision at a time, in a teacher-led mode
+for the front of the room and a student mode on the Chromebooks. Every step is a
+"what do we do next?" multiple choice whose wrong answers are real sixth-grade
+errors, and the digits being worked on light up as the question is asked. It
+opens with the question the whole tool is built around — how do we line these
+up? — whose right answer differs by operation: decimals for adding and
+subtracting, right edges for multiplying (count the places at the end), and for
+dividing, move the decimal until the divisor is whole. Division then makes them
+DO it: having answered how many places, they hop the decimal that many times on
+the divisor and again on the dividend, each hop drawing the caret you would draw
+on the board, before divide/multiply/subtract/bring down run with the equations
+down the side. Separate from `/long-division`, which stays whole-number only. The
+problem set is one string the teacher types once and travels the usual three ways.
+`npm run test:decimal-steps`.
+
 **Order fractions on the number line** (8/1, Steele's ask). `/number-line-plus`
 gains a third mode: students drag a set of cards onto a 0-to-5 line with a tick
 every half and put them in order, smallest to largest. Mixed numbers and
