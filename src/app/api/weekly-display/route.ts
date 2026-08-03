@@ -1,4 +1,9 @@
-import { getPublishedLessonsForDateRange, type LessonData } from "@/lib/notionLessons";
+import {
+  getPublishedLessonsForDateRange,
+  getStepVocabularyForLessons,
+  type LessonData,
+} from "@/lib/notionLessons";
+import { mergeVocabularyBlocks } from "@/lib/weeklyDisplayBoard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -77,6 +82,41 @@ function displayLesson(lesson: LessonData): DisplayLesson {
   };
 }
 
+/**
+ * Backfills `discussionVocabulary` from each lesson's STEPS when the
+ * lesson-level property is blank.
+ *
+ * The board's vocabulary reveal - highlight the key term, drop the sentence
+ * away, fly the term up, raise the definition under it - is entirely gated on
+ * finding a term. Notion has TWO places to author vocabulary: `Discussion
+ * Vocabulary` on the lesson, and `Vocabulary` on each Lesson Step. The board
+ * only ever read the first one, so a lesson authored the second way (which is
+ * the common way - it is the field beside the step you are writing) reached the
+ * TVs with the reveal silently switched off. That is what happened to
+ * M1.T1.L2-D1 on 2026-08-03: five defined terms on its steps, nothing on the
+ * lesson, and a board that only typed the sentence in and stopped.
+ *
+ * Mutates in place, and swallows its own failures - a board with no reveal is
+ * still a working board, and this must never be the reason a classroom TV
+ * shows an error.
+ */
+async function fillVocabularyFromSteps(days: { lessons: DisplayLesson[] }[]): Promise<void> {
+  const missing = days
+    .flatMap((day) => day.lessons)
+    .filter((lesson) => !lesson.discussionVocabulary.trim());
+  if (!missing.length) return;
+
+  try {
+    const byLesson = await getStepVocabularyForLessons(missing.map((lesson) => lesson.id));
+    for (const lesson of missing) {
+      const blocks = byLesson.get(lesson.id);
+      if (blocks?.length) lesson.discussionVocabulary = mergeVocabularyBlocks(blocks);
+    }
+  } catch {
+    // Leave the blank vocabulary exactly as it was.
+  }
+}
+
 export async function GET() {
   const today = classroomDate();
   const weekStart = weekStartFor(today);
@@ -101,6 +141,8 @@ export async function GET() {
         lessons: matchingLessons.map(displayLesson),
       };
     });
+
+    await fillVocabularyFromSteps(days);
 
     return Response.json(
       {
