@@ -1027,14 +1027,15 @@ the invariants they protect are easy to break again.
   what stops it becoming a dead label that drifts from what runs - the failure mode the Response Mode
   / Poll Kind traps below warn about). DELIBERATELY NO generic "Tool" option: a step's specific tool
   state (e.g. `tool-divisibility`) comes from `State ID` + the `Tool` property, and a coarse
-  "Manipulative / Tool" -> `manip` would override that and drop the tool embed. Existing steps were
-  NOT backfilled - State Type is empty on them until Steele sets it, and the fallback covers them.
+  "Manipulative / Tool" -> `manip` would override that and drop the tool embed. M1.T1.L2-LAUNCH's
+  steps were backfilled from their State ID (the two tool steps left empty on purpose); other lessons
+  are empty until set, and the fallback covers them.
   RENAMED 2026-08-02 FROM `Slide Type` (Steele: "make the other notion select be state type and this
-  one is slide type"). The property shipped as `Slide Type` the same day the `slide` FRAME landed,
-  and two unrelated things called "slide" in one system is how vocabulary drifts. `slide` now means
-  ONLY the outside-visual frame; the step's kind is `State Type`. `notionLessons.ts` still reads
-  `Slide Type` as a FALLBACK so a step authored before the Notion rename keeps resolving - drop that
-  fallback only once every step carries `State Type`, and never point it back at the frame.
+  one is slide type"), and the rename is DONE in Notion - verified live against the data source, the
+  old name no longer exists, so nothing reads it as a fallback. The property shipped as `Slide Type`
+  the same day the `slide` FRAME landed, and two unrelated things called "slide" in one system is how
+  vocabulary drifts. `slide` now means ONLY the outside-visual frame, whose URL is the SEPARATE
+  `Slide Url` file property. Never point `State Type` back at it.
 - **`Anchor Problem` IS THE HOOK.** There is no `Hook` property in the lessons database.
 - **`liveAssignedToolRoute` MATCHES BY PREFIX, and drops a trailing dash qualifier.** A Lesson Step
   names a tool the way a teacher writes it - `Distributive Area Method`, `... - teacher display`,

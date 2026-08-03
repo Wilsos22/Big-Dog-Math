@@ -118,12 +118,15 @@ export const DEFAULT_STATES: ClassState[] = [
 // The teacher-facing "State Type" Notion property: a plain-English name for the
 // KIND of each Lesson Step, mapped back to the canonical State ID the runtime
 // uses. Steele wanted to see (and set from a dropdown) the kind of slide at a
-// glance (2026-08-02). Wiring the MAP - not just a cosmetic label - is what
-// stops it drifting from what actually runs, the failure mode the Response Mode
-// and Poll Kind drift traps in CLAUDE.md warn about. Every stateId here MUST be
-// a real DEFAULT_STATES id; `test:state-type` pins that. It is PREFERRED over the
-// raw `State ID` only when a step sets State Type, so existing steps (State ID
-// only) render exactly as before and a teacher can migrate one step at a time.
+// glance (2026-08-02). NOTE the property is "State Type", NOT "Slide Type" - it
+// was renamed the same day to end a collision: "slide" now means ONLY the frame
+// holding an outside visual, whose URL lives in the separate "Slide Url" file
+// property. Wiring the MAP - not just a cosmetic label - is what stops it
+// drifting from what actually runs, the failure mode the Response Mode and Poll
+// Kind drift traps in CLAUDE.md warn about. Every stateId here MUST be a real
+// DEFAULT_STATES id; `test:state-type` pins that. It is PREFERRED over the raw
+// `State ID` only when a step sets State Type, so existing steps (State ID only)
+// render exactly as before and a teacher can migrate one step at a time.
 export const STATE_TYPE_OPTIONS: { label: string; stateId: string }[] = [
   { label: "Warm-Up", stateId: "warmup" },
   { label: "Review", stateId: "review" },

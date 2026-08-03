@@ -3,7 +3,9 @@
 // friendly select (2026-08-02) and the runtime maps it back to a canonical State
 // ID; a label pointing at a state that does not exist would render nothing on a
 // classroom screen - the exact silent-drift failure the Response Mode / Poll Kind
-// traps in CLAUDE.md warn about. Compile classStates.ts in isolation, then check.
+// traps in CLAUDE.md warn about. ("State Type" was renamed from "Slide Type" the
+// same day - "slide" now means only the outside-visual frame, whose URL lives in
+// the separate "Slide Url" property.) Compile classStates.ts in isolation, then check.
 
 import assert from "node:assert/strict";
 import {
