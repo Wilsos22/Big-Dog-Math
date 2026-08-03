@@ -15,6 +15,7 @@ import {
   type PublicSurfaceMode,
 } from "./lessonStepMetadata";
 import { stateIdForStateType } from "./classStates";
+import { decodeScreenLayout } from "./lessonScreenLayout";
 
 // Only the REAL lessons data source. The array used to carry two more ids
 // (a schemaless sibling and one that was never a data source of this DB);
@@ -61,6 +62,9 @@ export interface LessonStepData {
   // An outside visual for this step: an exported slide image, or a Lucid / Figma / Canva / Google
   // Slides board. Accepts a URL property or a Files attachment. Empty on a normal step.
   slideUrl: string;
+  // Mirror the slide onto the Pace + Support projector. Off by default - the support screen carries
+  // directions, and duplicating the visual there costs the room its second channel.
+  slideMirror: boolean;
   workSpaceAvailable?: boolean;
   // The classroom state strip, authored per step. Raw select values - see
   // lib/classroomStateStrip for the vocabulary and the all-four-or-nothing rule.
@@ -371,6 +375,26 @@ async function resolveFirstLink(
   return "";
 }
 
+// Pull the slide frame's authored URL and mirror flag out of a step's saved screen layout. Reads
+// the MAIN screen only - a slide is a main-projector frame, and the pace copy is the mirror flag,
+// not a second block. Returns empties for a step with no layout or no slide block.
+function slideFrameFromLayout(encodedLayout: string): { url: string; mirror: boolean } {
+  if (!encodedLayout) return { url: "", mirror: false };
+  try {
+    const zones = decodeScreenLayout(encodedLayout).main;
+    for (const zone of zones ?? []) {
+      for (const block of zone) {
+        if (block.type !== "slide") continue;
+        const url = String(block.ov?.slideUrl ?? "").trim();
+        if (url) return { url, mirror: String(block.ov?.slideMirror ?? "") === "1" };
+      }
+    }
+  } catch {
+    // A corrupt blob must never take the lesson down - fall through to the Notion property.
+  }
+  return { url: "", mirror: false };
+}
+
 function extractFirstText(properties: Record<string, NotionProperty>, names: string[]): string {
   for (const name of names) {
     const text = extractText(properties[name]);
@@ -507,6 +531,12 @@ async function mapPage(
     const stateType = extractText(step["State Type"]) || extractText(step["Slide Type"]);
     const stateId = stateIdForStateType(stateType) || extractText(step["State ID"]);
     const rawAiContext = extractText(step["AI Context"]);
+    // The Lesson Screen Studio saves a slide frame as a block override inside the AI Context
+    // layout blob, so the URL a teacher pasted there has to reach the runtime the same way the
+    // Notion property does. The blob wins; the property is the fallback and the readable copy.
+    const slideFrame = slideFrameFromLayout(
+      parseLessonStepAiContext(stripLessonRoutineConfig(rawAiContext)).screenLayout,
+    );
     return {
       id: related.id,
       title: extractFirstText(step, ["Step title", "Name", "Step"]),
@@ -540,7 +570,8 @@ async function mapPage(
       discussionPhases: extractText(step["Discussion Phases"]),
       responseMode: extractText(step["Response Mode"]),
       slideOverlay: extractText(step["Slide Overlay"]),
-      slideUrl: extractUrl(step["Slide URL"]) || extractUrl(step["Slide Image"]),
+      slideUrl: slideFrame.url || extractUrl(step["Slide URL"]) || extractUrl(step["Slide Image"]),
+      slideMirror: slideFrame.mirror,
       workSpaceAvailable: step["Work Space Available"]?.type === "checkbox"
         ? step["Work Space Available"].checkbox
         : undefined,

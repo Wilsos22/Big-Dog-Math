@@ -123,6 +123,8 @@ interface LineupItem {
   // Carried through the published sequence so a Control reconnect cannot wipe
   // the slide overlays the lesson authored.
   slideOverlay?: string;
+  slideUrl?: string;
+  slideMirror?: boolean;
   discussionStems?: string;
   vocabulary?: string;
   discussionPhases?: string;
@@ -486,6 +488,8 @@ async function idbDel(key: string): Promise<void> {
 interface TodayLessonStep {
   id: string;
   slideOverlay?: string;
+  slideUrl?: string;
+  slideMirror?: boolean;
   title: string;
   duration: number;
   stateId: string;
@@ -1175,6 +1179,8 @@ export default function ControlPage() {
         responseMode: step.responseMode,
         workSpaceAvailable: step.workSpaceAvailable,
         slideOverlay: step.slideOverlay || undefined,
+        slideUrl: step.slideUrl || undefined,
+        slideMirror: step.slideMirror || undefined,
         publicSurfaceMode: step.publicSurfaceMode,
         routineConfig: step.routineConfig,
         eyes: step.eyes,
@@ -1875,6 +1881,8 @@ export default function ControlPage() {
               // and the iPad then degraded to restating the pace directions.
               remoteActions: item.remoteActions || "",
               slideOverlay: item.slideOverlay || undefined,
+              slideUrl: item.slideUrl || undefined,
+              slideMirror: item.slideMirror || undefined,
               eyes: item.eyes || "",
               voice: item.voice || "",
               supplies: item.supplies || "",
@@ -2182,6 +2190,8 @@ export default function ControlPage() {
           responseMode: step.responseMode,
           workSpaceAvailable: step.workSpaceAvailable,
           slideOverlay: step.slideOverlay || undefined,
+          slideUrl: step.slideUrl || undefined,
+          slideMirror: step.slideMirror || undefined,
           publicSurfaceMode: step.publicSurfaceMode,
           routineConfig: step.routineConfig,
           eyes: step.eyes,
@@ -2699,6 +2709,8 @@ export default function ControlPage() {
           responseMode: step.responseMode,
           workSpaceAvailable: step.workSpaceAvailable,
           slideOverlay: step.slideOverlay || undefined,
+          slideUrl: step.slideUrl || undefined,
+          slideMirror: step.slideMirror || undefined,
           publicSurfaceMode: step.publicSurfaceMode,
           routineConfig: step.routineConfig,
         })));

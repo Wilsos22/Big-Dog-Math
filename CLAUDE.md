@@ -540,6 +540,23 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   `.ip-ink-layer` z-index 6, ABOVE the whole `/teacher/present` iframe, so a stroke lands on the ink
   canvas no matter what is nested inside - the shield only stops the board fighting back on the
   laptop driving the projector.
+  IT RENDERS ON THE REAL PROJECTOR AS OF 2026-08-02, and NOT by way of `LessonScreen` - present and
+  pace still draw their own fluid stages (the fluid->fixed rewrite is still open). `SlideFrameScene`
+  is the surface-side renderer: `/teacher/present` puts it in the scene chain AFTER poll, resource
+  and published tool but BEFORE the board scene, so a poll or a tool being up means the slide is no
+  longer what the step is about, while the whiteboard split shifts it to the right 58% through the
+  same `board-open` rule `.stage-tool` uses. `/teacher/pace` renders it ONLY when the step sets
+  `slideMirror` - the support screen's job is directions, and mirroring by default would cost the
+  room its second channel. The toggle is per step, in the studio inspector on a selected slide frame.
+  THE URL REACHES THE RUNTIME FROM TWO PLACES AND THE BLOB WINS: `slideFrameFromLayout` in
+  notionLessons.ts decodes the saved screen layout and reads the main screen's slide block
+  (`ov.slideUrl` / `ov.slideMirror`), falling back to the Notion `Slide URL` / `Slide Image`
+  property. So authoring in the studio needs no Notion property, and a property set in Notion is
+  the readable copy. `slideUrl` and `slideMirror` are server-authored fields on
+  `LiveFlowSequenceStep`, which puts them in the `interlude` / `transition` class - CONTROL'S
+  SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry them or a reconnect erases the
+  slide mid-lesson. Watch the indentation trap when adding the next such field: the 8-space and
+  10-space mapping lines are substrings of each other, so a naive replace double-applies.
 - THREE DEMONSTRATION OBJECTS (`manipSplit` / `manipSnap` / `manipFree`) are a SEPARATE, EPHEMERAL
   palette (main projector only) the teacher drags live during class. Their type union is distinct from
   the 10 persisted component types, their live position lives in the studio's in-memory `manip` map
