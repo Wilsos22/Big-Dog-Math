@@ -50,7 +50,15 @@ export interface PseudonymousRosterRow {
   alias: string;
   emailHmac: string | null;
   period: string;
+  // Optional physical seating from the Sheet's Table column. A table number is
+  // furniture, not identity - it says where a chair is, and it is meaningless
+  // outside a room whose seating chart the Workspace already holds. It rides
+  // the roster push so the Monday captain spinner can draw each table's pool
+  // from the students who actually sit there. Null until the Sheet has it.
+  table: number | null;
 }
+
+export const MAX_TABLE_NUMBER = 24;
 
 // Validates a pushed roster payload. Returns the clean rows, or throws with a
 // row-numbered message. ANY identified-looking row rejects the WHOLE payload:
@@ -63,7 +71,7 @@ export function assertPseudonymousRoster(input: unknown): PseudonymousRosterRow[
     throw new Error("Roster payload is larger than one school's worth of students.");
   }
   return input.map((raw, index) => {
-    const row = (raw ?? {}) as { alias?: unknown; emailHmac?: unknown; period?: unknown };
+    const row = (raw ?? {}) as { alias?: unknown; emailHmac?: unknown; period?: unknown; table?: unknown };
     const label = `Row ${index + 1}`;
     const alias = typeof row.alias === "string" ? row.alias.trim() : "";
     if (!isStudentAlias(alias)) {
@@ -88,6 +96,14 @@ export function assertPseudonymousRoster(input: unknown): PseudonymousRosterRow[
     if (looksIdentified(period)) {
       throw new Error(`${label}: period looks like an email address.`);
     }
-    return { alias, emailHmac: emailHmacRaw || null, period };
+    let table: number | null = null;
+    if (row.table !== undefined && row.table !== null && String(row.table).trim() !== "") {
+      const parsed = Number.parseInt(String(row.table).trim(), 10);
+      if (!Number.isFinite(parsed) || parsed < 1 || parsed > MAX_TABLE_NUMBER) {
+        throw new Error(`${label}: table must be a number from 1 to ${MAX_TABLE_NUMBER}, or blank.`);
+      }
+      table = parsed;
+    }
+    return { alias, emailHmac: emailHmacRaw || null, period, table };
   });
 }

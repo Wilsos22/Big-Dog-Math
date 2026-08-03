@@ -104,7 +104,7 @@ const CLAIMED_FLOW_ACTIONS = new Set<TeacherRemoteAction>([
   "reveal-final-score",
   "discussion-pick-sharer",
 ]);
-const SPINNER_STATE_IDS = new Set(["learning-target-readers", "ipad-kid"]);
+const SPINNER_STATE_IDS = new Set(["learning-target-readers", "ipad-kid", "table-captains"]);
 const REMOTE_TRANSITION_TIMEOUT_MS = 10_000;
 const AUTO_ADVANCE_HOLD_MS = 2_600;
 const POLL_RESULTS_HOLD_MS = 6_000;

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useLiveFlowPing } from "@/lib/liveFlowPing";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
 import SpeakerSpinner from "@/components/SpeakerSpinner";
+import TableCaptainSpinner from "@/components/TableCaptainSpinner";
+import SupplyCheckBoard from "@/components/SupplyCheckBoard";
 import InkBoard from "@/components/InkBoard";
 import LessonVisual from "@/components/LessonVisual";
 import AttentionListener from "@/components/AttentionListener";
@@ -469,6 +471,11 @@ export default function ClassroomStagePage() {
     ?? classroomStageTheme(state?.id, state?.label);
   const showReaderSpinner = state?.id === "learning-target-readers";
   const showIpadKidSpinner = state?.id === "ipad-kid";
+  const showTableCaptains = state?.id === "table-captains";
+  // Closeout stops being a wall of text and becomes the room's own scoreboard:
+  // ten tables filling in green as the teacher taps the iPad. The written
+  // directions live inside the board rather than beside it.
+  const showSupplyCheck = state?.id === "closeout";
   const routineConfig = presentation?.routineConfig || null;
   const spinnerSyncScope = `${flow?.sequence?.currentIndex ?? -1}:${presentation?.notionStepId || state?.id || "spinner"}`;
   // Same reason: the target belongs to the two reveal states, not to every state
@@ -1089,6 +1096,15 @@ export default function ClassroomStagePage() {
               stateId="ipad-kid"
               syncScope={spinnerSyncScope}
               role="controller"
+              remoteCommand={session.remote_command}
+            />
+          ) : showSupplyCheck ? (
+            <SupplyCheckBoard key={`${session.id}:supply-check`} mode="board" sessionId={session.id} />
+          ) : showTableCaptains ? (
+            <TableCaptainSpinner
+              key={`${session.id}:table-captains`}
+              sessionId={session.id}
+              periodId={session.period_id}
               remoteCommand={session.remote_command}
             />
           ) : isTransition ? (

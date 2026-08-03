@@ -63,6 +63,7 @@ export const DEFAULT_STATES: ClassState[] = [
   { id: "review", label: "Review", minutes: 4, color: "#35785a", desc: "Review the answers and the problems the class missed most often.", paceAction: "Let's check the answers together.", studentAction: "Look up and check your thinking." },
   { id: "learning-target-readers", label: "Learning Intention + Success Criterion", minutes: 1, color: "#d2a74f", desc: "Meet today's readers, then listen for the learning intention and success criterion.", paceAction: "Meet today's readers.", studentAction: "Look up and listen to today's readers.", remoteAction: "Use the main panel to spin or re-spin the two readers." },
   { id: "ipad-kid", label: "iPad Kid Spinner", minutes: 1, color: "#6fbd91", desc: "Spin to choose this week's iPad Kid.", paceAction: "Let's choose this week's iPad Kid.", studentAction: "Look up for this week's class role.", remoteAction: "Use the main panel to spin or re-spin the iPad Kid.", scheduleHint: "Monday" },
+  { id: "table-captains", label: "Table Captain Spinner", minutes: 2, color: "#50a3a4", desc: "Spin this week's captain for every table.", paceAction: "Meet this week's table captains.", studentAction: "Look up for this week's table captains.", remoteAction: "Use the main panel to spin or re-spin the captains. The captain owns their table's supply count at closeout all week.", scheduleHint: "Monday" },
   { id: "launch", label: "Lesson Launch", minutes: 4, color: "#a86735", desc: "Make sense of the scenario, quantities, and question.", paceAction: "Study the problem. What do you notice?", studentAction: "Write one thing you notice." },
   { id: "concrete", label: "Concrete", minutes: 5, color: "#3f7d50", desc: "Build the relationship with the assigned concrete model.", paceAction: "Build the relationship with your materials.", studentAction: "Build the model with your materials." },
   { id: "representational", label: "Representational", minutes: 5, color: "#357f7d", desc: "Connect the concrete model to a diagram or representation.", paceAction: "Show the same idea with a model.", studentAction: "Build or draw the same relationship." },
@@ -81,6 +82,19 @@ export const DEFAULT_STATES: ClassState[] = [
   { id: "transition-hustle", label: "Transition - Hustle", minutes: 1, color: "#f95335", desc: "Move now. Materials away, next spot, eyes up before the music ends.", paceAction: "Quick change - beat the music.", studentAction: "Move fast and quiet. Be ready before the music ends." },
   { id: "transition-reset", label: "Transition - Reset", minutes: 2, color: "#fcaf38", desc: "Reset the room: new groups, new materials, new station. Set up and seated before the music ends.", paceAction: "Reset to the next setup.", studentAction: "Reset your area and be seated before the music ends." },
   { id: "transition-settle", label: "Transition - Settle", minutes: 1, color: "#50a3a4", desc: "Bring it down. Voices off, seats found, breathe. Ready to focus when the music ends.", paceAction: "Settle and refocus.", studentAction: "Settle in quietly before the music ends." },
+  // Supply transitions: the named version of a hustle, one per thing the room
+  // actually moves. They exist as their OWN states rather than a generic
+  // transition because the direction differs every time (a marker gets capped,
+  // a calculator goes back in its own numbered slot, a bin gets a lid) and
+  // because the AWAY states are where the table captain earns or loses the
+  // table's standing at closeout. Out is one minute, away is two: putting back
+  // is the half that gets rushed and it is the half that is countable.
+  { id: "supplies-boards-out", label: "Whiteboards - Out", minutes: 1, color: "#674a40", desc: "Captain brings one board, one marker, and one eraser per person. Board lies flat on the keys, marker capped until the directions are up.", paceAction: "Captains up. Board, marker, eraser each. Boards flat, caps on.", studentAction: "Board flat on your keyboard. Cap on until we start.", remoteAction: "Do not schedule a typing state under board work - a board resting on the keys types into any focused text box." },
+  { id: "supplies-boards-away", label: "Whiteboards - Away", minutes: 2, color: "#8a6b2f", desc: "Wipe your board clean, cap your marker, stack it at your table. Captain counts the markers back in.", paceAction: "Wipe. Cap. Stack. Captains count the markers.", studentAction: "Wipe your board, cap your marker, hand both to your captain.", remoteAction: "The marker count is the one that goes wrong. Let the captain say the number out loud before you move on." },
+  { id: "supplies-calculators-out", label: "Calculators - Out", minutes: 1, color: "#674a40", desc: "Take the calculator with your number. Nothing else leaves the rack.", paceAction: "Your number, your calculator. Straight back to your seat.", studentAction: "Take your numbered calculator and sit down.", remoteAction: "Numbered slots make the return countable. A student who takes the wrong number breaks somebody else's closeout." },
+  { id: "supplies-calculators-away", label: "Calculators - Away", minutes: 2, color: "#8a6b2f", desc: "Calculator back in its own numbered slot. Captain checks for an empty slot before anyone sits down.", paceAction: "Own slot, own number. Captains scan for a gap.", studentAction: "Put your calculator back in your own numbered slot.", remoteAction: "An empty slot names itself - that is the whole reason the slots are numbered. Get the number before the bell, not after." },
+  { id: "supplies-bins-out", label: "Manipulatives - Out", minutes: 1, color: "#674a40", desc: "Captain brings the bin to the space between partners. Nothing comes out of the bin until the directions are up.", paceAction: "Captains grab the bin. Bin between partners, lid on until we start.", studentAction: "Wait for the bin. Hands off the pieces until the directions are up.", remoteAction: "The lid staying on is the whole trick. Pieces out early means you are competing with them for attention." },
+  { id: "supplies-bins-away", label: "Manipulatives - Away", minutes: 2, color: "#8a6b2f", desc: "Every piece back in the bin, lid on, floor checked. Captain carries the bin back.", paceAction: "Pieces in. Lid on. Check the floor. Captains return the bins.", studentAction: "All pieces in the bin, lid on, then check the floor around you.", remoteAction: "Floor check before the bin moves - a piece under a chair is the miss that shows up two weeks later as an incomplete set." },
   { id: "closeout", label: "Closeout", minutes: 1, color: "#8a6b2f", desc: CLOSEOUT_DIRECTIONS, paceAction: CLOSEOUT_DIRECTIONS, studentAction: CLOSEOUT_DIRECTIONS, remoteAction: "Scan the room, then end the session when supplies are away and areas are clean." },
   { id: "i-do", label: "Direct Instruction (I do)", minutes: 4, color: "#a86735", desc: "Watch and take notes. I'll model each step." },
   { id: "we-do", label: "Guided Practice (We do)", minutes: 5, color: "#357f7d", desc: "We'll solve these together — try each step with me." },
@@ -151,6 +165,13 @@ export const STATE_TYPE_OPTIONS: { label: string; stateId: string }[] = [
   { label: "Transition - Hustle", stateId: "transition-hustle" },
   { label: "Transition - Reset", stateId: "transition-reset" },
   { label: "Transition - Settle", stateId: "transition-settle" },
+  { label: "Whiteboards - Out", stateId: "supplies-boards-out" },
+  { label: "Whiteboards - Away", stateId: "supplies-boards-away" },
+  { label: "Calculators - Out", stateId: "supplies-calculators-out" },
+  { label: "Calculators - Away", stateId: "supplies-calculators-away" },
+  { label: "Manipulatives - Out", stateId: "supplies-bins-out" },
+  { label: "Manipulatives - Away", stateId: "supplies-bins-away" },
+  { label: "Table Captains", stateId: "table-captains" },
   { label: "Closeout", stateId: "closeout" },
 ];
 
@@ -175,7 +196,13 @@ export const BANK_GROUPS = [
     id: "routines",
     label: "Class Routines",
     hint: "Optional routines that belong on selected lesson days",
-    stateIds: ["ipad-kid"],
+    stateIds: ["ipad-kid", "table-captains"],
+  },
+  {
+    id: "supplies",
+    label: "Supplies",
+    hint: "Named grab-and-return moves - the away states are what the captain reports at closeout",
+    stateIds: ["supplies-boards-out", "supplies-boards-away", "supplies-calculators-out", "supplies-calculators-away", "supplies-bins-out", "supplies-bins-away"],
   },
   {
     id: "collaboration",

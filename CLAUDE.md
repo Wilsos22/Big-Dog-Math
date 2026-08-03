@@ -795,6 +795,30 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   `STUDENT_SWITCH_ROUTE_PREFIXES` escape and is deliberately not a teacher route.
 ## Data layer (Supabase)
 
+- TABLE CAPTAINS AND THE CLOSEOUT SUPPLY CHECK (built 2026-08-03, migration
+  `supabase/table-captains-and-supply-checks.sql` - Steele runs it by hand like every other file in
+  that folder; the feature is DARK until he does, and the `table_number` select in
+  `/api/roster/sync` is the first thing that 500s if he has not). Three pieces. `students.table_number`
+  is nullable physical seating pushed from the Workspace roster Sheet's optional Table column - a
+  BLANK cell means "the Sheet is not tracking seating", never "clear this student's table", so a
+  half-filled column cannot wipe what the rest of it just set. `table_captains` is one row per
+  (period, week_start, table); `week_start` is the MONDAY in America/Los_Angeles, so a Wednesday
+  re-spin overwrites Monday rather than opening a second week. `supply_checks` is one row per
+  (session, table) and the LATEST tap wins - a table that finds the missing marker before the bell
+  ends the day green, and a mis-tap is fixed by tapping again.
+  THE RULE IS CONSECUTIVE MISSES, and it lives in exactly two places: the `supply_check_streaks`
+  view and `standingFromStreak` in `src/lib/tableCaptains.ts`. Two reds in a row flags a table; ANY
+  green wipes the streak. Do not re-derive it in a component.
+  The captain spinner works with NO seating chart, and that is deliberate, not a stopgap:
+  `/api/teacher/table-captains` returns a candidate pool per table, which is the whole period until
+  the Sheet has tables, and `pickCaptains` in `TableCaptainSpinner.tsx` keeps the picks distinct.
+  It draws SMALLEST POOL FIRST so constrained tables commit while the field is still open. When the
+  Sheet grows the column, each pool narrows and nothing else changes.
+  The captain's alias renders as a first name on the projector through the browser-local name key -
+  the SAME deliberate room-facing FERPA exception the reader and speaker spinners carry (rule 8),
+  for the same reason. Nothing in this feature writes or transmits a name; `supply_checks` has no
+  student reference at all, because a table is furniture.
+
 - Browser client: `getSupabase()` in `src/lib/supabase.ts` (`NEXT_PUBLIC_SUPABASE_URL` +
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`). Server client: `getSupabaseAdmin()` in `src/lib/supabaseServer.ts`
   (`+ SUPABASE_SERVICE_ROLE_KEY`). Both return `null` when env is missing - null-check every call.
