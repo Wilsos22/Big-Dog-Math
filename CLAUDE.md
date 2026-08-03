@@ -319,6 +319,30 @@ bars and live misconception grouping).
   the board and a teacher steers the room through the PROMPT ("find where 4 and 6 land together").
   Publishing the pair is an additive config arm plus two `/control` form fields, not a rewrite.
   It emits NO evidence - `reportToolResult` is not wired here, so it moves no mastery bar.
+- `/division-house` IS THE THIRD DIVISION TOOL AND THEY ARE ALL DIFFERENT (2026-08-03, Steele).
+  `/long-division` is a whole-number choreographed DEMO with no scoring; `/decimal-steps` does the
+  ARITHMETIC; `/division-house` (`DivisionHouseBoard` + `src/lib/divisionHouse.ts`) drills the
+  CHOREOGRAPHY - the numbers are worked out for the student and what they supply is which spot and
+  which operation, in his sequence: the number we are dividing -> divide -> the number we divide BY
+  -> where the answer goes -> multiply -> by which spot -> where that goes -> subtract -> where that
+  goes -> bring down -> which digit -> where it goes, and then it resets. `npm run
+  test:division-house` pins that order; collapsing two of those into one step removes a decision.
+  IT IS REPS, NOT A TEST (Steele: "its not testing as much as just getting reps following the
+  numbers" / "I just want them to start to remember what the sequence is"). That is WHY the target
+  spot PULSES, why a placed number STAYS GREEN, and why the divide/multiply/subtract/bring-down strip
+  fills in as they name each one - none of those are giveaways to be tightened up later, they are the
+  design. What the strip must NOT do is light the step BEFORE it is named, or the question answers
+  itself.
+  Four layout rules that were notes first. Only the inside of the house is clickable - there is no
+  such thing as a number above or below the divisor, so those cells are not drawn ("this isnt
+  needed"). A multi-digit number is ONE number: the leftover plus the digit brought down highlight
+  together and clicking either counts, which is why a prompt carries `slots: string[]` and not a
+  single id. There is a CLEAR GUTTER COLUMN between the divisor and the bracket, and it is not
+  decoration - the divide and multiply signs and their arrows live in it. And each sign is placed
+  the way it is written by hand: `÷`/`x` BETWEEN the two numbers with the arrow split in two
+  segments so it never runs through the sign, `−` to the LEFT of the number being taken away with a
+  rule under it and the difference below, and a bring-down draws the arrow ALONE (the glyph would be
+  redundant).
 - `/decimal-steps` IS ITS OWN TOOL, NOT PART OF `/long-division` (Steele, 2026-08-02, unprompted:
   "this is its own tool from long division"). `/long-division` (`LongDivisionHouse`) is a
   WHOLE-NUMBER choreographed demo with no scoring, built for M1.T3.L4; `/decimal-steps`

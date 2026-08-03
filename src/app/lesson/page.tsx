@@ -52,6 +52,7 @@ const TOOL_ROUTES: Record<string, string> = {
   "long division": "/long-division", "dividend in the house": "/long-division",
   "decimals": "/decimal-steps", "decimal steps": "/decimal-steps", "decimals step by step": "/decimal-steps",
   "decimal operations": "/decimal-steps",
+  "division house": "/division-house", "long division house": "/division-house",
 };
 function lines(text?: string) {
   return (text || "").split(/[\n,]/).map((s) => s.trim()).filter(Boolean);

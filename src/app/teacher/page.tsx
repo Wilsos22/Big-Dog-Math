@@ -61,6 +61,7 @@ const TOOL_GROUPS: { label: string; tools: LinkItem[] }[] = [
       { href: "/place-value", label: "Place Value Reader", letter: ".", color: "#f95335", desc: "Odometer wheels roll and carry" },
       { href: "/place-value-mirror", label: "Place Value Mirror", letter: "M", color: "#50a3a4", desc: "Places group in 3s and mirror" },
       { href: "/long-division", label: "Long Division", letter: "L", color: "#674a40", desc: "The standard algorithm, step by step" },
+      { href: "/division-house", label: "Division House", letter: "H", color: "#7c5cd6", desc: "Click the spot, name the operation" },
       { href: "/ladder-method", label: "Ladder Method", letter: "L", color: "#674a40", desc: "GCF, LCM, prime factors" },
       { href: "/lcm-bouncer", label: "LCM Bouncer", letter: "B", color: "#fcaf38", desc: "Two hoppers meet on a common multiple" },
     ],
