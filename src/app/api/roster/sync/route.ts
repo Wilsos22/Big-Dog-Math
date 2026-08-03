@@ -28,6 +28,7 @@ type SiteStudent = {
   period_id: string;
   alias: string | null;
   email_hmac: string | null;
+  table_number: number | null;
 };
 
 export async function POST(request: Request) {
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
 
   const [{ data: pData, error: pErr }, { data: sData, error: sErr }] = await Promise.all([
     db.from("periods").select("id,name,sort_order"),
-    db.from("students").select("id,period_id,alias,email_hmac"),
+    db.from("students").select("id,period_id,alias,email_hmac,table_number"),
   ]);
   if (pErr || sErr) return Response.json({ error: (pErr || sErr)!.message }, { status: 500 });
 
@@ -96,8 +97,16 @@ export async function POST(request: Request) {
         continue;
       }
       matchedSiteStudentIds.add(existing.id);
-      const next = { alias: r.alias, email_hmac: r.emailHmac ?? existing.email_hmac, period_id: periodId };
-      if (existing.alias === next.alias && existing.email_hmac === next.email_hmac && existing.period_id === next.period_id) {
+      // A blank Table cell means "the Sheet is not tracking seating", not
+      // "clear this student's table" - a half-filled column must not wipe the
+      // seating the rest of the sheet just set.
+      const next = {
+        alias: r.alias,
+        email_hmac: r.emailHmac ?? existing.email_hmac,
+        period_id: periodId,
+        table_number: r.table ?? existing.table_number,
+      };
+      if (existing.alias === next.alias && existing.email_hmac === next.email_hmac && existing.period_id === next.period_id && existing.table_number === next.table_number) {
         unchanged += 1;
         continue;
       }
@@ -113,8 +122,8 @@ export async function POST(request: Request) {
     }
 
     const { data, error } = await db.from("students")
-      .insert({ period_id: periodId, alias: r.alias, email_hmac: r.emailHmac })
-      .select("id,period_id,alias,email_hmac")
+      .insert({ period_id: periodId, alias: r.alias, email_hmac: r.emailHmac, table_number: r.table })
+      .select("id,period_id,alias,email_hmac,table_number")
       .single();
     if (error) { skipped.push({ alias: r.alias, reason: error.message }); continue; }
     const inserted = data as SiteStudent;

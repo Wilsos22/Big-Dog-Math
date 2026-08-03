@@ -46,6 +46,7 @@ import {
 } from "@/lib/discussionProtocol";
 import { TeacherApiError, teacherApiRequest, teacherPost } from "@/lib/teacherApi";
 import {
+  isUntimedStep,
   FIST_TO_FIVE_DEFAULT_QUESTION,
   LIVE_FLOW_MODE,
   REMOTE_COMMAND_STALE_MS,
@@ -181,6 +182,7 @@ const TOOL_STATE_INFO = {
   "tool-area-model": { route: "/area-model", label: "Box Method" },
   "tool-distributive-area": { route: "/distributive-area", label: "Distributive Area Method" },
   "tool-divisibility": { route: "/divisibility", label: "Divisibility Rules" },
+  "tool-lcm-bouncer": { route: "/lcm-bouncer", label: "LCM Bouncer" },
   "tool-area-explorer": { route: "/area-explorer", label: "Area Explorer" },
   "tool-combine": { route: "/combine-like-terms", label: "Combine Like Terms" },
   "tool-ladder": { route: "/ladder-method", label: "Ladder Method" },
@@ -414,6 +416,11 @@ function buildLiveToolConfig(stateId: ToolStateId, values: ToolSetupValues): Liv
       return { ...base, route: "/distributive-area", config: { set: normalizeDistributiveSet(values.distributiveSet) } };
     case "tool-divisibility":
       return { ...base, route: "/divisibility", config: {} };
+    case "tool-lcm-bouncer":
+      // No published config yet - the strides are set on the board. A teacher
+      // naming the pair in the prompt ("find where 4 and 6 land together") is
+      // what steers the room; publishing them is an additive config arm later.
+      return { ...base, route: "/lcm-bouncer", config: {} };
     case "tool-area-explorer":
       return { ...base, route: "/area-explorer", config: {} };
     case "tool-combine":
@@ -776,6 +783,10 @@ export default function ControlPage() {
   const timerStartSecondsRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
+  // A clock the teacher armed mid-state from the Remote, on a step that authored no Duration.
+  // Lives here because Control's snapshot is a FULL REPLACE - the server sets it, but Control
+  // republishes every second and would erase it within a tick if it did not hold it too.
+  const [onDemandSeconds, setOnDemandSeconds] = useState<number | null>(null);
   // The single cue channel and the duck-restore timer. See playCue.
   const cueRef = useRef<HTMLAudioElement | null>(null);
   const duckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1294,6 +1305,9 @@ export default function ControlPage() {
       setFinished(flow.timer.finished || (flow.timer.running && remaining <= 0));
       if (shouldRun && flow.state) startMusicFor(flow.state.id);
       else stopMusic();
+      // The Remote arms an on-demand clock server-side; adopt its length so Control's own engine
+      // runs it and the next republish carries it instead of erasing it.
+      setOnDemandSeconds(flow.timer.totalSeconds > 0 ? flow.timer.totalSeconds : null);
     } else {
       secRef.current = 0;
       setSecondsLeft(0);
@@ -1301,6 +1315,7 @@ export default function ControlPage() {
       setRunning(false);
       setFinished(flow.poll?.stage === "results");
       stopMusic();
+      setOnDemandSeconds(null);
     }
     setBoardOpen(Boolean(flow.presentation?.boardOpen));
     setScoreboardStage(flow.presentation?.scoreboardStage || "halftime");
@@ -1360,6 +1375,10 @@ export default function ControlPage() {
   // advance while lesson pacing remains on.
   useEffect(() => {
     if (!finished || !autoAdvance || (controlPoll?.stage === "results" && controlPoll.awaitingTeacherAdvance)) return;
+    // An armed clock running out on an untimed state is a moment ending, not the state ending -
+    // advancing here would pull the room off a deck the teacher is still talking through.
+    const runningItem = currentIndex >= 0 ? lineup[currentIndex] : undefined;
+    if (isUntimedStep(minutesForLineupItem(runningItem, bank) * 60)) return;
     // A Hustle or Settle is fired at the END of a state, so `finished` is already
     // true when it starts. Without this guard the auto-advance fired 2.6s later
     // and skipped straight past the transition the room was still executing.
@@ -1377,6 +1396,7 @@ export default function ControlPage() {
       if (!st) return;
       stopMusic();
       setCurrentIndex(ni);
+      setOnDemandSeconds(null);
       const minutes = minutesForLineupItem(item, bank);
       secRef.current = minutes * 60;
       armTimer(secRef.current);
@@ -1402,6 +1422,11 @@ export default function ControlPage() {
     activeItem?.title || activeState?.label || "",
   );
   const activeMinutes = minutesForLineupItem(activeItem, bank);
+  // A step with no authored Duration runs untimed: no clock on any screen, no cues, and never an
+  // automatic advance - the teacher moves it on, or arms a timer over it from the Remote. Built
+  // for a whole outside deck or a video as ONE state, where a countdown just fights the content.
+  const stepIsUntimed = isUntimedStep(activeMinutes * 60);
+  const effectiveTotalSeconds = onDemandSeconds ?? activeMinutes * 60;
   const activeLessonVisual = useMemo(() => {
     if (!activeItem || !activeState) return null;
     return resolveLessonVisual({
@@ -1866,9 +1891,9 @@ export default function ControlPage() {
           running: phase.running,
           finished: phase.finished,
         }
-      : activeState
+      : activeState && !(stepIsUntimed && onDemandSeconds === null)
         ? {
-            totalSeconds: safeTimerSeconds(activeMinutes * 60),
+            totalSeconds: safeTimerSeconds(effectiveTotalSeconds),
             secondsLeft: safeTimerSeconds(running ? timerStartSecondsRef.current || secondsLeft : secondsLeft),
             running,
             finished,
@@ -1976,7 +2001,7 @@ export default function ControlPage() {
       transition: serverTransition,
       behaviorOverride: serverBehaviorOverride,
     });
-  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, finished, lineup, publishedTool, running, scoreboardStage, secondsLeft, serverBehaviorOverride, serverInterlude, serverTransition, showDiscussion]);
+  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, effectiveTotalSeconds, finished, lineup, onDemandSeconds, publishedTool, running, scoreboardStage, secondsLeft, serverBehaviorOverride, serverInterlude, serverTransition, showDiscussion, stepIsUntimed]);
 
   const flushLiveFlowUpdates = useCallback(async () => {
     if (liveFlowSyncingRef.current) return;
@@ -2118,6 +2143,7 @@ export default function ControlPage() {
     const st = bank.find((s) => s.id === item.stateId);
     if (!st) return;
     setCurrentIndex(i);
+    setOnDemandSeconds(null);
     const minutes = minutesForLineupItem(item, bank);
     secRef.current = minutes * 60;
     setSecondsLeft(minutes * 60);

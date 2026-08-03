@@ -1,4 +1,4 @@
-import type { TeacherRemoteAction } from "@/lib/liveClassFlow";
+import { ON_DEMAND_TIMER_SECONDS, type TeacherRemoteAction } from "@/lib/liveClassFlow";
 import type { StateStripSlot } from "@/lib/classroomStateStrip";
 import { SOUND_CUES, soundCueAction } from "@/lib/soundBank";
 
@@ -52,6 +52,26 @@ export const SPEAKER_REMOTE_BUTTON: RemoteDeckButton = {
   label: "Pick a speaker",
   detail: "Random student to share",
   tone: "teal",
+};
+
+/**
+ * Arm a clock over an UNTIMED state - a slide deck you are talking through, a hook you want them
+ * sitting with - without changing the step or its pacing. Shown only when the current state has no
+ * timer of its own, because on a timed state these would fight the authored duration.
+ */
+export const ON_DEMAND_TIMER_BUTTONS: readonly RemoteDeckButton[] = ON_DEMAND_TIMER_SECONDS.map((seconds) => ({
+  action: "arm-timer" as TeacherRemoteAction,
+  label: seconds >= 60 && seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds}s`,
+  detail: "Start a clock on this slide",
+  tone: "teal",
+  payload: { seconds },
+}));
+
+export const CLEAR_ON_DEMAND_TIMER_BUTTON: RemoteDeckButton = {
+  action: "clear-timer",
+  label: "Clear timer",
+  detail: "Back to no clock",
+  tone: "neutral",
 };
 
 /**

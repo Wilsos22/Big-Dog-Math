@@ -47,6 +47,7 @@ const CLASS_MODE_TARGETS = new Set([
   "/order-of-operations",
   "/fraction-bars",
   "/divisibility",
+  "/lcm-bouncer",
   "/algebra-tiles",
   "/challenge",
   "/area-model",

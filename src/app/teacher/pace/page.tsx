@@ -62,6 +62,10 @@ interface PollAnswer {
   answer: string | null;
 }
 
+// An untimed state shows a dash, not a zeroed clock - a 0:00 on a projector reads as "you are out
+// of time", which is exactly the pressure an untimed state exists to remove.
+const UNTIMED_CLOCK = "\u2013";
+
 function formatTime(totalSeconds: number) {
   const seconds = Math.max(0, totalSeconds);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;

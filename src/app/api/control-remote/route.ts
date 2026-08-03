@@ -38,6 +38,10 @@ export const dynamic = "force-dynamic";
 
 const ACTIONS = new Set<string>(TEACHER_REMOTE_ACTIONS);
 const DIRECT_TIMER_ACTIONS = new Set<TeacherRemoteAction>(["toggle-timer", "add-30", "subtract-30", "reset-timer"]);
+// Arming and clearing are NOT in that set: every action there requires an existing timer, and the
+// whole point of these two is to work on a state that has none.
+const ON_DEMAND_TIMER_ACTIONS = new Set<TeacherRemoteAction>(["arm-timer", "clear-timer"]);
+const MAX_ON_DEMAND_SECONDS = 60 * 60;
 
 // Ad-hoc "Transition now" vibes. These reuse the planned transition states'
 // ids so the classroom laptop plays the same uploaded music slot.
@@ -100,7 +104,7 @@ const CLAIMED_FLOW_ACTIONS = new Set<TeacherRemoteAction>([
   "reveal-final-score",
   "discussion-pick-sharer",
 ]);
-const SPINNER_STATE_IDS = new Set(["learning-target-readers", "ipad-kid"]);
+const SPINNER_STATE_IDS = new Set(["learning-target-readers", "ipad-kid", "table-captains"]);
 const REMOTE_TRANSITION_TIMEOUT_MS = 10_000;
 const AUTO_ADVANCE_HOLD_MS = 2_600;
 const POLL_RESULTS_HOLD_MS = 6_000;
@@ -445,6 +449,30 @@ async function navigateFlow(
         steps: steps.map(({ remoteActions: _privateRemoteActions, ...publicStep }) => publicStep),
       },
       paper: step.paperTask ? { task: step.paperTask } : null,
+    },
+  };
+}
+
+// Start a clock over whatever state is up, or take it away again. Deliberately does not touch the
+// sequence: an on-demand timer is the teacher putting pressure on one moment, not a change to the
+// lesson's pacing, so `advanceMode` is left exactly as authored and running out does not advance.
+function setOnDemandTimer(flow: LiveClassFlowSnapshot, seconds: number | null): LiveClassFlowSnapshot {
+  if (seconds === null) {
+    return { ...flow, updatedAt: new Date().toISOString(), timer: null };
+  }
+  const total = Math.round(Number(seconds));
+  if (!Number.isFinite(total) || total <= 0 || total > MAX_ON_DEMAND_SECONDS) {
+    throw new Error("Choose a timer length between 1 second and an hour.");
+  }
+  return {
+    ...flow,
+    updatedAt: new Date().toISOString(),
+    timer: {
+      totalSeconds: total,
+      secondsLeft: total,
+      running: true,
+      finished: false,
+      endsAt: new Date(Date.now() + total * 1000).toISOString(),
     },
   };
 }
@@ -1114,6 +1142,10 @@ export async function POST(request: Request) {
     } else if (action === "transition-now") {
       if (!liveFlow) throw new Error("Load a lesson before starting a transition.");
       liveFlow = startInterlude(liveFlow, body.vibe, body.seconds);
+      handledDirectly = true;
+    } else if (ON_DEMAND_TIMER_ACTIONS.has(action)) {
+      if (!liveFlow) throw new Error("Load a lesson before starting a timer.");
+      liveFlow = setOnDemandTimer(liveFlow, action === "arm-timer" ? Number(body.seconds) : null);
       handledDirectly = true;
     } else if (DIRECT_TIMER_ACTIONS.has(action)) {
       if (!liveFlow) throw new Error("Load a lesson before controlling its timer.");

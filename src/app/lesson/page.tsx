@@ -45,6 +45,8 @@ const TOOL_ROUTES: Record<string, string> = {
   "area explorer": "/area-explorer", "area of shapes": "/area-explorer",
   "ratio explainer": "/ratio-explainer", "ratios explainer": "/ratio-explainer",
   "divisibility": "/divisibility", "divisibility rules": "/divisibility",
+  "lcm bouncer": "/lcm-bouncer", "lcm": "/lcm-bouncer", "least common multiple": "/lcm-bouncer",
+  "common multiples": "/lcm-bouncer", "bouncing multiples": "/lcm-bouncer",
   "place value": "/place-value", "place value reader": "/place-value",
   "place value mirror": "/place-value-mirror", "place value chart": "/place-value-mirror",
   "long division": "/long-division", "dividend in the house": "/long-division",

@@ -1,22 +1,26 @@
-// The guided decimal engine: one problem in, an ordered list of decisions out.
+// The guided decimal engine: one problem in, an ordered list of moves out.
 //
-// Every step is a QUESTION with multiple choices, because the thing being
-// taught is what to do next, not the arithmetic. The distractors are real
-// sixth-grade errors, never filler: starting from the left, writing a whole
-// two-digit sum in one column, flipping a subtraction to avoid regrouping,
-// using the LARGER decimal count in a product instead of the sum, moving the
-// decimal in the divisor only.
+// v2, rebuilt from Steele's twenty toolbar comments on /decimal-steps. The
+// shape that changed: a step is no longer always a multiple choice. Students
+// now TYPE the arithmetic and only CHOOSE on the decisions, because picking
+// "9 + 7 = 16" off a list is recognition, not computation. Three kinds:
+//   choice - the decisions (which rule, what to do with a carry, what next)
+//   input  - a number the student works out and types
+//   move   - the student physically drags a decimal point across places
 //
-// The setup question is the point of the whole tool and its answer DIFFERS BY
-// OPERATION - that is the misconception it exists to catch:
+// The set-up question is still the point of the tool and its answer still
+// DIFFERS BY OPERATION - the misconception it exists to catch:
 //   +  and  -   line up by the decimal point
 //   x           line up the right edges and ignore the decimals until the end
 //   /           neither; move the decimal until the divisor is whole
 //
+// Multiplication is digit by digit ("we can only multiply two numbers at once,
+// so we start with the 4 and the 2"), not a row at a time. Division asks how
+// many times the divisor goes in "without going over", in those words.
+//
 // This module is pure and holds no React. It computes on integers scaled by a
 // power of ten - never on floats - so 0.1 + 0.2 is 0.3 here and the boards
-// cannot drift. Rendering (and the "actually move the decimal" interaction the
-// division setup demands) lives in DecimalStepsBoard.
+// cannot drift.
 
 export type DecimalOp = "+" | "-" | "x" | "/";
 
@@ -39,14 +43,6 @@ export interface DecimalProblem {
   op: DecimalOp;
 }
 
-/**
- * How a board is drawn. The three shapes are genuinely different, and that
- * difference is itself the lesson:
- *   column  - digits AND the decimal points share one grid (+ and -)
- *   product - digits right-aligned, decimal points floating between columns
- *             and greyed out until the very last step (x)
- *   house   - long division, with the decimals riding as movable markers (/)
- */
 export type DecimalLayout = "column" | "product" | "house";
 
 export type DecimalRow =
@@ -66,11 +62,10 @@ export type DecimalRow =
 export interface DecCell {
   id: string;
   row: DecimalRow;
-  /** Grid column. For `house`, column 0 is the dividend's leftmost digit. */
   col: number;
   text: string;
-  /** `pad` is a zero written in to fill an empty place - it renders lighter. */
-  kind: "digit" | "dot" | "pad" | "struck" | "op";
+  /** `carrybox` is the small square a student writes a carried digit into. */
+  kind: "digit" | "dot" | "pad" | "carrybox" | "op";
 }
 
 /**
@@ -94,33 +89,51 @@ export interface DecChoice {
   why: string;
 }
 
+/** A number the student works out and types. */
+export interface DecInput {
+  /** The exact string expected, unless `tolerance` makes it a range. */
+  expect: string;
+  /** Small label in front of the box, e.g. "4 + 7 =". */
+  label: string;
+  /** Cell ids filled in once it is right. */
+  fills: string[];
+  /** Said when they type something else - a nudge, never the answer. */
+  hint: string;
+  /** An estimate is judged by nearness. Absent means exact match. */
+  tolerance?: number;
+}
+
 /**
- * An interaction the student performs AFTER choosing correctly.
+ * The student physically moving a decimal point.
  *
- * Only division uses it, and it is Steele's requirement: having named how many
- * places the decimal moves, they have to actually move it that many times, on
- * the divisor and then on the dividend. Naming the number is not the same as
- * doing it, and moving only the divisor is the error this catches.
+ * Steele's requirement, twice over: "they move the decimal themselves" and
+ * "student should have to click the decimal and move it themselves". Naming
+ * how many places is a separate step from doing it.
  */
 export interface DecMoveAction {
   kind: "move-decimal";
-  target: "divisor" | "dividend";
+  target: "divisor" | "dividend" | "product";
   places: number;
+  direction: "left" | "right";
 }
+
+export type DecStepKind = "choice" | "input" | "move";
 
 export interface DecStep {
   id: string;
+  kind: DecStepKind;
   /** Short label for the step rail beside the board. */
   rail: string;
   question: string;
   choices: DecChoice[];
+  input?: DecInput;
+  action?: DecMoveAction;
   /** Cell and marker ids that appear once this step is taken. */
   reveal: string[];
   /** Cell and marker ids lit while this step is the current one. */
   highlight: string[];
   /** The sentence left on screen after the step is taken. */
   say: string;
-  action?: DecMoveAction;
 }
 
 export interface DecimalTrace {
@@ -133,7 +146,7 @@ export interface DecimalTrace {
   rows: DecimalRow[];
   columns: number;
   answerText: string;
-  /** Division only: how far the decimals travel, for the move interaction. */
+  /** Division only: how far the decimals travel. */
   shift: number;
 }
 
@@ -152,7 +165,6 @@ function scaleTo(d: Dec, places: number): number {
   return d.int * 10 ** (places - d.places);
 }
 
-/** Split a scaled integer into its integer and decimal digit strings. */
 function digitsOf(int: number, places: number): { ints: string; decs: string } {
   const s = String(int).padStart(places + 1, "0");
   return { ints: s.slice(0, s.length - places), decs: places ? s.slice(s.length - places) : "" };
@@ -176,51 +188,114 @@ export function trimTrailingZeros(text: string): string {
   return trimmed || "0";
 }
 
+export function decValue(d: Dec): number {
+  return d.int / 10 ** d.places;
+}
+
 const DEC_PLACES = ["tenths", "hundredths", "thousandths"];
 const INT_PLACES = ["ones", "tens", "hundreds", "thousands"];
 
-/** The name of a place, so every question can say where it is working. */
-function placeName(posFromLeft: number, intW: number, decW: number): string {
+function placeName(posFromLeft: number, intW: number): string {
   if (posFromLeft < intW) return INT_PLACES[intW - 1 - posFromLeft] ?? "left";
-  void decW;
   return DEC_PLACES[posFromLeft - intW] ?? "right";
 }
 
-/** Grid column of a digit position, allowing for the shared decimal column. */
 function colOf(posFromLeft: number, intW: number): number {
   return posFromLeft < intW ? posFromLeft : posFromLeft + 1;
 }
 
+// ── choice order ────────────────────────────────────────────────────────────
+
 /**
- * The "wrong direction" distractor for a column step.
+ * Put the choices in a stable but not-always-first order.
  *
- * It has to change with where the column sits, or it reads as nonsense: on the
- * leftmost column "skip to the tens" names the column you are already in, which
- * is not a wrong answer so much as an unreadable one.
+ * Steele: "make sure the correct answer isnt in the first slot every itme".
+ * Every builder writes the right answer first because that is how you read the
+ * code, and the result was a tool a student could beat by always tapping the
+ * top button. The order is derived from the step id so it never reshuffles
+ * under a student mid-question, and never depends on Math.random.
  */
-function wrongWayChoice(p: number, last: number, intW: number, decW: number, verb: string): DecChoice {
-  if (p === last) {
-    return {
-      text: `Start on the left with the ${placeName(0, intW, decW)}`,
-      correct: false,
-      why: `${verb === "added" ? "Adding" : "Subtracting"} starts on the right, because a carry or a regroup always travels leftward. Start on the left and there is nowhere for it to go.`,
-    };
+function seatChoices(id: string, choices: DecChoice[]): DecChoice[] {
+  if (choices.length < 2) return choices;
+  let h = 0;
+  for (let i = 0; i < id.length; i += 1) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  const out = [...choices];
+  // Fisher-Yates driven by the hash, so the arrangement is a pure function of
+  // the step and cannot land the answer in the same slot every time.
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    h = (h * 1103515245 + 12345) >>> 0;
+    const j = h % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
   }
-  if (p > 0) {
-    return {
-      text: `Skip to the ${placeName(p - 1, intW, decW)}`,
-      correct: false,
-      why: `Every column gets ${verb}, in order. Skipping one drops part of the number.`,
-    };
-  }
+  return out;
+}
+
+// ── the shared opening: name the operation, then estimate ───────────────────
+
+const OP_WORD: Record<DecimalOp, string> = { "+": "Add", "-": "Subtract", "x": "Multiply", "/": "Divide" };
+const OP_SIGN: Record<DecimalOp, string> = { "+": "+", "-": "−", "x": "x", "/": "÷" };
+
+function operationStep(op: DecimalOp): DecStep {
+  const wrongWhy: Record<DecimalOp, string> = {
+    "+": "The sign says add - the two numbers are being put together.",
+    "-": "The sign says subtract - one number is being taken away from the other.",
+    "x": "The sign says multiply - one number is being taken that many times.",
+    "/": "The sign says divide - one number is being shared into groups.",
+  };
   return {
-    text: "Stop here - the answer looks finished",
-    correct: false,
-    why: `This is the last column on the left, and it still has to be ${verb}.`,
+    id: "operation",
+    kind: "choice",
+    rail: "The operation",
+    question: "What operation are we doing?",
+    choices: (["+", "-", "x", "/"] as DecimalOp[]).map((candidate) => ({
+      text: `${OP_WORD[candidate]}  ${OP_SIGN[candidate]}`,
+      correct: candidate === op,
+      why: candidate === op
+        ? `Right - this is a ${OP_WORD[candidate].toLowerCase()}ing problem, so the rules for ${OP_WORD[candidate].toLowerCase()}ing apply.`
+        : wrongWhy[op],
+    })),
+    reveal: [],
+    highlight: [],
+    say: `${OP_WORD[op]}.`,
   };
 }
 
-// ── the setup question, which is the whole point ────────────────────────────
+/**
+ * Estimate first (Steele: "we should make an estimation feature first").
+ *
+ * Judged by NEARNESS, not equality - a student who rounds differently but lands
+ * in the right neighbourhood has done the thinking. The band is generous on
+ * purpose, and the hint teaches the rounding rather than leaking the answer.
+ */
+function estimateStep(a: Dec, b: Dec, op: DecimalOp, value: number): DecStep {
+  const rounded = Math.round(value);
+  const tolerance = Math.max(1, Math.abs(value) * 0.2);
+  const nudge: Record<DecimalOp, string> = {
+    "+": `Round ${a.text} and ${b.text} to the nearest whole number, then add those.`,
+    "-": `Round ${a.text} and ${b.text} to the nearest whole number, then subtract those.`,
+    "x": `Round each number to something easy. Is ${b.text} about a half? about one? about two? Then take that much of ${a.text}.`,
+    "/": `About how many ${b.text}s fit inside ${a.text}? Round both to something easy first.`,
+  };
+  return {
+    id: "estimate",
+    kind: "input",
+    rail: "Estimate",
+    question: "Before we work it out - about what whole number should the answer be?",
+    choices: [],
+    input: {
+      expect: String(rounded),
+      label: "About",
+      fills: [],
+      hint: nudge[op],
+      tolerance,
+    },
+    reveal: [],
+    highlight: [],
+    say: "Now we have something to check the answer against.",
+  };
+}
+
+// ── the set-up question, whose answer changes with the operation ────────────
 
 const LINEUP_BY_DECIMAL: DecChoice[] = [
   {
@@ -272,7 +347,7 @@ const DIVISION_SETUP: DecChoice[] = [
   {
     text: "Nothing - start dividing",
     correct: false,
-    why: "Dividing by 0.4 with the decimal still in place is the step almost everybody gets wrong. Make the divisor whole first.",
+    why: "Dividing by a piece of a number is the step almost everybody gets wrong. Make the divisor whole first.",
   },
   {
     text: "Round both numbers to whole numbers",
@@ -281,18 +356,76 @@ const DIVISION_SETUP: DecChoice[] = [
   },
 ];
 
+// ── carrying, which is now three moves instead of one ───────────────────────
+
+/**
+ * The carry steps.
+ *
+ * Steele: "They put in the answer and it stops them and says what do we do with
+ * the second 1? and they write carry it. and they have to physically put the
+ * one in a small box over the 2 that solidifies when they input". So a carry is
+ * a decision AND a physical act, not a number that appears on its own.
+ */
+function carrySteps(idBase: string, total: number, carryOut: number, digit: number, boxId: string, place: string): DecStep[] {
+  const second = String(total)[0];
+  return [
+    {
+      id: `${idBase}-what`,
+      kind: "choice",
+      rail: "Carry",
+      question: `${total} does not fit in one column. What do we do with the ${second}?`,
+      choices: [
+        {
+          text: "Carry it into the next column to the left",
+          correct: true,
+          why: `Right - the ${digit} stays in the ${place} and the ${carryOut} is worth ten of them, so it moves left.`,
+        },
+        {
+          text: `Write the whole ${total} in the ${place}`,
+          correct: false,
+          why: "Only one digit fits in a column. Two digits in one place changes what the number means.",
+        },
+        {
+          text: "Drop it",
+          correct: false,
+          why: `Dropping it loses ${carryOut === 1 ? "ten" : `${carryOut} tens`}. Every part of the number has to go somewhere.`,
+        },
+      ],
+      reveal: [],
+      highlight: [boxId],
+      say: `Carry the ${carryOut}.`,
+    },
+    {
+      id: `${idBase}-write`,
+      kind: "input",
+      rail: "Write it",
+      question: "Put the carried digit in the box above the next column.",
+      choices: [],
+      input: {
+        expect: String(carryOut),
+        label: "Carry",
+        fills: [boxId],
+        // Deliberately not "${digit} ${place}" - on a multiplication row the
+        // place word is "column", which reads as "2 column".
+        hint: `${total} is ${carryOut} ten and ${digit} left over. The ${carryOut} is what moves.`,
+      },
+      reveal: [boxId],
+      highlight: [boxId],
+      say: `${carryOut} is waiting in the next column.`,
+    },
+  ];
+}
+
 // ── addition and subtraction ────────────────────────────────────────────────
 
 interface ColumnBoard {
   cells: DecCell[];
-  markers: DecMarker[];
   intW: number;
   decW: number;
   columns: number;
   paddedA: string;
   paddedB: string;
   paddedS: string;
-  /** Positions where a pad zero had to be written in. */
   padsA: number[];
   padsB: number[];
 }
@@ -317,8 +450,6 @@ function buildColumnBoard(a: Dec, b: Dec, resultInt: number, decW: number): Colu
     for (let p = 0; p < padded.length; p += 1) {
       const ch = padded[p];
       if (ch === " ") continue;
-      // A decimal place the student has to write a zero into: past what they
-      // were given, but inside the width the other number forces.
       const isPad = p >= intW && p - intW >= source.places;
       if (isPad) pads.push(p);
       cells.push({ id: `${row}-${p}`, row, col: colOf(p, intW), text: ch, kind: isPad ? "pad" : "digit" });
@@ -333,34 +464,23 @@ function buildColumnBoard(a: Dec, b: Dec, resultInt: number, decW: number): Colu
   }
   cells.push({ id: "sum-dot", row: "sum", col: intW, text: ".", kind: "dot" });
 
-  return { cells, markers: [], intW, decW, columns, paddedA, paddedB, paddedS, padsA, padsB };
+  return { cells, intW, decW, columns, paddedA, paddedB, paddedS, padsA, padsB };
 }
 
 function zeroFillStep(board: ColumnBoard, a: Dec, b: Dec): DecStep | null {
   const pads = [...board.padsA, ...board.padsB];
   if (!pads.length) return null;
   const shorter = board.padsA.length ? a : b;
-  const missing = placeName(board.intW + shorter.places, board.intW, board.decW);
+  const missing = placeName(board.intW + shorter.places, board.intW);
   return {
     id: "zeros",
+    kind: "choice",
     rail: "Fill the gap",
     question: `${shorter.text} has nothing in the ${missing} place. What goes there?`,
     choices: [
-      {
-        text: "Write a zero to hold the place",
-        correct: true,
-        why: `Right - a zero on the end does not change the value, and now every column has a digit to work with.`,
-      },
-      {
-        text: "Leave it empty",
-        correct: false,
-        why: "An empty column is easy to misread and easy to skip. A zero says out loud that there are none of those.",
-      },
-      {
-        text: "Slide the digits over to fill it",
-        correct: false,
-        why: "Sliding a digit changes its place value - the 4 in the tenths would become 4 hundredths, a different number.",
-      },
+      { text: "Write a zero to hold the place", correct: true, why: "Right - a zero on the end does not change the value, and now every column has a digit to work with." },
+      { text: "Leave it empty", correct: false, why: "An empty column is easy to misread and easy to skip. A zero says out loud that there are none of those." },
+      { text: "Slide the digits over to fill it", correct: false, why: "Sliding a digit changes its place value - the 4 in the tenths would become 4 hundredths, a different number." },
     ],
     reveal: [...board.padsA.map((p) => `a-${p}`), ...board.padsB.map((p) => `b-${p}`)],
     highlight: pads.map((p) => `${board.padsA.includes(p) ? "a" : "b"}-${p}`),
@@ -368,32 +488,20 @@ function zeroFillStep(board: ColumnBoard, a: Dec, b: Dec): DecStep | null {
   };
 }
 
-function bringDownStep(intW: number): DecStep {
+function bringDownStep(): DecStep {
   return {
     id: "point",
+    kind: "choice",
     rail: "Decimal down",
     question: "Where does the decimal point go in the answer?",
     choices: [
-      {
-        text: "Straight down, in line with the others",
-        correct: true,
-        why: "Right - the columns already line up, so the answer's point drops straight down.",
-      },
-      {
-        text: "At the end of the answer",
-        correct: false,
-        why: "That would make the answer a whole number and multiply it by ten or a hundred.",
-      },
-      {
-        text: "Count the decimal places in both numbers and use that many",
-        correct: false,
-        why: "Counting places is the multiplying rule. When you add or subtract, the point comes straight down.",
-      },
+      { text: "Straight down, in line with the others", correct: true, why: "Right - the columns already line up, so the answer's point drops straight down." },
+      { text: "At the end of the answer", correct: false, why: "That would make the answer a whole number and multiply it by ten or a hundred." },
+      { text: "Count the decimal places in both numbers and use that many", correct: false, why: "Counting places is the multiplying rule. When you add or subtract, the point comes straight down." },
     ],
     reveal: ["sum-dot"],
     highlight: ["a-dot", "b-dot", "sum-dot"],
     say: "Write it before you add and you cannot forget it.",
-    ...(intW ? {} : {}),
   };
 }
 
@@ -404,21 +512,23 @@ function buildAddition(a: Dec, b: Dec): DecimalTrace {
   const { intW, paddedA, paddedB } = board;
 
   const steps: DecStep[] = [
+    operationStep("+"),
+    estimateStep(a, b, "+", sumInt / 10 ** decW),
     {
       id: "lineup",
+      kind: "choice",
       rail: "Line up",
       question: `We are adding ${a.text} and ${b.text}. How do we line them up?`,
       choices: LINEUP_BY_DECIMAL,
-      reveal: board.cells.filter((c) => c.row === "a" || c.row === "b").filter((c) => c.kind !== "pad").map((c) => c.id),
+      reveal: board.cells.filter((c) => (c.row === "a" || c.row === "b") && c.kind !== "pad").map((c) => c.id),
       highlight: ["a-dot", "b-dot"],
       say: "Decimal over decimal, so every place matches.",
     },
   ];
   const zeros = zeroFillStep(board, a, b);
   if (zeros) steps.push(zeros);
-  steps.push(bringDownStep(intW));
+  steps.push(bringDownStep());
 
-  // Right to left, one column at a time.
   let carry = 0;
   for (let p = paddedA.length - 1; p >= 0; p -= 1) {
     const dA = paddedA[p] === " " ? 0 : Number(paddedA[p]);
@@ -426,46 +536,33 @@ function buildAddition(a: Dec, b: Dec): DecimalTrace {
     const total = dA + dB + carry;
     const digit = total % 10;
     const carryOut = Math.floor(total / 10);
-    const place = placeName(p, intW, board.decW);
-    const carryPart = carry ? ` + ${carry} carried` : "";
-    const choices: DecChoice[] = [
-      {
-        text: total >= 10
-          ? `Add the ${place}: ${dA} + ${dB}${carryPart} = ${total}. Write ${digit}, carry ${carryOut}`
-          : `Add the ${place}: ${dA} + ${dB}${carryPart} = ${total}`,
-        correct: true,
-        why: total >= 10
-          ? `Right - ${total} is too big for one column, so ${digit} stays and ${carryOut} moves left.`
-          : "Right - one column at a time, working right to left.",
-      },
-    ];
-    if (total >= 10) {
-      choices.push({
-        text: `Add the ${place}: ${dA} + ${dB}${carryPart} = ${total}. Write ${total}`,
-        correct: false,
-        why: `Only one digit fits in a column. Write ${digit} and carry the ${carryOut} into the next place left.`,
-      });
-    }
-    choices.push(wrongWayChoice(p, paddedA.length - 1, intW, board.decW, "added"));
-    if (choices.length < 3) {
-      choices.push({
-        text: `Multiply the ${place}: ${dA} x ${dB}`,
-        correct: false,
-        why: "This is an addition problem - the columns get added, not multiplied.",
-      });
-    }
+    const place = placeName(p, intW);
+    const carryBox = `carry-${p}`;
+    const label = carry ? `${dA} + ${dB} + ${carry} =` : `${dA} + ${dB} =`;
 
     steps.push({
       id: `col-${p}`,
+      kind: "input",
       rail: place,
-      question: "What do we do next?",
-      choices,
-      reveal: [`sum-${p}`, ...(carryOut ? [`carry-${p - 1}`] : [])],
-      highlight: [`a-${p}`, `b-${p}`, `sum-${p}`, ...(carry ? [`carry-${p}`] : [])],
-      say: total >= 10 ? `${total} - write ${digit}, carry ${carryOut}.` : `${total} in the ${place}.`,
+      question: `Add the ${place} column.`,
+      choices: [],
+      input: {
+        expect: String(total),
+        label,
+        fills: [`sum-${p}`],
+        hint: carry
+          ? `Do not forget the ${carry} carried into this column.`
+          : `Add just this column: ${dA} and ${dB}.`,
+      },
+      reveal: [`sum-${p}`],
+      highlight: [`a-${p}`, `b-${p}`, `sum-${p}`, ...(carry ? [carryBox] : [])],
+      say: total >= 10 ? `${total} - only the ${digit} fits here.` : `${total} in the ${place}.`,
     });
+
     if (carryOut) {
-      board.cells.push({ id: `carry-${p - 1}`, row: "carry", col: colOf(p - 1, intW), text: String(carryOut), kind: "digit" });
+      const nextBox = `carry-${p - 1}`;
+      board.cells.push({ id: nextBox, row: "carry", col: colOf(p - 1, intW), text: String(carryOut), kind: "carrybox" });
+      steps.push(...carrySteps(`col-${p}`, total, carryOut, digit, nextBox, place));
     }
     carry = carryOut;
   }
@@ -492,28 +589,29 @@ function buildSubtraction(a: Dec, b: Dec): DecimalTrace {
   const { intW, paddedA, paddedB } = board;
 
   const steps: DecStep[] = [
+    operationStep("-"),
+    estimateStep(a, b, "-", (A - B) / 10 ** decW),
     {
       id: "lineup",
+      kind: "choice",
       rail: "Line up",
       question: `We are subtracting ${b.text} from ${a.text}. How do we line them up?`,
       choices: LINEUP_BY_DECIMAL,
-      reveal: board.cells.filter((c) => c.row === "a" || c.row === "b").filter((c) => c.kind !== "pad").map((c) => c.id),
+      reveal: board.cells.filter((c) => (c.row === "a" || c.row === "b") && c.kind !== "pad").map((c) => c.id),
       highlight: ["a-dot", "b-dot"],
       say: "Decimal over decimal, so every place matches.",
     },
   ];
   const zeros = zeroFillStep(board, a, b);
   if (zeros) steps.push(zeros);
-  steps.push(bringDownStep(intW));
+  steps.push(bringDownStep());
 
-  // Work on a mutable copy of the top row so regrouping can rewrite it.
   const top = paddedA.split("").map((c) => (c === " " ? -1 : Number(c)));
   for (let p = paddedA.length - 1; p >= 0; p -= 1) {
     const dB = paddedB[p] === " " ? 0 : Number(paddedB[p]);
-    const place = placeName(p, intW, board.decW);
+    const place = placeName(p, intW);
 
     if (top[p] < dB) {
-      // Walk left for a digit that can lend one.
       let lender = p - 1;
       while (lender >= 0 && top[lender] <= 0) lender -= 1;
       const changed: string[] = [];
@@ -529,24 +627,13 @@ function buildSubtraction(a: Dec, b: Dec): DecimalTrace {
 
       steps.push({
         id: `regroup-${p}`,
+        kind: "choice",
         rail: "Regroup",
         question: `In the ${place} we need to take ${dB} from ${top[p] - 10}. What do we do?`,
         choices: [
-          {
-            text: `Regroup: take one from the ${placeName(lender, intW, board.decW)} to make it ${top[p]}`,
-            correct: true,
-            why: `Right - one ${placeName(lender, intW, board.decW)} is ten ${place}, so the column becomes ${top[p]}.`,
-          },
-          {
-            text: `Turn it around and do ${dB} take away ${top[p] - 10}`,
-            correct: false,
-            why: "Subtraction does not flip. Taking the small one from the big one in a column gives the wrong answer every time - regroup instead.",
-          },
-          {
-            text: "Write a zero and move on",
-            correct: false,
-            why: "That throws the column away. The value is still there, it just needs regrouping from the place to its left.",
-          },
+          { text: `Regroup: take one from the ${placeName(lender, intW)} to make it ${top[p]}`, correct: true, why: `Right - one ${placeName(lender, intW)} is ten ${place}, so the column becomes ${top[p]}.` },
+          { text: `Turn it around and do ${dB} take away ${top[p] - 10}`, correct: false, why: "Subtraction does not flip. Taking the small one from the big one in a column gives the wrong answer every time - regroup instead." },
+          { text: "Write a zero and move on", correct: false, why: "That throws the column away. The value is still there, it just needs regrouping from the place to its left." },
         ],
         reveal: changed,
         highlight: changed,
@@ -554,28 +641,20 @@ function buildSubtraction(a: Dec, b: Dec): DecimalTrace {
       });
     }
 
-    const result = top[p] - dB;
-    // A leading column the difference does not reach (100.5 − 99.75 has no
-    // hundreds in its answer) has nothing to write, so asking about it would be
-    // a step with no move. The regrouping above still runs.
     if (board.paddedS[p] === " ") continue;
+    const result = top[p] - dB;
     steps.push({
       id: `col-${p}`,
+      kind: "input",
       rail: place,
-      question: "What do we do next?",
-      choices: [
-        {
-          text: `Subtract the ${place}: ${top[p]} − ${dB} = ${result}`,
-          correct: true,
-          why: "Right - one column at a time, working right to left.",
-        },
-        wrongWayChoice(p, paddedA.length - 1, intW, board.decW, "subtracted"),
-        {
-          text: `Add the ${place}: ${top[p]} + ${dB} = ${top[p] + dB}`,
-          correct: false,
-          why: "This is a subtraction problem - read the sign before you work the column.",
-        },
-      ],
+      question: `Subtract the ${place} column.`,
+      choices: [],
+      input: {
+        expect: String(result),
+        label: `${top[p]} − ${dB} =`,
+        fills: [`sum-${p}`],
+        hint: `Take ${dB} away from ${top[p]}, just in this column.`,
+      },
       reveal: [`sum-${p}`],
       highlight: [`a-${p}`, `b-${p}`, `sum-${p}`, `regroup-${p}`],
       say: `${result} in the ${place}.`,
@@ -596,7 +675,7 @@ function buildSubtraction(a: Dec, b: Dec): DecimalTrace {
   };
 }
 
-// ── multiplication ──────────────────────────────────────────────────────────
+// ── multiplication, digit by digit ──────────────────────────────────────────
 
 function buildMultiplication(a: Dec, b: Dec): DecimalTrace {
   const da = String(a.int);
@@ -604,13 +683,10 @@ function buildMultiplication(a: Dec, b: Dec): DecimalTrace {
   const productInt = a.int * b.int;
   const places = a.places + b.places;
   const partials = db.split("").reverse().map((d, i) => a.int * Number(d) * 10 ** i);
-  // Pad so a digit always sits LEFT of the answer's point: 0.25 x 0.4 is 100
-  // with three places, and printing that as ".100" gives a student nothing to
-  // read the ones place from.
   const prod = String(productInt).padStart(places + 1, "0");
-  // Right-aligned digit grid: no shared decimal column, because the points are
-  // deliberately out of play until the last step.
+  const single = partials.length === 1;
   const columns = Math.max(da.length, db.length, prod.length, ...partials.map((p) => String(p).length));
+
   const cells: DecCell[] = [];
   const markers: DecMarker[] = [];
   const lay = (row: DecimalRow, text: string, idPrefix: string) => {
@@ -622,14 +698,15 @@ function buildMultiplication(a: Dec, b: Dec): DecimalTrace {
   };
   const offA = lay("a", da, "a");
   const offB = lay("b", db, "b");
-  // The operands keep their points, floating between digit columns and muted -
-  // visible, but not part of the multiply.
   markers.push({ id: "a-dot", row: "a", boundary: offA + da.length - a.places, muted: true });
   markers.push({ id: "b-dot", row: "b", boundary: offB + db.length - b.places, muted: true });
 
   const steps: DecStep[] = [
+    operationStep("x"),
+    estimateStep(a, b, "x", productInt / 10 ** places),
     {
       id: "lineup",
+      kind: "choice",
       rail: "Line up",
       question: `We are multiplying ${a.text} by ${b.text}. How do we line them up?`,
       choices: LINEUP_RIGHT_EDGE,
@@ -639,117 +716,128 @@ function buildMultiplication(a: Dec, b: Dec): DecimalTrace {
     },
   ];
 
-  // A single-digit multiplier has one row, and that row IS the product - a
-  // separate answer row would print the same number twice.
-  const single = partials.length === 1;
-  partials.forEach((value, i) => {
-    const digit = Number(db[db.length - 1 - i]);
+  // ONE PAIR OF DIGITS AT A TIME. Steele: "we can only multiple 2 numbers at
+  // once. So we strt with the 4 and the 2" - a whole row in one step is the
+  // answer appearing, not the algorithm being taught.
+  partials.forEach((value, j) => {
+    const mult = Number(db[db.length - 1 - j]);
     const text = String(value);
-    const prefix = single ? "prod" : `p${i}`;
-    lay(single ? "sum" : (`part${i}` as DecimalRow), text, prefix);
-    const ids = text.split("").map((_, k) => `${prefix}-${k}`);
-    const zeroNote = i > 0 ? ` and a ${"zero".concat(i > 1 ? "s" : "")} placeholder` : "";
-    steps.push({
-      id: `partial-${i}`,
-      rail: `x ${digit}`,
-      question: "What do we do next?",
-      choices: [
-        {
-          text: `Multiply every digit of ${da} by ${digit}${i > 0 ? `, then shift ${i} place${i > 1 ? "s" : ""} left` : ""}`,
-          correct: true,
-          why: i > 0
-            ? `Right - that ${digit} is worth ${digit}${"0".repeat(i)}, so its row slides ${i} place${i > 1 ? "s" : ""} left.`
-            : `Right - ${da} x ${digit} = ${text}.`,
-        },
-        {
-          text: `Multiply only the first digit of ${da} by ${digit}`,
-          correct: false,
-          why: `Every digit of ${da} gets multiplied, not just one. That is the same mistake as distributing to the first term only.`,
-        },
-        i > 0
-          ? {
-            text: `Multiply every digit of ${da} by ${digit} and line it up on the right`,
-            correct: false,
-            why: `That ${digit} sits in the tens, so it is really ${digit}0. Its row has to shift left or the two rows add up wrong.`,
-          }
-          : {
-            text: `Add ${da} and ${digit}`,
-            correct: false,
-            why: "This is a multiplication problem - read the sign before you work the row.",
-          },
-      ],
-      reveal: ids,
-      highlight: [...ids, ...cells.filter((c) => c.row === "a").map((c) => c.id), `b-${db.length - 1 - i}`],
-      say: `${da} x ${digit}${zeroNote} is ${text}.`,
+    const prefix = single ? "prod" : `p${j}`;
+    const offset = columns - text.length;
+    text.split("").forEach((ch, i) => {
+      cells.push({ id: `${prefix}-${i}`, row: single ? "sum" : (`part${j}` as DecimalRow), col: offset + i, text: ch, kind: "digit" });
     });
+
+    let carry = 0;
+    for (let i = da.length - 1; i >= 0; i -= 1) {
+      const dTop = Number(da[i]);
+      const total = dTop * mult + carry;
+      const digit = total % 10;
+      const carryOut = Math.floor(total / 10);
+      // Which cell in this partial row holds that digit.
+      const rowPos = text.length - 1 - (da.length - 1 - i) - j;
+      const cellId = `${prefix}-${rowPos}`;
+      const carryBox = `mcarry-${j}-${i}`;
+      // On the LAST digit of the row there is no column left to carry into, so
+      // the carry simply becomes the row's leading digit and is written with
+      // it. Without this the leading digit is never placed and the row reads
+      // short by one - 6 x 4 = 24 would show only the 4.
+      const leadsWithCarry = carryOut > 0 && i === 0;
+      const fills = leadsWithCarry ? [`${prefix}-${rowPos - 1}`, cellId] : [cellId];
+      steps.push({
+        id: `mul-${j}-${i}`,
+        kind: "input",
+        rail: `${mult} x ${dTop}`,
+        question: `Multiply just these two digits.${j > 0 ? ` This row is the ${mult} in the tens, so it sits one place left.` : ""}`,
+        choices: [],
+        input: {
+          expect: String(total),
+          label: carry ? `${mult} x ${dTop} + ${carry} =` : `${mult} x ${dTop} =`,
+          fills,
+          hint: carry ? `Multiply first, then add the ${carry} you carried.` : "Two digits at a time - just these two.",
+        },
+        reveal: fills,
+        highlight: [`a-${i}`, `b-${db.length - 1 - j}`, ...fills, ...(carry ? [carryBox] : [])],
+        say: `${mult} x ${dTop}${carry ? ` + ${carry}` : ""} = ${total}.`,
+      });
+      if (carryOut && i > 0) {
+        const nextBox = `mcarry-${j}-${i - 1}`;
+        cells.push({ id: nextBox, row: "carry", col: columns - (da.length - i) - j - 1, text: String(carryOut), kind: "carrybox" });
+        steps.push(...carrySteps(`mul-${j}-${i}`, total, carryOut, digit, nextBox, "column"));
+      }
+      carry = carryOut;
+    }
+    if (j > 0) {
+      // The placeholder zeros that shift the row left.
+      for (let z = 0; z < j; z += 1) {
+        const zeroId = `${prefix}-${text.length - 1 - z}`;
+        if (!steps.some((s) => s.reveal.includes(zeroId))) steps[steps.length - 1].reveal.push(zeroId);
+      }
+    }
   });
 
-  if (!single) lay("sum", prod, "prod");
   if (!single) {
+    lay("sum", prod, "prod");
     steps.push({
       id: "addpartials",
+      kind: "input",
       rail: "Add rows",
-      question: "What do we do next?",
-      choices: [
-        {
-          text: "Add the rows together",
-          correct: true,
-          why: `Right - ${partials.join(" + ")} = ${prod}.`,
-        },
-        {
-          text: "Multiply the rows together",
-          correct: false,
-          why: "The rows are pieces of one product. Pieces get added back together, not multiplied.",
-        },
-        {
-          text: "Keep only the longest row",
-          correct: false,
-          why: "Every row is part of the answer. Dropping one throws away part of the product.",
-        },
-      ],
+      question: "Add the rows together.",
+      choices: [],
+      input: {
+        expect: String(productInt),
+        label: `${partials.join(" + ")} =`,
+        fills: prod.split("").map((_, i) => `prod-${i}`),
+        hint: "Each row is one piece of the product. Add the pieces.",
+      },
       reveal: prod.split("").map((_, i) => `prod-${i}`),
       highlight: prod.split("").map((_, i) => `prod-${i}`),
-      say: `${partials.join(" + ")} = ${prod}.`,
+      say: `${partials.join(" + ")} = ${productInt}.`,
     });
   }
 
-  const wrong = Math.max(a.places, b.places);
-  const countChoices: DecChoice[] = [
-    {
-      text: `${places} - ${a.places} from ${a.text} plus ${b.places} from ${b.text}`,
-      correct: true,
-      why: `Right - you add the decimal places, so the answer gets ${places}.`,
-    },
-  ];
-  if (wrong !== places) {
-    countChoices.push({
-      text: `${wrong} - whichever number has more`,
-      correct: false,
-      why: "Taking the larger count is the most common multiplying error. The places add: every place in each factor makes the answer smaller, and both count.",
-    });
-  }
-  countChoices.push({
-    text: "0 - the answer is a whole number",
-    correct: false,
-    why: `Both factors are less than whole in places, so the product cannot lose its decimal. ${a.text} x ${b.text} is about ${estimateText(a, b)}.`,
-  });
-  if (countChoices.length < 3) {
-    countChoices.push({
-      text: `${places + 1} - one more to be safe`,
-      correct: false,
-      why: "Each extra place divides the answer by ten. Count them exactly: one for each place in each factor.",
-    });
-  }
-
-  markers.push({ id: "prod-dot", row: "sum", boundary: columns - places, muted: false });
+  // The decimal, exactly as Steele described it: count the digits right of the
+  // points, then say WHICH WAY and HOW FAR, then physically move it.
+  markers.push({ id: "prod-dot", row: "sum", boundary: columns, muted: false });
   steps.push({
     id: "count",
+    kind: "input",
     rail: "Count places",
-    question: "How many decimal places does the answer need?",
-    choices: countChoices,
+    question: "Count the digits to the right of the decimal point in BOTH numbers. How many altogether?",
+    choices: [],
+    input: {
+      expect: String(places),
+      label: "Digits after the points",
+      fills: [],
+      hint: `${a.text} has ${a.places}, and ${b.text} has ${b.places}. Add them, do not take the bigger one.`,
+    },
     reveal: ["prod-dot"],
-    highlight: ["a-dot", "b-dot", "prod-dot"],
-    say: `${a.places} + ${b.places} = ${places}, counted in from the right.`,
+    highlight: ["a-dot", "b-dot"],
+    say: `${a.places} + ${b.places} = ${places}.`,
+  });
+  steps.push({
+    id: "direction",
+    kind: "choice",
+    rail: "Which way",
+    question: `Which way does the decimal point move to make ${places} place${places === 1 ? "" : "s"}?`,
+    choices: [
+      { text: "Left", correct: true, why: "Right - counting in from the right end makes the answer smaller, which is what multiplying by a piece of a number does." },
+      { text: "Right", correct: false, why: "Moving right makes the number bigger. Multiplying by less than one has to end up smaller." },
+    ],
+    reveal: [],
+    highlight: ["prod-dot"],
+    say: `${places} place${places === 1 ? "" : "s"} to the left.`,
+  });
+  steps.push({
+    id: "move-product",
+    kind: "move",
+    rail: "Move it",
+    question: `Drag the decimal point ${places} place${places === 1 ? "" : "s"} to the left.`,
+    choices: [],
+    action: { kind: "move-decimal", target: "product", places, direction: "left" },
+    reveal: [],
+    highlight: ["prod-dot"],
+    say: `The answer is ${formatDec(productInt, places)}.`,
   });
 
   return {
@@ -760,34 +848,26 @@ function buildMultiplication(a: Dec, b: Dec): DecimalTrace {
     markers,
     steps,
     rows: single
-      ? ["a", "b", "rule", "sum"]
-      : ["a", "b", "rule", ...partials.map((_, i) => `part${i}` as DecimalRow), "rule", "sum"],
+      ? ["carry", "a", "b", "rule", "sum"]
+      : ["carry", "a", "b", "rule", ...partials.map((_, i) => `part${i}` as DecimalRow), "rule", "sum"],
     columns,
     answerText: formatDec(productInt, places),
     shift: 0,
   };
 }
 
-function estimateText(a: Dec, b: Dec): number {
-  return Math.round(a.int * b.int / 10 ** (a.places + b.places) * 100) / 100;
-}
-
 // ── division ────────────────────────────────────────────────────────────────
 
 function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
-  // Shift both until the divisor is whole. That shift IS the lesson.
   const shift = b.places;
-  const divisor = b.int; // b scaled by 10^b.places is exactly its digits
+  const divisor = b.int;
   if (divisor === 0) return null;
   const dividendPlaces = Math.max(0, a.places - shift);
   const dividendInt = a.int * 10 ** Math.max(0, shift - a.places);
   const dividendText = formatDec(dividendInt, dividendPlaces);
 
-  // Long division over the dividend's digits; the quotient must terminate.
   const digits = dividendText.replace(".", "").split("");
   const dotAt = dividendText.includes(".") ? dividendText.indexOf(".") : digits.length;
-  // How many of those digits the student was actually given. Anything past this
-  // arrived from the shift, so it appears when the decimal moves - not before.
   const givenDigits = a.text.replace(".", "").length;
 
   let remainder = 0;
@@ -798,8 +878,6 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
     const next = i < digits.length ? Number(digits[i]) : 0;
     if (i >= digits.length) extra += 1;
     const partial = remainder * 10 + next;
-    // Nothing goes above the bracket until the divisor actually fits, which is
-    // how it is written by hand: 21 into 7 is not a step, it is a wider look.
     if (!started && partial < divisor) {
       remainder = partial;
       continue;
@@ -809,25 +887,16 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
     cycles.push({ pos: i, partial, q, product: q * divisor, rest: partial - q * divisor });
     remainder = partial - q * divisor;
   }
-  if (remainder !== 0 || !cycles.length) return null; // does not terminate - refuse it
+  if (remainder !== 0 || !cycles.length) return null;
 
   const totalDigits = digits.length + extra;
   const columns = totalDigits;
   const cells: DecCell[] = [];
   const markers: DecMarker[] = [];
 
-  // Dividend. Three kinds of digit, revealed at three different moments:
-  // what the student was given, what the shift produced, and the zeros the
-  // algorithm appends past the last digit to finish the quotient.
   for (let i = 0; i < totalDigits; i += 1) {
     const ch = i < digits.length ? digits[i] : "0";
-    cells.push({
-      id: `dv-${i}`,
-      row: "dividend",
-      col: i,
-      text: ch,
-      kind: i < givenDigits ? "digit" : "pad",
-    });
+    cells.push({ id: `dv-${i}`, row: "dividend", col: i, text: ch, kind: i < givenDigits ? "digit" : "pad" });
   }
   String(divisor).split("").forEach((ch, i) => {
     cells.push({ id: `ds-${i}`, row: "divisor", col: i, text: ch, kind: "digit" });
@@ -836,39 +905,27 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
     cells.push({ id: `q-${c.pos}`, row: "quotient", col: c.pos, text: String(c.q), kind: "digit" });
   });
 
-  // Decimal markers start where the ORIGINAL numbers put them and move.
   markers.push({ id: "ds-dot", row: "divisor", boundary: String(b.int).length - b.places, muted: false });
   markers.push({ id: "dv-dot", row: "dividend", boundary: a.text.includes(".") ? a.text.indexOf(".") : givenDigits, muted: false });
   markers.push({ id: "q-dot", row: "quotient", boundary: dotAt, muted: false });
 
+  const quotient = quotientText(cycles, dotAt, totalDigits);
   const steps: DecStep[] = [
+    operationStep("/"),
+    estimateStep(a, b, "/", Number(quotient)),
     {
       id: "setup",
+      kind: "choice",
       rail: "Before we start",
       question: `We are dividing ${a.text} by ${b.text}. What do we have to do before we can start?`,
-      // A divisor that is ALREADY whole needs a different question, or the
-      // "correct" answer would be an instruction to move a decimal that has
-      // nowhere to go. Knowing when no move is needed is its own decision.
       choices: shift > 0
         ? DIVISION_SETUP
         : [
-          {
-            text: `Nothing - ${b.text} is already a whole number`,
-            correct: true,
-            why: `Right - the decimal only moves when the divisor has one. ${b.text} is ready to divide by.`,
-          },
-          {
-            text: `Move the decimal in ${b.text} to the right`,
-            correct: false,
-            why: `${b.text} is already whole, so there is nothing to move. Check the DIVISOR before you reach for that rule.`,
-          },
-          {
-            text: `Move the decimal in ${a.text} to the right`,
-            correct: false,
-            why: `Moving the dividend on its own changes the answer. The dividend only moves to match a move in the divisor.`,
-          },
+          { text: `Nothing - ${b.text} is already a whole number`, correct: true, why: `Right - the decimal only moves when the divisor has one. ${b.text} is ready to divide by.` },
+          { text: `Move the decimal in ${b.text} to the right`, correct: false, why: `${b.text} is already whole, so there is nothing to move. Check the DIVISOR before you reach for that rule.` },
+          { text: `Move the decimal in ${a.text} to the right`, correct: false, why: "Moving the dividend on its own changes the answer. The dividend only moves to match a move in the divisor." },
         ],
-      reveal: cells.filter((c) => c.row === "dividend" || c.row === "divisor").filter((c) => c.kind === "digit").map((c) => c.id).concat("ds-dot", "dv-dot"),
+      reveal: cells.filter((c) => (c.row === "dividend" || c.row === "divisor") && c.kind === "digit").map((c) => c.id).concat("ds-dot", "dv-dot"),
       highlight: ["ds-dot"],
       say: shift > 0 ? `${b.text} is not a whole number yet.` : `${b.text} is already whole - nothing to move.`,
     },
@@ -877,99 +934,75 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
   if (shift > 0) {
     steps.push({
       id: "howfar",
+      kind: "input",
       rail: "How far",
       question: `How many places does the decimal move to make ${b.text} whole?`,
-      choices: [
-        { text: `${shift}`, correct: true, why: `Right - ${b.text} needs ${shift} place${shift > 1 ? "s" : ""} to become ${divisor}.` },
-        {
-          text: `${shift + 1}`,
-          correct: false,
-          why: `That would take it past whole. Move it just far enough to clear the last digit of ${b.text}.`,
-        },
-        {
-          text: "0 - it is already whole",
-          correct: false,
-          why: `${b.text} still has a decimal point with digits after it, so it is not a whole number yet.`,
-        },
-      ],
+      choices: [],
+      input: {
+        expect: String(shift),
+        label: "Places",
+        fills: [],
+        hint: `Count the digits after the point in ${b.text}. That is how far it travels.`,
+      },
       reveal: [],
       highlight: ["ds-dot"],
       say: `${shift} place${shift > 1 ? "s" : ""} to the right.`,
     });
     steps.push({
       id: "move-divisor",
+      kind: "move",
       rail: "Move it",
-      question: `Move the decimal in ${b.text} ${shift} place${shift > 1 ? "s" : ""} to the right.`,
-      choices: [
-        { text: "Move it", correct: true, why: `${b.text} becomes ${divisor}.` },
-      ],
+      question: `Drag the decimal point in ${b.text} ${shift} place${shift > 1 ? "s" : ""} to the right.`,
+      choices: [],
+      action: { kind: "move-decimal", target: "divisor", places: shift, direction: "right" },
       reveal: [],
       highlight: ["ds-dot"],
       say: `The divisor is ${divisor} now.`,
-      action: { kind: "move-decimal", target: "divisor", places: shift },
     });
     steps.push({
-      id: "move-dividend",
+      id: "and-the-other",
+      kind: "choice",
       rail: "And the other",
       question: `We moved the divisor ${shift} place${shift > 1 ? "s" : ""}. What about ${a.text}?`,
       choices: [
-        {
-          text: `Move it ${shift} place${shift > 1 ? "s" : ""} the same way`,
-          correct: true,
-          why: "Right - both numbers move the same amount, so the answer does not change.",
-        },
-        {
-          text: "Leave it where it is",
-          correct: false,
-          why: `Moving only the divisor makes it a different problem. ${a.text} has to travel the same distance.`,
-        },
-        {
-          text: `Move it ${shift} place${shift > 1 ? "s" : ""} the other way`,
-          correct: false,
-          why: "Going the other way divides where you multiplied. Both decimals move in the same direction.",
-        },
+        { text: `Move it ${shift} place${shift > 1 ? "s" : ""} the same way`, correct: true, why: "Right - both numbers move the same amount, so the answer does not change." },
+        { text: "Leave it where it is", correct: false, why: `Moving only the divisor makes it a different problem. ${a.text} has to travel the same distance.` },
+        { text: `Move it ${shift} place${shift > 1 ? "s" : ""} the other way`, correct: false, why: "Going the other way divides where you multiplied. Both decimals move in the same direction." },
       ],
-      // The digits the shift produced arrive with the move that produced them.
+      reveal: [],
+      highlight: ["dv-dot"],
+      say: `${a.text} moves too.`,
+    });
+    steps.push({
+      id: "move-dividend",
+      kind: "move",
+      rail: "Move it",
+      question: `Drag the decimal point in ${a.text} ${shift} place${shift > 1 ? "s" : ""} to the right.`,
+      choices: [],
+      action: { kind: "move-decimal", target: "dividend", places: shift, direction: "right" },
       reveal: cells.filter((c) => c.row === "dividend" && c.col >= givenDigits && c.col < digits.length).map((c) => c.id),
       highlight: ["dv-dot"],
       say: `${a.text} becomes ${dividendText}.`,
-      action: { kind: "move-decimal", target: "dividend", places: shift },
     });
   }
 
   steps.push({
     id: "qpoint",
+    kind: "choice",
     rail: "Decimal up",
     question: "Where does the decimal point go in the answer?",
     choices: [
-      {
-        text: "Straight up from its new spot in the dividend",
-        correct: true,
-        why: "Right - once the divisor is whole, the answer's point sits directly above the dividend's.",
-      },
-      {
-        text: "At the end of the answer",
-        correct: false,
-        why: "That would make the answer a whole number when it is not one.",
-      },
-      {
-        text: "Where the decimal started, before we moved it",
-        correct: false,
-        why: "The old spot belongs to the old problem. The point goes up from where the dividend's decimal is NOW.",
-      },
+      { text: "Straight up from its new spot in the dividend", correct: true, why: "Right - once the divisor is whole, the answer's point sits directly above the dividend's." },
+      { text: "At the end of the answer", correct: false, why: "That would make the answer a whole number when it is not one." },
+      { text: "Where the decimal started, before we moved it", correct: false, why: "The old spot belongs to the old problem. The point goes up from where the dividend's decimal is NOW." },
     ],
     reveal: ["q-dot"],
     highlight: ["dv-dot", "q-dot"],
     say: "Put it up before you divide and you cannot lose it.",
   });
 
-  // Divide / multiply / subtract / bring down, one cycle per dividend digit.
   const CYCLE = ["Divide", "Multiply", "Subtract", "Bring down"];
   cycles.forEach((c, i) => {
-    // The product and the difference are two SEPARATE rows, written the way it
-    // is written by hand: product under the partial, a line, the difference
-    // under that. One row for both would put them in the same grid columns,
-    // and the product would simply vanish under the difference.
     const workRow = `work${i}` as DecimalRow;
     const restRow = `rest${i}` as DecimalRow;
     const productText = String(c.product);
@@ -980,38 +1013,26 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
     restText.split("").forEach((ch, k) => {
       cells.push({ id: `r${i}-${k}`, row: restRow, col: c.pos - restText.length + 1 + k, text: ch, kind: "digit" });
     });
-    // The digit brought down lands beside the difference, in the same row -
-    // together they ARE the next number to divide.
     if (i < cycles.length - 1) {
       cells.push({ id: `bd${i}`, row: restRow, col: c.pos + 1, text: cells.find((x) => x.id === `dv-${c.pos + 1}`)?.text ?? "0", kind: "digit" });
     }
 
     steps.push({
       id: `divide-${i}`,
+      kind: "input",
       rail: CYCLE[0],
-      question: "What do we do next?",
-      choices: [
-        {
-          text: `Divide: ${c.partial} ÷ ${divisor} = ${c.q}`,
-          correct: true,
-          why: c.q === 0
-            ? `Right - ${divisor} does not fit into ${c.partial}, so a zero goes up top and we keep going.`
-            : `Right - ${divisor} fits into ${c.partial} ${c.q} time${c.q > 1 ? "s" : ""}.`,
-        },
-        {
-          text: `Multiply: ${c.partial} x ${divisor}`,
-          correct: false,
-          why: "Multiplying comes second. First find how many times the divisor fits.",
-        },
-        {
-          text: `Divide: ${divisor} ÷ ${c.partial}`,
-          correct: false,
-          why: `The divisor goes INTO the number under the bracket, not the other way round.`,
-        },
-      ],
+      // Steele's words, and they are the words used at the board.
+      question: `How many ${divisor}'s are in ${c.partial} without going over?`,
+      choices: [],
+      input: {
+        expect: String(c.q),
+        label: `${divisor}'s in ${c.partial}`,
+        fills: [`q-${c.pos}`],
+        hint: c.q === 0
+          ? `${divisor} is bigger than ${c.partial}, so it fits zero times - write the 0 and carry on.`
+          : `Count up by ${divisor} until one more would pass ${c.partial}.`,
+      },
       reveal: [`q-${c.pos}`],
-      // The number being divided is the dividend's digits on the first round,
-      // and after that the leftover with the brought-down digit beside it.
       highlight: i === 0
         ? [`q-${c.pos}`, ...rangeIds(cells, "dividend", 0, c.pos)]
         : [`q-${c.pos}`, ...rangeIds(cells, `rest${i - 1}` as DecimalRow, 0, c.pos)],
@@ -1020,25 +1041,16 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
 
     steps.push({
       id: `multiply-${i}`,
+      kind: "input",
       rail: CYCLE[1],
-      question: "What do we do next?",
-      choices: [
-        {
-          text: `Multiply: ${c.q} x ${divisor} = ${c.product}`,
-          correct: true,
-          why: `Right - that is how much of the ${c.partial} we have used up.`,
-        },
-        {
-          text: `Subtract: ${c.partial} − ${divisor} = ${c.partial - divisor}`,
-          correct: false,
-          why: "Subtracting comes third, and it takes away the product, not the divisor itself.",
-        },
-        {
-          text: `Multiply: ${c.q} x ${c.partial} = ${c.q * c.partial}`,
-          correct: false,
-          why: "Multiply the digit you just wrote by the DIVISOR - that is what tells you how much you used.",
-        },
-      ],
+      question: "Multiply, to see how much of it we used.",
+      choices: [],
+      input: {
+        expect: String(c.product),
+        label: `${c.q} x ${divisor} =`,
+        fills: productText.split("").map((_, k) => `w${i}-${k}`),
+        hint: `Multiply the digit you just wrote by the divisor, ${divisor}.`,
+      },
       reveal: productText.split("").map((_, k) => `w${i}-${k}`),
       highlight: [`q-${c.pos}`, ...String(divisor).split("").map((_, k) => `ds-${k}`), ...productText.split("").map((_, k) => `w${i}-${k}`)],
       say: `${c.q} x ${divisor} = ${c.product}.`,
@@ -1046,35 +1058,16 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
 
     steps.push({
       id: `subtract-${i}`,
+      kind: "input",
       rail: CYCLE[2],
-      question: "What do we do next?",
-      choices: [
-        {
-          text: `Subtract: ${c.partial} − ${c.product} = ${c.rest}`,
-          correct: true,
-          why: c.rest === 0
-            ? "Right - nothing is left over in this round."
-            : `Right - ${c.rest} is left over and travels into the next round.`,
-        },
-        {
-          text: `Add: ${c.partial} + ${c.product} = ${c.partial + c.product}`,
-          correct: false,
-          why: "The product gets taken away. It is the part of the number we have already divided up.",
-        },
-        // When the product equals the partial, "flip the subtraction" would be
-        // word-for-word the correct answer, so the distractor has to change.
-        c.product === c.partial
-          ? {
-            text: "Bring the next digit down now",
-            correct: false,
-            why: "Subtract first, then bring down. Bringing a digit down early hides what was left over.",
-          }
-          : {
-            text: `Subtract: ${c.product} − ${c.partial}`,
-            correct: false,
-            why: "The number under the bracket is on top, so it goes first - you take the product away from it, not the other way round.",
-          },
-      ],
+      question: "Subtract, to see what is left over.",
+      choices: [],
+      input: {
+        expect: String(c.rest),
+        label: `${c.partial} − ${c.product} =`,
+        fills: restText.split("").map((_, k) => `r${i}-${k}`),
+        hint: "Take the product away from the number above it.",
+      },
       reveal: restText.split("").map((_, k) => `r${i}-${k}`),
       highlight: [...productText.split("").map((_, k) => `w${i}-${k}`), ...restText.split("").map((_, k) => `r${i}-${k}`)],
       say: `${c.partial} − ${c.product} = ${c.rest}.`,
@@ -1083,28 +1076,17 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
     if (i < cycles.length - 1) {
       steps.push({
         id: `bring-${i}`,
+        kind: "choice",
         rail: CYCLE[3],
         question: "What do we do next?",
         choices: [
-          {
-            text: `Bring down the next digit`,
-            correct: true,
-            why: "Right - it joins the leftover to make the next number to divide.",
-          },
-          {
-            text: "Stop - we have the answer",
-            correct: false,
-            why: "There are still digits under the bracket. Every one of them gets divided.",
-          },
-          {
-            text: "Bring down every remaining digit at once",
-            correct: false,
-            why: "One at a time. Bringing two down skips a digit in the answer.",
-          },
+          { text: "Bring down the next digit", correct: true, why: "Right - it joins the leftover to make the next number to divide." },
+          { text: "Stop - we have the answer", correct: false, why: "There are still digits under the bracket. Every one of them gets divided." },
+          { text: "Bring down every remaining digit at once", correct: false, why: "One at a time. Bringing two down skips a digit in the answer." },
         ],
         reveal: [`dv-${c.pos + 1}`, `bd${i}`],
         highlight: [`dv-${c.pos + 1}`, `bd${i}`, ...restText.split("").map((_, k) => `r${i}-${k}`)],
-        say: `Bring down the ${i + 2 <= digits.length ? "next digit" : "zero"}.`,
+        say: "Bring down the next digit.",
       });
     }
   });
@@ -1118,44 +1100,16 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
     steps,
     rows: ["quotient", "dividend", ...cycles.flatMap((_, i) => [`work${i}` as DecimalRow, `rest${i}` as DecimalRow])],
     columns,
-    answerText: quotientText(cycles, dotAt, totalDigits),
+    answerText: quotient,
     shift,
   };
-}
-
-/**
- * Drop reveal/highlight ids that name nothing.
- *
- * A number narrower than the grid has no digit in the leading columns - 3.75
- * under 12.4 has no tens - so a column step naturally reaches for a cell that
- * was never built. Left in, the highlight silently lights nothing, which is
- * indistinguishable from a highlight that is broken.
- */
-function pruneGhostIds(trace: DecimalTrace): DecimalTrace {
-  const ids = new Set([...trace.cells.map((c) => c.id), ...trace.markers.map((m) => m.id)]);
-  for (const step of trace.steps) {
-    step.reveal = step.reveal.filter((id) => ids.has(id));
-    step.highlight = step.highlight.filter((id) => ids.has(id));
-  }
-  return trace;
 }
 
 function rangeIds(cells: DecCell[], row: DecimalRow, from: number, to: number): string[] {
   return cells.filter((c) => c.row === row && c.col >= from && c.col <= to).map((c) => c.id);
 }
 
-/**
- * Read the quotient off the columns it was actually written in.
- *
- * The digits are sparse - nothing is written above the bracket until the
- * divisor first fits - so the answer is assembled by column, not by pushing
- * onto a list. Columns before the first quotient digit are worth zero.
- */
-function quotientText(
-  cycles: { pos: number; q: number }[],
-  dotAt: number,
-  totalDigits: number,
-): string {
+function quotientText(cycles: { pos: number; q: number }[], dotAt: number, totalDigits: number): string {
   const slots = Array.from({ length: totalDigits }, () => "0");
   cycles.forEach((c) => { slots[c.pos] = String(c.q); });
   const whole = slots.slice(0, dotAt).join("").replace(/^0+(?=\d)/, "") || "0";
@@ -1163,20 +1117,34 @@ function quotientText(
   return frac ? `${whole}.${frac}` : whole;
 }
 
-// ── the public entry point ──────────────────────────────────────────────────
+/**
+ * Drop reveal/highlight ids that name nothing, and seat the choices.
+ *
+ * A number narrower than the grid has no digit in the leading columns - 3.75
+ * under 12.4 has no tens - so a column step naturally reaches for a cell that
+ * was never built. Left in, the highlight silently lights nothing, which is
+ * indistinguishable from a highlight that is broken.
+ */
+function finish(trace: DecimalTrace): DecimalTrace {
+  const ids = new Set([...trace.cells.map((c) => c.id), ...trace.markers.map((m) => m.id)]);
+  for (const step of trace.steps) {
+    step.reveal = step.reveal.filter((id) => ids.has(id));
+    step.highlight = step.highlight.filter((id) => ids.has(id));
+    if (step.kind === "choice") step.choices = seatChoices(step.id, step.choices);
+  }
+  return trace;
+}
 
 export function buildDecimalTrace(problem: DecimalProblem): DecimalTrace | null {
   const { a, b, op } = problem;
-  if (op === "+") return pruneGhostIds(buildAddition(a, b));
+  if (op === "+") return finish(buildAddition(a, b));
   if (op === "-") {
-    // A negative difference is out of scope for this board, not a silent wrong
-    // answer: the caller refuses the problem and says why.
     if (scaleTo(a, Math.max(a.places, b.places)) < scaleTo(b, Math.max(a.places, b.places))) return null;
-    return pruneGhostIds(buildSubtraction(a, b));
+    return finish(buildSubtraction(a, b));
   }
-  if (op === "x") return pruneGhostIds(buildMultiplication(a, b));
+  if (op === "x") return finish(buildMultiplication(a, b));
   const div = buildDivision(a, b);
-  return div ? pruneGhostIds(div) : null;
+  return div ? finish(div) : null;
 }
 
 // ── the problem-set format ──────────────────────────────────────────────────
@@ -1191,13 +1159,6 @@ export interface DecimalSetParse {
   rejected: { text: string; reason: string }[];
 }
 
-/**
- * Forgiving on the shape, strict on what can actually be walked.
- *
- * A problem the board cannot draw is REPORTED rather than dropped, because a
- * teacher who typed `10 / 3` needs to know the quotient repeats before class,
- * not to find a broken step mid-lesson.
- */
 export function parseDecimalSet(raw: string | null | undefined): DecimalSetParse {
   const out: DecimalProblem[] = [];
   const rejected: { text: string; reason: string }[] = [];
@@ -1222,8 +1183,7 @@ export function parseDecimalSet(raw: string | null | undefined): DecimalSetParse
       rejected.push({ text, reason: "cannot divide by zero" });
       continue;
     }
-    const trace = buildDecimalTrace({ a, b, op });
-    if (!trace) {
+    if (!buildDecimalTrace({ a, b, op })) {
       rejected.push({
         text,
         reason: op === "-"
@@ -1248,3 +1208,11 @@ export function normalizeDecimalSet(raw: string | null | undefined): string {
 
 /** One of each operation, in the order a unit teaches them. */
 export const DEFAULT_DECIMAL_SET = "12.4 + 3.75, 8.3 - 4.68, 6.2 x 0.4, 9.6 / 0.4";
+
+/** The four operations, for the picker in the tool's top bar. */
+export const DECIMAL_OPS: { op: DecimalOp; label: string; sign: string }[] = [
+  { op: "+", label: "Add", sign: "+" },
+  { op: "-", label: "Subtract", sign: "−" },
+  { op: "x", label: "Multiply", sign: "x" },
+  { op: "/", label: "Divide", sign: "÷" },
+];

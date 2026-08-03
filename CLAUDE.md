@@ -298,7 +298,27 @@ bars and live misconception grouping).
   `/order-of-operations` (GEMS), `/combine-like-terms`, `/proportions`, `/area-model`,
   `/coordinate-grid`, `/ladder-method`, `/multiplication-fluency`, `/term-identifier`,
   `/divisibility`, `/distributive-area`, `/area-explorer`, `/balance-beam`, `/long-division`,
-  `/place-value`, `/place-value-mirror`, `/timer`, `/decimal-steps`.
+  `/place-value`, `/place-value-mirror`, `/timer`, `/decimal-steps`, `/lcm-bouncer`.
+- `/lcm-bouncer` (added 2026-08-03, Steele's idea) is the CONCRETE partner to `/ladder-method`'s
+  abstract GCF/LCM procedure: two balls arc across the same numbered track, Ball A touching down
+  every `stepA` squares and Ball B every `stepB`. Teal marks Ball A's own landings, coral Ball B's,
+  amber a square BOTH landed on - and the first amber column is the LCM.
+  THE TWO BALLS SHARE A HORIZONTAL SPEED, NOT A TEMPO, and that is the load-bearing decision. One
+  hop per beat would put Ball A on 12 at beat 3 and Ball B on 12 at beat 2 - same square, different
+  moments, and the "they landed together" event never happens on screen. Sharing the speed puts the
+  meeting in a single frame and leaves the BOUNCE COUNTS different, which is the quantity the lesson
+  is actually about. Do not "fix" it to one hop per beat. One clock (`progress`, in column units)
+  drives both arcs: each ball's height is a parabola over `(progress mod step) / step`.
+  The board KEEPS GOING past the first meeting on purpose, so the amber columns repeat at a fixed
+  interval and the room can see that every common multiple is a multiple of the least one. Track
+  length is DERIVED from the pair (`trackLengthFor`), never hand-set, so the LCM is always reachable
+  - a coprime pair just gets a long track, and "9 and 10 take ninety squares to meet" is a true and
+  useful thing to watch. Numbers hide on untouched squares once the track is long, but a landed-on
+  square always shows its number.
+  Wired in the simple `LiveToolConfig` arm (`config: Record<string, never>`) - the strides are set on
+  the board and a teacher steers the room through the PROMPT ("find where 4 and 6 land together").
+  Publishing the pair is an additive config arm plus two `/control` form fields, not a rewrite.
+  It emits NO evidence - `reportToolResult` is not wired here, so it moves no mastery bar.
 - `/decimal-steps` IS ITS OWN TOOL, NOT PART OF `/long-division` (Steele, 2026-08-02, unprompted:
   "this is its own tool from long division"). `/long-division` (`LongDivisionHouse`) is a
   WHOLE-NUMBER choreographed demo with no scoring, built for M1.T3.L4; `/decimal-steps`
@@ -306,6 +326,24 @@ bars and live misconception grouping).
   operations where every step is a multiple-choice decision. They both draw a long-division house
   and that is the only thing they share - do not merge them, and do not "fix" one by pointing it at
   the other.
+  V2 (2026-08-03) REBUILT IT FROM TWENTY VERCEL TOOLBAR COMMENTS, and the shape change is the
+  thing to keep: **A STEP IS NOT ALWAYS A MULTIPLE CHOICE.** `DecStep.kind` is `choice` | `input` |
+  `move`. Students TYPE the arithmetic (every column, product, difference, quotient digit) and only
+  CHOOSE on the decisions, because picking "9 + 7 = 16" off a list is recognition, not computation.
+  Do not "simplify" an input step back into choices. Also from that pass, each load-bearing:
+  every walk opens by naming the operation and then typing a whole-number ESTIMATE (judged by
+  NEARNESS, never equality - a student who rounds sensibly a different way must pass); a CARRY is a
+  decision plus a physical act (the box stands open and pulsing, then solidifies when the digit is
+  typed); MULTIPLICATION IS DIGIT BY DIGIT with its own carries ("we can only multiple 2 numbers at
+  once. So we strt with the 4 and the 2") - a step that multiplies a whole row is the answer
+  appearing; the student CLICKS THE DECIMAL to move it and each hop leaves a big dashed arc UNDER
+  the number from the old spot to the new; and the long-division house is a real L (vertical only
+  down the dividend, bar across its top, quotient ABOVE the bar).
+  THE CHOICES ARE SEATED, NOT WRITTEN IN ORDER. `seatChoices` shuffles by a hash of the step id,
+  because every builder writes the correct answer first and a student could beat the tool by always
+  tapping the top button. It is deterministic on purpose - a re-render must not reshuffle under a
+  student mid-question - so do not swap it for `Math.random`, and do not add a builder that assumes
+  `choices[0]` is the answer.
   THE SET-UP QUESTION IS THE WHOLE POINT AND ITS ANSWER CHANGES WITH THE OPERATION: `+`/`-` line up
   the decimal points, `x` lines up the RIGHT EDGES and ignores the decimals until you count places
   at the end, `/` moves the decimal until the divisor is whole. A student who answers "line up the
@@ -809,6 +847,30 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   one. Note this list is about class-mode NAVIGATION, not access - `/join` has its own
   `STUDENT_SWITCH_ROUTE_PREFIXES` escape and is deliberately not a teacher route.
 ## Data layer (Supabase)
+
+- TABLE CAPTAINS AND THE CLOSEOUT SUPPLY CHECK (built 2026-08-03, migration
+  `supabase/table-captains-and-supply-checks.sql` - Steele runs it by hand like every other file in
+  that folder; the feature is DARK until he does, and the `table_number` select in
+  `/api/roster/sync` is the first thing that 500s if he has not). Three pieces. `students.table_number`
+  is nullable physical seating pushed from the Workspace roster Sheet's optional Table column - a
+  BLANK cell means "the Sheet is not tracking seating", never "clear this student's table", so a
+  half-filled column cannot wipe what the rest of it just set. `table_captains` is one row per
+  (period, week_start, table); `week_start` is the MONDAY in America/Los_Angeles, so a Wednesday
+  re-spin overwrites Monday rather than opening a second week. `supply_checks` is one row per
+  (session, table) and the LATEST tap wins - a table that finds the missing marker before the bell
+  ends the day green, and a mis-tap is fixed by tapping again.
+  THE RULE IS CONSECUTIVE MISSES, and it lives in exactly two places: the `supply_check_streaks`
+  view and `standingFromStreak` in `src/lib/tableCaptains.ts`. Two reds in a row flags a table; ANY
+  green wipes the streak. Do not re-derive it in a component.
+  The captain spinner works with NO seating chart, and that is deliberate, not a stopgap:
+  `/api/teacher/table-captains` returns a candidate pool per table, which is the whole period until
+  the Sheet has tables, and `pickCaptains` in `TableCaptainSpinner.tsx` keeps the picks distinct.
+  It draws SMALLEST POOL FIRST so constrained tables commit while the field is still open. When the
+  Sheet grows the column, each pool narrows and nothing else changes.
+  The captain's alias renders as a first name on the projector through the browser-local name key -
+  the SAME deliberate room-facing FERPA exception the reader and speaker spinners carry (rule 8),
+  for the same reason. Nothing in this feature writes or transmits a name; `supply_checks` has no
+  student reference at all, because a table is furniture.
 
 - Browser client: `getSupabase()` in `src/lib/supabase.ts` (`NEXT_PUBLIC_SUPABASE_URL` +
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`). Server client: `getSupabaseAdmin()` in `src/lib/supabaseServer.ts`
@@ -1361,6 +1423,27 @@ the invariants they protect are easy to break again.
   `musicRef` rather than closing over the element, or restoring volume on a swapped-out track would
   leave the NEW one quiet. Time-up is deliberately still `stopMusic()` then `playCue("end")` - the
   song ends, the cue plays alone.
+- **AN UNTIMED STATE PUBLISHES NO TIMER, AND THE REMOTE ARMS ONE ON DEMAND** (added 2026-08-02,
+  Steele: "during the times i need to upload a full outside deck or video or something i dont want
+  to fight the progression of the slides with a timer"). A Lesson Step with a blank or zero
+  `Duration` runs UNTIMED: `isUntimedStep` (liveClassFlow.ts) is the one test, Control publishes
+  `timer: null` for it, `/teacher/present` and `/teacher/pace` render `UNTIMED_CLOCK` (an en dash,
+  never `0:00` - a zeroed clock on a projector reads as "you are out of time", which is the exact
+  pressure the state exists to remove), no warning or time-up cue fires because nothing is running,
+  and the auto-advance effect RETURNS EARLY so an armed clock expiring can never pull the room off
+  a deck mid-explanation.
+  The teacher arms one from the Remote's preset row (`ON_DEMAND_TIMER_SECONDS`, derived into
+  `ON_DEMAND_TIMER_BUTTONS` so the deck and the server cannot drift). `arm-timer` / `clear-timer`
+  are deliberately NOT in `DIRECT_TIMER_ACTIONS`: every action in that set throws when
+  `flow.timer` is null, and working on a state that has no timer is the entire point.
+  THE FULL-REPLACE TRAP BITES HERE TOO, and differently from `interlude`. The server sets the
+  armed timer, but Control republishes from its OWN local state about once a second and would
+  erase it within a tick - so Control holds `onDemandSeconds`, adopts it in the hydration effect
+  (`setOnDemandSeconds(flow.timer.totalSeconds)`), publishes `effectiveTotalSeconds` instead of
+  `activeMinutes * 60`, and clears it on every step change so a new state never inherits the last
+  one's ad-hoc clock. An untimed state also breaks the 50-minute sum contract by construction -
+  it cannot be added up - which is the deliberate trade and a reason not to reach for it on a work
+  block.
 - **EVERY CLASSROOM TOGGLE NEEDS ITS OFF SWITCH IN THE UI.** `hide-board` was wired end to end -
   action type, `/api/control-remote` handler, `/control` listener - but the iPad Remote only ever
   rendered "Open work space". Once the writing surface was up there was no way to put it away, and
