@@ -17,6 +17,8 @@ import { teacherApiRequest } from "@/lib/teacherApi";
 import { LIVE_FLOW_MODE, getStoredTeacherSessionId, liveTimerSeconds, type LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { studioPreviewSession, useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
+import LessonSlideStage from "@/components/screen/LessonSlideStage";
+import { stepScreenData, defaultZones, type ScreenStepData, type ScreenZones } from "@/lib/lessonScreenModel";
 
 // ?preview=<stage id> renders the shell with sample content and no session.
 const PREVIEW_SAMPLES: Record<string, { label: string; action: string; steps: string[]; anchor?: string }> = {
@@ -347,6 +349,31 @@ export default function PaceSupportPage() {
       : !connected || !state
         ? "idle"
         : `${state.id}:${flow?.sequence?.currentIndex ?? -1}`;
+
+  // The support screen mirrors the main projector: a plain worded/info state shows the SAME studio
+  // slide (auto-default from the Notion step), so pace and present match. Interactive/second-purpose
+  // scenes (poll, discussion, spinner, anchor, warm-up agenda, mirrored slide) keep their own render.
+  const lessonSlideData: ScreenStepData | null = flow && state && flow.presentation
+    ? stepScreenData({
+        order: (flow.sequence?.currentIndex ?? 0) + 1,
+        duration: (timer?.totalSeconds ?? 0) / 60,
+        title: flow.presentation.title || state.label || "",
+        stateId: state.id,
+        mainDisplay: flow.presentation.mainDisplay || flow.presentation.body || "",
+        paceDirections: flow.presentation.paceDirections || "",
+        studentDirections: flow.presentation.studentAction || "",
+        vocabulary: Array.isArray(flow.presentation.vocabulary) ? flow.presentation.vocabulary.join("\n") : String(flow.presentation.vocabulary || ""),
+        question: "",
+        responseMode: flow.presentation.responseMode || "",
+        screenNotes: "",
+        slideUrl: "",
+      })
+    : null;
+  const lessonSlideZones: ScreenZones = lessonSlideData ? defaultZones(lessonSlideData, "main") : [];
+  const showLessonSlide = Boolean(
+    lessonSlideData && connected && !interlude && !mirroredSlideUrl && !warmupAgenda &&
+    !anchorPose && !linkedSpinnerMode && !poll && !hasDiscussionTimeline && !isDiscussion && !isLearningCheck,
+  );
 
   return (
     <main className="pace-page" style={style}>
@@ -700,8 +727,20 @@ export default function PaceSupportPage() {
         {/* Last child of the body stage, so it paints over the inset-0 scene.
             Pinned top right INSIDE the stage rather than in the topbar, where the
             clock already lives. */}
-        <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} />
+        {/* The slide overlay draws its own strip; suppress this one so they do not double up. */}
+        {!showLessonSlide ? <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} /> : null}
       </section>
+      {showLessonSlide && lessonSlideData ? (
+        <LessonSlideStage
+          data={lessonSlideData}
+          zones={lessonSlideZones}
+          totalSteps={flow?.sequence?.totalSteps ?? 1}
+          screen="main"
+          strip={behaviorStrip}
+          showWords={stripWords}
+          overridden={behaviorOverridden}
+        />
+      ) : null}
       {/* Write-on-screen was mounted only on /teacher/present, so the support
           projector could never be annotated - the teacher circled something on
           the iPad and half the room's screen never changed. */}

@@ -406,7 +406,9 @@ export function defaultZoneTypes(data: ScreenStepData, screen: ScreenKey): Scree
     if (data.slideUrl) return [["slide"], []];
     if (data.hasModel) return [["model"], data.hasEquation ? ["prompt", "equation"] : ["prompt", "text"]];
     if (data.hasEquation) return [["prompt", "equation"], []];
-    return [["prompt", "text"], []];
+    // A plain worded step is just the prompt - only add the screen-notes card when there is a note,
+    // so the auto-default never shows an empty second card on the projector.
+    return data.screenNotes ? [["prompt", "text"], []] : [["prompt"], []];
   }
   if (screen === "pace") {
     return [["doThis"], data.vocabulary ? ["timer", "support"] : ["timer"]];

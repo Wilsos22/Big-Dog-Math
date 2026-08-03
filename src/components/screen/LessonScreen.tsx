@@ -392,7 +392,7 @@ export default function LessonScreen({
           </span>
         </div>
         <span style={{ fontSize: 19, fontWeight: 900, letterSpacing: ".12em", textTransform: "uppercase", color: "rgba(255,255,255,.82)", textAlign: "center", lineHeight: 1.3 }}>
-          {screenLabel}
+          {editing ? screenLabel : ""}
         </span>
       </div>
 
@@ -406,14 +406,16 @@ export default function LessonScreen({
           </div>
         ) : null}
         <div style={{ display: "flex", gap: 44, padding: "44px 48px", minWidth: 0, alignItems: "stretch" }}>
-          {zones.map((blocks, zoneIndex) => (
+          {/* On the live wall an empty zone is wasted space, so it collapses and the content takes the
+              full width; in the studio editor every zone stays visible so a frame can be dropped in. */}
+          {(editing ? zones : zones.filter((blocks) => blocks.length > 0)).map((blocks, zoneIndex) => (
             <div
               key={zoneIndex}
               onClick={editing ? () => onSelectZone?.() : undefined}
               style={{ display: "flex", flexDirection: "column", gap: 26, minWidth: 0, flex: ZONE_FLEX[screen][zoneIndex], borderRadius: 26 }}
             >
               {blocks.map((block) => renderBlock(block, zoneIndex))}
-              {blocks.length === 0 ? (
+              {blocks.length === 0 && editing ? (
                 <div style={{ flex: 1, border: "3px dashed rgba(120,110,90,.42)", borderRadius: 26, background: "transparent", display: "grid", placeItems: "center", alignContent: "center", gap: 10 }}>
                   <span style={{ fontSize: 30, fontWeight: 900, letterSpacing: ".14em", textTransform: "uppercase", color: SCREEN_NEUTRALS.placeholder }}>
                     {ZONE_EMPTY_LABEL[screen][zoneIndex]}

@@ -29,6 +29,8 @@ import {
 } from "@/lib/liveClassFlow";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { studioPreviewSession, useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
+import LessonSlideStage from "@/components/screen/LessonSlideStage";
+import { stepScreenData, defaultZones, type ScreenStepData, type ScreenZones } from "@/lib/lessonScreenModel";
 import { parseSlideOverlay } from "@/lib/slideOverlay";
 import SlideFrameScene from "@/components/SlideFrameScene";
 import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
@@ -694,6 +696,36 @@ export default function ClassroomStagePage() {
     : loading || !session || !flow || !state
       ? "idle"
       : `${state.id}:${flow.sequence?.currentIndex ?? -1}`;
+
+  // Build the studio's LessonScreen for the current step (auto-default layout from the Notion step).
+  const lessonSlideData: ScreenStepData | null = flow && state && presentation
+    ? stepScreenData({
+        order: (flow.sequence?.currentIndex ?? 0) + 1,
+        duration: (timer?.totalSeconds ?? 0) / 60,
+        title: presentation.title || state.label || "",
+        stateId: state.id,
+        mainDisplay: presentation.mainDisplay || presentation.body || "",
+        paceDirections: presentation.paceDirections || "",
+        studentDirections: presentation.studentAction || "",
+        vocabulary: Array.isArray(presentation.vocabulary) ? presentation.vocabulary.join("\n") : String(presentation.vocabulary || ""),
+        question: "",
+        responseMode: presentation.responseMode || "",
+        screenNotes: "",
+        slideUrl: "",
+      })
+    : null;
+  const lessonSlideZones: ScreenZones = lessonSlideData ? defaultZones(lessonSlideData, "main") : [];
+  // Only plain worded/info states use the studio slide; every interactive or bespoke scene keeps its
+  // own present rendering, so this never covers a poll, tool, discussion, spinner, board, or anchor.
+  const showLessonSlide = Boolean(
+    lessonSlideData && !loading && !interlude &&
+    !showReaderSpinner && !showIpadKidSpinner && !isTransition && !isLearningCheck &&
+    !routineConfig && discussionTimelinePhases.length === 0 &&
+    !poll && !showResourcePanel && !liveToolUrl && !slideFrameUrl &&
+    presentation?.mode !== "board" && !lessonVisual &&
+    theme.id !== "discussion" && theme.id !== "independent" &&
+    !isExitState && !anchorMode && state?.id !== "warmup",
+  );
 
   return (
     <main className="stage-page" style={style}>
@@ -1371,7 +1403,8 @@ export default function ClassroomStagePage() {
           {/* Last child of the work stage, so it paints over the inset-0 scenes.
               Pinned top right INSIDE the stage rather than in the topbar, where
               the clock already lives. */}
-          <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} />
+          {/* The slide overlay draws its own strip; suppress this one so they do not double up. */}
+          {!showLessonSlide ? <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} /> : null}
           {/* On-demand speaker spinner: pops over any scene when the iPad sends
               spin-speaker, lands on one first name, then clears itself. Projector
               only - never mounted on a student device. */}
@@ -1385,6 +1418,17 @@ export default function ClassroomStagePage() {
             session field are gone. The type and every component went with it on
             2026-07-30; only the unused Supabase column remains. */}
       </section>
+      {showLessonSlide && lessonSlideData ? (
+        <LessonSlideStage
+          data={lessonSlideData}
+          zones={lessonSlideZones}
+          totalSteps={flow?.sequence?.totalSteps ?? 1}
+          screen="main"
+          strip={behaviorStrip}
+          showWords={stripWords}
+          overridden={behaviorOverridden}
+        />
+      ) : null}
       {inkOverlay && !inkOverlay.embed && <ScreenInkOverlay room={inkOverlay.room} />}
       {inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && <AttentionListener room={inkOverlay.room} />}
     </main>
