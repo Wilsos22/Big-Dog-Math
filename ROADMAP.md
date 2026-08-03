@@ -73,6 +73,20 @@ at `/teacher/studio/edit`. OPEN: present and pace do not yet render the shared
 authors layouts ahead of the projector reading them; that adoption is a separate,
 verified follow-up.
 
+**DIRECTION — frame + imported slides, not a native slide editor** (Steele,
+8/3). The native slide-composition path (the drag-resize component grid) is
+SHELVED — it reinvents Canva. The moat is the FRAME (state chrome, shared clock,
+ink layer, class-sync) plus the INTERACTIVE layer (tools, Fist-to-5, polls,
+discussion beat-timers, the spine); information slides are authored in
+Canva / Figma / Google Slides and imported through the `slide` frame, which the
+app wraps in the chrome. Keep one dumb auto-default so the nightly grind stays
+zero-effort. Prefer a published Canva/Slides link over a Notion upload (the
+upload's signed url expires in ~1h). Corollary: pace + student MIRROR the main
+screen unless they serve a real second purpose (discussion stems/vocab, a
+student input surface, or student-only overlay chrome). Detail lives in CLAUDE.md
+under the Lesson Screen Studio section. So the studio-adoption follow-up above
+targets the frame-around-an-imported-slide, not a native grid.
+
 **The classroom state strip — eyes / voice / supplies / body** (7/29, Steele's
 ask). A vertical four-slot group pinned top right of both projectors, modelled
 on a garment care label, authored per Lesson Step from four new Notion selects.
