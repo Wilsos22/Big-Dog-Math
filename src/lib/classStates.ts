@@ -115,16 +115,16 @@ export const DEFAULT_STATES: ClassState[] = [
   { id: "break", label: "Brain Break", minutes: 3, color: "#a3a3a3", desc: "Quick brain break — reset and get ready to focus." },
 ];
 
-// The teacher-facing "Slide Type" Notion property: a plain-English name for the
+// The teacher-facing "State Type" Notion property: a plain-English name for the
 // KIND of each Lesson Step, mapped back to the canonical State ID the runtime
 // uses. Steele wanted to see (and set from a dropdown) the kind of slide at a
 // glance (2026-08-02). Wiring the MAP - not just a cosmetic label - is what
 // stops it drifting from what actually runs, the failure mode the Response Mode
 // and Poll Kind drift traps in CLAUDE.md warn about. Every stateId here MUST be
-// a real DEFAULT_STATES id; `test:slide-type` pins that. It is PREFERRED over the
-// raw `State ID` only when a step sets Slide Type, so existing steps (State ID
+// a real DEFAULT_STATES id; `test:state-type` pins that. It is PREFERRED over the
+// raw `State ID` only when a step sets State Type, so existing steps (State ID
 // only) render exactly as before and a teacher can migrate one step at a time.
-export const SLIDE_TYPE_OPTIONS: { label: string; stateId: string }[] = [
+export const STATE_TYPE_OPTIONS: { label: string; stateId: string }[] = [
   { label: "Warm-Up", stateId: "warmup" },
   { label: "Review", stateId: "review" },
   { label: "Learning Targets", stateId: "learning-target-readers" },
@@ -140,7 +140,7 @@ export const SLIDE_TYPE_OPTIONS: { label: string; stateId: string }[] = [
   // Deliberately NO generic "Tool" option: a step's specific tool state (e.g.
   // tool-divisibility) is set by State ID + the Tool property, and a coarse
   // "Manipulative / Tool" -> manip would override that and drop the tool embed.
-  // Tool/manipulative steps leave Slide Type empty and fall back to State ID.
+  // Tool/manipulative steps leave State Type empty and fall back to State ID.
   { label: "Partner / Group Work", stateId: "partner" },
   { label: "Independent Work", stateId: "independent" },
   { label: "Exit Ticket", stateId: "exit" },
@@ -150,14 +150,14 @@ export const SLIDE_TYPE_OPTIONS: { label: string; stateId: string }[] = [
   { label: "Closeout", stateId: "closeout" },
 ];
 
-const SLIDE_TYPE_BY_LABEL = new Map(
-  SLIDE_TYPE_OPTIONS.map((option) => [option.label.trim().toLowerCase(), option.stateId]),
+const STATE_TYPE_BY_LABEL = new Map(
+  STATE_TYPE_OPTIONS.map((option) => [option.label.trim().toLowerCase(), option.stateId]),
 );
 
-/** Map a friendly Slide Type label to its canonical State ID, or "" if unknown. */
-export function stateIdForSlideType(slideType: string | null | undefined): string {
-  const key = (slideType || "").trim().toLowerCase();
-  return key ? SLIDE_TYPE_BY_LABEL.get(key) ?? "" : "";
+/** Map a friendly State Type label to its canonical State ID, or "" if unknown. */
+export function stateIdForStateType(stateType: string | null | undefined): string {
+  const key = (stateType || "").trim().toLowerCase();
+  return key ? STATE_TYPE_BY_LABEL.get(key) ?? "" : "";
 }
 
 export const BANK_GROUPS = [

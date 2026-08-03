@@ -14,7 +14,7 @@ import {
   resolvePublicSurfaceMode,
   type PublicSurfaceMode,
 } from "./lessonStepMetadata";
-import { stateIdForSlideType } from "./classStates";
+import { stateIdForStateType } from "./classStates";
 
 // Only the REAL lessons data source. The array used to carry two more ids
 // (a schemaless sibling and one that was never a data source of this DB);
@@ -498,10 +498,14 @@ async function mapPage(
       || rawKind === "multiple-choice-explain" || rawKind === "fist-to-five"
       ? rawKind
       : "";
-    // The friendly "Slide Type" dropdown wins when set (mapped back to the
+    // The friendly "State Type" dropdown wins when set (mapped back to the
     // canonical id); otherwise the raw "State ID" is used exactly as before, so
     // every existing step is unchanged and a teacher migrates one at a time.
-    const stateId = stateIdForSlideType(extractText(step["Slide Type"])) || extractText(step["State ID"]);
+    // `Slide Type` is the pre-rename name of this property, read as a fallback so a step authored
+    // before the Notion rename keeps resolving. `Slide Type` now means the OUTSIDE VISUAL frame
+    // (see embedUrl.ts) - do not reintroduce it here once every step carries `State Type`.
+    const stateType = extractText(step["State Type"]) || extractText(step["Slide Type"]);
+    const stateId = stateIdForStateType(stateType) || extractText(step["State ID"]);
     const rawAiContext = extractText(step["AI Context"]);
     return {
       id: related.id,
