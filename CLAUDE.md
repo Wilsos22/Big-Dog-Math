@@ -613,11 +613,54 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   from `DesignSystem_901ffe` + `_ds_bundle.js`. Those are Claude Design CANVAS primitives, NOT repo
   dependencies - the studio chrome uses the repo's per-page `<style>` + `--bdb-*` convention instead,
   per the handoff's own "do not add a new styling system." Do not pull the canvas bundle into the app.
+- **DIRECTION (Steele, 2026-08-03): FRAME + IMPORTED SLIDES FOR INFORMATION; NATIVE ONLY FOR THE LIVE
+  LAYER. DO NOT build a native slide-composition editor** (the drag-resize grid of text/model/prompt
+  components was scoped and SHELVED here - it is a worse Canva). The moat is the FRAME (state band,
+  state word, step counter, shared clock, ink layer, split-whiteboard, attention pulse, class-sync)
+  and the INTERACTIVE layer (tools/manipulatives, Fist-to-5, polls, checkpoints, discussion beat-timers,
+  the proficiency spine) - none of which a slide app does. Anything that just SHOWS INFORMATION (direct
+  instruction, worked examples, "here's the plan") is authored in Canva / Figma / Google Slides and
+  imported through the `slide` frame, which the app wraps in the state chrome. Keep ONE dumb auto-default
+  so the nightly grind stays zero-effort: the app composes a plain on-brand info screen from the Notion
+  step, and the teacher drops in a `slide` frame only when a screen is worth designing. PREFER A PUBLISHED
+  LINK (Canva/Slides share url) OVER A NOTION UPLOAD - the upload's signed url dies in ~1h (the open
+  `Slide Url` expiry trap above); a published link does not. So the investment is the imported-slide path
+  (stable urls, good fit/framing, wiring present/pace to render the frame), NOT the native grid.
+  THE MODEL RESTS ON TWO LEGS, AND A WEAK ONE SINKS IT: (a) the frame must wrap an imported slide so it
+  reads NATIVE - one designed surface, not a Canva slide with chrome bolted around it; and (b) the native
+  auto-compose must be genuinely good, because killing the nightly slideshow-making was the WHOLE POINT -
+  a mediocre auto-default sends the teacher into Canva every night and makes prep worse, not better.
+  FOUR REFINEMENTS (honest review, 2026-08-03): (1) THE CUT IS TEMPLATED vs BESPOKE, not info vs
+  interactive. Data-driven info (today's problem, warm-up, anchor, "the plan") stays NATIVE and
+  auto-composed from Notion so the daily grind stays free; only BESPOKE visual info (diagrams, worked
+  examples, hooks, culture-day slides) goes to Canva. Drawing the line at "all info -> Canva" turns the
+  cheap daily stuff into manual design work. (2) THE AUTO-DEFAULT IS THE PRIMARY PATH, NOT A FALLBACK -
+  guard it; it must be good enough that most days the teacher never opens Canva. (3) RELIABILITY: prefer
+  an EXPORTED IMAGE on stable hosting (cached, no live fetch) over a live embed for classroom-critical
+  info slides - school wifi flakes and a live iframe can blank mid-lesson (the 4s fallback card is a bad
+  look on a projector). Reserve live embeds for boards being actively edited (Lucid/Figma). Tradeoff:
+  images do not auto-update. (4) A locked "Big Dog Math" Canva BRAND TEMPLATE keeps imported slides
+  on-brand - the frame holds the chrome, but the content inside drifts over a year without one.
+- **PACE + STUDENT MIRROR MAIN UNLESS THEY SERVE A SECOND PURPOSE (Steele, 2026-08-03).** Under the
+  direction above the default for `/teacher/pace` and `/live-flow` is to show the SAME thing as the
+  main projector; they diverge only for an enumerable set of real second purposes. Today those are:
+  (1) DISCUSSION - main runs the beat TIMELINE, pace + student show the sentence STEMS + VOCABULARY and
+  the current beat's clock (the language support); (2) a STUDENT INTERACTIVE step - `activePoll` /
+  published tool / checkpoint - where `/live-flow` shows the INPUT surface (answer boxes, choices, the
+  manipulative) the student acts on, and pace shows the question + response count; (3) STUDENT-ONLY
+  chrome that OVERLAYS rather than replaces - the progress strip ("part 3 of 4") and the I'm-stuck
+  signal chips; (4) the speaker/readers/iPad SPINNER (a mirror, not a difference). Everything else pace
+  currently shows (pace-directions + timer instead of the main content) is a HOLDOVER, not a second
+  purpose - as the frame+imported-slide model lands, those surfaces should mirror the main slide and
+  keep only the timer + a one-line "do this now" as an overlay. When you add a pace/student scene, ask
+  first "is this a real second purpose, or should it just mirror main?"
 - OPEN / NOT DONE: present and pace do NOT yet consume `LessonScreen`. They render FLUID
   (`position:fixed`, `clamp()` + a `zoom` multiplier), not on a 1920x1080 canvas, and cover scenes the
   9 components do not (tool/spinner/discussion/ink/success-criterion), so adopting the library there is
   a fluid->fixed rewrite of the two most classroom-critical surfaces and was NOT shippable unverified.
   Until it lands, the studio's saved layouts author-ahead - nothing on the projector reads the blob yet.
+  NOTE the DIRECTION above reframes this: the fluid->fixed rewrite should target the FRAME wrapping an
+  imported slide, not a native 9-component grid.
 
 The lesson-content editor's previews are the REAL surfaces, not copies: `/teacher/studio/edit` embeds
 `/teacher/present?studioPreview=1` and `/teacher/pace?studioPreview=1` in scaled iframes and posts
