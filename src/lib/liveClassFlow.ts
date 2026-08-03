@@ -66,6 +66,12 @@ export const TEACHER_REMOTE_ACTIONS = [
   "reveal-results",
   "reveal-final-score",
   "transition-now",
+  // An UNTIMED state (a Lesson Step with a blank or zero Duration) publishes no timer at all, so
+  // the room sees a dash instead of a countdown. These arm one on demand, over whatever is on
+  // screen, without changing the step - the pattern is a whole slide deck as one state where only
+  // certain moments need a clock. `arm-timer` carries `seconds` in the command body.
+  "arm-timer",
+  "clear-timer",
   "play-warning",
   "play-countdown",
   "play-times-up",
@@ -101,6 +107,19 @@ export const TEACHER_REMOTE_ACTIONS = [
   "play-you",
 ] as const;
 export type TeacherRemoteAction = (typeof TEACHER_REMOTE_ACTIONS)[number];
+
+// The lengths the Remote offers for an on-demand timer, in seconds. Short and few on purpose -
+// this is a mid-lesson tap, not a form.
+export const ON_DEMAND_TIMER_SECONDS = [60, 120, 180, 300] as const;
+
+/**
+ * A step with no authored Duration runs untimed: no countdown on any screen, no warning or
+ * time-up cue, and never an automatic advance regardless of what `Advance` says. The teacher
+ * moves it on, or arms a timer over it.
+ */
+export function isUntimedStep(durationSeconds: number | null | undefined): boolean {
+  return !Number.isFinite(Number(durationSeconds)) || Number(durationSeconds) <= 0;
+}
 
 const DISCUSSION_REMOTE_ACTION_SET = new Set<string>(DISCUSSION_REMOTE_ACTIONS);
 

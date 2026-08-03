@@ -1,4 +1,4 @@
-import type { TeacherRemoteAction } from "@/lib/liveClassFlow";
+import { ON_DEMAND_TIMER_SECONDS, type TeacherRemoteAction } from "@/lib/liveClassFlow";
 import type { StateStripSlot } from "@/lib/classroomStateStrip";
 import { SOUND_CUES, soundCueAction } from "@/lib/soundBank";
 
@@ -42,6 +42,26 @@ export const TRANSITION_NOW_BUTTONS: readonly RemoteDeckButton[] = [
   { action: "transition-now", label: "Hustle 30s", detail: "Task switch", tone: "orange", payload: { vibe: "hustle", seconds: 30 } },
   { action: "transition-now", label: "Settle 30s", detail: "Bring it down", tone: "teal", payload: { vibe: "settle", seconds: 30 } },
 ];
+
+/**
+ * Arm a clock over an UNTIMED state - a slide deck you are talking through, a hook you want them
+ * sitting with - without changing the step or its pacing. Shown only when the current state has no
+ * timer of its own, because on a timed state these would fight the authored duration.
+ */
+export const ON_DEMAND_TIMER_BUTTONS: readonly RemoteDeckButton[] = ON_DEMAND_TIMER_SECONDS.map((seconds) => ({
+  action: "arm-timer" as TeacherRemoteAction,
+  label: seconds >= 60 && seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds}s`,
+  detail: "Start a clock on this slide",
+  tone: "teal",
+  payload: { seconds },
+}));
+
+export const CLEAR_ON_DEMAND_TIMER_BUTTON: RemoteDeckButton = {
+  action: "clear-timer",
+  label: "Clear timer",
+  detail: "Back to no clock",
+  tone: "neutral",
+};
 
 /**
  * The sound bank, which took the Abbie AI deck's place (Steele, 2026-07-29:

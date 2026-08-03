@@ -24,7 +24,7 @@ import {
 import type { LessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import type { LessonStepData } from "@/lib/notionLessons";
-import { BEHAVIOR_OVERRIDE_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
+import { BEHAVIOR_OVERRIDE_BUTTONS, CLEAR_ON_DEMAND_TIMER_BUTTON, ON_DEMAND_TIMER_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
 import { joinRealtimeRoom } from "@/lib/realtimeRooms";
 import {
   SOUND_LABEL_ROOM,
@@ -1291,6 +1291,24 @@ export default function TeacherRemotePage() {
                         </div>
                       </div>
                     ) : null}
+                    {/* An untimed state gets the arming row; a timed one gets the clear button only
+                        while an on-demand clock is actually up, so the deck never offers to remove
+                        a duration the lesson authored. */}
+                    <div className="remote-control-block">
+                      <h3 className="deck-section-title">{flow?.timer ? "Timer" : "Start a timer"}</h3>
+                      <div className="deck-grid">
+                        {flow?.timer ? (
+                          <DeckKey
+                            button={CLEAR_ON_DEMAND_TIMER_BUTTON}
+                            busy={busy}
+                            disabled={controlsDisabled}
+                            onSend={send}
+                          />
+                        ) : ON_DEMAND_TIMER_BUTTONS.map((button) => (
+                          <DeckKey key={button.label} button={button} busy={busy} disabled={controlsDisabled} onSend={send} />
+                        ))}
+                      </div>
+                    </div>
                     <div className="remote-control-block">
                       <h3 className="deck-section-title">Transition now</h3>
                       <div className="deck-grid">

@@ -1298,6 +1298,27 @@ the invariants they protect are easy to break again.
   `musicRef` rather than closing over the element, or restoring volume on a swapped-out track would
   leave the NEW one quiet. Time-up is deliberately still `stopMusic()` then `playCue("end")` - the
   song ends, the cue plays alone.
+- **AN UNTIMED STATE PUBLISHES NO TIMER, AND THE REMOTE ARMS ONE ON DEMAND** (added 2026-08-02,
+  Steele: "during the times i need to upload a full outside deck or video or something i dont want
+  to fight the progression of the slides with a timer"). A Lesson Step with a blank or zero
+  `Duration` runs UNTIMED: `isUntimedStep` (liveClassFlow.ts) is the one test, Control publishes
+  `timer: null` for it, `/teacher/present` and `/teacher/pace` render `UNTIMED_CLOCK` (an en dash,
+  never `0:00` - a zeroed clock on a projector reads as "you are out of time", which is the exact
+  pressure the state exists to remove), no warning or time-up cue fires because nothing is running,
+  and the auto-advance effect RETURNS EARLY so an armed clock expiring can never pull the room off
+  a deck mid-explanation.
+  The teacher arms one from the Remote's preset row (`ON_DEMAND_TIMER_SECONDS`, derived into
+  `ON_DEMAND_TIMER_BUTTONS` so the deck and the server cannot drift). `arm-timer` / `clear-timer`
+  are deliberately NOT in `DIRECT_TIMER_ACTIONS`: every action in that set throws when
+  `flow.timer` is null, and working on a state that has no timer is the entire point.
+  THE FULL-REPLACE TRAP BITES HERE TOO, and differently from `interlude`. The server sets the
+  armed timer, but Control republishes from its OWN local state about once a second and would
+  erase it within a tick - so Control holds `onDemandSeconds`, adopts it in the hydration effect
+  (`setOnDemandSeconds(flow.timer.totalSeconds)`), publishes `effectiveTotalSeconds` instead of
+  `activeMinutes * 60`, and clears it on every step change so a new state never inherits the last
+  one's ad-hoc clock. An untimed state also breaks the 50-minute sum contract by construction -
+  it cannot be added up - which is the deliberate trade and a reason not to reach for it on a work
+  block.
 - **EVERY CLASSROOM TOGGLE NEEDS ITS OFF SWITCH IN THE UI.** `hide-board` was wired end to end -
   action type, `/api/control-remote` handler, `/control` listener - but the iPad Remote only ever
   rendered "Open work space". Once the writing surface was up there was no way to put it away, and
