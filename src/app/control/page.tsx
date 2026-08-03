@@ -182,6 +182,7 @@ const TOOL_STATE_INFO = {
   "tool-area-model": { route: "/area-model", label: "Box Method" },
   "tool-distributive-area": { route: "/distributive-area", label: "Distributive Area Method" },
   "tool-divisibility": { route: "/divisibility", label: "Divisibility Rules" },
+  "tool-lcm-bouncer": { route: "/lcm-bouncer", label: "LCM Bouncer" },
   "tool-area-explorer": { route: "/area-explorer", label: "Area Explorer" },
   "tool-combine": { route: "/combine-like-terms", label: "Combine Like Terms" },
   "tool-ladder": { route: "/ladder-method", label: "Ladder Method" },
@@ -415,6 +416,11 @@ function buildLiveToolConfig(stateId: ToolStateId, values: ToolSetupValues): Liv
       return { ...base, route: "/distributive-area", config: { set: normalizeDistributiveSet(values.distributiveSet) } };
     case "tool-divisibility":
       return { ...base, route: "/divisibility", config: {} };
+    case "tool-lcm-bouncer":
+      // No published config yet - the strides are set on the board. A teacher
+      // naming the pair in the prompt ("find where 4 and 6 land together") is
+      // what steers the room; publishing them is an additive config arm later.
+      return { ...base, route: "/lcm-bouncer", config: {} };
     case "tool-area-explorer":
       return { ...base, route: "/area-explorer", config: {} };
     case "tool-combine":

@@ -15,6 +15,7 @@ const TOOLS: Tool[] = [
   { href: "/place-value", label: "Place Value Reader", letter: "V", color: "#4d8df6", desc: "Read and build big numbers and decimals" },
   { href: "/place-value-mirror", label: "Place Value Mirror", letter: "M", color: "#7c5cd6", desc: "Multiply and divide by powers of ten" },
   { href: "/divisibility", label: "Divisibility Rules", letter: "D", color: "#2f9e6f", desc: "Test factors and build the family" },
+  { href: "/lcm-bouncer", label: "LCM Bouncer", letter: "L", color: "#fcaf38", desc: "Two hoppers, one track, find where they meet" },
   { href: "/fraction-bars", label: "Fraction Bars", letter: "F", color: "#fcaf38", desc: "Fractions, decimals, percents" },
   { href: "/percent-bar", label: "Percent Bar", letter: "%", color: "#50a3a4", desc: "Parts, wholes, and benchmarks" },
   { href: "/group-bars", label: "Group Bars", letter: "G", color: "#2f9e6f", desc: "Equal groups and ratios" },
