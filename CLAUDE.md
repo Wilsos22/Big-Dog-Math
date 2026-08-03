@@ -626,6 +626,21 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   LINK (Canva/Slides share url) OVER A NOTION UPLOAD - the upload's signed url dies in ~1h (the open
   `Slide Url` expiry trap above); a published link does not. So the investment is the imported-slide path
   (stable urls, good fit/framing, wiring present/pace to render the frame), NOT the native grid.
+  THE MODEL RESTS ON TWO LEGS, AND A WEAK ONE SINKS IT: (a) the frame must wrap an imported slide so it
+  reads NATIVE - one designed surface, not a Canva slide with chrome bolted around it; and (b) the native
+  auto-compose must be genuinely good, because killing the nightly slideshow-making was the WHOLE POINT -
+  a mediocre auto-default sends the teacher into Canva every night and makes prep worse, not better.
+  FOUR REFINEMENTS (honest review, 2026-08-03): (1) THE CUT IS TEMPLATED vs BESPOKE, not info vs
+  interactive. Data-driven info (today's problem, warm-up, anchor, "the plan") stays NATIVE and
+  auto-composed from Notion so the daily grind stays free; only BESPOKE visual info (diagrams, worked
+  examples, hooks, culture-day slides) goes to Canva. Drawing the line at "all info -> Canva" turns the
+  cheap daily stuff into manual design work. (2) THE AUTO-DEFAULT IS THE PRIMARY PATH, NOT A FALLBACK -
+  guard it; it must be good enough that most days the teacher never opens Canva. (3) RELIABILITY: prefer
+  an EXPORTED IMAGE on stable hosting (cached, no live fetch) over a live embed for classroom-critical
+  info slides - school wifi flakes and a live iframe can blank mid-lesson (the 4s fallback card is a bad
+  look on a projector). Reserve live embeds for boards being actively edited (Lucid/Figma). Tradeoff:
+  images do not auto-update. (4) A locked "Big Dog Math" Canva BRAND TEMPLATE keeps imported slides
+  on-brand - the frame holds the chrome, but the content inside drifts over a year without one.
 - **PACE + STUDENT MIRROR MAIN UNLESS THEY SERVE A SECOND PURPOSE (Steele, 2026-08-03).** Under the
   direction above the default for `/teacher/pace` and `/live-flow` is to show the SAME thing as the
   main projector; they diverge only for an enumerable set of real second purposes. Today those are:
