@@ -71,6 +71,7 @@ const TOOL_GROUPS: { label: string; tools: LinkItem[] }[] = [
       { href: "/percent-bar", label: "Percent Bar", letter: "%", color: "#cf6f9b", desc: "Parts, wholes, benchmarks" },
       { href: "/group-bars", label: "Group Bars", letter: "G", color: "#2f9e6f", desc: "Equal groups and ratios" },
       { href: "/number-line-plus", label: "Number Line", letter: "N", color: "#674a40", desc: "Single or double number line" },
+      { href: "/decimal-steps", label: "Decimals, step by step", letter: "D", color: "#674a40", desc: "All four operations, guided" },
     ],
   },
   {

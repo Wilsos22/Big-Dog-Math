@@ -510,6 +510,7 @@ export default function SessionPage() {
     { label: "Percent Bar", value: "/percent-bar" },
     { label: "Equation Builder", value: "/equation-builder" },
     { label: "GEMS", value: "/order-of-operations" },
+    { label: "Decimals, step by step", value: "/decimal-steps" },
     { label: "Live Class Flow", value: LIVE_FLOW_MODE },
   ];
 

@@ -38,6 +38,9 @@ export interface LessonScreenProps {
   studentName?: string;
   editing?: boolean;
   selectedId?: string | null;
+  // Let an embedded board or website take pointer input. OFF by default: a projector is a display,
+  // and a stray touch on the driving laptop must not scroll a board mid-lesson. See SlideFrame.
+  boardInteractive?: boolean;
   // When set (the studio preview), the dotted ground is drawn on this scaled layer and its pattern
   // is divided by the scale so it holds an ~11px grid at preview size. Omitted on a real projector.
   dotScale?: number;
@@ -66,6 +69,7 @@ export default function LessonScreen({
   studentName = "Student name",
   editing = false,
   selectedId = null,
+  boardInteractive = false,
   dotScale,
   manip = {},
   onManipChange,
@@ -319,7 +323,7 @@ export default function LessonScreen({
           </div>
         ) : null}
 
-        {isDemoComponentType(block.type) ? demoBody(block) : blockBody(block, screen, value, style, editing)}
+        {isDemoComponentType(block.type) ? demoBody(block) : blockBody(block, screen, value, style, editing, boardInteractive)}
       </div>
     );
   };
@@ -435,7 +439,7 @@ export default function LessonScreen({
 // That is deliberate: the board is the visual, and the iPad ink sheet on top is where the class
 // writes. When ink is armed the sheet captures pointer events and the board stops panning, which
 // is the correct trade rather than a bug.
-function SlideFrame({ rawUrl, fit, editing }: { rawUrl: string; fit: "contain" | "cover"; editing: boolean }) {
+function SlideFrame({ rawUrl, fit, editing, interactive }: { rawUrl: string; fit: "contain" | "cover"; editing: boolean; interactive: boolean }) {
   const source = resolveSlideSource(rawUrl);
   const [loaded, setLoaded] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
@@ -483,6 +487,14 @@ function SlideFrame({ rawUrl, fit, editing }: { rawUrl: string; fit: "contain" |
           sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
           style={{ width: "100%", height: "100%", border: "none", display: "block" }}
         />
+        {/* An iframe swallows pointer events, so it is shielded unless someone deliberately asks for
+            an interactive board. In the studio the shield is always on, or a click meant to select
+            the frame would disappear into the embed. This is also what keeps the projector inert
+            under the iPad glass sheet - the ink canvas on /ipad sits above this whole surface, so
+            the pen already writes over a board; the shield just stops the board fighting back. */}
+        {interactive && !editing ? null : (
+          <div style={{ position: "absolute", inset: 0, background: "transparent" }} aria-hidden />
+        )}
         {timedOut && !loaded ? (
           <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", alignContent: "center", gap: 14, background: SCREEN_NEUTRALS.paper, padding: 40, textAlign: "center" }}>
             <span style={{ fontSize: 46, fontWeight: 900, color: SCREEN_NEUTRALS.body }}>
@@ -541,6 +553,7 @@ function blockBody(
   value: (key: string) => string,
   style: ReturnType<typeof stateStyleFor>,
   editing: boolean,
+  interactive: boolean,
 ) {
   switch (block.type) {
     case "prompt": {
@@ -558,6 +571,7 @@ function blockBody(
           rawUrl={value("slideUrl")}
           fit={value("slideFit") === "cover" ? "cover" : "contain"}
           editing={editing}
+          interactive={interactive}
         />
       );
     }

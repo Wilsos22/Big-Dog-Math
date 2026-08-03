@@ -203,6 +203,8 @@ function stepsFromLesson(lesson: LessonData): LiveFlowSequenceStep[] {
       responseMode: step.responseMode || "",
       workSpaceAvailable: step.workSpaceAvailable,
       slideOverlay: step.slideOverlay || undefined,
+      slideUrl: step.slideUrl || undefined,
+      slideMirror: step.slideMirror || undefined,
       publicSurfaceMode: step.publicSurfaceMode,
       routineConfig: step.routineConfig,
       eyes: step.eyes || "",

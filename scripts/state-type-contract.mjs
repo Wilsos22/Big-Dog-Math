@@ -4,8 +4,8 @@
 // ID; a label pointing at a state that does not exist would render nothing on a
 // classroom screen - the exact silent-drift failure the Response Mode / Poll Kind
 // traps in CLAUDE.md warn about. ("State Type" was renamed from "Slide Type" the
-// same day - "Slide Type" is a separate property for embedded outside slides.)
-// Compile classStates.ts in isolation, then check.
+// same day - "slide" now means only the outside-visual frame, whose URL lives in
+// the separate "Slide Url" property.) Compile classStates.ts in isolation, then check.
 
 import assert from "node:assert/strict";
 import {

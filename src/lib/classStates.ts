@@ -98,6 +98,7 @@ export const DEFAULT_STATES: ClassState[] = [
   { id: "tool-distributive-area", label: "Distributive Area Method", minutes: 6, color: "#50a3a4", desc: "Split the rectangle your own way, then find each partial product." },
   { id: "tool-area-explorer", label: "Area Explorer", minutes: 6, color: "#50a3a4", desc: "Pick a shape, fill in the area formula, and name the unit." },
   { id: "tool-divisibility", label: "Divisibility Rules", minutes: 6, color: "#50a3a4", desc: "Test each rule, cross out the numbers, and prove factor pairs with arches." },
+  { id: "tool-decimal-steps", label: "Decimals, step by step", minutes: 8, color: "#674a40", desc: "Pick what to do next, one step at a time, with the digits you are working on lit up." },
   { id: "tool-combine", label: "Combine Like Terms", minutes: 6, color: "#f95335", desc: "Group like terms and simplify the expression." },
   { id: "tool-ladder", label: "Ladder Method", minutes: 6, color: "#674a40", desc: "Divide down the ladder to find GCF and LCM." },
   { id: "tool-proportions", label: "Proportions", minutes: 6, color: "#50a3a4", desc: "Find the scale factor and the missing value." },
@@ -118,15 +119,15 @@ export const DEFAULT_STATES: ClassState[] = [
 // The teacher-facing "State Type" Notion property: a plain-English name for the
 // KIND of each Lesson Step, mapped back to the canonical State ID the runtime
 // uses. Steele wanted to see (and set from a dropdown) the kind of slide at a
-// glance (2026-08-02). NOTE the property is "State Type", NOT "Slide Type" -
-// "Slide Type" is a SEPARATE property for embedded outside slides/boards, so
-// this one was renamed to avoid the collision (2026-08-02). Wiring the MAP - not
-// just a cosmetic label - is what stops it drifting from what actually runs, the
-// failure mode the Response Mode and Poll Kind drift traps in CLAUDE.md warn
-// about. Every stateId here MUST be a real DEFAULT_STATES id; `test:state-type`
-// pins that. It is PREFERRED over the raw `State ID` only when a step sets State
-// Type, so existing steps (State ID only) render exactly as before and a teacher
-// can migrate one step at a time.
+// glance (2026-08-02). NOTE the property is "State Type", NOT "Slide Type" - it
+// was renamed the same day to end a collision: "slide" now means ONLY the frame
+// holding an outside visual, whose URL lives in the separate "Slide Url" file
+// property. Wiring the MAP - not just a cosmetic label - is what stops it
+// drifting from what actually runs, the failure mode the Response Mode and Poll
+// Kind drift traps in CLAUDE.md warn about. Every stateId here MUST be a real
+// DEFAULT_STATES id; `test:state-type` pins that. It is PREFERRED over the raw
+// `State ID` only when a step sets State Type, so existing steps (State ID only)
+// render exactly as before and a teacher can migrate one step at a time.
 export const STATE_TYPE_OPTIONS: { label: string; stateId: string }[] = [
   { label: "Warm-Up", stateId: "warmup" },
   { label: "Review", stateId: "review" },
@@ -198,7 +199,7 @@ export const BANK_GROUPS = [
     id: "manipulatives",
     label: "Manipulatives",
     hint: "Student screens switch to digital math tools",
-    stateIds: ["tool-whiteboard", "tool-number-line", "tool-percent-bar", "tool-fraction-bars", "tool-algebra-tiles", "tool-area-model", "tool-distributive-area", "tool-divisibility", "tool-area-explorer", "tool-group-bars", "tool-coordinate-grid", "tool-multiplication", "manip"],
+    stateIds: ["tool-whiteboard", "tool-number-line", "tool-percent-bar", "tool-fraction-bars", "tool-algebra-tiles", "tool-area-model", "tool-distributive-area", "tool-divisibility", "tool-decimal-steps", "tool-area-explorer", "tool-group-bars", "tool-coordinate-grid", "tool-multiplication", "manip"],
   },
 ] as const;
 

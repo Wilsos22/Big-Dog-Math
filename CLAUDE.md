@@ -298,7 +298,35 @@ bars and live misconception grouping).
   `/order-of-operations` (GEMS), `/combine-like-terms`, `/proportions`, `/area-model`,
   `/coordinate-grid`, `/ladder-method`, `/multiplication-fluency`, `/term-identifier`,
   `/divisibility`, `/distributive-area`, `/area-explorer`, `/balance-beam`, `/long-division`,
-  `/place-value`, `/place-value-mirror`, `/timer`.
+  `/place-value`, `/place-value-mirror`, `/timer`, `/decimal-steps`.
+- `/decimal-steps` IS ITS OWN TOOL, NOT PART OF `/long-division` (Steele, 2026-08-02, unprompted:
+  "this is its own tool from long division"). `/long-division` (`LongDivisionHouse`) is a
+  WHOLE-NUMBER choreographed demo with no scoring, built for M1.T3.L4; `/decimal-steps`
+  (`DecimalStepsBoard` + `src/lib/decimalSteps.ts`) is a guided DECIMAL tool covering all four
+  operations where every step is a multiple-choice decision. They both draw a long-division house
+  and that is the only thing they share - do not merge them, and do not "fix" one by pointing it at
+  the other.
+  THE SET-UP QUESTION IS THE WHOLE POINT AND ITS ANSWER CHANGES WITH THE OPERATION: `+`/`-` line up
+  the decimal points, `x` lines up the RIGHT EDGES and ignores the decimals until you count places
+  at the end, `/` moves the decimal until the divisor is whole. A student who answers "line up the
+  decimals" for all four has exactly the misconception this tool exists to catch, so the adding rule
+  is deliberately OFFERED as a wrong choice on the multiply board. `npm run test:decimal-steps` pins
+  all four, and a change making one answer serve every operation has broken the tool's reason to
+  exist. Same rule for counting places: the answer ADDS the two factors' decimal counts, and
+  "whichever number has more" is the offered trap - except when the two numbers agree (6.2 x 3),
+  where the trap would be a right answer marked wrong and drops out.
+  DIVISION MAKES THEM ACTUALLY MOVE THE DECIMAL. Naming the number of places is a separate step from
+  doing it: after answering "how many places", the student hops the divisor's decimal that many
+  times, then answers what happens to the dividend and hops it too (moving only the divisor is the
+  error being caught). Each hop draws the caret arc you would draw on the board. Then divide /
+  multiply / subtract / bring down run with the equations down the LEFT rail.
+  Two layout rules that were bugs first. The product and the difference are SEPARATE rows
+  (`work<i>` and `rest<i>`) - one row put them in the same grid columns and the product silently
+  vanished under the difference. And nothing is written above the bracket until the divisor actually
+  fits, so `7.35 / 2.1` reads `3.5`, not `03.5`. Arithmetic is integer-scaled, never float, so
+  `0.1 + 0.2` is `0.3`. A problem the board cannot walk - a repeating quotient, a negative
+  difference, divide by zero - is REFUSED with a reason the `/control` field prints, never silently
+  dropped.
 - `/number-line-plus` HAS THREE MODES, and the third is a different kind of tool. Integers and Parts
   of a whole are one draggable dot on a readout; **Order fractions** (added 2026-08-01 on Steele's
   ask) is a board where students drag a SET of cards onto a 0-to-5 line with a tick every half.
@@ -538,6 +566,42 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   is set derives `[["slide"], []]` as its main default. Sites that send `X-Frame-Options: DENY` cannot
   be framed and there is no way to detect that ahead of time; the renderer falls back to a worded card
   after 4 seconds rather than leaving a white void on a projector.
+  THE EMBED IS SHIELDED BY DEFAULT and that is what makes ink work over it. An iframe swallows
+  pointer events, so `SlideFrame` lays a transparent div over it unless `LessonScreen` is passed
+  `boardInteractive` - always, in the studio, or a click meant to select the frame vanishes into the
+  embed. On the pen path nothing more is needed: `/ipad` mounts its interactive `InkBoard` canvas at
+  `.ip-ink-layer` z-index 6, ABOVE the whole `/teacher/present` iframe, so a stroke lands on the ink
+  canvas no matter what is nested inside - the shield only stops the board fighting back on the
+  laptop driving the projector.
+  IT RENDERS ON THE REAL PROJECTOR AS OF 2026-08-02, and NOT by way of `LessonScreen` - present and
+  pace still draw their own fluid stages (the fluid->fixed rewrite is still open). `SlideFrameScene`
+  is the surface-side renderer: `/teacher/present` puts it in the scene chain AFTER poll, resource
+  and published tool but BEFORE the board scene, so a poll or a tool being up means the slide is no
+  longer what the step is about, while the whiteboard split shifts it to the right 58% through the
+  same `board-open` rule `.stage-tool` uses. `/teacher/pace` renders it ONLY when the step sets
+  `slideMirror` - the support screen's job is directions, and mirroring by default would cost the
+  room its second channel. The toggle is per step, in the studio inspector on a selected slide frame.
+  THE URL REACHES THE RUNTIME FROM TWO PLACES AND THE BLOB WINS: `slideFrameFromLayout` in
+  notionLessons.ts decodes the saved screen layout and reads the main screen's slide block
+  (`ov.slideUrl` / `ov.slideMirror`), falling back to the Notion `Slide URL` / `Slide Image`
+  property. So authoring in the studio needs no Notion property, and a property set in Notion is
+  the readable copy. `slideUrl` and `slideMirror` are server-authored fields on
+  `LiveFlowSequenceStep`, which puts them in the `interlude` / `transition` class - CONTROL'S
+  SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry them or a reconnect erases the
+  slide mid-lesson. Watch the indentation trap when adding the next such field: the 8-space and
+  10-space mapping lines are substrings of each other, so a naive replace double-applies.
+  THE NOTION PROPERTY IS `Slide Url`, NOT `Slide URL`, AND IT IS A FILE PROPERTY. Read it through
+  `propByName` (notionLessons.ts), which normalizes case and punctuation - an exact-string property
+  lookup fails SILENTLY, the site reads "" and the screen renders as though nothing was authored.
+  That is the whole class of bug: verified live 2026-08-02, the property Steele created was `Slide
+  Url` and the exact-match read would have found nothing with no error anywhere. Prefer `propByName`
+  for any new property.
+  UNSOLVED, AND IT WILL BITE ON A REAL TEACHING DAY: a Notion-UPLOADED file resolves to a
+  short-lived SIGNED S3 url (about an hour), and Control builds its lineup ONCE at load and then
+  republishes that frozen url every second. A lesson opened at 7:30 has a dead image url by period
+  4, and the projector shows the four-second fallback card. An EXTERNAL link pasted into the
+  property has no expiry and is safe. The fix is a proxy route that re-resolves the step's file from
+  Notion per request so the snapshot carries a stable path; not built, needs Steele's word.
 - THREE DEMONSTRATION OBJECTS (`manipSplit` / `manipSnap` / `manipFree`) are a SEPARATE, EPHEMERAL
   palette (main projector only) the teacher drags live during class. Their type union is distinct from
   the 10 persisted component types, their live position lives in the studio's in-memory `manip` map
@@ -577,7 +641,7 @@ Adding a tool: also add a lowercase entry to `TOOL_ROUTES` in `src/app/lesson/pa
 Same trap on the live-session side: listing a route in `LiveToolRoute` (`src/lib/liveClassFlow.ts`)
 only lets the teacher PUBLISH a task to it. The tool component must also call
 `useLiveToolConfig("/route")` and render `<LiveToolBanner tool={...} />`, or the published directions
-are silently dropped and students see nothing. All 19 tool routes are wired as of 2026-07-26
+are silently dropped and students see nothing. All 20 tool routes are wired as of 2026-08-02
 (/divisibility joined the union that day, end to end: ASSIGNED_TOOL_ROUTES so Notion "Tool:
 Divisibility Rules" resolves, ClassSync target, tool-divisibility bank state, control map, and the
 banner on DivisibilityRules) - a NEW
@@ -596,9 +660,11 @@ from localStorage, and treat an empty set as free play. The remaining arms are
 `Record<string, never>`, where the prompt is all there is - do not invent config behavior for them.
 `/number-line-plus` is the one arm carrying TWO independent configs: a non-empty `fractionSet` wins
 and opens the ordering board, an empty one leaves the integer hop problem exactly as it was, so the
-field is optional and pre-existing snapshots still parse.
+field is optional and pre-existing snapshots still parse. A FOURTH sequence arm joined 2026-08-02:
+`/decimal-steps` `{ set }` - "12.4 + 3.75, 9.6 / 0.4" via `src/lib/decimalSteps.ts`, any of the four
+operations in one string.
 
-Counting those arms, `LiveToolRoute` has 22, not 19: `/challenge`, `/exit-ticket` and `/checkpoint`
+Counting those arms, `LiveToolRoute` has 23, not 20: `/challenge`, `/exit-ticket` and `/checkpoint`
 ride the same union so `/control` can publish them, but they deliberately do NOT call
 `useLiveToolConfig` - do not "fix" them by wiring the banner. Each has its own launch path
 (`launchChallenge`, `launchExitTicket`, `launchCheckpoint`) writing the real content to `challenges` /
@@ -986,21 +1052,25 @@ the invariants they protect are easy to break again.
 - **A STEP'S KIND CAN BE SET FROM THE FRIENDLY `State Type` SELECT, WHICH WINS OVER `State ID`**
   (added 2026-08-02, Steele: "a notion property that tells me what kind of slide it is... it should
   be a select"). The Lesson Steps data source (`collection://8e467c1b-8937-4902-811e-ca0a2e15af4d`)
-  has a `State Type` SELECT with plain-English options (Warm-Up, Direct Instruction (I Do),
-  Discussion, Learning Check, Question, Exit Ticket, ...). NAME TRAP: this property is `State Type`,
-  NOT `Slide Type` - `Slide Type` is a SEPARATE property (embedded outside slides/boards, read into
-  `slideUrl` via `Slide URL`/`Slide Image`), so the state-kind select was renamed off it the same day
-  to break the collision. `notionLessons.ts` resolves `stateId = stateIdForStateType(State Type) ||
-  State ID`, so a step that sets State Type is driven by it and a step that leaves it empty is
-  UNCHANGED (falls back to the raw `State ID`) - a teacher migrates one step at a time. The label->id
-  map is `STATE_TYPE_OPTIONS` / `stateIdForStateType` in `src/lib/classStates.ts`; the Notion option
-  NAMES must equal those labels exactly, and `npm run test:state-type` pins that every option maps to
-  a real DEFAULT_STATES id (the wiring is what stops it becoming a dead label that drifts from what
-  runs - the failure mode the Response Mode / Poll Kind traps below warn about). DELIBERATELY NO
-  generic "Tool" option: a step's specific tool state (e.g. `tool-divisibility`) comes from `State ID`
-  + the `Tool` property, and a coarse "Manipulative / Tool" -> `manip` would override that and drop
-  the tool embed. M1.T1.L2-LAUNCH's steps were backfilled from their State ID (the two tool steps left
-  empty on purpose); other lessons are empty until set, and the fallback covers them.
+  now has a `State Type` SELECT with plain-English options (Warm-Up, Direct Instruction (I Do),
+  Discussion, Learning Check, Question, Exit Ticket, ...). `notionLessons.ts` resolves
+  `stateId = stateIdForStateType(State Type) || State ID`, so a step that sets State Type is driven
+  by it and a step that leaves it empty is UNCHANGED (falls back to the raw `State ID`) - a teacher
+  migrates one step at a time. The label->id map is `STATE_TYPE_OPTIONS` / `stateIdForStateType` in
+  `src/lib/classStates.ts`; the Notion option NAMES must equal those labels exactly, and
+  `npm run test:state-type` pins that every option maps to a real DEFAULT_STATES id (the wiring is
+  what stops it becoming a dead label that drifts from what runs - the failure mode the Response Mode
+  / Poll Kind traps below warn about). DELIBERATELY NO generic "Tool" option: a step's specific tool
+  state (e.g. `tool-divisibility`) comes from `State ID` + the `Tool` property, and a coarse
+  "Manipulative / Tool" -> `manip` would override that and drop the tool embed. M1.T1.L2-LAUNCH's
+  steps were backfilled from their State ID (the two tool steps left empty on purpose); other lessons
+  are empty until set, and the fallback covers them.
+  RENAMED 2026-08-02 FROM `Slide Type` (Steele: "make the other notion select be state type and this
+  one is slide type"), and the rename is DONE in Notion - verified live against the data source, the
+  old name no longer exists, so nothing reads it as a fallback. The property shipped as `Slide Type`
+  the same day the `slide` FRAME landed, and two unrelated things called "slide" in one system is how
+  vocabulary drifts. `slide` now means ONLY the outside-visual frame, whose URL is the SEPARATE
+  `Slide Url` file property. Never point `State Type` back at it.
 - **`Anchor Problem` IS THE HOOK.** There is no `Hook` property in the lessons database.
 - **`liveAssignedToolRoute` MATCHES BY PREFIX, and drops a trailing dash qualifier.** A Lesson Step
   names a tool the way a teacher writes it - `Distributive Area Method`, `... - teacher display`,
@@ -1201,6 +1271,38 @@ the invariants they protect are easy to break again.
   stamped with the sequence index it was issued at and expires on the next advance with no clearing
   code anywhere. The strip DOES cross `studentSafeLiveFlow` on purpose - "voice 0" is announced to the
   room and painted on two projectors, and a head-down student needs the same read the room gets.
+- **OPEN BUG (2026-08-02, deferred by Steele): A TEACHER-LOADED BANK CLIP IS DECODED ON ONE
+  AudioContext AND PLAYED ON ANOTHER.** Symptom he reported: cues he uploaded a clip for make no
+  sound from the Stream Deck, while cues with no upload still fire their synthesized version. The
+  two `installUserClip` call sites in `/control` disagree - the UPLOAD path passes
+  `audioCtxRef.current`, the page-load RESTORE path (the `idbGet(bankClipKey(...))` loop) passes
+  nothing and falls back to `sharedContext()`, the bank's own second context. `playSoundCue` always
+  plays through `audioCtxRef.current`, and an AudioBuffer only crosses contexts cleanly when their
+  sample rates match; when they do not, `src.buffer = chosen` throws and the press is silent.
+  Synthesis never reads `userBuffers`, which is why the un-uploaded cues are unaffected. PREDICTION
+  TO CHECK BEFORE FIXING: a freshly uploaded clip should sound, and the same clip should go silent
+  after a `/control` reload. The mechanism is inferred from the code, not observed - the disagreeing
+  call sites are certain, the sample-rate cause is not. Fix is to make both sites use one context.
+- **STATE MUSIC IS STOP-FIRST, AND CUES DUCK IT RATHER THAN STACK ON IT** (both found live
+  2026-08-02, Steele: "a song that plays the whole time and then a sound when the first time alert
+  and then another when time is up and they all played on top of eachother and the song continued
+  into the next state"). Two independent bugs in `/control`'s audio, both fixed.
+  (1) `startMusicFor` returned EARLY when the new state had no music of its own - BEFORE its
+  `stopMusic()` call - so the warm-up song played straight on through every later state until
+  something else happened to stop it. Two callers relied on that swap and inherited the leak: the
+  server-hydration effect and the interlude effect both read
+  `if (running && flow.state) startMusicFor(...) else stopMusic()`, and a running state with no
+  music of its own took the early return. It stops FIRST now, unconditionally: every caller means
+  "the music for this state is the only music", and that has to hold when the answer is silence.
+  (2) There was no cue channel and no ducking - `playCue` made a fresh `new Audio()` per call and
+  nothing lowered the music - so the 30-second alert, the last-ten ticks and the time-up sound all
+  sounded over the song and over each other. Now ONE `cueRef` (a new cue stops the one still
+  sounding, because a cue is an interruption) and `duckMusic` pulls the song to `MUSIC_DUCK_VOLUME`
+  0.18 for the clip's real duration, read off `loadedmetadata` with a 3s fallback so a clip that
+  never loads cannot leave the music quiet for the rest of the period. The duck-restore re-reads
+  `musicRef` rather than closing over the element, or restoring volume on a swapped-out track would
+  leave the NEW one quiet. Time-up is deliberately still `stopMusic()` then `playCue("end")` - the
+  song ends, the cue plays alone.
 - **EVERY CLASSROOM TOGGLE NEEDS ITS OFF SWITCH IN THE UI.** `hide-board` was wired end to end -
   action type, `/api/control-remote` handler, `/control` listener - but the iPad Remote only ever
   rendered "Open work space". Once the writing surface was up there was no way to put it away, and
@@ -1523,7 +1625,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 30 golden/contract suites, run with typecheck by
+  2026-07-27 `npm test` - the aggregate of all 31 golden/contract suites, run with typecheck by
   GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.

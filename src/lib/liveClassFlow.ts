@@ -131,6 +131,7 @@ export type LiveToolRoute =
   | "/proportions"
   | "/coordinate-grid"
   | "/term-identifier"
+  | "/decimal-steps"
   | "/challenge"
   | "/exit-ticket"
   | "/checkpoint";
@@ -219,6 +220,16 @@ export type LiveToolConfig =
       label: string;
       prompt: string;
       config: { set: string; bothModes?: boolean };
+    }
+  | {
+      id: string;
+      // `set` is a "12.4 + 3.75, 9.6 / 0.4" problem series (see lib/decimalSteps)
+      // covering all four operations. Empty means the tool's built-in series -
+      // one of each operation - same as visiting the route directly.
+      route: "/decimal-steps";
+      label: string;
+      prompt: string;
+      config: { set: string };
     };
 
 export interface LiveFlowSequenceStep {
@@ -252,6 +263,13 @@ export interface LiveFlowSequenceStep {
   publicSurfaceMode?: PublicSurfaceMode;
   routineConfig?: PublicLessonRoutineConfig | null;
   slideOverlay?: string;
+  // An outside visual for this step - an exported slide image, a Lucid / Figma / Canva / Google
+  // Slides board, or a plain website - rendered inside the lesson frame on the MAIN projector.
+  // `slideMirror` repeats it on Pace + Support; off by default so the support screen keeps
+  // carrying directions. Both are server-authored, so Control's full-replace snapshot has to
+  // carry them through the same way it carries slideOverlay.
+  slideUrl?: string;
+  slideMirror?: boolean;
   // The authored classroom state strip. Raw select values, resolved by
   // lib/classroomStateStrip - all four or the step shows no strip at all.
   eyes?: string;

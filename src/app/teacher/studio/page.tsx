@@ -29,6 +29,7 @@ import {
   type ScreenKey,
   type ScreenZones,
 } from "@/lib/lessonScreenModel";
+import { resolveSlideSource, slideSourceLabel } from "@/lib/embedUrl";
 
 interface LessonSummary {
   id: string;
@@ -572,6 +573,34 @@ function StudioInner() {
                   </label>
                 );
               })}
+
+              {selectedBlock.type === "slide" ? (() => {
+                const source = resolveSlideSource(
+                  selectedBlock.ov.slideUrl ?? autoScreenValue(data, "slideUrl"),
+                );
+                const mirrored = selectedBlock.ov.slideMirror === "1";
+                return (
+                  <div className="lss-slide-extras">
+                    {source.kind !== "none" ? (
+                      <p className="lss-slide-kind">{slideSourceLabel(source)}</p>
+                    ) : source.reason ? (
+                      <p className="lss-slide-warn">{source.reason}</p>
+                    ) : null}
+                    {source.warning ? <p className="lss-slide-warn">{source.warning}</p> : null}
+                    {/* The support projector normally carries directions, not a copy of the main
+                        screen. Mirroring is per step and deliberately opt-in - a room that sees the
+                        same thing twice has lost its second channel. */}
+                    <button
+                      type="button"
+                      className={`lss-mirror${mirrored ? " on" : ""}`}
+                      aria-pressed={mirrored}
+                      onClick={() => editField("slideMirror", mirrored ? "" : "1")}
+                    >
+                      {mirrored ? "Mirroring on Pace + Support" : "Mirror on Pace + Support"}
+                    </button>
+                  </div>
+                );
+              })() : null}
             </div>
           ) : null}
 
@@ -675,6 +704,11 @@ const STUDIO_CSS = `
 .lss-inspector { border-top:6px solid #50A3A4; gap:12px; }
 .lss-inspector-head { display:grid; gap:3px; }
 .lss-fields { display:grid; gap:11px; }
+.lss-slide-extras { display:grid; gap:8px; padding-top:4px; }
+.lss-slide-kind { margin:0; font-size:0.7rem; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:#50A3A4; }
+.lss-slide-warn { margin:0; font-size:0.72rem; font-weight:700; line-height:1.4; color:#C4660A; }
+.lss-mirror { border:1px solid #DBD5C9; border-radius:10px; background:#fff; color:#4A453E; font-size:0.78rem; font-weight:800; padding:9px 12px; cursor:pointer; text-align:left; }
+.lss-mirror.on { border-color:#3C7D7E; background:#3C7D7E; color:#fff; }
 .lss-field { display:grid; gap:5px; }
 .lss-field-label { font-size:10px; font-weight:900; letter-spacing:.13em; text-transform:uppercase; color:#8A8378; }
 .lss-field input, .lss-field textarea { border:2px solid #DBD5C9; border-radius:12px; background:#F6F3EC;

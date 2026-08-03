@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useLiveFlowPing } from "@/lib/liveFlowPing";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
+import SlideFrameScene from "@/components/SlideFrameScene";
 import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
 import { applyStripOverride, overrideIsLive } from "@/lib/classroomStateStrip";
 import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
@@ -222,6 +223,12 @@ export default function PaceSupportPage() {
     : publicSurfacesLinked && state?.id === "ipad-kid"
       ? "ipad"
       : null;
+  // The support projector mirrors the main slide ONLY when the step asks it to. Off by default:
+  // this screen's job is directions, and duplicating the visual costs the room its second channel.
+  const mirroredSlideStep = flow?.sequence?.steps?.[flow.sequence.currentIndex] || null;
+  const mirroredSlideUrl = mirroredSlideStep?.slideMirror
+    ? String(mirroredSlideStep.slideUrl || "").trim()
+    : "";
   const spinnerSyncScope = `${flow?.sequence?.currentIndex ?? -1}:${flow?.presentation?.notionStepId || state?.id || "spinner"}`;
   const routineConfig = flow?.presentation?.routineConfig || null;
   // The classroom state strip. The authored values come with the step; the
@@ -429,6 +436,10 @@ export default function PaceSupportPage() {
         .pw-term { display:flex; align-items:center; gap:9px; color:var(--head); font-size:clamp(1rem,1.5vw,1.3rem); font-weight:800; }
         .pw-term-dot { width:10px; height:10px; border-radius:3px; background:var(--acc); flex:none; }
         .pw-def { margin:6px 0 0; padding-top:6px; border-top:1px solid #F0D9D3; color:var(--soft); font-size:clamp(0.85rem,1.2vw,1.05rem); line-height:1.35; font-weight:650; }
+        .pw-slide { position:absolute; inset:0; width:100%; height:100%; border:0; background:var(--ground); overflow:hidden; }
+        .stage-slide-fallback { position:absolute; inset:0; display:grid; align-content:center; justify-items:center; gap:12px; background:var(--ground); text-align:center; padding:6vw; }
+        .stage-slide-fallback p { margin:0; color:var(--ink); font-size:clamp(1.6rem,3.4vw,2.8rem); font-weight:800; }
+        .stage-slide-fallback span { color:var(--soft); font-size:clamp(0.95rem,1.8vw,1.4rem); font-weight:700; }
         .pw-center { position:absolute; inset:0; display:grid; place-items:center; padding:clamp(28px,5vw,72px); text-align:center; }
         .pw-center h2 { margin:0; max-width:24ch; color:var(--head); font-size:clamp(2rem,4.6vw,4.4rem); line-height:1.05; font-weight:800; letter-spacing:-0.02em; }
         .pw-center p { margin:12px 0 0; color:var(--soft); font-size:clamp(0.95rem,1.7vw,1.3rem); font-weight:700; }
@@ -522,6 +533,8 @@ export default function PaceSupportPage() {
               <span className="pw-interlude-clock">{formatTime(interludeSeconds)}</span>
             </div>
           </div>
+        ) : mirroredSlideUrl ? (
+          <SlideFrameScene url={mirroredSlideUrl} className="pw-slide" />
         ) : warmupAgenda ? (
           <div className="pw-agenda" aria-label="Today's agenda">
             <p className="pw-agenda-kicker">Today&apos;s plan</p>

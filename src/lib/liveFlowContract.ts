@@ -261,6 +261,10 @@ const ASSIGNED_TOOL_ROUTES: Record<string, string> = {
   distributivearea: "/distributive-area",
   divisibility: "/divisibility",
   divisibilityrules: "/divisibility",
+  decimals: "/decimal-steps",
+  decimalsteps: "/decimal-steps",
+  decimaloperations: "/decimal-steps",
+  decimalsstepbystep: "/decimal-steps",
 };
 
 function normalizeAssignedToolName(value: string): string {
