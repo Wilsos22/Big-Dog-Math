@@ -6,21 +6,33 @@ import StudentAssignments from "@/components/StudentAssignments";
 
 type Tool = { href: string; label: string; letter: string; color: string; desc: string };
 
+// Every public manipulative that runs with no class session, ordered by domain:
+// number sense, fractions/percents, ratio, expressions/equations, geometry and
+// measurement, then operations. Keep this in step with the tool routes in
+// CLAUDE.md - the hub silently loses a tool if a route ships without an entry.
 const TOOLS: Tool[] = [
   { href: "/number-line-plus", label: "Number Line", letter: "N", color: "#674a40", desc: "Integers, hops, and fractions" },
-  { href: "/coordinate-grid", label: "Coordinate Grid", letter: "+", color: "#4d8df6", desc: "Plot and identify points" },
-  { href: "/percent-bar", label: "Percent Bar", letter: "%", color: "#50a3a4", desc: "Parts, wholes, and benchmarks" },
+  { href: "/place-value", label: "Place Value Reader", letter: "V", color: "#4d8df6", desc: "Read and build big numbers and decimals" },
+  { href: "/place-value-mirror", label: "Place Value Mirror", letter: "M", color: "#7c5cd6", desc: "Multiply and divide by powers of ten" },
+  { href: "/divisibility", label: "Divisibility Rules", letter: "D", color: "#2f9e6f", desc: "Test factors and build the family" },
   { href: "/fraction-bars", label: "Fraction Bars", letter: "F", color: "#fcaf38", desc: "Fractions, decimals, percents" },
+  { href: "/percent-bar", label: "Percent Bar", letter: "%", color: "#50a3a4", desc: "Parts, wholes, and benchmarks" },
   { href: "/group-bars", label: "Group Bars", letter: "G", color: "#2f9e6f", desc: "Equal groups and ratios" },
   { href: "/proportions", label: "Proportions", letter: "P", color: "#50a3a4", desc: "Scale factors and missing values" },
+  { href: "/coordinate-grid", label: "Coordinate Grid", letter: "+", color: "#4d8df6", desc: "Plot and identify points" },
   { href: "/equation-builder", label: "Equation Builder", letter: "E", color: "#2f9e6f", desc: "Solve step by step" },
+  { href: "/balance-beam", label: "Balance Beam", letter: "B", color: "#50a3a4", desc: "Keep both sides equal to solve" },
   { href: "/order-of-operations", label: "GEMS Order of Ops", letter: "G", color: "#7c5cd6", desc: "Pick the step, build the line" },
   { href: "/combine-like-terms", label: "Combine Like Terms", letter: "C", color: "#f95335", desc: "Group and simplify" },
   { href: "/term-identifier", label: "Identify Terms", letter: "T", color: "#50a3a4", desc: "Coefficient, variable, constant" },
-  { href: "/area-model", label: "Area Model", letter: "A", color: "#fcaf38", desc: "Multiply with rectangles" },
-  { href: "/ladder-method", label: "Ladder Method", letter: "L", color: "#674a40", desc: "GCF, LCM, prime factors" },
   { href: "/algebra-tiles", label: "Algebra Tiles", letter: "A", color: "#2f9e6f", desc: "Build and simplify expressions" },
+  { href: "/area-model", label: "Area Model", letter: "A", color: "#fcaf38", desc: "Multiply with rectangles" },
+  { href: "/distributive-area", label: "Distributive Area", letter: "D", color: "#f95335", desc: "Break apart to multiply" },
+  { href: "/area-explorer", label: "Area Explorer", letter: "□", color: "#4d8df6", desc: "Area of the shapes you build" },
+  { href: "/ladder-method", label: "Ladder Method", letter: "L", color: "#674a40", desc: "GCF, LCM, prime factors" },
+  { href: "/long-division", label: "Long Division", letter: "÷", color: "#7c5cd6", desc: "Divide step by step" },
   { href: "/multiplication-fluency", label: "Multiplication Facts", letter: "×", color: "#4d8df6", desc: "Fast facts practice" },
+  { href: "/whiteboard", label: "Whiteboard", letter: "W", color: "#674a40", desc: "A blank space to work" },
 ];
 
 export default function ExplorePage() {

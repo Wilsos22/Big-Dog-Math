@@ -494,6 +494,13 @@ export default function StudentLanding() {
                   </a>
                 ))}
               </div>
+              {/* The Stuck walkthrough lives on the student home base (Steele,
+                  2026-08-01: "on the students homepage not on the log in page").
+                  It is still the homepage chip CLAUDE.md pins to /homework-help,
+                  just on the in-class home base rather than the code-entry view. */}
+              <a className="st-explore" href="/homework-help">
+                <span>Stuck on the assignment? <b>Get unstuck</b></span>
+              </a>
               {joinErr && <div className="st-joinerr" role="alert">{joinErr}</div>}
               {helpRequestCode && (
                 <p className="st-help-code" role="status">
@@ -555,8 +562,14 @@ export default function StudentLanding() {
           </a>
         )}
         {!pendingCode && (
+          // The code-entry screen is for kids NOT in a live class - absent, at
+          // home, or doing homework. The Stuck chip moved to the home base
+          // (above), so this entry is framed for them: same /homework-help
+          // walkthrough, which is the documented no-code path (runs at 8pm from
+          // a kitchen table). Keeping it here is what stops an absent kid, who
+          // can never open a live class code, from losing that path entirely.
           <a className="st-explore" href="/homework-help">
-            <span>Stuck on the assignment? <b>Get unstuck</b></span>
+            <span>Absent or doing homework? <b>Get unstuck</b></span>
           </a>
         )}
       </div>

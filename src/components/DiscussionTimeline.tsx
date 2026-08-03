@@ -155,13 +155,19 @@ export default function DiscussionTimeline({
         {phases.map((phase, index) => {
           const state = progress.done || index < progress.index ? "done" : index === progress.index ? "active" : "upcoming";
           const fill = state === "done" ? 1 : state === "active" ? Math.min(1, progress.phaseFraction) : 0;
+          const isActive = state === "active";
+          // The ACTIVE beat counts DOWN its own remaining time; every other beat
+          // shows its full length. Showing phase.seconds on the active one was
+          // the bug - the bar emptied but the number never moved.
+          const shown = isActive ? phaseSecondsLeft : phase.seconds;
+          const urgency = !isActive ? "" : phaseSecondsLeft <= 5 ? " final" : phaseSecondsLeft <= 15 ? " urgent" : "";
           return (
             <li className={`dt-phase ${state}`} key={`${phase.mode}-${index}`}>
               <span className="dt-label">{DISCUSSION_MODE_LABEL[phase.mode]}</span>
               <span className="dt-direction">{phase.direction}</span>
               <span className="dt-bar-wrap">
                 <span className="dt-bar" style={{ width: `${Math.round(fill * 100)}%` }} />
-                <span className="dt-time">{formatDuration(phase.seconds)}</span>
+                <span className={`dt-time${isActive ? " active" : ""}${urgency}`}>{formatDuration(shown)}</span>
               </span>
             </li>
           );
@@ -177,10 +183,16 @@ export default function DiscussionTimeline({
         .dt-label { font-size:0.9em; font-weight:900; text-transform:uppercase; letter-spacing:0.05em; color:var(--dt-accent-text, #3c7d7e); }
         .dt-phase.upcoming .dt-label { color:var(--dt-soft, #7a7061); }
         .dt-direction { font-size:1em; font-weight:800; color:var(--dt-ink, #201e1a); line-height:1.25; }
-        .dt-bar-wrap { position:relative; height:1.7em; border-radius:999px; background:var(--dt-track, #f3ecdd); border:1px solid var(--dt-line, #ece4d4); overflow:hidden; display:flex; align-items:center; }
+        .dt-bar-wrap { position:relative; height:2em; border-radius:999px; background:var(--dt-track, #f3ecdd); border:1px solid var(--dt-line, #ece4d4); overflow:hidden; display:flex; align-items:center; }
         .dt-bar { position:absolute; left:0; top:0; bottom:0; background:var(--dt-accent, #50a3a4); border-radius:999px; }
         .dt-phase.done .dt-bar { background:var(--dt-done, #2f9e6f); }
         .dt-time { position:relative; margin-left:auto; margin-right:0.7em; font-size:0.85em; font-weight:900; color:var(--dt-ink, #201e1a); font-variant-numeric:tabular-nums; }
+        /* The live beat's number is the one that moves, so it reads bigger. */
+        .dt-time.active { font-size:1.3em; color:var(--dt-accent-text, #3c7d7e); }
+        .dt-time.urgent { color:#f95335; animation:dt-time-pulse 1s ease-in-out infinite; }
+        .dt-time.final { color:#f95335; animation:dt-time-pulse 0.5s ease-in-out infinite; }
+        @keyframes dt-time-pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        @media (prefers-reduced-motion: reduce) { .dt-time.urgent, .dt-time.final { animation:none; } }
         @media (max-width: 640px) {
           .dt-phase { grid-template-columns:1fr; gap:0.35em; }
           .dt-bar-wrap { width:100%; }

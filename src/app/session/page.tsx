@@ -328,6 +328,34 @@ export default function SessionPage() {
     setSession({ id: sessionId, code, periodName, periodId });
     setJoins([]); setAdmissionRequests([]); setBroadcast(data.broadcast || "free");
     setOpenCount(1); setEndNotice(null);
+
+    // Starting a class starts today's lesson - there is no separate "Start
+    // lesson" tap anymore. This arms step 0, the warm-up state; ClassSync holds
+    // students on the homepage through warm-up (it only moves the room on the
+    // first Advance past it), so auto-starting does NOT pull anyone off the
+    // warm-up card - it just means the teacher's first Next moves the class
+    // instead of a second launch button. If nothing is published today, the
+    // start-lesson call is skipped and the session stays in free mode exactly
+    // as before; if it errors, the "Start today's lesson" button is still there.
+    // Uses the fresh sessionId directly - session state is not set yet, so
+    // sendFlowAction (which gates on it) would bail here.
+    if (todayLesson?.id || todayLesson?.lessonCode) {
+      try {
+        const started = await teacherPost<{
+          session?: { liveFlow: LiveClassFlowSnapshot | null };
+          liveFlow?: LiveClassFlowSnapshot | null;
+        }>("/api/control-remote", {
+          action: "start-lesson",
+          sessionId,
+          notionLessonId: todayLesson?.id || "",
+          lessonCode: todayLesson?.lessonCode || "",
+        });
+        const nextFlow = started.session?.liveFlow || started.liveFlow || null;
+        if (nextFlow) { setLiveFlow(nextFlow); setBroadcast(LIVE_FLOW_MODE); }
+      } catch {
+        // Leave the session in free mode - the Start today's lesson button remains.
+      }
+    }
   }
   function adoptOpenSession(row: TeacherSessionRow) {
     const periodName = periods.find((period) => period.id === row.period_id)?.name || "Class";
@@ -588,6 +616,10 @@ export default function SessionPage() {
         .se-flow-now { display:grid; gap:2px; }
         .se-flow-state { color:#1c1d22; font-size:1.15rem; font-weight:900; }
         .se-flow-meta { color:#7a7468; font-size:0.85rem; font-weight:800; font-variant-numeric:tabular-nums; }
+        .se-flow-lesson { color:#0f766e; font-size:0.82rem; font-weight:900; letter-spacing:0.02em; }
+        .se-today { margin:14px 0 0; padding:12px 14px; border-radius:12px; background:#fbf7ef; border:1px solid #efe7d6; font-weight:800; color:#2a2a2e; font-size:1.02rem; }
+        .se-today-k { display:block; font-size:0.72rem; font-weight:900; letter-spacing:0.08em; text-transform:uppercase; color:#0f766e; margin-bottom:3px; }
+        .se-today-none { margin:12px 0 0; color:#5a5346; font-weight:700; font-size:0.95rem; }
         .se-flow-keys { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
         .se-flow-key { min-height:52px; min-width:110px; border:2px solid #e7dec9; border-radius:12px; background:#fbf7ef;
           color:#2a2a2e; padding:0 20px; font:inherit; font-size:1rem; font-weight:900; cursor:pointer; }
@@ -700,6 +732,20 @@ export default function SessionPage() {
               </select>
               <button className="se-start" onClick={start} disabled={!periodId}>Start session</button>
             </div>
+            {/* Starting a session now auto-starts the lesson, so name it here -
+                the teacher should see WHICH lesson is about to run before the tap. */}
+            {todayLesson ? (
+              <p className="se-today">
+                <span className="se-today-k">Starts this lesson</span>
+                {[todayLesson.lessonCode, todayLesson.title].filter(Boolean).join(" · ") || "Today's published lesson"}
+              </p>
+            ) : (
+              <p className="se-today-none">
+                {todayUnreachable
+                  ? "Today's lesson could not be loaded from Notion - the session will open in free mode."
+                  : "No lesson is published for today - the session will open in free mode."}
+              </p>
+            )}
             <p className="se-empty" style={{ marginTop: 12 }}>Pick a class period and start a session. Students enter the code on their home screen.</p>
           </div>
         )}
@@ -712,6 +758,9 @@ export default function SessionPage() {
               {liveFlow?.sequence ? (
                 <div className="se-flowbar">
                   <div className="se-flow-now">
+                    {liveFlow.lesson?.code || liveFlow.lesson?.title ? (
+                      <span className="se-flow-lesson">{[liveFlow.lesson.code, liveFlow.lesson.title].filter(Boolean).join(" · ")}</span>
+                    ) : null}
                     <span className="se-flow-state">{liveFlow.state?.label || "Lesson running"}</span>
                     <span className="se-flow-meta">
                       Step {liveFlow.sequence.currentIndex + 1} of {liveFlow.sequence.totalSteps}

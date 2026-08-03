@@ -12,7 +12,7 @@ import { useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
 import { classroomStageTheme, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
-import { parseDiscussionPhases } from "@/lib/discussionPhases";
+import { parseDiscussionPhases, discussionStageCountdown, DISCUSSION_MODE_LABEL } from "@/lib/discussionPhases";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { TIMER_URGENCY_CSS, TIMER_URGENT_SECONDS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 import {
@@ -148,6 +148,13 @@ export default function LiveFlowPage() {
   const router = useRouter();
   const supabase = getSupabase();
   const [flow, setFlow] = useState<LiveClassFlowSnapshot | null>(null);
+  // A 1s heartbeat so the countdown re-renders every second. Session polling is
+  // 2s, and a big beat clock that jumped two seconds at a time would read broken.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setClockTick((t) => (t + 1) % 3600), 1000);
+    return () => window.clearInterval(id);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [emptyMessage, setEmptyMessage] = useState("Waiting for the teacher.");
   const [holding, setHolding] = useState(false);
@@ -581,6 +588,18 @@ export default function LiveFlowPage() {
   const activeTimerSeconds = phase?.timed && typeof phase.secondsLeft === "number"
     ? phase.secondsLeft
     : liveTimerSeconds(timer);
+  // On a self-running discussion timeline, students work against the CURRENT
+  // beat's clock (think 30, write 90, ...), not the whole-state total - so the
+  // number they see, the red-at-15 warning and the shell glow all key off the
+  // beat. Same computation the projector and pacing slide use, so the room agrees.
+  const timelinePhases = (() => {
+    const parsed = parseDiscussionPhases(flow?.presentation?.discussionPhases);
+    return parsed.ok ? parsed.phases : [];
+  })();
+  const discussionStage = timelinePhases.length
+    ? discussionStageCountdown(timelinePhases, timer?.totalSeconds ?? 0, liveTimerSeconds(timer))
+    : null;
+  const displayTimerSeconds = discussionStage && !discussionStage.done ? discussionStage.secondsLeft : activeTimerSeconds;
   // Progress strip: position, what's next, and today's target - so the screen
   // changing reads as "we're in part 3 of 4", not "an adult moved my screen".
   const progressIndex = flow?.sequence?.currentIndex ?? -1;
@@ -597,13 +616,13 @@ export default function LiveFlowPage() {
   // no chime): the shell edge glows inside 30 seconds, the timer itself goes
   // red and announces inside 10.
   const timerTicking = Boolean(showTimer && timer && (timer.running || (phase?.timed && typeof phase.secondsLeft === "number")));
-  const timeWarning = timerTicking && activeTimerSeconds <= 30 && activeTimerSeconds > 0;
+  const timeWarning = timerTicking && displayTimerSeconds <= 30 && displayTimerSeconds > 0;
   // 10s was too late to be a warning - by then the sound is the only thing a
   // student reacts to. Match the projectors: amber at 30, coral and pulsing at
   // 15, so a head-down student on a Chromebook gets the same runway the room
   // gets (Steele, 2026-07-28).
-  const studentTimerUrgency = timerUrgency(activeTimerSeconds, { running: timerTicking });
-  const timeCritical = timerTicking && activeTimerSeconds <= TIMER_URGENT_SECONDS && activeTimerSeconds > 0;
+  const studentTimerUrgency = timerUrgency(displayTimerSeconds, { running: timerTicking });
+  const timeCritical = timerTicking && displayTimerSeconds <= TIMER_URGENT_SECONDS && displayTimerSeconds > 0;
   // A new lesson step clears the local signal highlight - "stuck" on the last
   // step is not "stuck" on this one. The server row keeps its step tag and the
   // teacher view scopes to the current step on its own.
@@ -906,6 +925,14 @@ export default function LiveFlowPage() {
         .lf-stem { display:flex; align-items:center; min-height:58px; border-left:4px solid var(--lf-accent); background:var(--bdb-ground); color:var(--bdb-ink); padding:10px 14px; font-size:clamp(1rem,2vw,1.22rem); font-weight:850; line-height:1.28; }
         .lf-vocab-list { display:flex; flex-wrap:wrap; gap:9px; margin:0; padding:0; list-style:none; }
         .lf-vocab { background:var(--bdb-ground); border:1px solid var(--bdb-line); border-radius:999px; color:var(--bdb-ink); padding:9px 12px; font-size:clamp(0.95rem,1.9vw,1.16rem); font-weight:900; line-height:1.1; }
+        /* The current discussion beat: a big count of time left IN THIS PART, so
+           a head-down student paces the same beat the room does. No explicit
+           colour on the number - the urgency class owns it, red and pulsing
+           inside 15s. Spans both support columns and sits above the language. */
+        .lf-beat { width:min(100%,1000px); display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--bdb-ink); border:1px solid var(--bdb-line); border-top:5px solid var(--lf-accent); border-radius:14px; background:#fff; padding:clamp(12px,2vw,22px); box-shadow:var(--bdb-shadow-sm); text-align:center; }
+        .lf-beat-mode { color:var(--lf-accent); font-size:clamp(0.9rem,2vw,1.15rem); font-weight:900; letter-spacing:0.12em; text-transform:uppercase; }
+        .lf-beat-time { font-size:clamp(3.4rem,12vw,6.5rem); line-height:0.95; font-weight:900; font-variant-numeric:tabular-nums; letter-spacing:-0.03em; }
+        .lf-beat-dir { font-size:clamp(1rem,2.4vw,1.4rem); font-weight:750; line-height:1.25; max-width:32ch; }
         .lf-poll { width:min(100%,760px); display:grid; gap:18px; justify-items:center; }
         .lf-poll-question { margin:0; max-width:34ch; color:var(--lf-head); font-size:clamp(1.45rem,3.4vw,2.6rem); font-weight:800; line-height:1.18; }
         .lf-poll-help { margin:0; color:var(--bdb-ink-soft); font-size:clamp(1rem,2.2vw,1.3rem); font-weight:700; }
@@ -1013,7 +1040,7 @@ export default function LiveFlowPage() {
           <span className="lf-sync">{!hasStudentSession ? "Not joined" : connectionState === "connected" ? "Synced" : "Connecting"}</span>
           {showTimer && timer ? (
             <div className={`lf-timer${timeCritical ? " low" : ""}`} aria-label="Current lesson timer" role={timeCritical ? "status" : undefined}>
-              <div className={`lf-time ${timerUrgencyClass(studentTimerUrgency)}`}>{formatTime(activeTimerSeconds)}</div>
+              <div className={`lf-time ${timerUrgencyClass(studentTimerUrgency)}`}>{formatTime(displayTimerSeconds)}</div>
               {timeCritical ? <span className="lf-time-left">left</span> : null}
             </div>
           ) : null}
@@ -1370,6 +1397,13 @@ export default function LiveFlowPage() {
               <ul className="lf-directions">
                 {discussion.directions.map((direction) => <li className="lf-direction" key={direction}>{direction}</li>)}
               </ul>
+            )}
+            {showDiscussionTimeline && discussionStage && !discussionStage.done && discussionStage.phase && (
+              <div className="lf-beat" aria-label="Time left in this part">
+                <span className="lf-beat-mode">{DISCUSSION_MODE_LABEL[discussionStage.phase.mode]}</span>
+                <span className={`lf-beat-time ${timerUrgencyClass(studentTimerUrgency)}`}>{formatTime(displayTimerSeconds)}</span>
+                <span className="lf-beat-dir">{discussionStage.phase.direction}</span>
+              </div>
             )}
             {showDiscussionSupports && (
               <section className="lf-supports" aria-label="Discussion supports">
