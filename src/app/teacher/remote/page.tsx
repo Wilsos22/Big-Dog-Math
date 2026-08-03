@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import VisitListPanel from "@/components/VisitListPanel";
 import LiveScreenPreview from "@/components/LiveScreenPreview";
+import SupplyCheckBoard from "@/components/SupplyCheckBoard";
 import {
   REMOTE_COMMAND_STALE_MS,
   canRevealM2T1L1FinalScore,
@@ -24,7 +25,7 @@ import {
 import type { LessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import type { LessonStepData } from "@/lib/notionLessons";
-import { BEHAVIOR_OVERRIDE_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
+import { BEHAVIOR_OVERRIDE_BUTTONS, CLEAR_ON_DEMAND_TIMER_BUTTON, ON_DEMAND_TIMER_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, SPEAKER_REMOTE_BUTTON, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
 import { joinRealtimeRoom } from "@/lib/realtimeRooms";
 import {
   SOUND_LABEL_ROOM,
@@ -39,8 +40,29 @@ import { overrideIsLive, stripFromStep } from "@/lib/classroomStateStrip";
 import { speakerNoteItems } from "@/lib/speakerNotes";
 
 const REMOTE_SESSION_KEY = "bdm-remote-session";
-const SPINNER_STATE_IDS = ["learning-target-readers", "ipad-kid"] as const;
+const SPINNER_STATE_IDS = ["learning-target-readers", "ipad-kid", "table-captains"] as const;
 type SpinnerStateId = (typeof SPINNER_STATE_IDS)[number];
+
+// What the one Spin button on the deck says it will do, per slide it appears on.
+const SPINNER_BUTTON_DETAIL: Record<SpinnerStateId, string> = {
+  "learning-target-readers": "Choose today's two readers",
+  "ipad-kid": "Choose this week's iPad Kid",
+  "table-captains": "Choose this week's captain for every table",
+};
+const SPINNER_BUTTON_TONE: Record<SpinnerStateId, string> = {
+  "learning-target-readers": "purple",
+  "ipad-kid": "green",
+  "table-captains": "teal",
+};
+
+// Where the captain report belongs: closeout, and the away half of any supply
+// transition. Those are the moments a count is actually being taken.
+const SUPPLY_CHECK_STATE_IDS = new Set([
+  "closeout",
+  "supplies-boards-away",
+  "supplies-calculators-away",
+  "supplies-bins-away",
+]);
 
 function isSpinnerStateId(value: unknown): value is SpinnerStateId {
   return typeof value === "string" && SPINNER_STATE_IDS.some((stateId) => stateId === value);
@@ -833,6 +855,7 @@ export default function TeacherRemotePage() {
       disabled: discussionPhaseIndex < 0 || discussionPhaseIndex >= DISCUSSION_ROUNDS.length - 1,
     },
   ];
+  const isSupplyCheckState = SUPPLY_CHECK_STATE_IDS.has(flow?.state?.id ?? "");
   const spinnerStateId = isSpinnerStateId(flow?.state?.id) ? flow.state.id : null;
   const spinnerStateKey = session && spinnerStateId
     ? `${session.id}:${spinnerStateId}:${sequence?.currentIndex ?? -1}`
@@ -853,10 +876,8 @@ export default function TeacherRemotePage() {
     ? {
         action: "spin-spinner",
         label: completedSpinnerStateKey === spinnerStateKey ? "Re-spin" : "Spin",
-        detail: spinnerStateId === "learning-target-readers"
-          ? "Choose today's two readers"
-          : "Choose this week\'s iPad Kid",
-        tone: spinnerStateId === "learning-target-readers" ? "purple" : "green",
+        detail: SPINNER_BUTTON_DETAIL[spinnerStateId],
+        tone: SPINNER_BUTTON_TONE[spinnerStateId],
       }
     : null;
   const stageLinks = useMemo(() => {
@@ -1266,6 +1287,12 @@ export default function TeacherRemotePage() {
                         />
                       ))}
                     </div>
+                    {/* Persistent cold-call: spins one student on the projector,
+                        any state. The state-scoped readers/iPad Spin is separate,
+                        below. */}
+                    <div className="deck-grid spinner-control">
+                      <DeckKey button={SPEAKER_REMOTE_BUTTON} busy={busy} disabled={controlsDisabled} onSend={send} />
+                    </div>
                     {spinnerButton ? (
                       <div className="deck-grid spinner-control">
                         <DeckKey button={spinnerButton} busy={busy} disabled={controlsDisabled} onSend={send} />
@@ -1291,6 +1318,24 @@ export default function TeacherRemotePage() {
                         </div>
                       </div>
                     ) : null}
+                    {/* An untimed state gets the arming row; a timed one gets the clear button only
+                        while an on-demand clock is actually up, so the deck never offers to remove
+                        a duration the lesson authored. */}
+                    <div className="remote-control-block">
+                      <h3 className="deck-section-title">{flow?.timer ? "Timer" : "Start a timer"}</h3>
+                      <div className="deck-grid">
+                        {flow?.timer ? (
+                          <DeckKey
+                            button={CLEAR_ON_DEMAND_TIMER_BUTTON}
+                            busy={busy}
+                            disabled={controlsDisabled}
+                            onSend={send}
+                          />
+                        ) : ON_DEMAND_TIMER_BUTTONS.map((button) => (
+                          <DeckKey key={button.label} button={button} busy={busy} disabled={controlsDisabled} onSend={send} />
+                        ))}
+                      </div>
+                    </div>
                     <div className="remote-control-block">
                       <h3 className="deck-section-title">Transition now</h3>
                       <div className="deck-grid">
@@ -1459,6 +1504,11 @@ export default function TeacherRemotePage() {
                     ) : null}
                   </section>
                 ) : null}
+
+                {/* The captain report. Only on the states where supplies are
+                    actually moving back, so it is not one more thing on the
+                    deck for the other fifty minutes. */}
+                {isSupplyCheckState ? <SupplyCheckBoard mode="remote" sessionId={session.id} /> : null}
 
                 <VisitListPanel sessionId={session.id} />
 

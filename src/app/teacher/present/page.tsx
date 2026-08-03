@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useLiveFlowPing } from "@/lib/liveFlowPing";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
+import SpeakerSpinner from "@/components/SpeakerSpinner";
+import TableCaptainSpinner from "@/components/TableCaptainSpinner";
+import SupplyCheckBoard from "@/components/SupplyCheckBoard";
 import InkBoard from "@/components/InkBoard";
 import LessonVisual from "@/components/LessonVisual";
 import AttentionListener from "@/components/AttentionListener";
@@ -47,6 +50,10 @@ interface PollAnswer {
   id: string;
   answer: string | null;
 }
+
+// An untimed state shows a dash, not a zeroed clock - a 0:00 on a projector reads as "you are out
+// of time", which is exactly the pressure an untimed state exists to remove.
+const UNTIMED_CLOCK = "\u2013";
 
 function formatTime(totalSeconds: number) {
   const seconds = Math.max(0, totalSeconds);
@@ -464,6 +471,11 @@ export default function ClassroomStagePage() {
     ?? classroomStageTheme(state?.id, state?.label);
   const showReaderSpinner = state?.id === "learning-target-readers";
   const showIpadKidSpinner = state?.id === "ipad-kid";
+  const showTableCaptains = state?.id === "table-captains";
+  // Closeout stops being a wall of text and becomes the room's own scoreboard:
+  // ten tables filling in green as the teacher taps the iPad. The written
+  // directions live inside the board rather than beside it.
+  const showSupplyCheck = state?.id === "closeout";
   const routineConfig = presentation?.routineConfig || null;
   const spinnerSyncScope = `${flow?.sequence?.currentIndex ?? -1}:${presentation?.notionStepId || state?.id || "spinner"}`;
   // Same reason: the target belongs to the two reveal states, not to every state
@@ -1086,6 +1098,15 @@ export default function ClassroomStagePage() {
               role="controller"
               remoteCommand={session.remote_command}
             />
+          ) : showSupplyCheck ? (
+            <SupplyCheckBoard key={`${session.id}:supply-check`} mode="board" sessionId={session.id} />
+          ) : showTableCaptains ? (
+            <TableCaptainSpinner
+              key={`${session.id}:table-captains`}
+              sessionId={session.id}
+              periodId={session.period_id}
+              remoteCommand={session.remote_command}
+            />
           ) : isTransition ? (
             <TransitionScene
               vibe={(state.label || "Transition").split("-").pop()?.trim() || "Transition"}
@@ -1371,6 +1392,12 @@ export default function ClassroomStagePage() {
               Pinned top right INSIDE the stage rather than in the topbar, where
               the clock already lives. */}
           <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} />
+          {/* On-demand speaker spinner: pops over any scene when the iPad sends
+              spin-speaker, lands on one first name, then clears itself. Projector
+              only - never mounted on a student device. */}
+          {session && !isStudioPreviewMode && (
+            <SpeakerSpinner sessionId={session.id} periodId={session.period_id} remoteCommand={session.remote_command} />
+          )}
         </section>
         {/* The Abbie broadcast bubble used to sit here, pinned bottom-centre over
             the stage, reading sessions.abbie. The Abbie AI feature is off the site

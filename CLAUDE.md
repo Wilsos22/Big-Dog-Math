@@ -138,7 +138,12 @@ bars and live misconception grouping).
    roster fetch, fair rotation, and spinner-sync snapshots still carry aliases, so the wire and
    server never see a name. The projector tab needs the name key loaded in ITS browser (present
    runs on the classroom laptop, so one paste on /roster covers it); without the key the spinner
-   falls back to aliases.
+   falls back to aliases. SAME EXCEPTION, SECOND SURFACE (2026-08-02): `SpeakerSpinner` is the
+   on-demand cold-call - the iPad's persistent `Pick a speaker` deck button sends the `spin-speaker`
+   remote action (any state, unlike `spin-spinner` which is scoped to the readers/iPad-Kid slides),
+   and the overlay on `/teacher/present` ONLY (never a student device) spins to one first name. Fair
+   rotation lives in the projector's localStorage (`bdm-speaker-spinner-fair-v1`) and the remaining
+   count is deliberately never shown; the alias is what rides the wire, first name only at render.
    STUDENT DEVICES RENDER NO STUDENT NAME OR ALIAS AT ALL (Steele, 2026-08-01: "they never have
    their names on their device" - a name on a kid's own screen is disruption material, same as on
    the board; an alias doubly so). Identity is NOT anonymous - the alias still rides every join,
@@ -293,7 +298,27 @@ bars and live misconception grouping).
   `/order-of-operations` (GEMS), `/combine-like-terms`, `/proportions`, `/area-model`,
   `/coordinate-grid`, `/ladder-method`, `/multiplication-fluency`, `/term-identifier`,
   `/divisibility`, `/distributive-area`, `/area-explorer`, `/balance-beam`, `/long-division`,
-  `/place-value`, `/place-value-mirror`, `/timer`, `/decimal-steps`.
+  `/place-value`, `/place-value-mirror`, `/timer`, `/decimal-steps`, `/lcm-bouncer`.
+- `/lcm-bouncer` (added 2026-08-03, Steele's idea) is the CONCRETE partner to `/ladder-method`'s
+  abstract GCF/LCM procedure: two balls arc across the same numbered track, Ball A touching down
+  every `stepA` squares and Ball B every `stepB`. Teal marks Ball A's own landings, coral Ball B's,
+  amber a square BOTH landed on - and the first amber column is the LCM.
+  THE TWO BALLS SHARE A HORIZONTAL SPEED, NOT A TEMPO, and that is the load-bearing decision. One
+  hop per beat would put Ball A on 12 at beat 3 and Ball B on 12 at beat 2 - same square, different
+  moments, and the "they landed together" event never happens on screen. Sharing the speed puts the
+  meeting in a single frame and leaves the BOUNCE COUNTS different, which is the quantity the lesson
+  is actually about. Do not "fix" it to one hop per beat. One clock (`progress`, in column units)
+  drives both arcs: each ball's height is a parabola over `(progress mod step) / step`.
+  The board KEEPS GOING past the first meeting on purpose, so the amber columns repeat at a fixed
+  interval and the room can see that every common multiple is a multiple of the least one. Track
+  length is DERIVED from the pair (`trackLengthFor`), never hand-set, so the LCM is always reachable
+  - a coprime pair just gets a long track, and "9 and 10 take ninety squares to meet" is a true and
+  useful thing to watch. Numbers hide on untouched squares once the track is long, but a landed-on
+  square always shows its number.
+  Wired in the simple `LiveToolConfig` arm (`config: Record<string, never>`) - the strides are set on
+  the board and a teacher steers the room through the PROMPT ("find where 4 and 6 land together").
+  Publishing the pair is an additive config arm plus two `/control` form fields, not a rewrite.
+  It emits NO evidence - `reportToolResult` is not wired here, so it moves no mastery bar.
 - `/decimal-steps` IS ITS OWN TOOL, NOT PART OF `/long-division` (Steele, 2026-08-02, unprompted:
   "this is its own tool from long division"). `/long-division` (`LongDivisionHouse`) is a
   WHOLE-NUMBER choreographed demo with no scoring, built for M1.T3.L4; `/decimal-steps`
@@ -608,11 +633,54 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   from `DesignSystem_901ffe` + `_ds_bundle.js`. Those are Claude Design CANVAS primitives, NOT repo
   dependencies - the studio chrome uses the repo's per-page `<style>` + `--bdb-*` convention instead,
   per the handoff's own "do not add a new styling system." Do not pull the canvas bundle into the app.
+- **DIRECTION (Steele, 2026-08-03): FRAME + IMPORTED SLIDES FOR INFORMATION; NATIVE ONLY FOR THE LIVE
+  LAYER. DO NOT build a native slide-composition editor** (the drag-resize grid of text/model/prompt
+  components was scoped and SHELVED here - it is a worse Canva). The moat is the FRAME (state band,
+  state word, step counter, shared clock, ink layer, split-whiteboard, attention pulse, class-sync)
+  and the INTERACTIVE layer (tools/manipulatives, Fist-to-5, polls, checkpoints, discussion beat-timers,
+  the proficiency spine) - none of which a slide app does. Anything that just SHOWS INFORMATION (direct
+  instruction, worked examples, "here's the plan") is authored in Canva / Figma / Google Slides and
+  imported through the `slide` frame, which the app wraps in the state chrome. Keep ONE dumb auto-default
+  so the nightly grind stays zero-effort: the app composes a plain on-brand info screen from the Notion
+  step, and the teacher drops in a `slide` frame only when a screen is worth designing. PREFER A PUBLISHED
+  LINK (Canva/Slides share url) OVER A NOTION UPLOAD - the upload's signed url dies in ~1h (the open
+  `Slide Url` expiry trap above); a published link does not. So the investment is the imported-slide path
+  (stable urls, good fit/framing, wiring present/pace to render the frame), NOT the native grid.
+  THE MODEL RESTS ON TWO LEGS, AND A WEAK ONE SINKS IT: (a) the frame must wrap an imported slide so it
+  reads NATIVE - one designed surface, not a Canva slide with chrome bolted around it; and (b) the native
+  auto-compose must be genuinely good, because killing the nightly slideshow-making was the WHOLE POINT -
+  a mediocre auto-default sends the teacher into Canva every night and makes prep worse, not better.
+  FOUR REFINEMENTS (honest review, 2026-08-03): (1) THE CUT IS TEMPLATED vs BESPOKE, not info vs
+  interactive. Data-driven info (today's problem, warm-up, anchor, "the plan") stays NATIVE and
+  auto-composed from Notion so the daily grind stays free; only BESPOKE visual info (diagrams, worked
+  examples, hooks, culture-day slides) goes to Canva. Drawing the line at "all info -> Canva" turns the
+  cheap daily stuff into manual design work. (2) THE AUTO-DEFAULT IS THE PRIMARY PATH, NOT A FALLBACK -
+  guard it; it must be good enough that most days the teacher never opens Canva. (3) RELIABILITY: prefer
+  an EXPORTED IMAGE on stable hosting (cached, no live fetch) over a live embed for classroom-critical
+  info slides - school wifi flakes and a live iframe can blank mid-lesson (the 4s fallback card is a bad
+  look on a projector). Reserve live embeds for boards being actively edited (Lucid/Figma). Tradeoff:
+  images do not auto-update. (4) A locked "Big Dog Math" Canva BRAND TEMPLATE keeps imported slides
+  on-brand - the frame holds the chrome, but the content inside drifts over a year without one.
+- **PACE + STUDENT MIRROR MAIN UNLESS THEY SERVE A SECOND PURPOSE (Steele, 2026-08-03).** Under the
+  direction above the default for `/teacher/pace` and `/live-flow` is to show the SAME thing as the
+  main projector; they diverge only for an enumerable set of real second purposes. Today those are:
+  (1) DISCUSSION - main runs the beat TIMELINE, pace + student show the sentence STEMS + VOCABULARY and
+  the current beat's clock (the language support); (2) a STUDENT INTERACTIVE step - `activePoll` /
+  published tool / checkpoint - where `/live-flow` shows the INPUT surface (answer boxes, choices, the
+  manipulative) the student acts on, and pace shows the question + response count; (3) STUDENT-ONLY
+  chrome that OVERLAYS rather than replaces - the progress strip ("part 3 of 4") and the I'm-stuck
+  signal chips; (4) the speaker/readers/iPad SPINNER (a mirror, not a difference). Everything else pace
+  currently shows (pace-directions + timer instead of the main content) is a HOLDOVER, not a second
+  purpose - as the frame+imported-slide model lands, those surfaces should mirror the main slide and
+  keep only the timer + a one-line "do this now" as an overlay. When you add a pace/student scene, ask
+  first "is this a real second purpose, or should it just mirror main?"
 - OPEN / NOT DONE: present and pace do NOT yet consume `LessonScreen`. They render FLUID
   (`position:fixed`, `clamp()` + a `zoom` multiplier), not on a 1920x1080 canvas, and cover scenes the
   9 components do not (tool/spinner/discussion/ink/success-criterion), so adopting the library there is
   a fluid->fixed rewrite of the two most classroom-critical surfaces and was NOT shippable unverified.
   Until it lands, the studio's saved layouts author-ahead - nothing on the projector reads the blob yet.
+  NOTE the DIRECTION above reframes this: the fluid->fixed rewrite should target the FRAME wrapping an
+  imported slide, not a native 9-component grid.
 
 The lesson-content editor's previews are the REAL surfaces, not copies: `/teacher/studio/edit` embeds
 `/teacher/present?studioPreview=1` and `/teacher/pace?studioPreview=1` in scaled iframes and posts
@@ -746,6 +814,30 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   one. Note this list is about class-mode NAVIGATION, not access - `/join` has its own
   `STUDENT_SWITCH_ROUTE_PREFIXES` escape and is deliberately not a teacher route.
 ## Data layer (Supabase)
+
+- TABLE CAPTAINS AND THE CLOSEOUT SUPPLY CHECK (built 2026-08-03, migration
+  `supabase/table-captains-and-supply-checks.sql` - Steele runs it by hand like every other file in
+  that folder; the feature is DARK until he does, and the `table_number` select in
+  `/api/roster/sync` is the first thing that 500s if he has not). Three pieces. `students.table_number`
+  is nullable physical seating pushed from the Workspace roster Sheet's optional Table column - a
+  BLANK cell means "the Sheet is not tracking seating", never "clear this student's table", so a
+  half-filled column cannot wipe what the rest of it just set. `table_captains` is one row per
+  (period, week_start, table); `week_start` is the MONDAY in America/Los_Angeles, so a Wednesday
+  re-spin overwrites Monday rather than opening a second week. `supply_checks` is one row per
+  (session, table) and the LATEST tap wins - a table that finds the missing marker before the bell
+  ends the day green, and a mis-tap is fixed by tapping again.
+  THE RULE IS CONSECUTIVE MISSES, and it lives in exactly two places: the `supply_check_streaks`
+  view and `standingFromStreak` in `src/lib/tableCaptains.ts`. Two reds in a row flags a table; ANY
+  green wipes the streak. Do not re-derive it in a component.
+  The captain spinner works with NO seating chart, and that is deliberate, not a stopgap:
+  `/api/teacher/table-captains` returns a candidate pool per table, which is the whole period until
+  the Sheet has tables, and `pickCaptains` in `TableCaptainSpinner.tsx` keeps the picks distinct.
+  It draws SMALLEST POOL FIRST so constrained tables commit while the field is still open. When the
+  Sheet grows the column, each pool narrows and nothing else changes.
+  The captain's alias renders as a first name on the projector through the browser-local name key -
+  the SAME deliberate room-facing FERPA exception the reader and speaker spinners carry (rule 8),
+  for the same reason. Nothing in this feature writes or transmits a name; `supply_checks` has no
+  student reference at all, because a table is furniture.
 
 - Browser client: `getSupabase()` in `src/lib/supabase.ts` (`NEXT_PUBLIC_SUPABASE_URL` +
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`). Server client: `getSupabaseAdmin()` in `src/lib/supabaseServer.ts`
@@ -1298,6 +1390,27 @@ the invariants they protect are easy to break again.
   `musicRef` rather than closing over the element, or restoring volume on a swapped-out track would
   leave the NEW one quiet. Time-up is deliberately still `stopMusic()` then `playCue("end")` - the
   song ends, the cue plays alone.
+- **AN UNTIMED STATE PUBLISHES NO TIMER, AND THE REMOTE ARMS ONE ON DEMAND** (added 2026-08-02,
+  Steele: "during the times i need to upload a full outside deck or video or something i dont want
+  to fight the progression of the slides with a timer"). A Lesson Step with a blank or zero
+  `Duration` runs UNTIMED: `isUntimedStep` (liveClassFlow.ts) is the one test, Control publishes
+  `timer: null` for it, `/teacher/present` and `/teacher/pace` render `UNTIMED_CLOCK` (an en dash,
+  never `0:00` - a zeroed clock on a projector reads as "you are out of time", which is the exact
+  pressure the state exists to remove), no warning or time-up cue fires because nothing is running,
+  and the auto-advance effect RETURNS EARLY so an armed clock expiring can never pull the room off
+  a deck mid-explanation.
+  The teacher arms one from the Remote's preset row (`ON_DEMAND_TIMER_SECONDS`, derived into
+  `ON_DEMAND_TIMER_BUTTONS` so the deck and the server cannot drift). `arm-timer` / `clear-timer`
+  are deliberately NOT in `DIRECT_TIMER_ACTIONS`: every action in that set throws when
+  `flow.timer` is null, and working on a state that has no timer is the entire point.
+  THE FULL-REPLACE TRAP BITES HERE TOO, and differently from `interlude`. The server sets the
+  armed timer, but Control republishes from its OWN local state about once a second and would
+  erase it within a tick - so Control holds `onDemandSeconds`, adopts it in the hydration effect
+  (`setOnDemandSeconds(flow.timer.totalSeconds)`), publishes `effectiveTotalSeconds` instead of
+  `activeMinutes * 60`, and clears it on every step change so a new state never inherits the last
+  one's ad-hoc clock. An untimed state also breaks the 50-minute sum contract by construction -
+  it cannot be added up - which is the deliberate trade and a reason not to reach for it on a work
+  block.
 - **EVERY CLASSROOM TOGGLE NEEDS ITS OFF SWITCH IN THE UI.** `hide-board` was wired end to end -
   action type, `/api/control-remote` handler, `/control` listener - but the iPad Remote only ever
   rendered "Open work space". Once the writing surface was up there was no way to put it away, and
