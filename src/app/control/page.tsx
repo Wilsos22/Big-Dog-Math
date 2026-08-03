@@ -297,6 +297,15 @@ const DEFAULT_TOOL_SETUP: ToolSetupValues = {
 };
 
 type CueKey = "music" | "warn30" | "tick" | "end";
+
+// State music sits under the cues rather than stopping for them - a song that cuts out every time
+// a tick fires is worse than one that dips. 0.18 is quiet enough that a spoken cue reads clearly
+// over it.
+const MUSIC_FULL_VOLUME = 1;
+const MUSIC_DUCK_VOLUME = 0.18;
+// Used until a clip reports its real duration. Longer than any cue in the bank, short enough that
+// a clip which never loads cannot leave the music quiet for the rest of the period.
+const CUE_DUCK_FALLBACK_SECONDS = 3;
 const CUE_LABELS: Record<CueKey, string> = {
   music: "Warm-up music (loops)",
   warn30: "30-second alert",
@@ -756,6 +765,9 @@ export default function ControlPage() {
   const timerStartSecondsRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
+  // The single cue channel and the duck-restore timer. See playCue.
+  const cueRef = useRef<HTMLAudioElement | null>(null);
+  const duckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousScoreboardStageRef = useRef<"halftime" | "final" | null>(null);
   const autoOpenedStepRef = useRef<Set<string>>(new Set());
   const openingStepRef = useRef<string | null>(null);
@@ -1085,17 +1097,53 @@ export default function ControlPage() {
     } catch { /* ignore */ }
   }, []);
 
+  // Pull the state music down under a cue and let it back up when the cue ends. Without this the
+  // warm-up song, the 30-second alert and the time-up sound all played at once and the room heard
+  // mush - the alert has to be the thing you notice, which is the entire reason it exists.
+  const duckMusic = useCallback((seconds: number) => {
+    const music = musicRef.current;
+    if (!music) return;
+    if (duckTimerRef.current) clearTimeout(duckTimerRef.current);
+    music.volume = MUSIC_DUCK_VOLUME;
+    duckTimerRef.current = setTimeout(() => {
+      // Re-read the ref: the music may have been swapped or stopped while ducked, and restoring
+      // volume on a stale element would leave the NEW track quiet for the rest of the lesson.
+      if (musicRef.current) musicRef.current.volume = MUSIC_FULL_VOLUME;
+      duckTimerRef.current = null;
+    }, Math.max(300, seconds * 1000));
+  }, []);
+
   const playCue = useCallback((key: CueKey) => {
     const url = soundUrls[key];
     if (url) {
+      // ONE cue channel. A cue is an interruption, so a new one replaces whatever is still
+      // sounding rather than layering onto it.
+      if (cueRef.current) {
+        cueRef.current.pause();
+        cueRef.current.currentTime = 0;
+      }
       const a = new Audio(url);
+      cueRef.current = a;
+      a.addEventListener("ended", () => {
+        if (cueRef.current === a) cueRef.current = null;
+        if (duckTimerRef.current) clearTimeout(duckTimerRef.current);
+        duckTimerRef.current = null;
+        if (musicRef.current) musicRef.current.volume = MUSIC_FULL_VOLUME;
+      });
+      // Duck for the clip's real length once metadata says what that is, with a sane guess until
+      // then - an unknown duration must not leave the music ducked forever.
+      duckMusic(Number.isFinite(a.duration) && a.duration > 0 ? a.duration : CUE_DUCK_FALLBACK_SECONDS);
+      a.addEventListener("loadedmetadata", () => {
+        if (cueRef.current === a && Number.isFinite(a.duration) && a.duration > 0) duckMusic(a.duration);
+      });
       a.play().catch(() => { /* ignore */ });
       return;
     }
+    duckMusic(key === "tick" ? 0.4 : 1);
     if (key === "tick") genTone([{ f: 660, t: 0, d: 0.07 }]);
     else if (key === "warn30") genTone([{ f: 880, t: 0, d: 0.18 }, { f: 660, t: 0.22, d: 0.18 }]);
     else if (key === "end") genTone([{ f: 880, t: 0, d: 0.2 }, { f: 880, t: 0.25, d: 0.2 }, { f: 880, t: 0.5, d: 0.2 }]);
-  }, [soundUrls, genTone]);
+  }, [soundUrls, genTone, duckMusic]);
 
   useEffect(() => {
     const previous = previousScoreboardStageRef.current;
@@ -1104,6 +1152,10 @@ export default function ControlPage() {
   }, [playCue, scoreboardStage]);
 
   const stopMusic = useCallback(() => {
+    if (duckTimerRef.current) {
+      clearTimeout(duckTimerRef.current);
+      duckTimerRef.current = null;
+    }
     if (musicRef.current) {
       musicRef.current.pause();
       musicRef.current.currentTime = 0;
@@ -1112,11 +1164,17 @@ export default function ControlPage() {
   }, []);
 
   const startMusicFor = useCallback((stateId: string) => {
+    // STOP FIRST, ALWAYS. This used to return early when the new state had no music of its own,
+    // which skipped the stop entirely - so the warm-up song played straight on through the next
+    // state, and the next, until something else happened to call stopMusic. Every caller treats
+    // this as "the music for this state is now the only music", so it has to be true even when the
+    // answer is silence.
+    stopMusic();
     const url = soundUrls[`music:${stateId}`];
     if (!url) return;
-    stopMusic();
     const a = new Audio(url);
     a.loop = true;
+    a.volume = MUSIC_FULL_VOLUME;
     a.play().catch(() => { /* ignore */ });
     musicRef.current = a;
   }, [soundUrls, stopMusic]);

@@ -1236,6 +1236,26 @@ the invariants they protect are easy to break again.
   stamped with the sequence index it was issued at and expires on the next advance with no clearing
   code anywhere. The strip DOES cross `studentSafeLiveFlow` on purpose - "voice 0" is announced to the
   room and painted on two projectors, and a head-down student needs the same read the room gets.
+- **STATE MUSIC IS STOP-FIRST, AND CUES DUCK IT RATHER THAN STACK ON IT** (both found live
+  2026-08-02, Steele: "a song that plays the whole time and then a sound when the first time alert
+  and then another when time is up and they all played on top of eachother and the song continued
+  into the next state"). Two independent bugs in `/control`'s audio, both fixed.
+  (1) `startMusicFor` returned EARLY when the new state had no music of its own - BEFORE its
+  `stopMusic()` call - so the warm-up song played straight on through every later state until
+  something else happened to stop it. Two callers relied on that swap and inherited the leak: the
+  server-hydration effect and the interlude effect both read
+  `if (running && flow.state) startMusicFor(...) else stopMusic()`, and a running state with no
+  music of its own took the early return. It stops FIRST now, unconditionally: every caller means
+  "the music for this state is the only music", and that has to hold when the answer is silence.
+  (2) There was no cue channel and no ducking - `playCue` made a fresh `new Audio()` per call and
+  nothing lowered the music - so the 30-second alert, the last-ten ticks and the time-up sound all
+  sounded over the song and over each other. Now ONE `cueRef` (a new cue stops the one still
+  sounding, because a cue is an interruption) and `duckMusic` pulls the song to `MUSIC_DUCK_VOLUME`
+  0.18 for the clip's real duration, read off `loadedmetadata` with a 3s fallback so a clip that
+  never loads cannot leave the music quiet for the rest of the period. The duck-restore re-reads
+  `musicRef` rather than closing over the element, or restoring volume on a swapped-out track would
+  leave the NEW one quiet. Time-up is deliberately still `stopMusic()` then `playCue("end")` - the
+  song ends, the cue plays alone.
 - **EVERY CLASSROOM TOGGLE NEEDS ITS OFF SWITCH IN THE UI.** `hide-board` was wired end to end -
   action type, `/api/control-remote` handler, `/control` listener - but the iPad Remote only ever
   rendered "Open work space". Once the writing surface was up there was no way to put it away, and
