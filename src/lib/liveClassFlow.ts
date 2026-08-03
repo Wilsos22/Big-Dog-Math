@@ -152,6 +152,7 @@ export type LiveToolRoute =
   | "/coordinate-grid"
   | "/term-identifier"
   | "/decimal-steps"
+  | "/division-house"
   | "/challenge"
   | "/exit-ticket"
   | "/checkpoint";
@@ -248,6 +249,15 @@ export type LiveToolConfig =
       // covering all four operations. Empty means the tool's built-in series -
       // one of each operation - same as visiting the route directly.
       route: "/decimal-steps";
+      label: string;
+      prompt: string;
+      config: { set: string };
+    }
+  | {
+      id: string;
+      // `set` is a "96/4, 738/6" whole-number series (see lib/divisionHouse).
+      // Empty means the tool's built-in ladder of four.
+      route: "/division-house";
       label: string;
       prompt: string;
       config: { set: string };

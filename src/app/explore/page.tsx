@@ -33,6 +33,7 @@ const TOOLS: Tool[] = [
   { href: "/ladder-method", label: "Ladder Method", letter: "L", color: "#674a40", desc: "GCF, LCM, prime factors" },
   { href: "/long-division", label: "Long Division", letter: "÷", color: "#7c5cd6", desc: "Divide step by step" },
   { href: "/multiplication-fluency", label: "Multiplication Facts", letter: "×", color: "#4d8df6", desc: "Fast facts practice" },
+  { href: "/division-house", label: "Division House", letter: "H", color: "#7c5cd6", desc: "Click where each number goes" },
   { href: "/decimal-steps", label: "Decimals, step by step", letter: "D", color: "#674a40", desc: "Add, subtract, multiply, divide" },
   { href: "/whiteboard", label: "Whiteboard", letter: "W", color: "#674a40", desc: "A blank space to work" },
 ];

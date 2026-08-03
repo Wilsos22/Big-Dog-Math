@@ -271,6 +271,8 @@ const ASSIGNED_TOOL_ROUTES: Record<string, string> = {
   decimalsteps: "/decimal-steps",
   decimaloperations: "/decimal-steps",
   decimalsstepbystep: "/decimal-steps",
+  divisionhouse: "/division-house",
+  longdivisionhouse: "/division-house",
 };
 
 function normalizeAssignedToolName(value: string): string {
