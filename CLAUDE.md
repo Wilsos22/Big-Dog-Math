@@ -298,7 +298,27 @@ bars and live misconception grouping).
   `/order-of-operations` (GEMS), `/combine-like-terms`, `/proportions`, `/area-model`,
   `/coordinate-grid`, `/ladder-method`, `/multiplication-fluency`, `/term-identifier`,
   `/divisibility`, `/distributive-area`, `/area-explorer`, `/balance-beam`, `/long-division`,
-  `/place-value`, `/place-value-mirror`, `/timer`, `/decimal-steps`.
+  `/place-value`, `/place-value-mirror`, `/timer`, `/decimal-steps`, `/lcm-bouncer`.
+- `/lcm-bouncer` (added 2026-08-03, Steele's idea) is the CONCRETE partner to `/ladder-method`'s
+  abstract GCF/LCM procedure: two balls arc across the same numbered track, Ball A touching down
+  every `stepA` squares and Ball B every `stepB`. Teal marks Ball A's own landings, coral Ball B's,
+  amber a square BOTH landed on - and the first amber column is the LCM.
+  THE TWO BALLS SHARE A HORIZONTAL SPEED, NOT A TEMPO, and that is the load-bearing decision. One
+  hop per beat would put Ball A on 12 at beat 3 and Ball B on 12 at beat 2 - same square, different
+  moments, and the "they landed together" event never happens on screen. Sharing the speed puts the
+  meeting in a single frame and leaves the BOUNCE COUNTS different, which is the quantity the lesson
+  is actually about. Do not "fix" it to one hop per beat. One clock (`progress`, in column units)
+  drives both arcs: each ball's height is a parabola over `(progress mod step) / step`.
+  The board KEEPS GOING past the first meeting on purpose, so the amber columns repeat at a fixed
+  interval and the room can see that every common multiple is a multiple of the least one. Track
+  length is DERIVED from the pair (`trackLengthFor`), never hand-set, so the LCM is always reachable
+  - a coprime pair just gets a long track, and "9 and 10 take ninety squares to meet" is a true and
+  useful thing to watch. Numbers hide on untouched squares once the track is long, but a landed-on
+  square always shows its number.
+  Wired in the simple `LiveToolConfig` arm (`config: Record<string, never>`) - the strides are set on
+  the board and a teacher steers the room through the PROMPT ("find where 4 and 6 land together").
+  Publishing the pair is an additive config arm plus two `/control` form fields, not a rewrite.
+  It emits NO evidence - `reportToolResult` is not wired here, so it moves no mastery bar.
 - `/decimal-steps` IS ITS OWN TOOL, NOT PART OF `/long-division` (Steele, 2026-08-02, unprompted:
   "this is its own tool from long division"). `/long-division` (`LongDivisionHouse`) is a
   WHOLE-NUMBER choreographed demo with no scoring, built for M1.T3.L4; `/decimal-steps`
