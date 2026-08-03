@@ -29,6 +29,7 @@ import {
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { studioPreviewSession, useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { parseSlideOverlay } from "@/lib/slideOverlay";
+import SlideFrameScene from "@/components/SlideFrameScene";
 import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 
 interface StageSession {
@@ -535,6 +536,11 @@ export default function ClassroomStagePage() {
   // Teacher-placed slide extras (the Slide Overlay property, edited in
   // /teacher/slides) render above the auto slide and below the ink.
   const slideOverlayData = parseSlideOverlay(activeSequenceStep?.slideOverlay);
+  // An outside visual authored on this step. It is the WHOLE screen when present, so it wins over
+  // the directions scene - a teacher who pasted a deck slide meant that slide, not a text frame.
+  // A poll, a published tool and the board scene still win over it: those are things the room is
+  // DOING, and one of them being up means the slide is no longer what the step is about.
+  const slideFrameUrl = String(activeSequenceStep?.slideUrl || "").trim();
   const lessonVisual = flow ? resolveLessonVisual({
     lessonCode: lesson?.code || activeSequenceStep?.lessonCode,
     stateId: theme.id,
@@ -846,6 +852,13 @@ export default function ClassroomStagePage() {
         .stage-targets-check { display:grid; place-items:center; min-width:58px; height:42px; border:2px solid var(--acc); border-radius:12px; color:var(--acc-deep); padding:0 8px; font-size:0.7rem; font-weight:900; letter-spacing:0.08em; text-transform:uppercase; }
         .stage-targets-criterion strong { font-size:clamp(1.25rem,2.6vw,2.3rem); line-height:1.2; }
         .stage-resource, .stage-tool { position:absolute; inset:0; width:100%; height:100%; border:0; background:#fff; }
+        /* The outside-visual frame. Same box as a published tool, so board-open shifts it the same
+           way and the lesson chrome around it never moves. Ground, not white, so a slide whose
+           aspect ratio does not match the projector letterboxes onto cream instead of a white slab. */
+        .stage-slide { position:absolute; inset:0; width:100%; height:100%; border:0; background:var(--ground); overflow:hidden; }
+        .stage-slide-fallback { position:absolute; inset:0; display:grid; align-content:center; justify-items:center; gap:12px; background:var(--ground); text-align:center; padding:6vw; }
+        .stage-slide-fallback p { margin:0; color:var(--ink); font-size:clamp(1.8rem,4vw,3.4rem); font-weight:800; }
+        .stage-slide-fallback span { color:var(--soft); font-size:clamp(1rem,2vw,1.6rem); font-weight:700; }
         .stage-resource-link { padding-top:clamp(34px,6vw,88px); }
         .stage-resource-link a { display:flex; min-height:72px; align-items:center; justify-content:center; border-radius:14px; background:var(--acc); color:#fff; padding:0 30px; text-decoration:none; font-size:1.25rem; font-weight:800; box-shadow:0 4px 16px rgba(40,32,20,0.14); }
         .stage-lesson-visual { position:absolute; inset:0; display:grid; place-items:center; padding:clamp(30px,5vw,72px); }
@@ -908,7 +921,7 @@ export default function ClassroomStagePage() {
         .stage-work.board-open .stage-routine,
         .stage-work.board-open .stage-independent { left:42%; }
         .stage-work.board-open .stage-resource,
-        .stage-work.board-open .stage-tool { left:42%; width:58%; }
+        .stage-work.board-open .stage-tool, .stage-work.board-open .stage-slide { left:42%; width:58%; }
         /* The panel is on the LEFT now, so the success card keeps its top-right
            home and only narrows to the content column. */
         .stage-work.board-open .stage-success { width:min(27vw,360px); }
@@ -1181,6 +1194,8 @@ export default function ClassroomStagePage() {
             )
           ) : liveToolUrl ? (
             <iframe className="stage-tool" src={liveToolUrl} title={flow.tool?.label || "Lesson tool"} />
+          ) : slideFrameUrl ? (
+            <SlideFrameScene url={slideFrameUrl} />
           ) : presentation?.mode === "board" ? (
             <div className="stage-board-scene">
               <div className="stage-board-wrap">

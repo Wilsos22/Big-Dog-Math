@@ -21,6 +21,7 @@ export const SCREEN_COMPONENT_TYPES = [
   "equation",
   "legend",
   "callout",
+  "slide",
 ] as const;
 export type PersistedComponentType = (typeof SCREEN_COMPONENT_TYPES)[number];
 

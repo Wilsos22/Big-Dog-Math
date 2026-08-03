@@ -14,6 +14,8 @@ import {
   resolvePublicSurfaceMode,
   type PublicSurfaceMode,
 } from "./lessonStepMetadata";
+import { stateIdForStateType } from "./classStates";
+import { decodeScreenLayout } from "./lessonScreenLayout";
 
 // Only the REAL lessons data source. The array used to carry two more ids
 // (a schemaless sibling and one that was never a data source of this DB);
@@ -57,6 +59,12 @@ export interface LessonStepData {
   discussionPhases: string;
   responseMode: string;
   slideOverlay: string;
+  // An outside visual for this step: an exported slide image, or a Lucid / Figma / Canva / Google
+  // Slides board. Accepts a URL property or a Files attachment. Empty on a normal step.
+  slideUrl: string;
+  // Mirror the slide onto the Pace + Support projector. Off by default - the support screen carries
+  // directions, and duplicating the visual there costs the room its second channel.
+  slideMirror: boolean;
   workSpaceAvailable?: boolean;
   // The classroom state strip, authored per step. Raw select values - see
   // lib/classroomStateStrip for the vocabulary and the all-four-or-nothing rule.
@@ -238,6 +246,21 @@ function extractNumber(prop: NotionProperty | undefined): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+// Notion property names are whatever the teacher typed, and a lookup keyed on an exact string
+// fails SILENTLY - the site reads "" and the screen renders as though nothing was authored. The
+// slide property came back as `Slide Url`, not `Slide URL`, and cost a whole build to notice. Match
+// on a normalized name so casing and spacing can never break the read again.
+function propByName(
+  properties: Record<string, NotionProperty>,
+  names: string[],
+): NotionProperty | undefined {
+  const wanted = names.map((name) => name.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  for (const [key, value] of Object.entries(properties)) {
+    if (wanted.includes(key.toLowerCase().replace(/[^a-z0-9]/g, ""))) return value;
+  }
+  return undefined;
+}
+
 function firstUrlFromText(text: string): string {
   return text.match(/https?:\/\/\S+/)?.[0]?.replace(/[),.;]+$/, "") ?? "";
 }
@@ -367,6 +390,26 @@ async function resolveFirstLink(
   return "";
 }
 
+// Pull the slide frame's authored URL and mirror flag out of a step's saved screen layout. Reads
+// the MAIN screen only - a slide is a main-projector frame, and the pace copy is the mirror flag,
+// not a second block. Returns empties for a step with no layout or no slide block.
+function slideFrameFromLayout(encodedLayout: string): { url: string; mirror: boolean } {
+  if (!encodedLayout) return { url: "", mirror: false };
+  try {
+    const zones = decodeScreenLayout(encodedLayout).main;
+    for (const zone of zones ?? []) {
+      for (const block of zone) {
+        if (block.type !== "slide") continue;
+        const url = String(block.ov?.slideUrl ?? "").trim();
+        if (url) return { url, mirror: String(block.ov?.slideMirror ?? "") === "1" };
+      }
+    }
+  } catch {
+    // A corrupt blob must never take the lesson down - fall through to the Notion property.
+  }
+  return { url: "", mirror: false };
+}
+
 function extractFirstText(properties: Record<string, NotionProperty>, names: string[]): string {
   for (const name of names) {
     const text = extractText(properties[name]);
@@ -494,8 +537,21 @@ async function mapPage(
       || rawKind === "multiple-choice-explain" || rawKind === "fist-to-five"
       ? rawKind
       : "";
-    const stateId = extractText(step["State ID"]);
+    // The friendly "State Type" dropdown wins when set (mapped back to the
+    // canonical id); otherwise the raw "State ID" is used exactly as before, so
+    // every existing step is unchanged and a teacher migrates one at a time.
+    // `Slide Type` was this property's pre-rename name and is deliberately NOT read as a fallback:
+    // the rename happened in Notion on 2026-08-02 and the old name no longer exists on the data
+    // source. `Slide` now means only the OUTSIDE VISUAL frame (see embedUrl.ts) - never point this
+    // back at it.
+    const stateId = stateIdForStateType(extractText(step["State Type"])) || extractText(step["State ID"]);
     const rawAiContext = extractText(step["AI Context"]);
+    // The Lesson Screen Studio saves a slide frame as a block override inside the AI Context
+    // layout blob, so the URL a teacher pasted there has to reach the runtime the same way the
+    // Notion property does. The blob wins; the property is the fallback and the readable copy.
+    const slideFrame = slideFrameFromLayout(
+      parseLessonStepAiContext(stripLessonRoutineConfig(rawAiContext)).screenLayout,
+    );
     return {
       id: related.id,
       title: extractFirstText(step, ["Step title", "Name", "Step"]),
@@ -529,6 +585,8 @@ async function mapPage(
       discussionPhases: extractText(step["Discussion Phases"]),
       responseMode: extractText(step["Response Mode"]),
       slideOverlay: extractText(step["Slide Overlay"]),
+      slideUrl: slideFrame.url || extractUrl(propByName(step, ["Slide URL", "Slide Image"])),
+      slideMirror: slideFrame.mirror,
       workSpaceAvailable: step["Work Space Available"]?.type === "checkbox"
         ? step["Work Space Available"].checkbox
         : undefined,

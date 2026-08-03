@@ -250,9 +250,17 @@ bars and live misconception grouping).
   whatever the assignment is, with no live session and no join (it runs at 8pm from a kitchen table).
   Steele's constraint: sixth graders ignore a wall of supports and A LIST IS A WALL. Never turn it
   into a list, and never add an "I am stuck, skip it" exit - an escape hatch cheaper than the work
-  gets used instead of the work. Reached from the third `.st-explore` button on the landing page.
+  gets used instead of the work. REACHED FROM TWO ENTRIES ON THE LANDING (moved 2026-08-01, Steele:
+  "the stuck? button should be on the students homepage not on the log in page"): the `Stuck on the
+  assignment?` chip is on the POST-code home base (the in-class student's homepage), and the
+  PRE-code code-entry screen carries an `Absent or doing homework?` chip pointing at the SAME route.
+  Both are `.st-explore` buttons. The pre-code one is deliberately NOT removed and NOT a "Stuck?"
+  label: an absent kid at 8pm has no live class code and can never open one (the period-code
+  fallback is gated on school hours AND a district account), so the code-entry screen is their ONLY
+  path to this route - stripping it there to honour "not on the log in page" literally would break
+  the documented absent flow, so it was RELABELLED to serve them instead.
   THE STUCK BUTTON IS THIS ROUTE AND ONLY THIS ROUTE (Steele, 2026-07-29): the walkthrough belongs
-  behind the homepage `Stuck on the assignment?` chip, NOT on a lesson or tool surface. A `Stuck?`
+  behind the landing chips, NOT on a lesson or tool surface. A `Stuck?`
   chip was briefly added to `/distributive-area` and removed the same day - "not part of the lesson.
   its for absent kids and kids doing homework."
 - `/homework-help` ANIMATES the Help Path when it can (2026-07-29, from the Claude Design handoff
@@ -540,9 +548,58 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   a screen absent from the blob renders its derived default. `src/lib/lessonScreenModel.ts` holds the
   phase-accent tokens (keyed to CANONICAL classStates ids), palette, and default-zone derivation;
   `src/components/screen/LessonScreen.tsx` is the shared renderer.
+- THE `slide` FRAME (added 2026-08-02, main projector only) puts an OUTSIDE visual inside the lesson
+  chrome: an exported slide image, a live Lucid / Figma / Canva / Google Slides board, or a plain
+  website. It is a persisted component type like any other, so the band, state word, step counter and
+  clock are drawn around it unchanged and nothing about `/control` or the step model moves. One
+  outside visual is ONE Lesson Step with its own clock - a board is its own state, never bolted onto a
+  text step. `src/lib/embedUrl.ts` classifies and rewrites the pasted URL (share URL in, embed URL
+  out) and is framework-free so the server may import it; the named hosts there must stay in sync with
+  `images.remotePatterns` and the `frame-src` CSP in `next.config.ts`. Authoring is the block override
+  `ov.slideUrl` in the layout blob, with an optional Notion `Slide URL` / `Slide Image` property as
+  the auto value - so no Notion schema change is required to use it. A step whose Notion `Slide URL`
+  is set derives `[["slide"], []]` as its main default. Sites that send `X-Frame-Options: DENY` cannot
+  be framed and there is no way to detect that ahead of time; the renderer falls back to a worded card
+  after 4 seconds rather than leaving a white void on a projector.
+  THE EMBED IS SHIELDED BY DEFAULT and that is what makes ink work over it. An iframe swallows
+  pointer events, so `SlideFrame` lays a transparent div over it unless `LessonScreen` is passed
+  `boardInteractive` - always, in the studio, or a click meant to select the frame vanishes into the
+  embed. On the pen path nothing more is needed: `/ipad` mounts its interactive `InkBoard` canvas at
+  `.ip-ink-layer` z-index 6, ABOVE the whole `/teacher/present` iframe, so a stroke lands on the ink
+  canvas no matter what is nested inside - the shield only stops the board fighting back on the
+  laptop driving the projector.
+  IT RENDERS ON THE REAL PROJECTOR AS OF 2026-08-02, and NOT by way of `LessonScreen` - present and
+  pace still draw their own fluid stages (the fluid->fixed rewrite is still open). `SlideFrameScene`
+  is the surface-side renderer: `/teacher/present` puts it in the scene chain AFTER poll, resource
+  and published tool but BEFORE the board scene, so a poll or a tool being up means the slide is no
+  longer what the step is about, while the whiteboard split shifts it to the right 58% through the
+  same `board-open` rule `.stage-tool` uses. `/teacher/pace` renders it ONLY when the step sets
+  `slideMirror` - the support screen's job is directions, and mirroring by default would cost the
+  room its second channel. The toggle is per step, in the studio inspector on a selected slide frame.
+  THE URL REACHES THE RUNTIME FROM TWO PLACES AND THE BLOB WINS: `slideFrameFromLayout` in
+  notionLessons.ts decodes the saved screen layout and reads the main screen's slide block
+  (`ov.slideUrl` / `ov.slideMirror`), falling back to the Notion `Slide URL` / `Slide Image`
+  property. So authoring in the studio needs no Notion property, and a property set in Notion is
+  the readable copy. `slideUrl` and `slideMirror` are server-authored fields on
+  `LiveFlowSequenceStep`, which puts them in the `interlude` / `transition` class - CONTROL'S
+  SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry them or a reconnect erases the
+  slide mid-lesson. Watch the indentation trap when adding the next such field: the 8-space and
+  10-space mapping lines are substrings of each other, so a naive replace double-applies.
+  THE NOTION PROPERTY IS `Slide Url`, NOT `Slide URL`, AND IT IS A FILE PROPERTY. Read it through
+  `propByName` (notionLessons.ts), which normalizes case and punctuation - an exact-string property
+  lookup fails SILENTLY, the site reads "" and the screen renders as though nothing was authored.
+  That is the whole class of bug: verified live 2026-08-02, the property Steele created was `Slide
+  Url` and the exact-match read would have found nothing with no error anywhere. Prefer `propByName`
+  for any new property.
+  UNSOLVED, AND IT WILL BITE ON A REAL TEACHING DAY: a Notion-UPLOADED file resolves to a
+  short-lived SIGNED S3 url (about an hour), and Control builds its lineup ONCE at load and then
+  republishes that frozen url every second. A lesson opened at 7:30 has a dead image url by period
+  4, and the projector shows the four-second fallback card. An EXTERNAL link pasted into the
+  property has no expiry and is safe. The fix is a proxy route that re-resolves the step's file from
+  Notion per request so the snapshot carries a stable path; not built, needs Steele's word.
 - THREE DEMONSTRATION OBJECTS (`manipSplit` / `manipSnap` / `manipFree`) are a SEPARATE, EPHEMERAL
   palette (main projector only) the teacher drags live during class. Their type union is distinct from
-  the 9 persisted component types, their live position lives in the studio's in-memory `manip` map
+  the 10 persisted component types, their live position lives in the studio's in-memory `manip` map
   keyed by block id, and `wireFromZones` STRIPS them so they can NEVER reach the layout blob or Notion
   (`persistableLayout` strips them before the default-compare too, so adding one never dirties a save).
   Anything that must animate on its own or react to students does NOT belong here - the latter has to
@@ -987,6 +1044,28 @@ the invariants they protect are easy to break again.
   `/api/control-remote` did not filter at all - so the two engines ran different lessons from the same
   Notion page. Unknown ids now get a synthesized bank entry with an EMPTY `desc` and are named in the
   load message. When adding a second consumer of `lesson.steps`, make it agree with `stepsFromLesson`.
+- **A STEP'S KIND CAN BE SET FROM THE FRIENDLY `State Type` SELECT, WHICH WINS OVER `State ID`**
+  (added 2026-08-02, Steele: "a notion property that tells me what kind of slide it is... it should
+  be a select"). The Lesson Steps data source (`collection://8e467c1b-8937-4902-811e-ca0a2e15af4d`)
+  now has a `State Type` SELECT with plain-English options (Warm-Up, Direct Instruction (I Do),
+  Discussion, Learning Check, Question, Exit Ticket, ...). `notionLessons.ts` resolves
+  `stateId = stateIdForStateType(State Type) || State ID`, so a step that sets State Type is driven
+  by it and a step that leaves it empty is UNCHANGED (falls back to the raw `State ID`) - a teacher
+  migrates one step at a time. The label->id map is `STATE_TYPE_OPTIONS` / `stateIdForStateType` in
+  `src/lib/classStates.ts`; the Notion option NAMES must equal those labels exactly, and
+  `npm run test:state-type` pins that every option maps to a real DEFAULT_STATES id (the wiring is
+  what stops it becoming a dead label that drifts from what runs - the failure mode the Response Mode
+  / Poll Kind traps below warn about). DELIBERATELY NO generic "Tool" option: a step's specific tool
+  state (e.g. `tool-divisibility`) comes from `State ID` + the `Tool` property, and a coarse
+  "Manipulative / Tool" -> `manip` would override that and drop the tool embed. M1.T1.L2-LAUNCH's
+  steps were backfilled from their State ID (the two tool steps left empty on purpose); other lessons
+  are empty until set, and the fallback covers them.
+  RENAMED 2026-08-02 FROM `Slide Type` (Steele: "make the other notion select be state type and this
+  one is slide type"), and the rename is DONE in Notion - verified live against the data source, the
+  old name no longer exists, so nothing reads it as a fallback. The property shipped as `Slide Type`
+  the same day the `slide` FRAME landed, and two unrelated things called "slide" in one system is how
+  vocabulary drifts. `slide` now means ONLY the outside-visual frame, whose URL is the SEPARATE
+  `Slide Url` file property. Never point `State Type` back at it.
 - **`Anchor Problem` IS THE HOOK.** There is no `Hook` property in the lessons database.
 - **`liveAssignedToolRoute` MATCHES BY PREFIX, and drops a trailing dash qualifier.** A Lesson Step
   names a tool the way a teacher writes it - `Distributive Area Method`, `... - teacher display`,
@@ -1187,6 +1266,38 @@ the invariants they protect are easy to break again.
   stamped with the sequence index it was issued at and expires on the next advance with no clearing
   code anywhere. The strip DOES cross `studentSafeLiveFlow` on purpose - "voice 0" is announced to the
   room and painted on two projectors, and a head-down student needs the same read the room gets.
+- **OPEN BUG (2026-08-02, deferred by Steele): A TEACHER-LOADED BANK CLIP IS DECODED ON ONE
+  AudioContext AND PLAYED ON ANOTHER.** Symptom he reported: cues he uploaded a clip for make no
+  sound from the Stream Deck, while cues with no upload still fire their synthesized version. The
+  two `installUserClip` call sites in `/control` disagree - the UPLOAD path passes
+  `audioCtxRef.current`, the page-load RESTORE path (the `idbGet(bankClipKey(...))` loop) passes
+  nothing and falls back to `sharedContext()`, the bank's own second context. `playSoundCue` always
+  plays through `audioCtxRef.current`, and an AudioBuffer only crosses contexts cleanly when their
+  sample rates match; when they do not, `src.buffer = chosen` throws and the press is silent.
+  Synthesis never reads `userBuffers`, which is why the un-uploaded cues are unaffected. PREDICTION
+  TO CHECK BEFORE FIXING: a freshly uploaded clip should sound, and the same clip should go silent
+  after a `/control` reload. The mechanism is inferred from the code, not observed - the disagreeing
+  call sites are certain, the sample-rate cause is not. Fix is to make both sites use one context.
+- **STATE MUSIC IS STOP-FIRST, AND CUES DUCK IT RATHER THAN STACK ON IT** (both found live
+  2026-08-02, Steele: "a song that plays the whole time and then a sound when the first time alert
+  and then another when time is up and they all played on top of eachother and the song continued
+  into the next state"). Two independent bugs in `/control`'s audio, both fixed.
+  (1) `startMusicFor` returned EARLY when the new state had no music of its own - BEFORE its
+  `stopMusic()` call - so the warm-up song played straight on through every later state until
+  something else happened to stop it. Two callers relied on that swap and inherited the leak: the
+  server-hydration effect and the interlude effect both read
+  `if (running && flow.state) startMusicFor(...) else stopMusic()`, and a running state with no
+  music of its own took the early return. It stops FIRST now, unconditionally: every caller means
+  "the music for this state is the only music", and that has to hold when the answer is silence.
+  (2) There was no cue channel and no ducking - `playCue` made a fresh `new Audio()` per call and
+  nothing lowered the music - so the 30-second alert, the last-ten ticks and the time-up sound all
+  sounded over the song and over each other. Now ONE `cueRef` (a new cue stops the one still
+  sounding, because a cue is an interruption) and `duckMusic` pulls the song to `MUSIC_DUCK_VOLUME`
+  0.18 for the clip's real duration, read off `loadedmetadata` with a 3s fallback so a clip that
+  never loads cannot leave the music quiet for the rest of the period. The duck-restore re-reads
+  `musicRef` rather than closing over the element, or restoring volume on a swapped-out track would
+  leave the NEW one quiet. Time-up is deliberately still `stopMusic()` then `playCue("end")` - the
+  song ends, the cue plays alone.
 - **EVERY CLASSROOM TOGGLE NEEDS ITS OFF SWITCH IN THE UI.** `hide-board` was wired end to end -
   action type, `/api/control-remote` handler, `/control` listener - but the iPad Remote only ever
   rendered "Open work space". Once the writing surface was up there was no way to put it away, and

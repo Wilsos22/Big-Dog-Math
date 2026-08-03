@@ -29,6 +29,7 @@ import {
   discussionPhaseMinutes,
   stripForPhase,
   activeDiscussionPhase,
+  discussionStageCountdown,
 } from "../.tmp-mastery/discussionPhases.js";
 
 let checks = 0;
@@ -216,6 +217,35 @@ check("activeDiscussionPhase walks the self-running timeline on elapsed seconds"
   assert.equal(over.phaseFraction, 1);
   // Negative or NaN-ish elapsed clamps to the start rather than throwing.
   assert.equal(activeDiscussionPhase(phases, -10).index, 0);
+});
+
+check("discussionStageCountdown counts down the ACTIVE beat off the state clock", () => {
+  // think 30, write 90, talk 60 -> total 180. The helper takes the STATE total
+  // and the STATE seconds-left, and returns the seconds left in the live beat.
+  const phases = parseDiscussionPhases("think 30 | a\nwrite 90 | b\ntalk 60 | c").phases;
+  const total = 180;
+  // t=0 (180 left): first beat, its full 30s ahead.
+  const start = discussionStageCountdown(phases, total, 180);
+  assert.equal(start.index, 0);
+  assert.equal(start.secondsLeft, 30);
+  assert.equal(start.done, false);
+  // 75s elapsed (105 left) -> 45s into the 90s write beat -> 45s left in it,
+  // NOT the 105s left in the whole state. This is the bug the fix targets.
+  const mid = discussionStageCountdown(phases, total, 105);
+  assert.equal(mid.index, 1);
+  assert.equal(mid.phase.mode, "write");
+  assert.equal(mid.secondsLeft, 45);
+  // Inside the last 15s of the talk beat (170s elapsed, 10 left in state and beat).
+  const late = discussionStageCountdown(phases, total, 10);
+  assert.equal(late.index, 2);
+  assert.equal(late.secondsLeft, 10);
+  // State clock run out: done, no active beat, zero left.
+  const done = discussionStageCountdown(phases, total, 0);
+  assert.equal(done.done, true);
+  assert.equal(done.phase, null);
+  assert.equal(done.secondsLeft, 0);
+  // No authored beats -> null, so a caller falls back to the state timer.
+  assert.equal(discussionStageCountdown([], total, 90), null);
 });
 
 console.log(`\n${checks} discussion phase checks passed`);

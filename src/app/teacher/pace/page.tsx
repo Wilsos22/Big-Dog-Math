@@ -4,13 +4,14 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useLiveFlowPing } from "@/lib/liveFlowPing";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
+import SlideFrameScene from "@/components/SlideFrameScene";
 import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
 import { applyStripOverride, overrideIsLive } from "@/lib/classroomStateStrip";
 import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
 import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
-import { parseDiscussionPhases } from "@/lib/discussionPhases";
+import { parseDiscussionPhases, discussionStageCountdown, DISCUSSION_MODE_LABEL } from "@/lib/discussionPhases";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { teacherApiRequest } from "@/lib/teacherApi";
 import { LIVE_FLOW_MODE, getStoredTeacherSessionId, liveTimerSeconds, type LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
@@ -77,6 +78,13 @@ function requestedSessionId() {
 export default function PaceSupportPage() {
   const [session, setSession] = useState<PaceSession | null>(null);
   const reloadRef = useRef<(() => void) | null>(null);
+  // A 1s heartbeat so the beat countdown re-renders every second, independent of
+  // the ~1.2s session poll - otherwise a big clock skips seconds.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setClockTick((t) => (t + 1) % 3600), 1000);
+    return () => window.clearInterval(id);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [sessionMessage, setSessionMessage] = useState("Connecting to the confirmed class session.");
   const [pollAnswers, setPollAnswers] = useState<PollAnswer[]>([]);
@@ -215,6 +223,12 @@ export default function PaceSupportPage() {
     : publicSurfacesLinked && state?.id === "ipad-kid"
       ? "ipad"
       : null;
+  // The support projector mirrors the main slide ONLY when the step asks it to. Off by default:
+  // this screen's job is directions, and duplicating the visual costs the room its second channel.
+  const mirroredSlideStep = flow?.sequence?.steps?.[flow.sequence.currentIndex] || null;
+  const mirroredSlideUrl = mirroredSlideStep?.slideMirror
+    ? String(mirroredSlideStep.slideUrl || "").trim()
+    : "";
   const spinnerSyncScope = `${flow?.sequence?.currentIndex ?? -1}:${flow?.presentation?.notionStepId || state?.id || "spinner"}`;
   const routineConfig = flow?.presentation?.routineConfig || null;
   // The classroom state strip. The authored values come with the step; the
@@ -233,10 +247,21 @@ export default function PaceSupportPage() {
   // A concrete-phase timeline step is a discussion too: it wants the support
   // screen's stems + vocabulary layout, so the room has the language for its
   // Talk beats. phase stays null, so the phase-specific bits fall back cleanly.
-  const hasDiscussionTimeline = (() => {
+  const timelinePhases = (() => {
     const parsed = parseDiscussionPhases(flow?.presentation?.discussionPhases);
-    return parsed.ok && parsed.phases.length > 0;
+    return parsed.ok ? parsed.phases : [];
   })();
+  const hasDiscussionTimeline = timelinePhases.length > 0;
+  // During a self-running timeline, the number the room works against is the
+  // CURRENT beat's remaining time (think 30, write 90, ...), not the whole-state
+  // clock - and the red-at-15 warning keys off that beat too.
+  const discussionStage = hasDiscussionTimeline
+    ? discussionStageCountdown(timelinePhases, timer?.totalSeconds ?? 0, timerSeconds)
+    : null;
+  const stageSeconds = discussionStage && !discussionStage.done ? discussionStage.secondsLeft : timerSeconds;
+  const stageUrgency = hasDiscussionTimeline
+    ? timerUrgency(stageSeconds, { running: Boolean(timer?.running), finished: timerFinished })
+    : currentTimerUrgency;
   const isDiscussion = theme.id === "discussion" || Boolean(phase);
   // The theme gates the LAYOUT; it must not gate the catalog fallback.
   // inferClassroomStage sends any "partner" or "group" step to the discussion
@@ -398,6 +423,9 @@ export default function PaceSupportPage() {
         .pw-stepn { flex:none; min-width:1.5ch; color:var(--acc-deep); font-weight:800; font-variant-numeric:tabular-nums; }
         .pw-pace { margin-top:auto; display:inline-flex; align-items:center; gap:18px; width:fit-content; border:1px solid var(--hair); border-radius:16px; background:var(--card); padding:14px 22px; box-shadow:0 2px 10px rgba(40,32,20,0.06); }
         .pw-bigtimer { color:var(--head); font-size:clamp(2.6rem,5vw,4.4rem); line-height:0.9; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-0.03em; }
+        /* The discussion-beat clock is the one the room paces against, so it
+           reads bigger than the ordinary shared-clock chip. */
+        .pw-bigtimer-stage { font-size:clamp(3.6rem,8vw,7rem); }
         .pw-bigtimer.finished { color:#A82C15; }
         .pw-pace-copy { display:grid; gap:3px; }
         .pw-pace-copy b { color:var(--ink); font-size:clamp(0.95rem,1.4vw,1.2rem); }
@@ -408,6 +436,10 @@ export default function PaceSupportPage() {
         .pw-term { display:flex; align-items:center; gap:9px; color:var(--head); font-size:clamp(1rem,1.5vw,1.3rem); font-weight:800; }
         .pw-term-dot { width:10px; height:10px; border-radius:3px; background:var(--acc); flex:none; }
         .pw-def { margin:6px 0 0; padding-top:6px; border-top:1px solid #F0D9D3; color:var(--soft); font-size:clamp(0.85rem,1.2vw,1.05rem); line-height:1.35; font-weight:650; }
+        .pw-slide { position:absolute; inset:0; width:100%; height:100%; border:0; background:var(--ground); overflow:hidden; }
+        .stage-slide-fallback { position:absolute; inset:0; display:grid; align-content:center; justify-items:center; gap:12px; background:var(--ground); text-align:center; padding:6vw; }
+        .stage-slide-fallback p { margin:0; color:var(--ink); font-size:clamp(1.6rem,3.4vw,2.8rem); font-weight:800; }
+        .stage-slide-fallback span { color:var(--soft); font-size:clamp(0.95rem,1.8vw,1.4rem); font-weight:700; }
         .pw-center { position:absolute; inset:0; display:grid; place-items:center; padding:clamp(28px,5vw,72px); text-align:center; }
         .pw-center h2 { margin:0; max-width:24ch; color:var(--head); font-size:clamp(2rem,4.6vw,4.4rem); line-height:1.05; font-weight:800; letter-spacing:-0.02em; }
         .pw-center p { margin:12px 0 0; color:var(--soft); font-size:clamp(0.95rem,1.7vw,1.3rem); font-weight:700; }
@@ -501,6 +533,8 @@ export default function PaceSupportPage() {
               <span className="pw-interlude-clock">{formatTime(interludeSeconds)}</span>
             </div>
           </div>
+        ) : mirroredSlideUrl ? (
+          <SlideFrameScene url={mirroredSlideUrl} className="pw-slide" />
         ) : warmupAgenda ? (
           <div className="pw-agenda" aria-label="Today's agenda">
             <p className="pw-agenda-kicker">Today&apos;s plan</p>
@@ -581,8 +615,11 @@ export default function PaceSupportPage() {
               </ul>
               {timer ? (
                 <div className="pw-pace">
-                  <span className={`pw-bigtimer${timerFinished ? " finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`}>{formatTime(timerSeconds)}</span>
-                  <span className="pw-pace-copy"><b>{flow.presentation?.title || state.label}</b><span>Shared class clock</span></span>
+                  <span className={`pw-bigtimer pw-bigtimer-stage${timerFinished ? " finished" : ""} ${timerUrgencyClass(stageUrgency)}`}>{formatTime(stageSeconds)}</span>
+                  <span className="pw-pace-copy">
+                    <b>{discussionStage?.phase ? DISCUSSION_MODE_LABEL[discussionStage.phase.mode] : (flow.presentation?.title || state.label)}</b>
+                    <span>{discussionStage && !discussionStage.done ? "Left in this beat" : "Shared class clock"}</span>
+                  </span>
                 </div>
               ) : null}
             </div>
