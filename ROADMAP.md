@@ -8,8 +8,14 @@ should update BOTH that database and this mirror when a feature ships.
 Snapshot (2026-07-16):
 
 ## Live
-**Decimals, step by step** (8/2, Steele's ask). `/decimal-steps` is a new guided
-tool covering all four operations, one decision at a time, in a teacher-led mode
+**Decimals, step by step** (8/2, rebuilt 8/3 from twenty toolbar comments).
+`/decimal-steps` is a guided tool covering all four operations, one move at a
+time. Students TYPE the arithmetic and only choose on the decisions; a carry is
+decided and then physically written into a box that solidifies; multiplication
+runs digit by digit; the decimal is clicked and dragged, leaving dashed arcs
+under the number; the walk opens by naming the operation and typing a
+whole-number estimate; and the correct answer is no longer always in the first
+slot. Original entry follows. A guided tool covering all four operations, in a teacher-led mode
 for the front of the room and a student mode on the Chromebooks. Every step is a
 "what do we do next?" multiple choice whose wrong answers are real sixth-grade
 errors, and the digits being worked on light up as the question is asked. It

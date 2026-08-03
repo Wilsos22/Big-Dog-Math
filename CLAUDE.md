@@ -326,6 +326,24 @@ bars and live misconception grouping).
   operations where every step is a multiple-choice decision. They both draw a long-division house
   and that is the only thing they share - do not merge them, and do not "fix" one by pointing it at
   the other.
+  V2 (2026-08-03) REBUILT IT FROM TWENTY VERCEL TOOLBAR COMMENTS, and the shape change is the
+  thing to keep: **A STEP IS NOT ALWAYS A MULTIPLE CHOICE.** `DecStep.kind` is `choice` | `input` |
+  `move`. Students TYPE the arithmetic (every column, product, difference, quotient digit) and only
+  CHOOSE on the decisions, because picking "9 + 7 = 16" off a list is recognition, not computation.
+  Do not "simplify" an input step back into choices. Also from that pass, each load-bearing:
+  every walk opens by naming the operation and then typing a whole-number ESTIMATE (judged by
+  NEARNESS, never equality - a student who rounds sensibly a different way must pass); a CARRY is a
+  decision plus a physical act (the box stands open and pulsing, then solidifies when the digit is
+  typed); MULTIPLICATION IS DIGIT BY DIGIT with its own carries ("we can only multiple 2 numbers at
+  once. So we strt with the 4 and the 2") - a step that multiplies a whole row is the answer
+  appearing; the student CLICKS THE DECIMAL to move it and each hop leaves a big dashed arc UNDER
+  the number from the old spot to the new; and the long-division house is a real L (vertical only
+  down the dividend, bar across its top, quotient ABOVE the bar).
+  THE CHOICES ARE SEATED, NOT WRITTEN IN ORDER. `seatChoices` shuffles by a hash of the step id,
+  because every builder writes the correct answer first and a student could beat the tool by always
+  tapping the top button. It is deterministic on purpose - a re-render must not reshuffle under a
+  student mid-question - so do not swap it for `Math.random`, and do not add a builder that assumes
+  `choices[0]` is the answer.
   THE SET-UP QUESTION IS THE WHOLE POINT AND ITS ANSWER CHANGES WITH THE OPERATION: `+`/`-` line up
   the decimal points, `x` lines up the RIGHT EDGES and ignores the decimals until you count places
   at the end, `/` moves the decimal until the divisor is whole. A student who answers "line up the
