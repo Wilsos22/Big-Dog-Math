@@ -6,11 +6,30 @@
 // zone is never wasted space. Shared by /teacher/present (screen "main") and /teacher/pace ("pace"),
 // mounted as an additive overlay only for plain worded/info states - every interactive scene keeps
 // its own surface rendering, and the ink layer stays above this (it is mounted after it).
+//
+// SCALING: the stage is anchored top-left and scaled from the top-left, then translated to centre the
+// scaled box in the viewport. An earlier version centred the UNSCALED 1920x1080 element in a grid and
+// scaled from its centre - which put an oversized element's box at the cell start and then shifted the
+// scaled result right, so it overflowed and clipped at every resolution except an exact 1920x1080.
+// Measuring window.innerWidth/innerHeight (the true viewport, reliable on a real projector) and
+// re-measuring briefly after mount avoids a stale scale on the classroom display.
 
-import { useEffect, useRef, useState, type ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 import LessonScreen from "@/components/screen/LessonScreen";
 import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
 import type { ScreenKey, ScreenStepData, ScreenZones } from "@/lib/lessonScreenModel";
+
+function fitBox() {
+  if (typeof window === "undefined") return { scale: 1, x: 0, y: 0 };
+  const vw = window.innerWidth || 1920;
+  const vh = window.innerHeight || 1080;
+  const scale = Math.min(vw / 1920, vh / 1080);
+  return {
+    scale,
+    x: Math.max(0, (vw - 1920 * scale) / 2),
+    y: Math.max(0, (vh - 1080 * scale) / 2),
+  };
+}
 
 export default function LessonSlideStage({
   data,
@@ -29,27 +48,34 @@ export default function LessonSlideStage({
   showWords: boolean;
   overridden: boolean;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [box, setBox] = useState(fitBox);
   useEffect(() => {
-    const measure = () => {
-      const el = ref.current;
-      if (!el) return;
-      const next = Math.min(el.clientWidth / 1920, el.clientHeight / 1080);
-      if (next > 0) setScale(next);
-    };
+    const measure = () => setBox(fitBox());
     measure();
-    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
-    if (observer && ref.current) observer.observe(ref.current);
     window.addEventListener("resize", measure);
+    // Re-measure briefly after mount: a classroom display can lay out late, and a single
+    // measurement then locks in a wrong scale for the rest of the period.
+    const interval = window.setInterval(measure, 400);
+    const stop = window.setTimeout(() => window.clearInterval(interval), 4000);
     return () => {
-      observer?.disconnect();
       window.removeEventListener("resize", measure);
+      window.clearInterval(interval);
+      window.clearTimeout(stop);
     };
   }, []);
   return (
-    <div ref={ref} style={{ position: "fixed", inset: 0, zIndex: 12, background: "#F6F3EC", display: "grid", placeItems: "center", overflow: "hidden" }}>
-      <div style={{ position: "relative", width: 1920, height: 1080, flex: "0 0 auto", transform: `scale(${scale})`, transformOrigin: "center" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 12, background: "#F6F3EC", overflow: "hidden" }}>
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: 1920,
+          height: 1080,
+          transform: `translate(${box.x}px, ${box.y}px) scale(${box.scale})`,
+          transformOrigin: "top left",
+        }}
+      >
         <LessonScreen data={data} screen={screen} zones={zones} totalSteps={totalSteps} />
       </div>
       <ClassroomStateStrip strip={strip} showWords={showWords} overridden={overridden} />
