@@ -1236,6 +1236,18 @@ the invariants they protect are easy to break again.
   stamped with the sequence index it was issued at and expires on the next advance with no clearing
   code anywhere. The strip DOES cross `studentSafeLiveFlow` on purpose - "voice 0" is announced to the
   room and painted on two projectors, and a head-down student needs the same read the room gets.
+- **OPEN BUG (2026-08-02, deferred by Steele): A TEACHER-LOADED BANK CLIP IS DECODED ON ONE
+  AudioContext AND PLAYED ON ANOTHER.** Symptom he reported: cues he uploaded a clip for make no
+  sound from the Stream Deck, while cues with no upload still fire their synthesized version. The
+  two `installUserClip` call sites in `/control` disagree - the UPLOAD path passes
+  `audioCtxRef.current`, the page-load RESTORE path (the `idbGet(bankClipKey(...))` loop) passes
+  nothing and falls back to `sharedContext()`, the bank's own second context. `playSoundCue` always
+  plays through `audioCtxRef.current`, and an AudioBuffer only crosses contexts cleanly when their
+  sample rates match; when they do not, `src.buffer = chosen` throws and the press is silent.
+  Synthesis never reads `userBuffers`, which is why the un-uploaded cues are unaffected. PREDICTION
+  TO CHECK BEFORE FIXING: a freshly uploaded clip should sound, and the same clip should go silent
+  after a `/control` reload. The mechanism is inferred from the code, not observed - the disagreeing
+  call sites are certain, the sample-rate cause is not. Fix is to make both sites use one context.
 - **STATE MUSIC IS STOP-FIRST, AND CUES DUCK IT RATHER THAN STACK ON IT** (both found live
   2026-08-02, Steele: "a song that plays the whole time and then a sound when the first time alert
   and then another when time is up and they all played on top of eachother and the song continued
