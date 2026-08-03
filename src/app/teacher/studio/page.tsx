@@ -20,6 +20,7 @@ import {
   autoScreenValue,
   defaultZones,
   paletteDropZone,
+  isDemoComponentType,
   paletteForScreen,
   persistableLayout,
   stepScreenData,
@@ -491,7 +492,7 @@ function StudioInner() {
               <button
                 key={entry.type}
                 type="button"
-                className={`lss-palette-btn${entry.mainOnly ? " lss-palette-demo" : ""}`}
+                className={`lss-palette-btn${isDemoComponentType(entry.type) ? " lss-palette-demo" : ""}`}
                 onClick={() => addBlock(entry.type)}
                 disabled={!currentStep}
               >
