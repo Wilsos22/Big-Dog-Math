@@ -57,6 +57,9 @@ export interface LessonStepData {
   discussionPhases: string;
   responseMode: string;
   slideOverlay: string;
+  // An outside visual for this step: an exported slide image, or a Lucid / Figma / Canva / Google
+  // Slides board. Accepts a URL property or a Files attachment. Empty on a normal step.
+  slideUrl: string;
   workSpaceAvailable?: boolean;
   // The classroom state strip, authored per step. Raw select values - see
   // lib/classroomStateStrip for the vocabulary and the all-four-or-nothing rule.
@@ -529,6 +532,7 @@ async function mapPage(
       discussionPhases: extractText(step["Discussion Phases"]),
       responseMode: extractText(step["Response Mode"]),
       slideOverlay: extractText(step["Slide Overlay"]),
+      slideUrl: extractUrl(step["Slide URL"]) || extractUrl(step["Slide Image"]),
       workSpaceAvailable: step["Work Space Available"]?.type === "checkbox"
         ? step["Work Space Available"].checkbox
         : undefined,

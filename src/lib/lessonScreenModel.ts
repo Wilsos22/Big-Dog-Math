@@ -125,6 +125,7 @@ export const SCREEN_PALETTE: PaletteEntry[] = [
   { type: "equation", label: "Answer boxes", field: "Question" },
   { type: "legend", label: "Color legend", field: "Slide Overlay" },
   { type: "callout", label: "Callout", field: "Student Directions" },
+  { type: "slide", label: "Slide or board", field: "Slide URL", mainOnly: true },
   { type: "manipSplit", label: "Demo - slide the split", field: "Main screen only", mainOnly: true },
   { type: "manipSnap", label: "Demo - snap two pieces", field: "Main screen only", mainOnly: true },
   { type: "manipFree", label: "Demo - move + resize", field: "Main screen only", mainOnly: true },
@@ -174,6 +175,10 @@ export const SCREEN_FIELD_SPECS: Record<ScreenComponentType, FieldSpec[]> = {
   ],
   legend: [{ key: "legendTitle", label: "Legend heading" }],
   callout: [{ key: "studentDirections", label: "Student Directions" }],
+  slide: [
+    { key: "slideUrl", label: "Slide or board URL" },
+    { key: "slideFit", label: "Fit - contain or cover" },
+  ],
   manipSplit: [
     { key: "modelTitle", label: "Label" },
     { key: "rows", label: "Rows" },
@@ -211,6 +216,7 @@ export const BLOCK_FLEX: Record<ScreenComponentType, string> = {
   equation: "1 1 0",
   legend: "0 0 auto",
   callout: "0 0 auto",
+  slide: "1 1 0",
   manipSplit: "1 1 0",
   manipSnap: "1 1 0",
   manipFree: "1 1 0",
@@ -239,6 +245,7 @@ export interface ScreenStepInput {
   question: string;
   responseMode: string;
   screenNotes?: string;
+  slideUrl?: string;
 }
 
 export interface ModelShape {
@@ -270,6 +277,7 @@ export interface ScreenStepData {
   vocabulary: string;
   question: string;
   responseMode: string;
+  slideUrl: string;
   hasModel: boolean;
   hasEquation: boolean;
   model: ModelShape;
@@ -328,6 +336,7 @@ export function stepScreenData(step: ScreenStepInput): ScreenStepData {
     vocabulary: step.vocabulary || "",
     question: step.question || "",
     responseMode: step.responseMode || "",
+    slideUrl: step.slideUrl || "",
     hasModel: Boolean(dims),
     hasEquation: /\(/.test(step.question || "") || /=\s*\d+\s*x/i.test(step.question || ""),
     model: {
@@ -364,6 +373,8 @@ export function autoScreenValue(data: ScreenStepData, key: string): string {
     doThisTitle: "Do this",
     supportTitle: data.vocabulary ? "Words we are using" : "Support",
     legendTitle: "Color coding",
+    slideUrl: data.slideUrl,
+    slideFit: "contain",
     modelTitle: model.title,
     modelHint: model.hint,
     rows: model.rows,
@@ -391,6 +402,8 @@ export function resolveScreenValue(data: ScreenStepData, block: ScreenBlock, key
 // A step with no content yields the same shape with empty text - a valid blank template.
 export function defaultZoneTypes(data: ScreenStepData, screen: ScreenKey): ScreenComponentType[][] {
   if (screen === "main") {
+    // A step carrying a slide or board URL is a slide step - the outside visual is the whole frame.
+    if (data.slideUrl) return [["slide"], []];
     if (data.hasModel) return [["model"], data.hasEquation ? ["prompt", "equation"] : ["prompt", "text"]];
     if (data.hasEquation) return [["prompt", "equation"], []];
     return [["prompt", "text"], []];

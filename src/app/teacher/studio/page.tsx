@@ -49,6 +49,7 @@ interface StudioStep {
   vocabulary: string;
   question: string;
   responseMode: string;
+  slideUrl: string;
 }
 
 interface StudioLessonFull {
@@ -85,6 +86,7 @@ function pickStep(raw: Record<string, unknown>): StudioStep {
     vocabulary: String(raw.vocabulary ?? ""),
     question: String(raw.question ?? ""),
     responseMode: String(raw.responseMode ?? ""),
+    slideUrl: String(raw.slideUrl ?? ""),
   };
 }
 

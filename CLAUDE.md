@@ -512,9 +512,22 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   a screen absent from the blob renders its derived default. `src/lib/lessonScreenModel.ts` holds the
   phase-accent tokens (keyed to CANONICAL classStates ids), palette, and default-zone derivation;
   `src/components/screen/LessonScreen.tsx` is the shared renderer.
+- THE `slide` FRAME (added 2026-08-02, main projector only) puts an OUTSIDE visual inside the lesson
+  chrome: an exported slide image, a live Lucid / Figma / Canva / Google Slides board, or a plain
+  website. It is a persisted component type like any other, so the band, state word, step counter and
+  clock are drawn around it unchanged and nothing about `/control` or the step model moves. One
+  outside visual is ONE Lesson Step with its own clock - a board is its own state, never bolted onto a
+  text step. `src/lib/embedUrl.ts` classifies and rewrites the pasted URL (share URL in, embed URL
+  out) and is framework-free so the server may import it; the named hosts there must stay in sync with
+  `images.remotePatterns` and the `frame-src` CSP in `next.config.ts`. Authoring is the block override
+  `ov.slideUrl` in the layout blob, with an optional Notion `Slide URL` / `Slide Image` property as
+  the auto value - so no Notion schema change is required to use it. A step whose Notion `Slide URL`
+  is set derives `[["slide"], []]` as its main default. Sites that send `X-Frame-Options: DENY` cannot
+  be framed and there is no way to detect that ahead of time; the renderer falls back to a worded card
+  after 4 seconds rather than leaving a white void on a projector.
 - THREE DEMONSTRATION OBJECTS (`manipSplit` / `manipSnap` / `manipFree`) are a SEPARATE, EPHEMERAL
   palette (main projector only) the teacher drags live during class. Their type union is distinct from
-  the 9 persisted component types, their live position lives in the studio's in-memory `manip` map
+  the 10 persisted component types, their live position lives in the studio's in-memory `manip` map
   keyed by block id, and `wireFromZones` STRIPS them so they can NEVER reach the layout blob or Notion
   (`persistableLayout` strips them before the default-compare too, so adding one never dirties a save).
   Anything that must animate on its own or react to students does NOT belong here - the latter has to

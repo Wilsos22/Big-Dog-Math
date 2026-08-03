@@ -7,6 +7,8 @@
 // studio adds on top. The live surfaces can render the same component with the editor props omitted.
 
 import type { CSSProperties, PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useState } from "react";
+import { resolveSlideSource } from "@/lib/embedUrl";
 import {
   BLOCK_FLEX,
   MANIP_FREE_DEFAULT,
@@ -270,10 +272,11 @@ export default function LessonScreen({
       borderRadius: 26,
       background: "#fff",
       boxShadow: "0 14px 36px rgba(40,32,20,.1)",
-      padding: "30px 34px",
+      padding: block.type === "slide" ? 0 : "30px 34px",
+      overflow: block.type === "slide" ? "hidden" : undefined,
       display: "grid",
-      gap: 20,
-      alignContent: align,
+      gap: block.type === "slide" ? 0 : 20,
+      alignContent: block.type === "slide" ? "stretch" : align,
       cursor: editing ? "pointer" : "default",
       outline: selected ? "3px solid rgba(80,163,164,.4)" : "none",
       outlineOffset: 7,
@@ -424,6 +427,86 @@ export default function LessonScreen({
   );
 }
 
+// One outside visual inside the lesson frame: an exported slide image, or a live Lucid / Figma /
+// Canva / Google Slides board. The band, the state word, the step counter and the clock are drawn
+// by LessonScreen around this and are not this component's business.
+//
+// A board is view-and-pan only on a projector - editing needs a login the projector does not have.
+// That is deliberate: the board is the visual, and the iPad ink sheet on top is where the class
+// writes. When ink is armed the sheet captures pointer events and the board stops panning, which
+// is the correct trade rather than a bug.
+function SlideFrame({ rawUrl, fit, editing }: { rawUrl: string; fit: "contain" | "cover"; editing: boolean }) {
+  const source = resolveSlideSource(rawUrl);
+  const [loaded, setLoaded] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+
+  useEffect(() => {
+    setLoaded(false);
+    setTimedOut(false);
+    if (source.kind !== "embed" && source.kind !== "site") return;
+    // School wifi is the real failure mode. Four seconds, then say so in words rather than
+    // leaving a white void on the projector.
+    const timer = setTimeout(() => setTimedOut(true), 4000);
+    return () => clearTimeout(timer);
+  }, [source.kind, source.url]);
+
+  const shell: CSSProperties = {
+    width: "100%",
+    height: "100%",
+    minHeight: 0,
+    display: "grid",
+    placeItems: "center",
+    background: SCREEN_NEUTRALS.paper,
+  };
+
+  if (source.kind === "image") {
+    return (
+      <div style={shell}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={source.url}
+          alt=""
+          style={{ width: "100%", height: "100%", objectFit: fit, display: "block" }}
+        />
+      </div>
+    );
+  }
+
+  if (source.kind === "embed" || source.kind === "site") {
+    return (
+      <div style={{ ...shell, position: "relative" }}>
+        <iframe
+          src={source.url}
+          title={source.kind === "site" ? "Lesson website" : "Lesson board"}
+          onLoad={() => setLoaded(true)}
+          referrerPolicy="no-referrer"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+          style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+        />
+        {timedOut && !loaded ? (
+          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", alignContent: "center", gap: 14, background: SCREEN_NEUTRALS.paper, padding: 40, textAlign: "center" }}>
+            <span style={{ fontSize: 46, fontWeight: 900, color: SCREEN_NEUTRALS.body }}>
+              {source.kind === "site" ? "Page did not load" : "Board did not load"}
+            </span>
+            <span style={{ fontSize: 28, fontWeight: 800, color: SCREEN_NEUTRALS.placeholder }}>Keep going - it is not part of the math</span>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ ...shell, alignContent: "center", gap: 12, padding: 40, textAlign: "center" }}>
+      <span style={{ fontSize: 34, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase", color: SCREEN_NEUTRALS.placeholder }}>
+        Slide or board
+      </span>
+      <span style={{ fontSize: 26, fontWeight: 800, color: SCREEN_NEUTRALS.placeholderSoft }}>
+        {editing ? source.reason || "Paste a slide image, a website, or a Lucid, Figma, Canva or Google Slides link" : ""}
+      </span>
+    </div>
+  );
+}
+
 const demoTitle: CSSProperties = {
   fontSize: 27,
   fontWeight: 900,
@@ -467,6 +550,15 @@ function blockBody(
         <h2 style={{ margin: 0, fontSize: size, fontWeight: 800, lineHeight: 1.02, letterSpacing: "-.03em", color: SCREEN_NEUTRALS.promptInk, textWrap: "balance" } as CSSProperties}>
           {text || placeholder(editing, "Main Display")}
         </h2>
+      );
+    }
+    case "slide": {
+      return (
+        <SlideFrame
+          rawUrl={value("slideUrl")}
+          fit={value("slideFit") === "cover" ? "cover" : "contain"}
+          editing={editing}
+        />
       );
     }
     case "text": {
