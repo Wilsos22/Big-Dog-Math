@@ -543,6 +543,34 @@ bars and live misconception grouping).
     SUCCESS_CRITERION_SETUP_PLACEHOLDER, and "Choose one I can statement in Notion." is a prompt
     to the teacher that must never appear on a classroom TV. Empty renders as
     "No success criterion chosen for today."
+  - THE VOCABULARY REVEAL IS ALL-OR-NOTHING AND ITS ONLY INPUT IS A KEY TERM (the whole second act
+    - the highlighter sweep, the sentence dropping away, the term flying up, the definition rising
+    under it - is gated on `hasReveal`, which needs a vocabulary term that ALSO appears in the
+    learning intention). With no term the board still slides in, types the sentence and pulses the
+    verbs, so it does not look broken; it looks like the animation was removed. That is exactly how
+    it was reported on 2026-08-03 ("it lost all of its animation and it no longer grabs the vocab
+    word"), and NOTHING had changed in the code - `/weekly-display` was byte-identical to `main`.
+    Diagnose it by counting animations on the live board, not by reading the source:
+    `document.getAnimations()` - three (`wldSlideIn`, `wldType`, `wldPulse`) means no key term,
+    twenty means the reveal is running.
+  - THE CAUSE WAS TWO NOTION FIELDS WITH NEAR-IDENTICAL NAMES, and this is the third instance of
+    that trap in this file. The board reads the LESSON-level `Discussion Vocabulary`; a lesson's
+    terms are just as often authored on each Lesson STEP, in its own `Vocabulary` property.
+    M1.T1.L2-D1 went Published with the lesson property EMPTY and five defined terms on its steps,
+    so the board found nothing and the reveal switched itself off silently. FIXED 2026-08-03:
+    `/api/weekly-display` now backfills a blank `discussionVocabulary` from that lesson's steps
+    (`getStepVocabularyForLessons` + `mergeVocabularyBlocks`), so a lesson authored either way
+    reveals. The lesson-level property still WINS when set - about 25 lessons carry a deliberately
+    curated one and those are not to be overridden.
+    Two rules inside the merge, both load-bearing. A DEFINED term beats a bare repeat however late
+    it arrives, because a warm-up step lists bare terms ("factor", "factor pair", "divisible") and a
+    later step is where they get defined - first-mention-wins would keep the bare copy and leave the
+    reveal with nothing to say, which is the exact failure being fixed. Otherwise first mention
+    wins, so terms stay in the order the lesson teaches them. Pinned in
+    `npm run test:weekly-display-board`.
+    The backfill swallows its own failures and never overrides a set property, so the worst case is
+    the board it already had. Do NOT make it override, and do not make a Notion failure here able to
+    500 the route - a classroom TV showing an error is worse than one showing no reveal.
   - The ground CUTS between screens instead of crossfading. The design had a .45s
     background-color transition, but every header/footer colour switches instantly, which left
     ~450ms of dark text on a lightening ground every nine seconds.
@@ -1586,13 +1614,26 @@ the invariants they protect are easy to break again.
 ## Notion + warm-up pipeline
 
 - `src/lib/notionLessons.ts` reads the "Math 6 Lessons" DB via the Notion data_sources API
-  (`NOTION_VERSION = 2025-09-03`, `POST /v1/data_sources/{id}/query`, three `DATA_SOURCE_IDS`), auth
+  (`NOTION_VERSION = 2025-09-03`, `POST /v1/data_sources/{id}/query`), auth
   `NOTION_TOKEN` (server-side; the literal `const NOTION_TOKEN = "secret"` on line ~13 is dead code -
-  ignore it, never put a real token there). THE DATABASE HAS THREE DATA SOURCES and published pages
-  really do live across them - any query that hits only one source is silently blind to the rest.
-  That bug shipped in `notionLessonArchive.ts` (fixed 2026-07-26): /api/lessons and
-  /api/teacher/lessons (the Studio + Slide-extras lesson pickers) missed two published launch-week
-  lessons that /api/today could see. Keep every lesson query iterating the SAME three-source list.
+  ignore it, never put a real token there). `DATA_SOURCE_IDS` NOW HOLDS EXACTLY ONE ID
+  (`e367e541-...`) - CORRECTED 2026-08-03, this section said "three" and told you to keep every query
+  iterating a three-source list, which is now the opposite of the truth and would send you to
+  "restore" two ids that break things. The other two were a schemaless sibling and one that was never
+  a data source of this database; every query against them FAILED, and under `requireComplete` that
+  sank whole lookups - the documented "by-code Notion lookup returned empty" symptom. The 2026-07-26
+  `notionLessonArchive.ts` fix (/api/lessons and /api/teacher/lessons missing two published
+  launch-week lessons /api/today could see) is still real history: the rule it earned is that every
+  lesson query iterates the SAME `DATA_SOURCE_IDS` list, whatever is in it - not that the number is
+  three.
+- THE LESSON STEPS DATA SOURCE IS QUERYABLE DIRECTLY, and that is the cheap way to read step fields
+  in bulk. `LESSON_STEP_DATA_SOURCE_ID` (`8e467c1b-...`, the same id `notionLessonStepWrites.ts`
+  writes through) carries a `Lesson` RELATION back to the lessons source, so one
+  `POST /v1/data_sources/{id}/query` with an `or` of `{ property: "Lesson", relation: { contains } }`
+  gets every step of several lessons at once. `mapPage`'s normal path does the opposite - a
+  `GET /v1/pages/{id}` PER STEP, about twelve a lesson - which is why
+  `getPublishedLessonsForDateRange` passes `includeRelations: false` and why /weekly-display (polled
+  by two TVs every 60s) could not simply turn it on.
 - `/api/today` returns the lesson whose `Publish Workflow` select equals `Published` AND `Date` equals
   today in `America/Los_Angeles` (not UTC). Renaming those properties or assuming UTC silently returns
   nothing.
