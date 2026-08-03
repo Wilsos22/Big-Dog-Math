@@ -978,21 +978,24 @@ the invariants they protect are easy to break again.
   `/api/control-remote` did not filter at all - so the two engines ran different lessons from the same
   Notion page. Unknown ids now get a synthesized bank entry with an EMPTY `desc` and are named in the
   load message. When adding a second consumer of `lesson.steps`, make it agree with `stepsFromLesson`.
-- **A STEP'S KIND CAN BE SET FROM THE FRIENDLY `Slide Type` SELECT, WHICH WINS OVER `State ID`**
+- **A STEP'S KIND CAN BE SET FROM THE FRIENDLY `State Type` SELECT, WHICH WINS OVER `State ID`**
   (added 2026-08-02, Steele: "a notion property that tells me what kind of slide it is... it should
   be a select"). The Lesson Steps data source (`collection://8e467c1b-8937-4902-811e-ca0a2e15af4d`)
-  now has a `Slide Type` SELECT with plain-English options (Warm-Up, Direct Instruction (I Do),
-  Discussion, Learning Check, Question, Exit Ticket, ...). `notionLessons.ts` resolves
-  `stateId = stateIdForSlideType(Slide Type) || State ID`, so a step that sets Slide Type is driven
-  by it and a step that leaves it empty is UNCHANGED (falls back to the raw `State ID`) - a teacher
-  migrates one step at a time. The label->id map is `SLIDE_TYPE_OPTIONS` / `stateIdForSlideType` in
-  `src/lib/classStates.ts`; the Notion option NAMES must equal those labels exactly, and
-  `npm run test:slide-type` pins that every option maps to a real DEFAULT_STATES id (the wiring is
-  what stops it becoming a dead label that drifts from what runs - the failure mode the Response Mode
-  / Poll Kind traps below warn about). DELIBERATELY NO generic "Tool" option: a step's specific tool
-  state (e.g. `tool-divisibility`) comes from `State ID` + the `Tool` property, and a coarse
-  "Manipulative / Tool" -> `manip` would override that and drop the tool embed. Existing steps were
-  NOT backfilled - Slide Type is empty on them until Steele sets it, and the fallback covers them.
+  has a `State Type` SELECT with plain-English options (Warm-Up, Direct Instruction (I Do),
+  Discussion, Learning Check, Question, Exit Ticket, ...). NAME TRAP: this property is `State Type`,
+  NOT `Slide Type` - `Slide Type` is a SEPARATE property (embedded outside slides/boards, read into
+  `slideUrl` via `Slide URL`/`Slide Image`), so the state-kind select was renamed off it the same day
+  to break the collision. `notionLessons.ts` resolves `stateId = stateIdForStateType(State Type) ||
+  State ID`, so a step that sets State Type is driven by it and a step that leaves it empty is
+  UNCHANGED (falls back to the raw `State ID`) - a teacher migrates one step at a time. The label->id
+  map is `STATE_TYPE_OPTIONS` / `stateIdForStateType` in `src/lib/classStates.ts`; the Notion option
+  NAMES must equal those labels exactly, and `npm run test:state-type` pins that every option maps to
+  a real DEFAULT_STATES id (the wiring is what stops it becoming a dead label that drifts from what
+  runs - the failure mode the Response Mode / Poll Kind traps below warn about). DELIBERATELY NO
+  generic "Tool" option: a step's specific tool state (e.g. `tool-divisibility`) comes from `State ID`
+  + the `Tool` property, and a coarse "Manipulative / Tool" -> `manip` would override that and drop
+  the tool embed. M1.T1.L2-LAUNCH's steps were backfilled from their State ID (the two tool steps left
+  empty on purpose); other lessons are empty until set, and the fallback covers them.
 - **`Anchor Problem` IS THE HOOK.** There is no `Hook` property in the lessons database.
 - **`liveAssignedToolRoute` MATCHES BY PREFIX, and drops a trailing dash qualifier.** A Lesson Step
   names a tool the way a teacher writes it - `Distributive Area Method`, `... - teacher display`,
