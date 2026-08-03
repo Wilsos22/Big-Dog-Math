@@ -1,34 +1,36 @@
 "use client";
 
-// Decimals, step by step - all four operations, one decision at a time.
+// Decimals, step by step - all four operations, one move at a time.
 //
-// Every step is a multiple-choice "what do we do next?", and the board only
-// moves once the choice is right. The digits being worked on light up as the
-// question is asked, so the words and the numbers point at the same thing.
+// v2, rebuilt from Steele's toolbar comments on /decimal-steps. What changed:
+//   - students TYPE the arithmetic; multiple choice is kept for the decisions
+//   - a carry is a decision AND a physical act: type it into a box over the
+//     next column, where it solidifies
+//   - the decimal is DRAGGED by the student, click by click, and each hop
+//     leaves a big dashed arc UNDER the number from the old spot to the new
+//   - the operation is chosen before anything, and can also be picked from the
+//     top bar so a teacher can jump straight to the one they are teaching
+//   - an estimate comes first, so there is something to check the answer against
+//   - the long-division house is a proper L, with the quotient over the bar
+//   - correct answers do not sit in the first slot (the engine seats them)
+//   - a big "Yes!" lands on every correct move, and the current step flashes
 //
-// Two modes, both one step at a time (Steele's ask). TEACHER LED is for the
-// front of the room: bigger type, and a Show button so the question can be
-// posed, hands taken, and then revealed. STUDENT has no reveal - a wrong pick
-// says why it is wrong and the step stays put.
-//
-// Division is the one that carries an extra demand: having answered how many
-// places the decimal moves, the student has to actually MOVE it that many
-// times, on the divisor and then on the dividend. Naming the number is not the
-// same as doing it, and moving only the divisor is the error it catches. The
-// divide / multiply / subtract / bring down steps still run down the side rail.
-//
-// The engine (lib/decimalSteps) owns the arithmetic and the questions; this
-// file is the board, the rail, and the decimal-moving interaction.
+// The engine (lib/decimalSteps) owns the arithmetic, the questions and the
+// choice order; this file is the board, the rail, and the interactions.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  DECIMAL_OPS,
   DEFAULT_DECIMAL_SET,
   buildDecimalTrace,
+  parseDec,
   parseDecimalSet,
   serializeDecimalSet,
   trimTrailingZeros,
   type DecCell,
   type DecStep,
+  type DecimalOp,
+  type DecimalProblem,
   type DecimalRow,
   type DecimalTrace,
 } from "@/lib/decimalSteps";
@@ -38,10 +40,13 @@ type Mode = "teacher" | "student";
 const PROGRESS_KEY = "bdm-decimal-steps";
 const MODE_KEY = "bdm-decimal-steps-mode";
 
-interface Ledger {
-  rail: string;
-  say: string;
-}
+/** Used when the picker asks for an operation the current set does not carry. */
+const FALLBACK: Record<DecimalOp, [string, string]> = {
+  "+": ["12.4", "3.75"],
+  "-": ["8.3", "4.68"],
+  "x": ["6.2", "0.4"],
+  "/": ["9.6", "0.4"],
+};
 
 function opSign(op: string): string {
   if (op === "+") return "+";
@@ -50,7 +55,6 @@ function opSign(op: string): string {
   return "÷";
 }
 
-/** Where in a set to pick up, so a reload mid-set does not restart it. */
 function resumeIndex(sig: string, count: number): number {
   try {
     const saved = JSON.parse(window.localStorage.getItem(PROGRESS_KEY) || "null");
@@ -66,8 +70,6 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
   const [published, setPublished] = useState<string | null>(null);
   const [linked, setLinked] = useState<string | null>(null);
 
-  // A teacher-built series also arrives in the URL (?set=12.4+3.75, 9.6/0.4) so
-  // it can be pasted into Notion or handed out for work at home.
   useEffect(() => {
     const raw = new URLSearchParams(window.location.search).get("set");
     if (raw && parseDecimalSet(raw).problems.length) setLinked(raw);
@@ -81,6 +83,8 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
   const signature = useMemo(() => serializeDecimalSet(problems), [problems]);
 
   const [idx, setIdx] = useState(0);
+  // A problem chosen by the operation picker rather than by walking the set.
+  const [picked, setPicked] = useState<DecimalProblem | null>(null);
   const [mode, setMode] = useState<Mode>("student");
   const [stepIdx, setStepIdx] = useState(0);
   const [wrong, setWrong] = useState<number[]>([]);
@@ -88,8 +92,13 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
   const [revealed, setRevealed] = useState<string[]>([]);
   const [moved, setMoved] = useState(0);
   const [shown, setShown] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [typedWrong, setTypedWrong] = useState(false);
+  const [cheer, setCheer] = useState(0);
+  const [snap, setSnap] = useState(0);
 
-  const trace = useMemo(() => buildDecimalTrace(problems[Math.min(idx, problems.length - 1)]), [problems, idx]);
+  const problem = picked ?? problems[Math.min(idx, problems.length - 1)];
+  const trace = useMemo(() => buildDecimalTrace(problem), [problem]);
 
   const resetProblem = useCallback(() => {
     setStepIdx(0);
@@ -98,21 +107,22 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
     setRevealed([]);
     setMoved(0);
     setShown(false);
+    setTyped("");
+    setTypedWrong(false);
   }, []);
 
-  // A teacher-published set wins over whatever this device was doing. Keyed on
-  // the config id, never the object: useLiveToolConfig re-reads every second,
-  // so an object-keyed effect would restart the problem under a student.
   const liveToolId = liveTool?.id;
   useEffect(() => {
     if (!liveTool || liveTool.route !== "/decimal-steps") return;
     if (!parseDecimalSet(liveTool.config.set).problems.length) return;
     setPublished(liveTool.config.set);
+    setPicked(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveToolId]);
 
   useEffect(() => {
     setIdx(resumeIndex(signature, problems.length));
+    setPicked(null);
     resetProblem();
   }, [signature, problems.length, resetProblem]);
 
@@ -136,9 +146,23 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
     setMode(m);
     try {
       window.localStorage.setItem(MODE_KEY, m);
-    } catch {
-      /* ignore */
+    } catch { /* ignore */ }
+  };
+
+  // Jump to an operation. Prefers a problem the teacher actually published, so
+  // a set of four divisions stays a set of four divisions.
+  const pickOp = (op: DecimalOp) => {
+    const found = problems.findIndex((p) => p.op === op);
+    if (found >= 0) {
+      setPicked(null);
+      setIdx(found);
+    } else {
+      const [x, y] = FALLBACK[op];
+      const a = parseDec(x);
+      const b = parseDec(y);
+      if (a && b) setPicked({ a, b, op });
     }
+    resetProblem();
   };
 
   if (!trace) {
@@ -147,143 +171,244 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
 
   const step: DecStep | undefined = trace.steps[stepIdx];
   const done = stepIdx >= trace.steps.length;
-  // "Move it" is an instruction, not a decision - a one-choice question is a
-  // button pretending to be a question, so the interaction opens straight away.
-  // Such a step reveals nothing on its own; the move is the whole move.
-  const instruction = Boolean(step && step.choices.length === 1 && step.action);
-  const solved = solvedStep || instruction;
-  const needsMove = Boolean(step?.action) && solved;
-  const moveTarget = step?.action?.target;
+  const needsMove = step?.kind === "move";
   const movesLeft = (step?.action?.places ?? 0) - moved;
+  const moveReady = needsMove && movesLeft === 0;
+  const solved = solvedStep || moveReady;
 
-  const ledger: Ledger[] = trace.steps.slice(0, stepIdx).map((s) => ({ rail: s.rail, say: s.say }));
+  const ledger = trace.steps.slice(0, stepIdx).map((s) => ({ rail: s.rail, say: s.say }));
   const revealedSet = new Set(revealed);
   const highlightSet = new Set(step && !done ? step.highlight : []);
+
+  const celebrate = () => setCheer((c) => c + 1);
 
   const pick = (i: number) => {
     if (!step || solvedStep) return;
     if (step.choices[i].correct) {
       setSolvedStep(true);
       setRevealed((r) => [...r, ...step.reveal]);
+      celebrate();
+      if (step.id === "lineup") setSnap((s) => s + 1);
     } else if (!wrong.includes(i)) {
       setWrong((w) => [...w, i]);
     }
   };
 
+  const submitTyped = () => {
+    if (!step?.input || solvedStep) return;
+    const value = Number(typed.trim());
+    if (!typed.trim() || !Number.isFinite(value)) {
+      setTypedWrong(true);
+      return;
+    }
+    const target = Number(step.input.expect);
+    const ok = step.input.tolerance !== undefined
+      ? Math.abs(value - target) <= step.input.tolerance
+      : typed.trim() === step.input.expect;
+    if (!ok) {
+      setTypedWrong(true);
+      return;
+    }
+    setTypedWrong(false);
+    setSolvedStep(true);
+    setRevealed((r) => [...r, ...step.reveal]);
+    celebrate();
+  };
+
   const advance = () => {
-    if (!step) return;
     setStepIdx((s) => s + 1);
     setWrong([]);
     setSolvedStep(false);
     setMoved(0);
     setShown(false);
+    setTyped("");
+    setTypedWrong(false);
   };
 
   const hop = (delta: number) => {
     const places = step?.action?.places ?? 0;
-    setMoved((m) => Math.max(0, Math.min(places, m + delta)));
+    setMoved((m) => {
+      const next = Math.max(0, Math.min(places, m + delta));
+      if (next === places && m !== places) celebrate();
+      return next;
+    });
   };
 
   const nextProblem = () => {
+    setPicked(null);
     setIdx((i) => (i + 1) % problems.length);
     resetProblem();
   };
 
-  // Live decimal positions. Only the divisor and the dividend ever move - the
-  // quotient's point is already placed in the SHIFTED dividend's columns, so
-  // shifting it again would slide it away from the digits it belongs to.
+  // Live decimal positions. Divisor and dividend travel right; a product's
+  // point travels LEFT from the end of the number.
   const markerShift = (row: DecimalRow): number => {
-    if (trace.layout !== "house") return 0;
-    if (row !== "divisor" && row !== "dividend") return 0;
-    const settled = trace.steps.slice(0, stepIdx).some((s) => s.action?.target === row);
-    if (settled) return trace.shift;
-    if (moveTarget === row && solved) return moved;
+    const target = row === "divisor" ? "divisor" : row === "dividend" ? "dividend" : row === "sum" ? "product" : null;
+    if (!target) return 0;
+    const settledStep = trace.steps.slice(0, stepIdx).find((s) => s.action?.target === target);
+    if (settledStep) return settledStep.action!.places * (settledStep.action!.direction === "left" ? -1 : 1);
+    if (step?.action?.target === target) return moved * (step.action.direction === "left" ? -1 : 1);
     return 0;
   };
 
   const chosen = step && solvedStep ? step.choices.findIndex((c) => c.correct) : -1;
   const answerTrim = trimTrailingZeros(trace.answerText);
+  const canAdvance = solved;
 
   return (
     <div className={`ds-root ${mode === "teacher" ? "big" : ""}`.trim()}>
       <style>{`
-        .ds-root { --ds-cell:44px; --ds-font:1.9rem; width:100%; display:grid; gap:16px; }
-        .ds-root.big { --ds-cell:60px; --ds-font:2.7rem; }
-        .ds-top { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
-        .ds-headline { font-size:clamp(1.5rem,3.4vw,2.2rem); font-weight:800; margin:0; letter-spacing:0.01em; }
-        .ds-count { font-size:0.76rem; font-weight:800; letter-spacing:0.14em; text-transform:uppercase; color:var(--bdb-ink-faint); margin:0 0 2px; }
+        .ds-root { --ds-cell:56px; --ds-font:2.5rem; width:100%; display:grid; gap:16px; position:relative; }
+        .ds-root.big { --ds-cell:76px; --ds-font:3.4rem; }
+        @media (max-width:900px) { .ds-root { --ds-cell:40px; --ds-font:1.8rem; } .ds-root.big { --ds-cell:46px; --ds-font:2.1rem; } }
+        .ds-top { display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+        .ds-headline { font-size:clamp(2.1rem,5vw,3.4rem); font-weight:900; margin:0; letter-spacing:-0.01em; line-height:1.05; }
+        .ds-count { font-size:0.78rem; font-weight:800; letter-spacing:0.14em; text-transform:uppercase; color:var(--bdb-ink-faint); margin:0 0 4px; }
         .ds-seg { display:inline-flex; border:1px solid var(--bdb-line); border-radius:999px; overflow:hidden; }
-        .ds-seg button { font:inherit; font-weight:800; font-size:0.84rem; min-height:44px; padding:0 16px; border:none; background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
+        .ds-seg button { font:inherit; font-weight:800; font-size:0.84rem; min-height:44px; padding:0 15px; border:none; background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
         .ds-seg button.on { background:var(--bdb-teal-deep); color:#fff; }
+        .ds-ops { display:inline-flex; gap:6px; }
+        .ds-op { font:inherit; font-weight:900; font-size:1.05rem; min-width:52px; min-height:44px; border-radius:11px;
+          border:2px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft); cursor:pointer; }
+        .ds-op.on { border-color:var(--bdb-brown); background:var(--bdb-brown); color:#fff; }
         .ds-btn { font:inherit; font-weight:800; font-size:0.88rem; min-height:44px; padding:0 17px; border-radius:11px; border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink); cursor:pointer; }
         .ds-btn.go { background:var(--bdb-teal-deep); border-color:var(--bdb-teal-deep); color:#fff; }
-        .ds-btn:disabled { color:var(--bdb-ink-faint); cursor:default; }
+        .ds-btn:disabled { color:var(--bdb-ink-faint); background:var(--bdb-card); border-color:var(--bdb-line); cursor:default; }
 
-        .ds-grid { display:grid; grid-template-columns:minmax(170px,0.85fr) minmax(320px,1.9fr) minmax(290px,1.15fr); gap:20px; align-items:start; }
-        @media (max-width:1040px) { .ds-grid { grid-template-columns:1fr; } .ds-rail { order:3; } .ds-stage { order:1; } .ds-ask { order:2; } }
+        .ds-grid { display:grid; grid-template-columns:minmax(190px,0.8fr) minmax(340px,2fr) minmax(300px,1.1fr); gap:22px; align-items:start; }
+        @media (max-width:1100px) { .ds-grid { grid-template-columns:1fr; } .ds-rail { order:3; } .ds-stage { order:1; } .ds-ask { order:2; } }
 
-        /* ── the running steps, on the side ── */
-        .ds-rail { display:grid; gap:7px; align-content:start; }
-        .ds-raillbl { font-size:0.72rem; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:var(--bdb-ink-faint); }
-        .ds-rrow { display:grid; gap:1px; padding:7px 11px; border-left:3px solid var(--bdb-line); }
-        .ds-rrow b { font-size:0.82rem; font-weight:800; color:var(--bdb-ink); }
-        .ds-rrow span { font-size:0.8rem; font-weight:600; color:var(--bdb-ink-soft); }
-        .ds-rrow.now { border-left-color:var(--bdb-amber); animation:ds-pulse 1.9s ease-in-out infinite; }
+        /* ── the steps, on the side ── */
+        .ds-rail { display:grid; gap:8px; align-content:start; }
+        .ds-raillbl { font-size:0.74rem; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:var(--bdb-ink-faint); }
+        .ds-rrow { display:grid; gap:2px; padding:9px 13px; border-left:4px solid var(--bdb-line); }
+        .ds-rrow b { font-size:0.95rem; font-weight:800; color:var(--bdb-ink); }
+        .ds-rrow span { font-size:0.86rem; font-weight:600; color:var(--bdb-ink-soft); }
         .ds-rrow.done { border-left-color:var(--bdb-green-deep); }
-        @keyframes ds-pulse { 0%,100% { background:transparent; } 50% { background:color-mix(in srgb, var(--bdb-amber) 14%, transparent); } }
-        @media (prefers-reduced-motion: reduce) { .ds-rrow.now { animation:none; background:color-mix(in srgb, var(--bdb-amber) 14%, transparent); } }
+        .ds-rrow.now { border-left-color:var(--bdb-amber); animation:ds-flash 1.4s ease-in-out infinite; }
+        .ds-rrow.now b { font-size:1.22rem; }
+        @keyframes ds-flash { 0%,100% { background:transparent; } 50% { background:color-mix(in srgb, var(--bdb-amber) 26%, transparent); } }
+        @media (prefers-reduced-motion: reduce) { .ds-rrow.now { animation:none; background:color-mix(in srgb, var(--bdb-amber) 26%, transparent); } }
 
         /* ── the board ── */
-        .ds-stage { display:grid; gap:10px; justify-items:center; padding:10px 4px; }
-        .ds-rows { display:grid; gap:2px; font-variant-numeric:tabular-nums; }
-        .ds-row { position:relative; display:grid; grid-auto-flow:column; justify-content:start; }
-        .ds-cellrow { display:grid; }
-        .ds-cell { width:var(--ds-cell); height:calc(var(--ds-cell) * 1.06); display:grid; place-items:center; font-size:var(--ds-font); font-weight:800; color:var(--bdb-ink); border-radius:8px; transition:background 140ms ease, color 140ms ease; }
-        .ds-cell.small { font-size:calc(var(--ds-font) * 0.5); color:var(--bdb-ink-soft); height:calc(var(--ds-cell) * 0.62); }
+        .ds-stage { display:grid; gap:14px; justify-items:center; padding:8px 4px 28px; }
+        .ds-rows { display:grid; gap:3px; font-variant-numeric:tabular-nums; }
+        .ds-row { position:relative; display:flex; align-items:stretch; }
+        .ds-cellrow { display:grid; position:relative; }
+        .ds-cell { width:var(--ds-cell); height:calc(var(--ds-cell) * 1.06); display:grid; place-items:center;
+          font-size:var(--ds-font); font-weight:800; color:var(--bdb-ink); border-radius:9px; transition:background 140ms ease; }
+        .ds-cell.small { font-size:calc(var(--ds-font) * 0.46); color:var(--bdb-ink-soft); height:calc(var(--ds-cell) * 0.6); }
         .ds-cell.pad { color:var(--bdb-ink-faint); }
         .ds-cell.hidden { visibility:hidden; }
-        .ds-cell.lit { background:color-mix(in srgb, var(--bdb-amber) 34%, transparent); }
-        .ds-cell.dot { font-size:var(--ds-font); }
-        .ds-gutter { width:calc(var(--ds-cell) * 0.9); display:grid; place-items:center; font-size:var(--ds-font); font-weight:800; color:var(--bdb-ink-soft); }
-        .ds-rule { height:3px; background:var(--bdb-ink); margin:5px 0; border-radius:2px; }
-        .ds-mark { position:absolute; font-size:var(--ds-font); font-weight:900; line-height:1; transform:translateX(-52%); transition:left 220ms ease; }
-        .ds-mark.muted { color:var(--bdb-ink-faint); }
-        .ds-mark.lit { color:var(--bdb-coral-deep); }
-        .ds-hop { position:absolute; border-top:2.5px solid var(--bdb-coral-deep); border-radius:60% 60% 0 0 / 100% 100% 0 0; height:13px; pointer-events:none; }
+        .ds-cell.lit { background:color-mix(in srgb, var(--bdb-amber) 40%, transparent); }
+        .ds-cell.carrybox { font-size:calc(var(--ds-font) * 0.46); height:calc(var(--ds-cell) * 0.6);
+          border:2px dashed var(--bdb-coral-deep); color:var(--bdb-coral-deep); border-radius:7px;
+          width:calc(var(--ds-cell) * 0.62); margin:0 auto; }
+        .ds-cell.carrybox.waiting { animation:ds-await 1.2s ease-in-out infinite; }
+        @keyframes ds-await { 0%,100% { background:transparent; } 50% { background:color-mix(in srgb, var(--bdb-coral) 22%, transparent); } }
+        @media (prefers-reduced-motion: reduce) { .ds-cell.carrybox.waiting { animation:none; background:color-mix(in srgb, var(--bdb-coral) 22%, transparent); } }
+        .ds-gutter { width:calc(var(--ds-cell) * 0.85); display:grid; place-items:center; font-size:var(--ds-font); font-weight:800; color:var(--bdb-ink-soft); }
+        .ds-rule { height:4px; background:var(--bdb-ink); margin:6px 0; border-radius:2px; }
+        /* The numbers snap together when the line-up question is answered -
+           Steele: "act like they are magnets drawn to eachother". */
+        .ds-snap { animation:ds-magnet 380ms cubic-bezier(.2,1.5,.4,1); }
+        @keyframes ds-magnet { 0% { transform:translateX(var(--ds-from)); opacity:0.35; } 100% { transform:translateX(0); opacity:1; } }
+        @media (prefers-reduced-motion: reduce) { .ds-snap { animation:none; } }
 
-        /* long division house */
+        /* decimal points that float between columns, and can be dragged */
+        /* A decimal point is a button so the student can move it, but a DISABLED
+           button is greyed by the browser - which washed the point out on every
+           row that was not currently movable. Forced back to ink. */
+        .ds-mark { position:absolute; bottom:calc(var(--ds-cell) * 0.14); transform:translateX(-50%);
+          font-size:var(--ds-font); font-weight:900; line-height:0.5; color:var(--bdb-ink);
+          background:none; border:none; padding:0; opacity:1; -webkit-text-fill-color:currentColor;
+          transition:left 240ms cubic-bezier(.3,1.4,.5,1); }
+        .ds-mark:disabled { color:var(--bdb-ink); opacity:1; }
+        .ds-mark.muted, .ds-mark.muted:disabled { color:var(--bdb-ink-faint); }
+        .ds-mark.grab, .ds-mark.grab:disabled { cursor:grab; color:var(--bdb-coral-deep); animation:ds-bob 1.1s ease-in-out infinite; }
+        .ds-mark.grab::after { content:""; position:absolute; inset:-16px -20px; border-radius:50%;
+          border:2.5px dashed var(--bdb-coral-deep); }
+        @keyframes ds-bob { 0%,100% { transform:translateX(-50%) scale(1); } 50% { transform:translateX(-50%) scale(1.22); } }
+        /* One dashed arc per place travelled, UNDER the number, from the old
+           spot to the new one. This is the caret you draw on the board. */
+        .ds-hop { position:absolute; border-bottom:3px dashed var(--bdb-coral-deep);
+          border-radius:0 0 58% 58% / 0 0 100% 100%; height:26px; pointer-events:none; }
+        .ds-uparrow { position:absolute; width:0; height:0; border-left:10px solid transparent; border-right:10px solid transparent;
+          border-bottom:16px solid var(--bdb-coral-deep); transform:translateX(-50%); animation:ds-rise 1.1s ease-in-out infinite; }
+        @keyframes ds-rise { 0%,100% { opacity:0.35; } 50% { opacity:1; } }
+        @media (prefers-reduced-motion: reduce) { .ds-mark.grab, .ds-uparrow { animation:none; } }
+
+        /* long division: a proper L - vertical stroke down the left of the
+           dividend, horizontal bar across its top, quotient sitting above. */
         .ds-house { display:flex; align-items:flex-start; }
-        .ds-divisor { display:flex; align-items:center; padding-top:calc(var(--ds-cell) * 1.06 + 5px); position:relative; }
-        .ds-bracket { position:relative; padding-left:10px; border-left:3px solid var(--bdb-ink); border-top-left-radius:14px; margin-top:calc(var(--ds-cell) * 1.06 + 2px); }
-        .ds-bar { height:3px; background:var(--bdb-ink); border-radius:2px; }
+        .ds-divisor { position:relative; }
+        .ds-hstack { display:grid; }
+        .ds-quot { padding-left:14px; position:relative; }
+        .ds-lbody { border-left:4px solid var(--bdb-ink); border-top:4px solid var(--bdb-ink);
+          border-top-left-radius:12px; padding-left:14px; padding-top:5px; }
 
         /* ── the question ── */
-        .ds-ask { display:grid; gap:10px; align-content:start; }
-        .ds-q { font-size:clamp(1.02rem,2.1vw,1.24rem); font-weight:800; margin:0; line-height:1.32; }
-        .ds-choice { font:inherit; text-align:left; font-weight:700; font-size:0.95rem; line-height:1.32; min-height:52px; padding:11px 15px; border-radius:12px;
+        .ds-ask { display:grid; gap:11px; align-content:start; }
+        .ds-q { font-size:clamp(1.1rem,2.3vw,1.38rem); font-weight:800; margin:0; line-height:1.3; }
+        .ds-choice { font:inherit; text-align:left; font-weight:700; font-size:1rem; line-height:1.3; min-height:54px; padding:12px 16px; border-radius:12px;
           border:2px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink); cursor:pointer; }
         .ds-choice:hover:not(:disabled) { border-color:var(--bdb-teal-deep); }
         .ds-choice.bad { border-color:var(--bdb-coral-deep); background:color-mix(in srgb, var(--bdb-coral) 11%, var(--bdb-card)); color:var(--bdb-ink-soft); }
-        .ds-choice.good { border-color:var(--bdb-green-deep); background:color-mix(in srgb, var(--bdb-green) 13%, var(--bdb-card)); }
+        .ds-choice.good { border-color:var(--bdb-green-deep); background:color-mix(in srgb, var(--bdb-green) 14%, var(--bdb-card)); }
         .ds-choice.hint { border-color:var(--bdb-amber); }
         .ds-choice:disabled { cursor:default; }
-        .ds-why { font-size:0.92rem; font-weight:600; line-height:1.42; margin:0; padding:9px 13px; border-left:3px solid var(--bdb-line); color:var(--bdb-ink-soft); }
+        .ds-entry { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+        .ds-entrylbl { font-size:1.15rem; font-weight:800; color:var(--bdb-ink); }
+        .ds-input { font:inherit; font-weight:900; font-size:1.5rem; width:7ch; min-height:56px; text-align:center;
+          border:3px solid var(--bdb-teal-deep); border-radius:12px; background:var(--bdb-card); color:var(--bdb-ink); padding:0 8px; }
+        .ds-input.bad { border-color:var(--bdb-coral-deep); }
+        .ds-input.good { border-color:var(--bdb-green-deep); background:color-mix(in srgb, var(--bdb-green) 13%, var(--bdb-card)); }
+        .ds-why { font-size:0.95rem; font-weight:600; line-height:1.42; margin:0; padding:10px 14px; border-left:4px solid var(--bdb-line); color:var(--bdb-ink-soft); }
         .ds-why.good { border-left-color:var(--bdb-green-deep); color:var(--bdb-ink); }
         .ds-why.bad { border-left-color:var(--bdb-coral-deep); }
-        .ds-move { display:grid; gap:9px; padding:12px 14px; border:2px dashed var(--bdb-coral-deep); border-radius:12px; }
-        .ds-move p { margin:0; font-weight:800; font-size:0.95rem; }
+        .ds-move { display:grid; gap:10px; padding:13px 15px; border:3px dashed var(--bdb-coral-deep); border-radius:13px; }
+        .ds-move p { margin:0; font-weight:800; font-size:1rem; }
         .ds-move .row { display:flex; gap:8px; flex-wrap:wrap; }
-        .ds-done { font-size:1.15rem; font-weight:800; color:var(--bdb-green-deep); margin:0; }
+        .ds-done { font-size:1.3rem; font-weight:900; color:var(--bdb-green-deep); margin:0; }
+
+        /* the "Yes!" that lands on a correct move */
+        .ds-yes { position:fixed; left:50%; top:22%; transform:translateX(-50%); z-index:90; pointer-events:none;
+          font-size:clamp(3rem,9vw,6rem); font-weight:900; color:var(--bdb-green-deep);
+          text-shadow:0 6px 24px rgba(0,0,0,0.18); animation:ds-yes 1100ms ease-out forwards; }
+        @keyframes ds-yes {
+          0% { opacity:0; transform:translateX(-50%) scale(0.5); }
+          22% { opacity:1; transform:translateX(-50%) scale(1.12); }
+          40% { transform:translateX(-50%) scale(1); }
+          100% { opacity:0; transform:translateX(-50%) scale(1) translateY(-40px); }
+        }
+        @media (prefers-reduced-motion: reduce) { .ds-yes { animation:none; opacity:1; } }
       `}</style>
 
       <LiveToolBanner tool={liveTool} />
 
       <div className="ds-top">
         <div>
-          <p className="ds-count">Problem {Math.min(idx, problems.length - 1) + 1} of {problems.length}</p>
+          <p className="ds-count">
+            {picked ? "Picked" : `Problem ${Math.min(idx, problems.length - 1) + 1} of ${problems.length}`}
+          </p>
           <h2 className="ds-headline">{trace.headline}{done ? ` = ${trace.answerText}` : ""}</h2>
         </div>
         <div style={{ display: "flex", gap: 9, flexWrap: "wrap", alignItems: "center" }}>
+          {/* Steele: "allow me or thr student to pick the operation wre are doing" */}
+          <div className="ds-ops">
+            {DECIMAL_OPS.map((o) => (
+              <button
+                key={o.op}
+                className={`ds-op ${trace.problem.op === o.op ? "on" : ""}`.trim()}
+                onClick={() => pickOp(o.op)}
+                title={o.label}
+                aria-label={o.label}
+                type="button"
+              >
+                {o.sign}
+              </button>
+            ))}
+          </div>
           <div className="ds-seg">
             <button className={mode === "teacher" ? "on" : ""} onClick={() => pickMode("teacher")} type="button">Teacher led</button>
             <button className={mode === "student" ? "on" : ""} onClick={() => pickMode("student")} type="button">Student</button>
@@ -316,7 +441,10 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
             revealed={revealedSet}
             highlight={highlightSet}
             markerShift={markerShift}
-            moveTarget={needsMove ? moveTarget : undefined}
+            moveStep={needsMove && movesLeft > 0 ? step : undefined}
+            onHop={() => hop(1)}
+            snapKey={snap}
+            showUpArrow={step?.id === "qpoint"}
           />
           {done && (
             <p className="ds-done">
@@ -343,7 +471,8 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
           ) : step ? (
             <>
               <p className="ds-q">{step.question}</p>
-              {!instruction && step.choices.map((c, i) => {
+
+              {step.kind === "choice" && step.choices.map((c, i) => {
                 const isWrong = wrong.includes(i);
                 const isRight = solvedStep && c.correct;
                 const hinted = shown && c.correct && !solvedStep;
@@ -359,39 +488,60 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
                   </button>
                 );
               })}
-              {solvedStep && chosen >= 0 && <p className="ds-why good">{step.choices[chosen].why}</p>}
-              {!solvedStep && wrong.length > 0 && <p className="ds-why bad">{step.choices[wrong[wrong.length - 1]].why}</p>}
 
-              {needsMove && step.action && (
+              {step.kind === "input" && step.input && (
+                <div className="ds-entry">
+                  <span className="ds-entrylbl">{step.input.label}</span>
+                  <input
+                    className={`ds-input ${typedWrong ? "bad" : ""} ${solvedStep ? "good" : ""}`.replace(/\s+/g, " ").trim()}
+                    value={solvedStep ? step.input.expect : typed}
+                    onChange={(e) => { setTyped(e.target.value); setTypedWrong(false); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") submitTyped(); }}
+                    disabled={solvedStep}
+                    inputMode="decimal"
+                    aria-label={step.input.label}
+                  />
+                  {!solvedStep && <button className="ds-btn go" onClick={submitTyped} type="button">Check</button>}
+                </div>
+              )}
+
+              {step.kind === "move" && step.action && (
                 <div className="ds-move">
                   <p>
-                    Move the decimal in the {step.action.target}: {moved} of {step.action.places} moved
-                    {movesLeft > 0 ? ` - ${movesLeft} to go` : " - that is it"}
+                    {moved} of {step.action.places} moved
+                    {movesLeft > 0 ? ` - drag the decimal point ${movesLeft} more` : " - that is it"}
                   </p>
                   <div className="row">
-                    <button className="ds-btn go" onClick={() => hop(1)} disabled={movesLeft <= 0} type="button">Move one place right</button>
+                    <button className="ds-btn go" onClick={() => hop(1)} disabled={movesLeft <= 0} type="button">
+                      Move one place {step.action.direction}
+                    </button>
                     <button className="ds-btn" onClick={() => hop(-1)} disabled={moved <= 0} type="button">Back one</button>
                   </div>
                 </div>
               )}
 
+              {solvedStep && chosen >= 0 && <p className="ds-why good">{step.choices[chosen].why}</p>}
+              {!solvedStep && wrong.length > 0 && <p className="ds-why bad">{step.choices[wrong[wrong.length - 1]].why}</p>}
+              {typedWrong && step.input && <p className="ds-why bad">{step.input.hint}</p>}
+              {solvedStep && step.kind === "input" && <p className="ds-why good">{step.say}</p>}
+
               <div style={{ display: "flex", gap: 9, flexWrap: "wrap", marginTop: 2 }}>
-                <button
-                  className="ds-btn go"
-                  onClick={advance}
-                  disabled={!solved || (needsMove && movesLeft !== 0)}
-                  type="button"
-                >
+                <button className="ds-btn go" onClick={advance} disabled={!canAdvance} type="button">
                   {needsMove && movesLeft !== 0 ? "Move it first" : "Next step"}
                 </button>
-                {mode === "teacher" && !solvedStep && (
+                {mode === "teacher" && !solved && (
                   <button className="ds-btn" onClick={() => setShown(true)} type="button">Show the answer</button>
+                )}
+                {mode === "teacher" && shown && step.kind === "input" && step.input && (
+                  <span className="ds-entrylbl" style={{ alignSelf: "center" }}>{step.input.expect}</span>
                 )}
               </div>
             </>
           ) : null}
         </div>
       </div>
+
+      {cheer > 0 && <span className="ds-yes" key={cheer}>Yes!</span>}
     </div>
   );
 }
@@ -403,36 +553,22 @@ function Board({
   revealed,
   highlight,
   markerShift,
-  moveTarget,
+  moveStep,
+  onHop,
+  snapKey,
+  showUpArrow,
 }: {
   trace: DecimalTrace;
   revealed: Set<string>;
   highlight: Set<string>;
   markerShift: (row: DecimalRow) => number;
-  moveTarget?: "divisor" | "dividend";
+  moveStep?: DecStep;
+  onHop: () => void;
+  snapKey: number;
+  showUpArrow?: boolean;
 }) {
-  const cellRef = useRef<HTMLDivElement | null>(null);
-  const [cellW, setCellW] = useState(44);
-  useEffect(() => {
-    const measure = () => {
-      const w = cellRef.current?.getBoundingClientRect().width ?? 0;
-      if (w > 0) setCellW(w);
-    };
-    measure();
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
-    if (cellRef.current && ro) ro.observe(cellRef.current);
-    window.addEventListener("resize", measure);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, []);
-
   const byRow = (row: DecimalRow) => trace.cells.filter((c) => c.row === row);
 
-  // `underline` draws the subtraction bar under a product row, the way it is
-  // written by hand - without it the product and the difference below it read
-  // as two unrelated numbers.
   const renderCells = (row: DecimalRow, small = false, underline = false) => {
     const cells = byRow(row);
     const map = new Map<number, DecCell>();
@@ -442,15 +578,19 @@ function Board({
         {Array.from({ length: trace.columns }, (_, col) => {
           const cell = map.get(col);
           if (!cell) return <span className="ds-cell" key={col} />;
-          const hidden = !revealed.has(cell.id);
+          const filled = revealed.has(cell.id);
+          // An empty carry box stands open while the student is being asked to
+          // write in it, then SOLIDIFIES when they do - Steele's word. Every
+          // other cell simply holds its space until it is written.
+          const waiting = cell.kind === "carrybox" && !filled && highlight.has(cell.id);
+          const hidden = !filled && !waiting;
           return (
             <span
               key={cell.id}
-              ref={col === 0 && row === trace.rows[0] ? cellRef : undefined}
-              className={`ds-cell ${small ? "small" : ""} ${cell.kind === "pad" ? "pad" : ""} ${cell.kind === "dot" ? "dot" : ""} ${hidden ? "hidden" : ""} ${highlight.has(cell.id) ? "lit" : ""}`.replace(/\s+/g, " ").trim()}
-              style={underline && !hidden ? { borderBottom: "3px solid var(--bdb-ink)" } : undefined}
+              className={`ds-cell ${small ? "small" : ""} ${cell.kind === "pad" ? "pad" : ""} ${cell.kind === "carrybox" ? "carrybox" : ""} ${waiting ? "waiting" : ""} ${hidden ? "hidden" : ""} ${highlight.has(cell.id) && !waiting ? "lit" : ""}`.replace(/\s+/g, " ").trim()}
+              style={underline && filled ? { borderBottom: "4px solid var(--bdb-ink)" } : undefined}
             >
-              {cell.text}
+              {waiting ? "" : cell.text}
             </span>
           );
         })}
@@ -458,29 +598,40 @@ function Board({
     );
   };
 
+  // Markers sit at exact column boundaries via calc on the cell width, never a
+  // measured pixel value - measuring is what put the multiplication points out
+  // of line with their digits.
   const renderMarkers = (row: DecimalRow) => {
     const shift = markerShift(row);
+    const grabbable = moveStep?.action && (
+      (moveStep.action.target === "divisor" && row === "divisor") ||
+      (moveStep.action.target === "dividend" && row === "dividend") ||
+      (moveStep.action.target === "product" && row === "sum")
+    );
     return trace.markers
       .filter((m) => m.row === row)
       .map((m) => {
         const at = m.boundary + shift;
         const hidden = !revealed.has(m.id);
-        const active = moveTarget && row === (moveTarget === "divisor" ? "divisor" : "dividend");
+        const hops = Math.abs(shift);
+        const from = Math.min(m.boundary, at);
         return (
           <span key={m.id}>
-            <span
-              className={`ds-mark ${m.muted ? "muted" : ""} ${highlight.has(m.id) || active ? "lit" : ""}`.replace(/\s+/g, " ").trim()}
-              style={{ left: at * cellW, bottom: 2, visibility: hidden ? "hidden" : "visible" }}
+            <button
+              className={`ds-mark ${m.muted ? "muted" : ""} ${grabbable ? "grab" : ""} ${highlight.has(m.id) ? "lit" : ""}`.replace(/\s+/g, " ").trim()}
+              style={{ left: `calc(${at} * var(--ds-cell))`, visibility: hidden ? "hidden" : "visible" }}
+              onClick={grabbable ? onHop : undefined}
+              disabled={!grabbable}
+              aria-label={grabbable ? "Move the decimal point one place" : "decimal point"}
+              type="button"
             >
               .
-            </span>
-            {/* One hop arc per place the decimal has travelled - the caret you
-                would draw on the board, so the move leaves a trace. */}
-            {Array.from({ length: shift }, (_, i) => (
+            </button>
+            {Array.from({ length: hops }, (_, i) => (
               <span
                 key={`${m.id}-hop-${i}`}
                 className="ds-hop"
-                style={{ left: (m.boundary + i) * cellW, width: cellW, top: -6 }}
+                style={{ left: `calc(${from + i} * var(--ds-cell))`, width: "var(--ds-cell)", bottom: -22 }}
               />
             ))}
           </span>
@@ -489,45 +640,55 @@ function Board({
   };
 
   if (trace.layout === "house") {
+    const workRows = trace.rows.filter((r) => r.startsWith("work") || r.startsWith("rest"));
     return (
       <div className="ds-house">
-        <div className="ds-divisor" style={{ position: "relative" }}>
+        {/* the divisor sits level with the dividend, outside the L */}
+        <div className="ds-divisor" style={{ paddingTop: "calc(var(--ds-cell) * 1.06 + 9px)" }}>
           <div style={{ position: "relative" }}>
             {renderCells("divisor")}
             {renderMarkers("divisor")}
           </div>
         </div>
-        <div className="ds-bracket">
-          <div style={{ position: "relative" }}>
-            {renderCells("quotient")}
-            {renderMarkers("quotient")}
+        <div className="ds-hstack">
+          <div className="ds-quot">
+            <div style={{ position: "relative" }}>
+              {renderCells("quotient")}
+              {renderMarkers("quotient")}
+              {showUpArrow && (
+                <span className="ds-uparrow" style={{ left: `calc(${trace.markers.find((m) => m.row === "quotient")?.boundary ?? 0} * var(--ds-cell))`, bottom: -20 }} />
+              )}
+            </div>
           </div>
-          <div className="ds-bar" />
-          <div style={{ position: "relative" }}>
-            {renderCells("dividend")}
-            {renderMarkers("dividend")}
+          <div className="ds-lbody">
+            <div style={{ position: "relative" }}>
+              {renderCells("dividend")}
+              {renderMarkers("dividend")}
+            </div>
+            {workRows.map((r) => (
+              <div key={r} style={{ position: "relative" }}>{renderCells(r, false, r.startsWith("work"))}</div>
+            ))}
           </div>
-          {trace.rows.filter((r) => r.startsWith("work") || r.startsWith("rest")).map((r) => (
-            <div key={r} style={{ position: "relative" }}>{renderCells(r, false, r.startsWith("work"))}</div>
-          ))}
         </div>
       </div>
     );
   }
 
-  // Before the line-up question is answered nothing is on the board, so the
-  // operator and the rule would float over an empty frame and read as broken.
   const started = revealed.size > 0;
-
   return (
     <div className="ds-rows">
       {trace.rows.map((row, i) => {
-        if (row === "rule") return started ? <div className="ds-rule" key={`rule-${i}`} /> : <div key={`rule-${i}`} style={{ height: 11 }} />;
+        if (row === "rule") return started ? <div className="ds-rule" key={`rule-${i}`} /> : <div key={`rule-${i}`} style={{ height: 14 }} />;
         const gutter = row === "b" && started ? opSign(trace.problem.op) : "";
+        const magnet = (row === "a" || row === "b") && snapKey > 0;
         return (
           <div className="ds-row" key={`${row}-${i}`}>
             <span className="ds-gutter">{gutter}</span>
-            <div style={{ position: "relative" }}>
+            <div
+              key={magnet ? `${row}-snap-${snapKey}` : row}
+              className={magnet ? "ds-snap" : undefined}
+              style={{ position: "relative", ["--ds-from" as string]: row === "a" ? "-46px" : "46px" }}
+            >
               {renderCells(row, row === "carry" || row === "regroup")}
               {renderMarkers(row)}
             </div>

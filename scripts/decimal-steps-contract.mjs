@@ -42,6 +42,7 @@ const traceFor = (text) => {
   return t;
 };
 const correctOf = (step) => step.choices.find((c) => c.correct).text;
+const inputOf = (step) => step.input.expect;
 const stepById = (t, id) => t.steps.find((s) => s.id === id);
 
 console.log("decimal-steps contract");
@@ -63,20 +64,40 @@ check("the set-up question's right answer changes with the operation", () => {
   assert.match(correctOf(stepById(traceFor("9.6 / 0.4"), "setup")), /divisor is a whole number/i);
 });
 
+check("every walk opens by naming the operation, then estimating", () => {
+  // Steele: "students shold have to select what operation are we doing? before
+  // anything" and "we should make an estimation feature first".
+  for (const text of ["12.4 + 3.75", "8.3 - 4.68", "6.2 x 0.4", "9.6 / 0.4"]) {
+    const t = traceFor(text);
+    assert.equal(t.steps[0].id, "operation");
+    assert.equal(t.steps[0].kind, "choice");
+    assert.equal(t.steps[0].choices.length, 4);
+    assert.equal(t.steps[1].id, "estimate");
+    assert.equal(t.steps[1].kind, "input");
+    // An estimate is judged by nearness, or a student who rounds sensibly fails.
+    assert.ok(t.steps[1].input.tolerance > 0);
+  }
+});
+
 check("division walks Steele's script, in order", () => {
   const t = traceFor("9.6 / 0.4");
   const ids = t.steps.map((s) => s.id);
-  assert.deepEqual(ids.slice(0, 5), ["setup", "howfar", "move-divisor", "move-dividend", "qpoint"]);
-  // ... and then the four-step cycle, which is what the side rail shows.
-  assert.deepEqual(t.steps.slice(5, 9).map((s) => s.rail), ["Divide", "Multiply", "Subtract", "Bring down"]);
+  assert.deepEqual(ids.slice(2, 8), ["setup", "howfar", "move-divisor", "and-the-other", "move-dividend", "qpoint"]);
+  assert.deepEqual(t.steps.slice(8, 12).map((s) => s.rail), ["Divide", "Multiply", "Subtract", "Bring down"]);
+  // "how many 4's are in 9 without going over?" - Steele's words, and the
+  // words used at the board.
+  const divide = t.steps.find((s) => s.id === "divide-0");
+  assert.match(divide.question, /how many 4's are in 9 without going over/i);
+  assert.equal(divide.kind, "input");
 });
 
 check("naming the number of places is not enough - the decimal has to be moved", () => {
   const t = traceFor("9.6 / 0.25");
   const divisor = stepById(t, "move-divisor");
-  const dividend = stepById(t, "move-dividend");
-  assert.deepEqual(divisor.action, { kind: "move-decimal", target: "divisor", places: 2 });
-  assert.deepEqual(dividend.action, { kind: "move-decimal", target: "dividend", places: 2 });
+  const dividend = stepById(t, "and-the-other");
+  assert.deepEqual(divisor.action, { kind: "move-decimal", target: "divisor", places: 2, direction: "right" });
+  assert.deepEqual(stepById(t, "move-dividend").action, { kind: "move-decimal", target: "dividend", places: 2, direction: "right" });
+  assert.equal(divisor.kind, "move");
   assert.equal(t.shift, 2);
   // Moving only the divisor is the error, so it has to be an offered choice.
   const leaveIt = dividend.choices.find((c) => /leave it where it is/i.test(c.text));
@@ -93,27 +114,99 @@ check("a divisor that is already whole gets a different question", () => {
   assert.match(correctOf(stepById(t, "setup")), /already a whole number/i);
 });
 
-check("multiplying ADDS the decimal places, and the larger count is the trap", () => {
-  const step = stepById(traceFor("6.2 x 0.4"), "count");
-  assert.match(correctOf(step), /^2 /);
-  const trap = step.choices.find((c) => /whichever number has more/i.test(c.text));
-  assert.ok(trap, "the take-the-larger error must be offered");
-  assert.equal(trap.correct, false);
-  // 6.2 x 3 has one decimal place in total, so "whichever has more" is ALSO
-  // one - the trap would be word-for-word a right answer marked wrong. It has
-  // to drop out whenever the two counts agree.
-  const same = stepById(traceFor("6.2 x 3"), "count");
-  assert.ok(!same.choices.some((c) => /whichever number has more/i.test(c.text)));
-  assert.match(correctOf(same), /^1 /);
+check("the product's decimal is counted, aimed, and then physically moved", () => {
+  // Steele: "it should ask them to count the numbers to the right of the
+  // decimal they input that number and then it asks which direction and how
+  // many spots and they press the left button".
+  const t = traceFor("6.2 x 0.4");
+  const count = stepById(t, "count");
+  assert.equal(count.kind, "input");
+  assert.equal(inputOf(count), "2");
+  assert.match(count.input.hint, /Add them, do not take the bigger one/);
+  const dir = stepById(t, "direction");
+  assert.equal(correctOf(dir), "Left");
+  const move = stepById(t, "move-product");
+  assert.deepEqual(move.action, { kind: "move-decimal", target: "product", places: 2, direction: "left" });
+});
+
+check("multiplying is two digits at a time, never a whole row at once", () => {
+  // Steele: "we can only multiple 2 numbers at once. So we strt with the 4 and
+  // the 2". A step that multiplies a row in one go is the answer appearing.
+  const t = traceFor("6.2 x 0.4");
+  const pairs = t.steps.filter((s) => s.id.startsWith("mul-"));
+  assert.equal(pairs.length, 2, "62 x 4 is two digit pairs");
+  assert.deepEqual(pairs.map((s) => s.rail), ["4 x 2", "4 x 6"]);
+  for (const s of pairs) assert.equal(s.kind, "input");
+  assert.ok(!t.steps.some((s) => /every digit of/i.test(s.question)));
+});
+
+check("the correct answer is not parked in the first slot", () => {
+  // Steele: "make sure the correct answer isnt in the first slot every itme".
+  // Every builder writes the right answer first, so without seating, a student
+  // beats the tool by always tapping the top button.
+  let first = 0;
+  let total = 0;
+  for (const text of ["12.4 + 3.75", "10.4 - 3.75", "3.6 x 2.4", "0.25 x 0.4", "9.6 / 0.4", "7.35 / 2.1", "1.2 / 0.03", "4.5 / 5", "100.5 - 99.75", "6.2 x 3"]) {
+    for (const s of traceFor(text).steps) {
+      if (s.kind !== "choice" || s.choices.length < 2) continue;
+      total += 1;
+      if (s.choices[0].correct) first += 1;
+    }
+  }
+  assert.ok(total > 20, "needs a real sample");
+  // Seating is deterministic, so this is a fact about the build, not a flake.
+  assert.ok(first < total * 0.55, `correct sat first in ${first} of ${total} choice steps`);
+  assert.ok(first > 0, "an order that never puts it first is just as learnable");
+});
+
+check("arithmetic is typed, decisions are chosen", () => {
+  // The shift Steele asked for: "students should have to enter the value of the
+  // addition in the answer". Picking 9 + 7 = 16 off a list is recognition.
+  const add = traceFor("12.4 + 3.75");
+  for (const s of add.steps.filter((s) => s.id.startsWith("col-") && !s.id.includes("-"))) {
+    assert.equal(s.kind, "input");
+  }
+  const cols = add.steps.filter((s) => /^col-\d+$/.test(s.id));
+  assert.ok(cols.length >= 4);
+  for (const s of cols) assert.equal(s.kind, "input");
+  // ... and the set-up rules are still choices.
+  assert.equal(stepById(add, "lineup").kind, "choice");
+  assert.equal(stepById(add, "point").kind, "choice");
+});
+
+check("a carry is decided, then physically written into a box", () => {
+  // Steele: "what do we do with the second 1? and they write carry it. and rhey
+  // have to physically put the one in a small box over the 2".
+  const t = traceFor("12.4 + 3.75");
+  const what = stepById(t, "col-2-what");
+  const write = stepById(t, "col-2-write");
+  assert.ok(what && write, "a carrying column needs both moves");
+  assert.equal(what.kind, "choice");
+  assert.match(what.question, /does not fit in one column/i);
+  assert.equal(write.kind, "input");
+  assert.equal(inputOf(write), "1");
+  // The box is a real cell on the board, not a number that appears by itself.
+  const box = t.cells.find((c) => c.id === write.input.fills[0]);
+  assert.ok(box, "the carry box must exist on the board");
+  assert.equal(box.kind, "carrybox");
+  assert.equal(box.row, "carry");
 });
 
 check("every step has exactly one right answer and no repeated choice", () => {
   for (const text of ["12.4 + 3.75", "10.4 - 3.75", "3.6 x 2.4", "0.25 x 0.4", "9.6 / 0.4", "7.35 / 2.1", "1.2 / 0.03", "4.5 / 5", "100.5 - 99.75"]) {
     const t = traceFor(text);
     for (const s of t.steps) {
-      assert.equal(s.choices.filter((c) => c.correct).length, 1, `${text} / ${s.id}`);
-      assert.equal(new Set(s.choices.map((c) => c.text)).size, s.choices.length, `${text} / ${s.id} repeats a choice`);
-      for (const c of s.choices) assert.ok(c.why.trim(), `${text} / ${s.id} has a choice with no reason`);
+      if (s.kind === "choice") {
+        assert.equal(s.choices.filter((c) => c.correct).length, 1, `${text} / ${s.id}`);
+        assert.equal(new Set(s.choices.map((c) => c.text)).size, s.choices.length, `${text} / ${s.id} repeats a choice`);
+        for (const c of s.choices) assert.ok(c.why.trim(), `${text} / ${s.id} has a choice with no reason`);
+      }
+      if (s.kind === "input") {
+        assert.ok(s.input, `${text} / ${s.id} is an input step with no input`);
+        assert.ok(s.input.expect.length, `${text} / ${s.id} expects nothing`);
+        assert.ok(s.input.hint.trim(), `${text} / ${s.id} has no nudge`);
+      }
+      if (s.kind === "move") assert.ok(s.action, `${text} / ${s.id} is a move with no action`);
     }
   }
 });
@@ -211,7 +304,7 @@ check("a question is never asked about a column the answer never reaches", () =>
   // 100.5 − 99.75 has no hundreds or tens in its difference, so those columns
   // would be steps with nothing to write.
   const t = traceFor("100.5 - 99.75");
-  const cols = t.steps.filter((s) => s.id.startsWith("col-"));
+  const cols = t.steps.filter((s) => /^col-\d+$/.test(s.id));
   for (const s of cols) assert.ok(s.reveal.length > 0, `${s.id} writes nothing`);
 });
 
