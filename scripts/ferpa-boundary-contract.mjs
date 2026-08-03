@@ -24,6 +24,21 @@ const {
   assertPseudonymousRoster,
 } = require(path.join(root, ".tmp-mastery/pseudonym.js"));
 
+// The Apps Script mirrors were moved out of the repo root into "Google
+// Scripts/" and this contract kept reading the old path, so the whole FERPA
+// guardrail crashed with ENOENT instead of checking anything. Resolve either
+// location rather than pinning one, so moving them again cannot silently
+// disarm the boundary test.
+const GS_DIRS = ["Google Scripts", "."];
+function readAppsScript(fileName) {
+  for (const dir of GS_DIRS) {
+    const candidate = path.join(root, dir, fileName);
+    if (fs.existsSync(candidate)) return fs.readFileSync(candidate, "utf8");
+  }
+  console.error(`FAIL: ${fileName} was not found in ${GS_DIRS.map((dir) => `"${dir}"`).join(" or ")}.`);
+  process.exit(1);
+}
+
 let checks = 0;
 function ok(condition, message) {
   checks += 1;
@@ -119,12 +134,12 @@ const checkpointUpload = fs.readFileSync(path.join(root, "src/app/api/checkpoint
 ok(checkpointUpload.includes("identified_csv_rejected"), "checkpoint upload must refuse email-bearing CSVs");
 
 // The Apps Script bridge sends HMACs, never the email.
-const evidenceGs = fs.readFileSync(path.join(root, "warmup-evidence.gs"), "utf8");
+const evidenceGs = readAppsScript("warmup-evidence.gs");
 ok(evidenceGs.includes("bdmEmailHmac_") && evidenceGs.includes("studentEmailHmac"),
   "warmup-evidence.gs must compute and send the email HMAC");
 ok(!/payload: JSON\.stringify\(\{ email:/.test(evidenceGs) && !/studentEmail: email/.test(evidenceGs),
   "warmup-evidence.gs must not put raw emails on the wire");
-const rosterGs = fs.readFileSync(path.join(root, "warmup-roster-push.gs"), "utf8");
+const rosterGs = readAppsScript("warmup-roster-push.gs");
 ok(rosterGs.includes("emailHmac") && rosterGs.includes("BDM_ROSTER_HMAC_KEY"),
   "warmup-roster-push.gs must push HMACs keyed by BDM_ROSTER_HMAC_KEY");
 
