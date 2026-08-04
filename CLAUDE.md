@@ -2142,6 +2142,23 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   suites), and every read. So a Cowork session should verify with typecheck + the contract suites,
   and hand the `npm run build`, the commit and the push to Steele rather than half-finishing them.
   Claude Code in a normal terminal is unaffected - this is the mount, not the repo.
+  **NEVER RUN `git worktree add` FROM THE SANDBOX** (learned 2026-08-03). The worktree is created
+  successfully and then is unusable from macOS: its `.git` file records the gitdir as the SANDBOX
+  path (`/sessions/<id>/mnt/Big Dog Math Site/.git/worktrees/<name>`), so every git command run
+  against it from a real terminal or from Desktop Commander answers `fatal: not a git repository`.
+  Worse, `git worktree add` and `git worktree prune` both take and then fail to release locks,
+  which is how `.git/index.lock` appears in the MAIN repo and blocks Steele's next commit while
+  looking exactly like repo corruption.
+  THE ESCAPE HATCH IS DESKTOP COMMANDER, which runs a real macOS shell outside the mount and has
+  full unlink permission. Create worktrees, commit, merge and push through it; use the sandbox for
+  reads, `npm run typecheck` and `npm test`. Read-only sandbox git is still worth guarding with
+  `git --no-optional-locks`, because a plain `git status` can refresh and relock the index.
+  TWO RECOVERY NOTES. Remove a stale lock only after `ps aux | grep "[g]it "` shows no live git
+  process - concurrent sessions are normal in this repo and deleting a live lock is worse than
+  leaving it. And an EMPTY (zero-byte) ref file under `.git/refs/heads/` breaks `git fetch`
+  REPO-WIDE with `fatal: bad object refs/heads/<name>` plus a misleading "did not send all
+  necessary objects" that reads as a remote problem; `git update-ref -d` cannot remove it either
+  ("reference broken"), so delete the file directly. `find .git/refs -size 0` finds them.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like
