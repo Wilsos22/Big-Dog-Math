@@ -1737,7 +1737,8 @@ the invariants they protect are easy to break again.
   no check exists in `scripts/` or `src/lib/liveClassFlow.ts`, and `/control` will happily
   run a 70-minute lineup into a 50-minute period. The ONE place it is even mentioned is
   `/teacher/rehearse`, which WARNS (never blocks) when a lineup totals over 50, and does not warn at
-  all when a lineup comes in short - see the same claim at the `/teacher/rehearse` bullet above. It is an AUTHORING contract, so the only thing
+  all when a lineup comes in short - see the same claim at the `/teacher/rehearse` bullet above.
+  It is an AUTHORING contract, so the only thing
   protecting it is whoever enters the steps: add the `Duration` values up before publishing. The
   `abbies-classroom` plugin skills (`classroom-os-context` "50-minute spine",
   `lesson-database-builder`, `lesson-deployment-builder`) carry the canonical breakdown - build days

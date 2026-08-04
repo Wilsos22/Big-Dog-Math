@@ -1114,13 +1114,33 @@ export default function ClassroomStagePage() {
               onLoad={(event) => setOverrideFrame(event.currentTarget)}
             />
           ) : previewSpinner ? (
-            <section className="stage-targets" aria-label="Today's learning intention and success criterion">
-              <p className="stage-targets-label">{showIpadKidSpinner ? "iPad kid - drawn live in class" : "Readers - drawn live in class"}</p>
-              <h2 className="stage-targets-intention">{lesson?.learningIntention || "Add the Learning Intention in Notion."}</h2>
-              <div className="stage-targets-criterion">
-                <span className="stage-targets-check">Success criterion</span>
-                <strong>{selectedCriterion}</strong>
-              </div>
+            /* The words the reel lands on, not a generic placeholder - and the
+               two modes land on DIFFERENT words. Readers cycles the learning
+               intention and the success criterion; ipad-kid is a single reel
+               reading "iPad Kid" over "This week's classroom role" and carries
+               no target at all. Showing the intention there would preview a
+               screen the room never displays, which is the one thing a
+               rehearsal must not do. Keep these strings matching
+               ClassroomSpinner's own reel list. */
+            <section className="stage-targets" aria-label={showIpadKidSpinner ? "iPad Kid role" : "Today's learning intention and success criterion"}>
+              <p className="stage-targets-label">Drawn live in class</p>
+              {showIpadKidSpinner ? (
+                <>
+                  <h2 className="stage-targets-intention">iPad Kid</h2>
+                  <div className="stage-targets-criterion">
+                    <span className="stage-targets-check">Role</span>
+                    <strong>This week&apos;s classroom role</strong>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 className="stage-targets-intention">{lesson?.learningIntention || "Add the Learning Intention in Notion."}</h2>
+                  <div className="stage-targets-criterion">
+                    <span className="stage-targets-check">Success criterion</span>
+                    <strong>{selectedCriterion}</strong>
+                  </div>
+                </>
+              )}
             </section>
           ) : showReaderSpinner ? (
             <ClassroomSpinner
