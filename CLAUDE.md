@@ -31,6 +31,12 @@ bars and live misconception grouping).
   successful production deploy still records `githubRepoVisibility: "public"` in its metadata while
   the repo is now private, which points at the GitHub App losing repo access at the visibility flip.
   NOT PROVEN, and Steele can settle it in one click by redeploying from the Vercel dashboard.
+  CONFIRMED SUSTAINED, NOT A BLIP (second session, independently, about 40 minutes later): the newest
+  deployment of any kind is still the one carrying `265ea95`, while `main` has taken **21 further
+  commits** - so every push since has produced no deployment at all, and the count is still climbing.
+  `list_deployments` on project `prj_YY1p31W5veS0gNzft3EkFInjGWAZ` (team
+  `team_83rmGiv2FDrY37oqcspUFhyP`) is the direct check and needs no dashboard. Until this is fixed,
+  treat "pushed to main" and "live" as SEPARATE claims and say which one you have.
   WHY THIS MATTERS MORE THAN IT LOOKS: rule 3 says a push to `main` is what deploys, so an agent that
   pushes and reports "shipped" is now reporting something it has not checked. **VERIFY THE LIVE
   `/api/build-id` ACTUALLY CHANGES** before calling anything deployed - the id is the deployed commit
