@@ -1723,18 +1723,25 @@ the invariants they protect are easy to break again.
   stamped with the sequence index it was issued at and expires on the next advance with no clearing
   code anywhere. The strip DOES cross `studentSafeLiveFlow` on purpose - "voice 0" is announced to the
   room and painted on two projectors, and a head-down student needs the same read the room gets.
-- **OPEN BUG (2026-08-02, deferred by Steele): A TEACHER-LOADED BANK CLIP IS DECODED ON ONE
-  AudioContext AND PLAYED ON ANOTHER.** Symptom he reported: cues he uploaded a clip for make no
-  sound from the Stream Deck, while cues with no upload still fire their synthesized version. The
-  two `installUserClip` call sites in `/control` disagree - the UPLOAD path passes
-  `audioCtxRef.current`, the page-load RESTORE path (the `idbGet(bankClipKey(...))` loop) passes
-  nothing and falls back to `sharedContext()`, the bank's own second context. `playSoundCue` always
-  plays through `audioCtxRef.current`, and an AudioBuffer only crosses contexts cleanly when their
-  sample rates match; when they do not, `src.buffer = chosen` throws and the press is silent.
-  Synthesis never reads `userBuffers`, which is why the un-uploaded cues are unaffected. PREDICTION
-  TO CHECK BEFORE FIXING: a freshly uploaded clip should sound, and the same clip should go silent
-  after a `/control` reload. The mechanism is inferred from the code, not observed - the disagreeing
-  call sites are certain, the sample-rate cause is not. Fix is to make both sites use one context.
+- **FIXED 2026-08-03: A TEACHER-LOADED BANK CLIP WAS DECODED ON ONE AudioContext AND PLAYED ON
+  ANOTHER.** Symptom Steele reported: cues he uploaded a clip for made no sound from the Stream
+  Deck, while cues with no upload still fired their synthesized version. The two `installUserClip`
+  call sites in `/control` disagreed - the UPLOAD path passed `audioCtxRef.current`, the page-load
+  RESTORE path (the `idbGet(bankClipKey(...))` loop) passed nothing and fell back to
+  `sharedContext()`, the bank's own second context. `playSoundCue` always plays through
+  `audioCtxRef.current`, and an AudioBuffer only crosses contexts cleanly when their sample rates
+  match; when they do not, `src.buffer = chosen` throws and the press is silent. Synthesis never
+  reads `userBuffers`, which is why the un-uploaded cues were unaffected.
+  THE HALF-FIX THAT LOOKS RIGHT AND IS NOT: passing `audioCtxRef.current` at the restore site
+  changes nothing, because that ref is null until `genTone` lazily constructs it on the first cue -
+  and the restore loop runs at MOUNT. It would still fall through to `sharedContext()`. The fix is
+  `ensureAudioCtx()`, which constructs the page's one context on demand; a context may be built
+  before any gesture (it starts suspended, `decodeAudioData` still works, the first click resumes
+  it). The COMMITTED-file path was never affected - `primeCueFiles` is called from inside
+  `playSoundCue` with the same context it is about to play on.
+  This got more urgent when the clips were committed to `public/sounds/`, because `userBuffers`
+  WINS over `fileBuffers` - one broken restored buffer would shadow a perfectly good committed file
+  and the button would be silent with the right clip sitting right there.
 - **STATE MUSIC IS STOP-FIRST, AND CUES DUCK IT RATHER THAN STACK ON IT** (both found live
   2026-08-02, Steele: "a song that plays the whole time and then a sound when the first time alert
   and then another when time is up and they all played on top of eachother and the song continued
