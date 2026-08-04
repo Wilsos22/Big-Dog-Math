@@ -473,6 +473,15 @@ export default function ClassroomStagePage() {
     ?? classroomStageTheme(state?.id, state?.label);
   const showReaderSpinner = state?.id === "learning-target-readers";
   const showIpadKidSpinner = state?.id === "ipad-kid";
+  // A Screen Studio or /teacher/rehearse preview has no session and no class
+  // period - studioPreviewSession hands down the literal string "studio-preview"
+  // - so ClassroomSpinner's roster fetch is rejected by the uuid() guard and the
+  // reel renders "An active session or class period is required." That is the
+  // single most repeated state of the day, and it was the one state a rehearsal
+  // could not show. Preview gets the words instead of the reel: the layout is
+  // what a rehearsal is checking, and a real roster is exactly what it must not
+  // touch. SpeakerSpinner below is already gated the same way.
+  const previewSpinner = isStudioPreviewMode && (showReaderSpinner || showIpadKidSpinner);
   const showTableCaptains = state?.id === "table-captains";
   // Closeout stops being a wall of text and becomes the room's own scoreboard:
   // ten tables filling in green as the teacher taps the iPad. The written
@@ -1104,6 +1113,15 @@ export default function ClassroomStagePage() {
               ref={setOverrideFrame}
               onLoad={(event) => setOverrideFrame(event.currentTarget)}
             />
+          ) : previewSpinner ? (
+            <section className="stage-targets" aria-label="Today's learning intention and success criterion">
+              <p className="stage-targets-label">{showIpadKidSpinner ? "iPad kid - drawn live in class" : "Readers - drawn live in class"}</p>
+              <h2 className="stage-targets-intention">{lesson?.learningIntention || "Add the Learning Intention in Notion."}</h2>
+              <div className="stage-targets-criterion">
+                <span className="stage-targets-check">Success criterion</span>
+                <strong>{selectedCriterion}</strong>
+              </div>
+            </section>
           ) : showReaderSpinner ? (
             <ClassroomSpinner
               key={`${session.id}:${spinnerSyncScope}:controller`}

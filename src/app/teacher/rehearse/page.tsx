@@ -244,7 +244,7 @@ export default function RehearsePage() {
       notes.push(`The classroom state strip is part-filled (${filledSlots.join(", ")}), so no strip renders at all. Fill all four or clear them.`);
     }
     if (step.pollKind && !step.question.trim() && step.pollKind !== "fist-to-five") {
-      notes.push("This step opens a response box with no authored Question.");
+      notes.push("No response opens on this step - with no Question, no poll is built at all. Every student screen will sit on \"your response box is opening\" until you advance.");
     }
     return notes;
   }, [step]);
