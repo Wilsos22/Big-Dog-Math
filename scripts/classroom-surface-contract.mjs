@@ -133,4 +133,26 @@ if (inkSync.includes("supabase.channel") || !inkSync.includes("joinRealtimeRoom"
   throw new Error("joinInkRoom must go through the shared realtime room registry, not open its own channel.");
 }
 
+// THE LESSON DAY IS 50 MINUTES, and nothing enforced it, so the three budgets a
+// teacher actually reads while building a lineup had all drifted to 55 - each
+// one calling a day that is already past the bell fine. /teacher/rehearse was
+// the only surface telling the truth.
+const builder = read("src/app/builder/page.tsx");
+const studioEdit = read("src/app/teacher/studio/edit/page.tsx");
+const rehearse = read("src/app/teacher/rehearse/page.tsx");
+if (!control.includes("const PERIOD_MIN = 50;")
+  || !builder.includes("total > 50")
+  || !studioEdit.includes("lessonTotalMinutes > 50")
+  || !rehearse.includes("totalMinutes > 50")) {
+  throw new Error("Every teacher-facing lineup budget must measure against the real 50-minute period.");
+}
+// The other direction, because the tempting "fix" is to make all four agree:
+// MIN_SCHEDULED_MINUTES feeds ONLY the stale-session auto-close, and a guardrail
+// that can end a class still in progress is worse than no guardrail - so it is
+// deliberately longer than the period and must NOT be pulled down to 50.
+const lifecycle = read("src/lib/sessionLifecycle.ts");
+if (!lifecycle.includes("export const MIN_SCHEDULED_MINUTES = 55;")) {
+  throw new Error("The stale-session floor must stay longer than the period so it can never close a live class.");
+}
+
 console.log("PASS - four classroom surfaces retain the approved roles, frames, launchers, timer guard, and live writing status.");

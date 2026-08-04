@@ -2,7 +2,7 @@
 
 // Teacher Classroom Control Panel — front-of-room display.
 // Bank (bottom): pull states into the day's LINEUP (sequence) with a running
-//   total vs. a 55-minute period.
+//   total vs. a 50-minute period.
 // Each state loads an adjustable countdown. After Start, the timed sequence
 // advances automatically until the teacher pauses or stops it.
 // Ending sequence: 30-second alert, giant on-screen 10-to-1 countdown with ticks,
@@ -244,7 +244,12 @@ interface PollLaunchConfig {
 
 const LS_BANK = "bdm-control-bank-v2";
 const LS_LINEUP = "bdm-control-lineup-v1";
-const PERIOD_MIN = 55;
+// The lesson day is 50 minutes. This is the budget the teacher actually reads
+// while building a lineup, so it has to be the real period - at 55 it called a
+// 54-minute day fine. Not to be confused with MIN_SCHEDULED_MINUTES (55) in
+// sessionLifecycle.ts, which is the stale-session auto-close floor and is
+// deliberately LONGER than the period so a guardrail can never end a live class.
+const PERIOD_MIN = 50;
 const REMOTE_RECEIPT_RETRY_MS = 600;
 
 const DEFAULT_TOOL_SETUP: ToolSetupValues = {

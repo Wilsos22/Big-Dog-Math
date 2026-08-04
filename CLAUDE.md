@@ -2042,7 +2042,15 @@ the invariants they protect are easy to break again.
   "empty renders as nothing, wrong renders on a classroom screen".
 - One page per teaching day (locked convention) - never a Notion Date range. Ranges are only a
   fallback; single dates are what make `/api/today` and the day-to-day retention chain work.
-- THE LESSON DAY IS 50 MINUTES, not 55 (Steele, 2026-07-28). NOTHING IN CODE ENFORCES THE SUM -
+- THE LESSON DAY IS 50 MINUTES, not 55 (Steele, 2026-07-28; he had to say it again 2026-08-04,
+  which is what turned up the reason it kept slipping). THE THREE BUDGETS A TEACHER ACTUALLY READS
+  WHILE BUILDING A LINEUP ALL SAID 55 - `PERIOD_MIN` on `/control` (printed as the literal readout
+  `{total} / 55 min`), the studio editor's over-budget flag, and `/builder`'s "over a 55-min period"
+  - so all three called a 54-minute day fine, and the one surface telling the truth was
+  `/teacher/rehearse`. Fixed 2026-08-04 and now pinned in `npm run test:classroom-surfaces`, in BOTH
+  directions, because the tempting "fix" is to make all four numbers agree. Read the paragraph below
+  on `MIN_SCHEDULED_MINUTES` before touching the fourth one.
+  The rest of this bullet is still true: NOTHING IN CODE ENFORCES THE SUM -
   no check exists in `scripts/` or `src/lib/liveClassFlow.ts`, and `/control` will happily
   run a 70-minute lineup into a 50-minute period. The ONE place it is even mentioned is
   `/teacher/rehearse`, which WARNS (never blocks) when a lineup totals over 50, and does not warn at

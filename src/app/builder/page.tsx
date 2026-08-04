@@ -286,7 +286,7 @@ export default function BuilderPage() {
               )}
             </div>
 
-            <div className="bx-total">Total: <span>{total} min</span>{total > 55 && " · over a 55-min period"}</div>
+            <div className="bx-total">Total: <span>{total} min</span>{total > 50 && " · over a 50-min period"}</div>
 
             <div className="bx-actions">
               <button className="bx-btn pri" onClick={() => save(false)} disabled={saving}>{saving ? "Saving…" : editingId ? "Save changes" : "Save to bank"}</button>

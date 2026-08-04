@@ -20,7 +20,14 @@
 import type { LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 
-/** Floor for a session's planned length. The CRA spine is a 55-minute day. */
+/**
+ * Floor for a session's planned length. NOT the period - the lesson day is 50
+ * minutes. This is deliberately LONGER, because it only feeds the stale-session
+ * auto-close: a guardrail that can end a class still in progress is worse than
+ * no guardrail, so its arithmetic errs long on purpose. Do not "correct" it to
+ * 50 to match the day. The teacher-facing budgets (PERIOD_MIN on /control, the
+ * studio total, /teacher/rehearse) are the ones that must read 50.
+ */
 export const MIN_SCHEDULED_MINUTES = 55;
 /** How far past the planned end a session may run before it closes itself. */
 export const STALE_GRACE_MINUTES = 15;

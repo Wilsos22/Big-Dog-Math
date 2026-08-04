@@ -1493,7 +1493,9 @@ export default function LessonScreenStudioPage() {
         <aside className="studio-states" aria-label="Lesson states">
           <p className="studio-kicker">
             Lesson states <span>{lesson?.steps.length || 0}</span>
-            {lesson ? <span className={`studio-total${lessonTotalMinutes > 55 ? " over" : ""}`}>{lessonTotalMinutes} min</span> : null}
+            {/* 50, the real period - at 55 the over-budget flag stayed off for a
+                lineup that was already five minutes past the bell. */}
+            {lesson ? <span className={`studio-total${lessonTotalMinutes > 50 ? " over" : ""}`}>{lessonTotalMinutes} min</span> : null}
           </p>
           <div className="studio-state-list">
             {(lesson?.steps || []).map((step, index) => (
