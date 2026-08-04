@@ -825,6 +825,11 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   `npm run test:notion-lesson-contract`.
   `slideFit` publishes ONLY when "cover" - every surface defaults to "contain", so publishing the
   default would add a constant string to a snapshot Control full-replaces about once a second.
+  THE STUDIO AND DEMO PREVIEWS CANNOT SHOW A SLIDE FRAME, and it is not a bug in the frame.
+  `studioPreviewFlow.ts` carries `slideOverlay` but has never carried `slideUrl` / `slideMirror` /
+  `slideFit`, so the `?studioPreview=1` iframes on `/teacher/studio/edit` and `/demo` render the
+  step as though no slide were authored. Verify a slide on `/teacher/rehearse` instead, which builds
+  through the real `stepsFromLesson`. Closing the gap is three fields in that file's step mapping.
   THE NOTION PROPERTY IS `Slide Url`, NOT `Slide URL`, AND IT IS A FILE PROPERTY. Read it through
   `propByName` (notionLessons.ts), which normalizes case and punctuation - an exact-string property
   lookup fails SILENTLY, the site reads "" and the screen renders as though nothing was authored.
