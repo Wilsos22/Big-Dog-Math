@@ -2,10 +2,14 @@
 
 // Shared ink surface for the iPad pen and the board display.
 //
-// The engine renders strokes as FILLED VARIABLE-WIDTH POLYGONS (see
-// lib/inkGeometry) instead of stroked polylines: width flows continuously with
-// smoothed Pencil pressure and both ends taper, which is most of what makes
-// notes-app ink look like ink. Three stacked canvases:
+// The engine renders strokes as FILLED POLYGONS (see lib/inkGeometry) instead
+// of stroked polylines. Width is CONSTANT and both ends are round caps -
+// Steele's call 2026-07-22 after writing real math on it, because he writes
+// equations, not calligraphy. Pressure is still captured, smoothed and carried
+// on the wire, so the feel could return by changing radiusFor alone; do not
+// read "variable-width polygon" here and restore pressure ink. FLUIDITY IS A
+// SEPARATE DIAL FROM WIDTH: how smooth the line is lives in smoothCenterline
+// and dejitter, how thick it is lives in radiusFor. Three stacked canvases:
 //
 //   highlight  - dry highlighter strokes (translucent, under the ink)
 //   dry        - finished pen strokes, baked once
@@ -43,6 +47,7 @@ const HL_SCALE = 3; // highlighter band is 3x the dialled pen width
 const LASER_MS = 850; // how long the laser trail lingers
 const HOLD_SNAP_MS = 600; // hold the pen still this long to straighten the stroke
 const HOLD_SNAP_RADIUS = 8; // "still" = within this many px
+const PREDICT_LEAD_MAX = 10; // px the predicted tip may run ahead of the real one
 const ZOOM_MAX = 5; // pinch zoom ceiling; floor is always 1 (the full page)
 const DOT_PITCH = 26; // Warm Notebook dot spacing at 100%
 const DOT_COLOR = "rgba(165,156,141,0.5)"; // ink-faint dots on the cream ground
@@ -389,8 +394,23 @@ export default function InkBoard({
   // the callback that loop is "Maximum update depth exceeded".
   const onHistoryChangeRef = useRef(onHistoryChange);
   useEffect(() => { onHistoryChangeRef.current = onHistoryChange; }, [onHistoryChange]);
+  // Only fire when the two booleans actually CHANGE. They are consumed as
+  // `disabled` on Undo/Redo, and every consumer writes them into React state,
+  // so firing per stroke re-rendered the whole host page on every pen lift -
+  // /ipad carries the toolbar, the panels and the present iframe. That dirties
+  // layout, and the very next pointerdown calls measure(), whose
+  // getBoundingClientRect has to synchronously flush the layout it just
+  // dirtied before the first sample of the new stroke is taken. That is the
+  // back-to-back stroke stall: after the first stroke the pair is (true,
+  // false) and stays there, so every later lift now notifies nothing.
+  const lastHistoryRef = useRef<{ undo: boolean; redo: boolean } | null>(null);
   const notifyHistory = useCallback(() => {
-    onHistoryChangeRef.current?.(historyRef.current.length > 0, redoRef.current.length > 0);
+    const undo = historyRef.current.length > 0;
+    const redo = redoRef.current.length > 0;
+    const last = lastHistoryRef.current;
+    if (last && last.undo === undo && last.redo === redo) return;
+    lastHistoryRef.current = { undo, redo };
+    onHistoryChangeRef.current?.(undo, redo);
   }, []);
 
   const redrawDirtyRef = useRef(false);
@@ -528,12 +548,15 @@ export default function InkBoard({
     // Clear is deliberate and destructive - history does not survive it.
     historyRef.current = [];
     redoRef.current = [];
-    onHistoryChangeRef.current?.(false, false);
+    // Through notifyHistory, not the callback directly - it owns the
+    // last-notified pair, and writing round it would leave that stale and
+    // swallow the next real change.
+    notifyHistory();
     for (const c of [hlRef.current, dryRef.current, wetRef.current]) {
       const ctx = ctxOf(c);
       if (ctx) clearFull(ctx);
     }
-  }, [clearFull, ctxOf]);
+  }, [clearFull, ctxOf, notifyHistory]);
 
   // Apply one incoming/local segment.
   const applySeg = useCallback((seg: Extract<InkMessage, { t: "seg" }>) => {
@@ -1145,10 +1168,21 @@ export default function InkBoard({
     // Predicted points: drawn on the wet layer this frame, never stored or sent.
     if (!stroke.erase && typeof native.getPredictedEvents === "function") {
       const lastP = pts.length ? pressureOf(pts[pts.length - 1].p) : emaRef.current;
-      predictedRef.current = native.getPredictedEvents().slice(0, 4).map((ev) => {
+      // Predicted points buy back real latency, but they are a guess about a
+      // pen that may be about to stop, and they are never stored - so whatever
+      // is drawn from them RETRACTS when the pen lifts and the true stroke
+      // bakes. Clamping how far ahead they may run keeps that pop small enough
+      // not to read as the line snapping backwards; the lead is cut at the
+      // first predicted point past the limit, since the ones after it are
+      // further still.
+      const tip = toPagePx(e.clientX, e.clientY);
+      const ahead: InkRenderPoint[] = [];
+      for (const ev of native.getPredictedEvents().slice(0, 4)) {
         const pg = toPagePx(ev.clientX, ev.clientY);
-        return { x: pg.x, y: pg.y, p: lastP };
-      });
+        if (Math.hypot(pg.x - tip.x, pg.y - tip.y) > PREDICT_LEAD_MAX) break;
+        ahead.push({ x: pg.x, y: pg.y, p: lastP });
+      }
+      predictedRef.current = ahead;
     }
     // Hold-to-straighten: moving past the still-radius re-arms the timer; a
     // pen held inside it lets the timer fire and snap the stroke.
