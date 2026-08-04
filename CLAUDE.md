@@ -933,6 +933,28 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   NOTE the DIRECTION above still holds: the eventual full rewrite should target the FRAME wrapping an
   imported slide, not a native 9-component grid - this step just put the auto-composed native slide on
   the wall first.
+  **THE TWO `showLessonSlide` GATES ARE ONE LIST IN TWO FILES, AND THEY SHIPPED DIFFERENT** (fixed
+  2026-08-03, one day after the overlay landed; it was two of Steele's six live bugs). The overlay is
+  `position:fixed; inset:0; z-index:12` - it does not sit BESIDE the host surface's scenes, it COVERS
+  them completely, and pace passes `screen="main"`, so wherever the gate is wrong pace stops showing
+  its own frame and draws the MAIN screen's zones instead. On a tool state that is a green band, a step
+  counter and one empty text column, which is exactly what "a your own partial screen" was. present's
+  gate was written from present's scene list and pace's from pace's, and pace has NO tool, resource,
+  board, transition, exit or independent scene to exclude - so every one of those states fell through
+  and got the slide. The rule is that the gate is not "does pace have another scene", it is **does MAIN
+  show the slide here** - anywhere present keeps a bespoke scene, pace showing the auto-composed slide
+  is not mirroring the room, it is showing the room something the main projector is not. Keep the two
+  clause lists together and edit them in the same commit.
+  A PAYLOAD CHECK IS NOT A STATE CHECK. `flow.tool` is only set once the teacher presses Send tool
+  setup on `/control`, and `flow.resource` only when Response Mode is literally `Assigned Tool` AND the
+  `Tool` name resolves - so a step authored with State ID `tool-divisibility` and neither of those is
+  still a tool state and still got the slide. Test the `tool-` PREFIX (the canonical test, see
+  `classStates.ts` `isAssignedTool`) as well as the payload. Nothing about that bug was
+  Divisibility-specific; it fired for every `tool-*` state, and Divisibility is just the one he ran.
+  DIAGNOSE THIS CLASS OF BUG BY LOOKING FOR THE OVERLAY, NOT BY READING THE SCENES: in the surface's
+  document, find every element with `position:fixed` and `z-index >= 10`. One unnamed full-viewport div
+  means the overlay is up; none means the surface is rendering its own frame. That check is what
+  separated "pace is broken" from "pace is covered" in about a minute.
 
 The lesson-content editor's previews are the REAL surfaces, not copies: `/teacher/studio/edit` embeds
 `/teacher/present?studioPreview=1` and `/teacher/pace?studioPreview=1` in scaled iframes and posts
@@ -1830,6 +1852,23 @@ the invariants they protect are easy to break again.
   rendered "Open work space". Once the writing surface was up there was no way to put it away, and
   it covered the slide for the rest of the lesson. The deck key is now a toggle driven by
   `flow.presentation.boardOpen`.
+  SAME FAMILY, FOUND LIVE 2026-08-03: **A LESSON HAD NO END.** `navigateFlow` THROWS "This is the last
+  lesson state." on a Next past the final step, and `/api/control-remote` returns it as a 409 - but the
+  Remote's `showCommandStatus` decided whether to render the status line by PATTERN-MATCHING the string
+  for "Disconnected" / "did not confirm" / "failed", and that message contains none of them, so the tap
+  was a silent no-op. `/control` knew about the last step (`hasNext`, a disabled Next, "Lesson
+  complete!"); the iPad in his hand did not, and offered a green "Next state" forever. Now the Remote
+  derives `isLastStep`, disables Next, drops the "Next: Lesson closeout" line that named a step which
+  does not exist, and shows an End lesson key IN ITS OWN ROW - never in the slot Next just occupied,
+  because a destructive control inheriting the position a thumb has tapped all period is a mis-tap
+  waiting to happen. THE SERVER SIDE ALREADY EXISTED and still does: ending a session is
+  `POST /api/teacher/session {action:"close"}` (not `"end"`), and `endSession` on the Remote carries its
+  own `window.confirm`. There is deliberately NO `end-lesson` member in `TEACHER_REMOTE_ACTIONS` -
+  adding one would also mean touching the sound-bank contract, which asserts that union.
+  THE GENERAL RULE, and it is the third time this file has had to write it: **inferring an error from
+  the wording of a status string is not error handling.** Set an explicit flag at the point of failure.
+  A message parked behind a condition that cannot see it is a message nobody reads - the same fault as
+  the signal chips' `setPollSubmitError` above.
 - **`/teacher` CAN START THE LESSON.** The live-session card has a Start lesson button that POSTs
   `start-lesson` to `/api/control-remote` - the complete server-side start (seeds the sequence,
   flips broadcast, arms step zero) that needs no `/control` tab anywhere. `/control?...&run=1` is
