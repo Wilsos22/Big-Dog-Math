@@ -91,6 +91,16 @@ const ASSIGNMENT_PROPERTY_NAMES = ["Assignment Link", "Assignment", "Assignment 
 const EXIT_TICKET_PROPERTY_NAMES = ["Exit Ticket Link", "Exit-Ticket Link", "Exit Ticket", "Exit Ticket URL"];
 const CCSS_RE = /\b[3-8]\.(?:NS|RP|EE|G|SP|NBT|NF|OA|MD)\.[A-Za-z0-9.]+/;
 
+// Deliberately a LOCAL copy of isExplicitlySkippedLesson (notionLessons.ts:198)
+// rather than an import. This file's contract test compiles it in isolation with
+// `tsc --ignoreConfig`, which drops the `@/` path aliases - so ANY local import
+// here fails the suite with "Cannot find module", not at runtime but in CI. Same
+// constraint soundBank.ts lives under. If the rule ever stops being "the Skip
+// select says yes", change both places.
+function skippedLesson(skipValue: string | null | undefined): boolean {
+  return String(skipValue || "").trim().toLowerCase() === "yes";
+}
+
 function richTextValue(items: RichTextItem[] | undefined): string {
   return items?.map((item) => item.plain_text ?? "").join("") ?? "";
 }
@@ -294,6 +304,14 @@ async function queryPublishedLessonPages(token: string): Promise<NotionPage[]> {
       const results = Array.isArray(data.results) ? data.results : [];
       for (const page of results) {
         if (!page || typeof page.id !== "string" || page.archived || page.in_trash) continue;
+        // Skip has to be honoured HERE, not just by the pickers. getPublishedLessonById
+        // rejects a skipped lesson (notionLessons.ts), so a lesson that only got
+        // filtered downstream would list in every picker and then fail to load when
+        // clicked - the worst shape for a bug, because the teacher sees the lesson
+        // is "there" and concludes the site is broken. /teacher papered over this
+        // with a keyword regex over the TITLE, which never caught a lesson whose
+        // title says nothing about being skipped. Fixed at the source 2026-08-03.
+        if (skippedLesson(propertyText(page.properties?.["Skip"]))) continue;
         const compactId = page.id.replace(/-/g, "");
         if (seenPageIds.has(compactId)) continue;
         seenPageIds.add(compactId);

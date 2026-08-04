@@ -71,6 +71,43 @@ console.log("vocabulary: term, definition, and the figure line");
   ok("an unstarred row marks its last cell", rich.figure.rows[0].highlight, 2);
 }
 
+console.log("step vocabulary folded into one block");
+{
+  // The live failure this exists for: M1.T1.L2-D1 shipped Published with an
+  // EMPTY lesson-level `Discussion Vocabulary` and all five terms authored on
+  // its Lesson Steps instead, so the board found no key term and the whole
+  // reveal - highlight, travel, definition lens - silently stopped.
+  const merged = board.mergeVocabularyBlocks([
+    // Step 1, the warm-up: bare terms, no definitions. This block arriving
+    // FIRST is the trap - first-mention-wins would keep these and the reveal
+    // would still have nothing to say.
+    "factor\nfactor pair\ndivisible",
+    "factor - a number that divides another evenly\nfactor pair - two numbers that multiply to the target\nproduct - the answer when you multiply",
+    "dimensions - the length and width of a rectangle\narea - the number of tiles inside a rectangle\nfactor pair - two numbers that multiply to the target",
+  ]);
+  const parsed = board.readBoardVocabulary(merged);
+  ok("a defined term beats a bare one however late it lands",
+    parsed.entries.find((e) => e.term === "factor").definition,
+    "a number that divides another evenly");
+  ok("every term appears exactly once", parsed.entries.map((e) => e.term), [
+    "factor", "factor pair", "divisible", "product", "dimensions", "area",
+  ]);
+  ok("a term with no definition anywhere stays bare",
+    parsed.entries.find((e) => e.term === "divisible").definition, "");
+  ok("and the merged block still finds a key term for this lesson's intention",
+    board.selectKeyTerm(parsed.entries, "I am learning how to find every factor pair of a number.").term,
+    "factor pair");
+
+  ok("an empty set of steps merges to nothing", board.mergeVocabularyBlocks([]), "");
+  ok("blank blocks merge to nothing", board.mergeVocabularyBlocks(["", "  \n "]), "");
+  ok("a figure line survives the merge",
+    board.readBoardVocabulary(board.mergeVocabularyBlocks(["ratio - a comparison", "table: Cups = 3, 6, 9"])).figure.kind,
+    "table");
+  ok("the same term written with different dashes is still one term",
+    board.readBoardVocabulary(board.mergeVocabularyBlocks(["Factor - divides evenly", "factor — divides evenly"])).entries.length,
+    1);
+}
+
 console.log("figure grammar fails safe");
 ok("lines", board.readBoardVocabulary("lines: Miles = 0, 4, 8, 12 | Hours = 0, 1, 2, 3").figure.lines.length, 2);
 ok("grid", board.readBoardVocabulary("grid: 45 | 45 of 100 = 0.45").figure, { kind: "grid", shaded: 45, caption: "45 of 100 = 0.45" });

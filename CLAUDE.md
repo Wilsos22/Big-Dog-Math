@@ -17,6 +17,12 @@ bars and live misconception grouping).
 - Live: https://bigdogmath.com (also website-prototype-three.vercel.app).
 - Repo: https://github.com/Wilsos22/Big-Dog-Math (default branch `main`; renamed from
   Website-prototype on 2026-07-27 - old URLs redirect, Vercel and CI followed automatically).
+  **PRIVATE as of 2026-08-03** (Steele's call, so the sound-bank clips and exported slide images can
+  be committed - see the sound bank section). Consequences to know: GitHub Actions minutes are no
+  longer unlimited (private repos get a monthly free allowance, and CI runs typecheck plus the whole
+  contract suite on every push, so watch it if pushes get frequent), and the repo is no longer a
+  thing Steele can hand someone to look at - `/demo` on the live site is the portfolio front door
+  instead, and it is unaffected. Vercel builds from a private repo unchanged.
 - Local working folder: `/Users/steelewilson/Big Dog Math Site` (renamed by Steele 2026-07-27
   from "Website prototype"; an EMPTY decoy folder may exist at the old path - some agent
   sessions are anchored there and keep a launcher shim in its .claude/launch.json. Renaming
@@ -45,6 +51,13 @@ bars and live misconception grouping).
   into a curve, dense/careful strokes are barely touched, so a number's corners survive - and it is
   path shape only, so the constant-width marker is intact. That is why "rudimentary" and the width
   decision are NOT in conflict: one is the line's smoothness, the other its thickness.
+  A THIRD DIAL EXISTS AND IT IS NOT IN `inkGeometry` AT ALL (2026-08-03): what the canvas is
+  COMPOSITED AGAINST. See the pen-feel bullets under "Live sessions" - the caps and miter fixes
+  and their contract, the React re-render that stalled back-to-back strokes, the backdrop-filter
+  over the writing surface, and the `Paper` A/B that separates compositing cost from stroke
+  geometry. Reach for that A/B BEFORE tuning constants again. And note that the two fixes that
+  actually changed the picture were both GEOMETRY BUGS, not tuning: every dial in that file was
+  already set sensibly.
 
 ## Hard rules (non-negotiable)
 
@@ -72,6 +85,27 @@ bars and live misconception grouping).
    `git branch -a --contains <sha>` finds it. On 2026-07-21 the live tool banner's cream-surface
    restyle was one such commit; wiring eleven more cream pages to the un-restyled banner would have
    shipped pale-on-pale text no student could read.
+   NEVER `--abort` A STUCK GIT OPERATION HERE - USE `--quit` (2026-08-03). `git am --abort`,
+   `git rebase --abort` and `git merge --abort` all HARD-RESET the working tree to the pre-operation
+   commit, and because concurrent sessions leave this repo's tree essentially never clean, that
+   discards THEIR uncommitted work along with yours. Found live: the repo sat mid-`git am` on a stale
+   patch, and git's own status message recommends `--abort` - taking it would have reset to `4371be7`,
+   dropping a commit already merged and pushed to `main` plus about 516 uncommitted lines of another
+   session's in-flight work (decimalSteps, divisionHouse, embedUrl, notionLessons, DecimalStepsBoard).
+   `git am --quit` removes `.git/rebase-apply` and leaves HEAD and the working tree exactly as they
+   are. Diagnose before clearing: `git apply --check .git/rebase-apply/0001` usually reports "patch
+   does not apply" because the patch's content ALREADY landed by another route - grep its symbols in
+   `src/` and the session is simply litter. A spurious `.git/index.lock` is often the first symptom.
+   THE INVERSE HAZARD IS REAL TOO: YOUR UNCOMMITTED WORK CAN BE SWEPT INTO SOMEONE ELSE'S COMMIT
+   (2026-08-03). This rule tells you to stage only your own paths; it did not say that the files you
+   are still editing, sitting modified in the shared working tree, are equally reachable by every
+   other session's `git add`. Found live during the division-tools audit: a concurrent session
+   committed and PUSHED eleven of this session's files while four more edits were still to come, so
+   the work landed on `main` one edit early and needed a follow-up commit to correct. Two defences,
+   both cheap. Commit early to a branch rather than holding a large change in the working tree. And
+   when you find your own files already on `origin/main`, diff branch against remote per path
+   (`git diff --quiet origin/main <branch> -- <file>`) to find exactly which ones went out stale,
+   rather than assuming the whole change did or did not land.
 3. Verified work ships without waiting for Steele (his standing request, 2026-07-21 - routing
    merges through him twice stranded finished work). A push to `main` is what deploys - Vercel
    auto-builds it. Flow: push the feature branch first (a local-only branch is invisible to
@@ -180,6 +214,40 @@ bars and live misconception grouping).
    `src/` and never touched this file - it never blocks, and silence means the check passed. `/sync`
    (`.claude/commands/sync.md`) is the manual pass: read the diff, sort each finding into this file,
    `ROADMAP.md`, auto-memory, or nothing, then land the `CLAUDE.md` edit on its own path to `main`.
+
+## How to work with Steele (standing, 2026-08-03)
+
+Four working rules he gave directly. They are here rather than in a Claude-only memory note because
+Codex and cloud sessions need them too (rule 9).
+
+1. **DELEGATE MULTI-FILE READING TO A SUBAGENT.** Any task that means reading and reviewing several
+   files goes to a subagent (Explore for read-only sweeps), not into the main conversation. File dumps
+   clog context and degrade the session, and his sessions are long and span code, Notion and lesson
+   design in one thread. Give the agent a precise brief and ask for file:line references plus quoted
+   conditions; keep the conclusion, not the files. Read directly only when you already know the exact
+   file and need one spot. This is not just hygiene - the lesson-picker sweep on 2026-08-03 replaced
+   about a dozen reads AND found that "browse all lessons and run one on demand" already existed, which
+   a file-by-file crawl would have taken far longer to notice.
+2. **INTERVIEW BEFORE BUILDING any design, UX, or backend change.** Cover every aspect of the feature
+   first; do not infer a spec from a one-line request. His asks carry unstated classroom context and
+   the cost of guessing is a rebuild. "2 balls bouncing across a row of squares" contained four real
+   forks (where it lives, pacing control, behaviour after the first match, the colour scheme), and
+   asking is what surfaced that shared landings needed their own third colour. Ask about the axes that
+   change the build: where it lives, who operates it and on what device, what it WRITES (evidence,
+   Notion, session state), the edges, and how it fails. Research the repo first - asking him something
+   the code already answers wastes his time.
+3. **A SECOND AGENT CHECKS EVERY FINISHED FEATURE, TOOL, OR LESSON PLAN.** The builder does not grade
+   its own work; it knows what it meant and reads intent into the code. Run the review after
+   verification passes and BEFORE reporting done. Hand the reviewer the real quality bar, not "look it
+   over" - for a tool that is the design rules in this file (reference in a left rail, never reveal an
+   answer the student has not earned, tactile drag over clicking, fill the screen, no emoji, AA
+   contrast); for a lesson it is the CRA spine, the 50-minute sum, student talk, and whether every
+   field the surfaces read is actually authored. Rank findings by whether they would hurt in a live
+   class, fix what is clearly right, and bring judgment calls to him.
+4. **TELL HIM WHEN TO CLEAR CONTEXT.** He will not track it and does not want to find out through
+   degraded output. Say so at a seam - a verified deploy, a finished task list, a topic change - and
+   name what should carry over. Anything durable belongs in this file or in memory, never in the
+   transcript.
 
 ## Repo layout
 
@@ -374,9 +442,18 @@ bars and live misconception grouping).
   decimals" for all four has exactly the misconception this tool exists to catch, so the adding rule
   is deliberately OFFERED as a wrong choice on the multiply board. `npm run test:decimal-steps` pins
   all four, and a change making one answer serve every operation has broken the tool's reason to
-  exist. Same rule for counting places: the answer ADDS the two factors' decimal counts, and
-  "whichever number has more" is the offered trap - except when the two numbers agree (6.2 x 3),
-  where the trap would be a right answer marked wrong and drops out.
+  exist. COUNTING PLACES IS A TYPED INPUT, NOT A CHOICE (corrected 2026-08-03; this paragraph
+  described an offered "whichever number has more" trap and an equal-counts drop-out, and the v2
+  rewrite had already made `count` an input - `decimalSteps.ts` - so there are no choices there at
+  all). The student types the total; the HINT carries the rule ("6.2 has 1, and 3 has 0. Add them,
+  do not take the bigger one"), which is the only place the trap survives, and it reads oddly when
+  both readings give the same number.
+  THE DIRECTION STEP ARGUES FROM PLACE VALUE, NEVER FROM SIZE (fixed 2026-08-03). It used to
+  confirm a correct "Left" with "counting in from the right end makes the answer smaller, which is
+  what multiplying by a piece of a number does" - unconditionally, so `6.2 x 3 = 18.6` told a
+  student that three is a piece of a number and that 18.6 is smaller than 6.2, at the moment the
+  rule is forming. The size argument only holds when both factors are under one; the contract now
+  refuses any `why` on that step that mentions size.
   DIVISION MAKES THEM ACTUALLY MOVE THE DECIMAL. Naming the number of places is a separate step from
   doing it: after answering "how many places", the student hops the divisor's decimal that many
   times, then answers what happens to the dividend and hops it too (moving only the divisor is the
@@ -472,9 +549,24 @@ bars and live misconception grouping).
   like mapped") - twenty-five cues, not the original seven: air horn, applause, cheering, crickets,
   drum roll, dun dun dun, Jeopardy, locked in, stank face, true, a few moments later, another one,
   bingo, bruh, directed by Robert B, we will never know, law and order, what, Metro, money, record
-  scratch, straight up, OMG, be right back, you. THE CLIPS ARE NOT IN THE REPO AND MUST NOT BE:
-  half are copyrighted recordings and this repository is public, and it is 14MB of binary besides.
-  They live in IndexedDB on the classroom laptop, which is the whole point of the loadable bank.
+  scratch, straight up, OMG, be right back, you.
+  THE CLIPS MAY NOW LIVE IN THE REPO (reversed 2026-08-03 by Steele: "sound clips and slide images
+  can go into the repo"). The old rule here said they MUST NOT BE, for two reasons - 14MB of binary,
+  and half being copyrighted recordings in a PUBLIC repository. He settled the size, and settled the
+  copyright by MAKING THE REPO PRIVATE the same day (github.com/Wilsos22/Big-Dog-Math, flipped with
+  zero forks and zero stars, so nothing was mirrored first). Commit them to `public/sounds/<id>.mp3`
+  - see that folder's README. `npm run sounds:name -- ~/Downloads` maps a folder of download-named
+  clips onto their cue ids using the SAME `matchSoundCueFile` the drag-and-drop loader uses, dry-run
+  by default.
+  TWO THINGS THE PRIVATE REPO DOES NOT DO, and both matter. (1) It does not make the files private:
+  `public/` is served by Vercel, so `bigdogmath.com/sounds/jeopardy.mp3` is fetchable by anyone who
+  guesses the URL. Private only stops repo browsing, cloning and code search - it is a real
+  reduction in exposure, not a wall. Gating audio behind a teacher route is possible (only teacher
+  surfaces ever play a cue; the student attention pulse is visual-only by design) and is NOT built.
+  (2) Git keeps history, so removing a clip later needs a history rewrite, not a delete - which is
+  why the repo must not go public again without pulling these first.
+  The per-device IndexedDB loader is UNCHANGED and still first in the source order, so a clip can
+  still be tried on one laptop without a commit.
   `matchSoundCueFile` places a dropped file on the right button by filename, normalizing past
   capitals, spaces, " copy" and the random suffix a download site appends, so one multi-file load
   fills the bank; a file nothing claims is reported back, never placed arbitrarily. Most cues are
@@ -543,6 +635,34 @@ bars and live misconception grouping).
     SUCCESS_CRITERION_SETUP_PLACEHOLDER, and "Choose one I can statement in Notion." is a prompt
     to the teacher that must never appear on a classroom TV. Empty renders as
     "No success criterion chosen for today."
+  - THE VOCABULARY REVEAL IS ALL-OR-NOTHING AND ITS ONLY INPUT IS A KEY TERM (the whole second act
+    - the highlighter sweep, the sentence dropping away, the term flying up, the definition rising
+    under it - is gated on `hasReveal`, which needs a vocabulary term that ALSO appears in the
+    learning intention). With no term the board still slides in, types the sentence and pulses the
+    verbs, so it does not look broken; it looks like the animation was removed. That is exactly how
+    it was reported on 2026-08-03 ("it lost all of its animation and it no longer grabs the vocab
+    word"), and NOTHING had changed in the code - `/weekly-display` was byte-identical to `main`.
+    Diagnose it by counting animations on the live board, not by reading the source:
+    `document.getAnimations()` - three (`wldSlideIn`, `wldType`, `wldPulse`) means no key term,
+    twenty means the reveal is running.
+  - THE CAUSE WAS TWO NOTION FIELDS WITH NEAR-IDENTICAL NAMES, and this is the third instance of
+    that trap in this file. The board reads the LESSON-level `Discussion Vocabulary`; a lesson's
+    terms are just as often authored on each Lesson STEP, in its own `Vocabulary` property.
+    M1.T1.L2-D1 went Published with the lesson property EMPTY and five defined terms on its steps,
+    so the board found nothing and the reveal switched itself off silently. FIXED 2026-08-03:
+    `/api/weekly-display` now backfills a blank `discussionVocabulary` from that lesson's steps
+    (`getStepVocabularyForLessons` + `mergeVocabularyBlocks`), so a lesson authored either way
+    reveals. The lesson-level property still WINS when set - about 25 lessons carry a deliberately
+    curated one and those are not to be overridden.
+    Two rules inside the merge, both load-bearing. A DEFINED term beats a bare repeat however late
+    it arrives, because a warm-up step lists bare terms ("factor", "factor pair", "divisible") and a
+    later step is where they get defined - first-mention-wins would keep the bare copy and leave the
+    reveal with nothing to say, which is the exact failure being fixed. Otherwise first mention
+    wins, so terms stay in the order the lesson teaches them. Pinned in
+    `npm run test:weekly-display-board`.
+    The backfill swallows its own failures and never overrides a set property, so the worst case is
+    the board it already had. Do NOT make it override, and do not make a Notion failure here able to
+    500 the route - a classroom TV showing an error is worse than one showing no reveal.
   - The ground CUTS between screens instead of crossfading. The design had a .45s
     background-color transition, but every header/footer colour switches instantly, which left
     ~450ms of dark text on a lightening ground every nine seconds.
@@ -573,7 +693,47 @@ bars and live misconception grouping).
   semantics, and present's 1s poll-answer fetcher is preview-gated - it used to overwrite
   posted answers with its catch-to-empty every tick.
 - Teacher (gated): `/teacher` and `/teacher/*` (analytics, assignments, challenges, checkpoint-upload,
-  checkpoints, exit-tickets, mastery, rightnow), `/control`, `/session`, `/roster`, `/start-question`.
+  checkpoints, exit-tickets, mastery, rehearse, rightnow), `/control`, `/session`, `/roster`, `/start-question`.
+- **`/teacher/rehearse` RUNS ANY PUBLISHED LESSON WITH NO SESSION** (added 2026-08-03, Steele: "I want
+  to be able to view a lesson in action without changing the date"). Pick any lesson from the archive,
+  step it with Restart / Back / Play / Next and a live clock, and watch it on the REAL
+  `/teacher/present`, `/teacher/pace` and `/live-flow` in `?studioPreview=1` iframes. THE DATE PROPERTY
+  IS UNTOUCHED and still governs the automatic pick; this only removes the need to edit a date to look
+  at a lesson.
+  IT OPENS NO SESSION, WRITES NO POLL ROW, RECORDS NO EVIDENCE AND PUBLISHES TO NOTHING - safe to open
+  mid-period while another class runs. That is the whole reason it is a separate route rather than a
+  mode on `/control`: Control's snapshot is a full-replace publish, so a "preview" living there would
+  be one bug away from overwriting a running lesson (see the second-Control-tab hazard above).
+  THREE PIECES, and the split is the point. (1) `src/lib/lessonFlowBuild.ts` holds `stepsFromLesson` +
+  `lessonSnapshotFromNotion`, EXTRACTED VERBATIM from `/api/control-remote` so the rehearsal builds its
+  sequence with the same code the real start uses - a preview built by a parallel implementation drifts
+  and then lies about what the room will see, which is worse than no preview. (2) `src/lib/rehearsalFlow.ts`
+  is the DB-free twin of `navigateFlow`: same mode selection, same body fallback chain, same resource
+  label, same state strip, but it synthesizes the poll (`rehearsal-poll-<n>`) instead of inserting one.
+  It does NOT reuse `buildStudioPreviewSnapshot`, which pads `sequence.steps` with `placeholder-<n>`
+  clones because Screen Studio only ever shows one step - a run-through needs the real sequence or the
+  step counter and progress strip lie. (3) `GET /api/teacher/rehearse?id=|code=` returns the built
+  sequence; one Notion read, no writes.
+  Unlike the live start it REPORTS rather than throws on a structured-numeric spec that will not parse,
+  a part-filled state strip, and a poll step with no authored Question - a rehearsal is exactly where
+  those should surface, and it also flags a lineup summing past 50 minutes.
+- BROWSING ALL PUBLISHED LESSONS (same change). `/api/teacher/lessons` always returned every published
+  lesson with no date filter; the UIs were what hid them. `/teacher`'s finder showed only
+  yesterday/today/tomorrow until you typed a query and then capped at SIX with a "refine the search"
+  line that assumed you already knew what you wanted - it now has a "Show every published lesson"
+  button and a 200-row cap that exists only to bound the DOM. `/control`'s Lesson Library could load a
+  lesson only by a code you remembered; it now carries a searchable Notion list beside the code box,
+  fetched lazily the first time the overlay opens (Control must stay responsive all period, and most
+  sessions never open it). Every row offers Edit screens / Rehearse / Begin.
+- **`getPublishedLessonArchive` NOW HONOURS `Skip`** (fixed same day). It ignored the property while
+  `getPublishedLessonById` rejects on it, so a skipped lesson listed in EVERY picker and then failed to
+  load when clicked - the worst shape of bug, because the teacher sees the lesson is "there" and
+  concludes the site is broken. `/teacher` papered over it with a keyword regex over the title, which
+  never caught a lesson whose title says nothing about being skipped.
+  THE PREDICATE IS DELIBERATELY DUPLICATED, not imported. `scripts/notion-lesson-archive-contract.mjs`
+  compiles `notionLessonArchive.ts` with `tsc --ignoreConfig`, which DROPS the `@/` path aliases - so
+  any local import in that file fails CI with "Cannot find module", and the failure looks nothing like
+  its cause. Same constraint `soundBank.ts` lives under. Keep that file import-free.
   `/teacher/growth` redirects to `/teacher/rightnow`. Note: `/builder` is teacher-ish but NOT gated
   (`/abbie` was the other one; that route is DELETED - see the Abbie section below).
   The lesson flow does NOT require `/control` to run: `/api/control-remote` executes
@@ -645,25 +805,60 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   room its second channel. The toggle is per step, in the studio inspector on a selected slide frame.
   THE URL REACHES THE RUNTIME FROM TWO PLACES AND THE BLOB WINS: `slideFrameFromLayout` in
   notionLessons.ts decodes the saved screen layout and reads the main screen's slide block
-  (`ov.slideUrl` / `ov.slideMirror`), falling back to the Notion `Slide URL` / `Slide Image`
-  property. So authoring in the studio needs no Notion property, and a property set in Notion is
-  the readable copy. `slideUrl` and `slideMirror` are server-authored fields on
-  `LiveFlowSequenceStep`, which puts them in the `interlude` / `transition` class - CONTROL'S
-  SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry them or a reconnect erases the
-  slide mid-lesson. Watch the indentation trap when adding the next such field: the 8-space and
-  10-space mapping lines are substrings of each other, so a naive replace double-applies.
+  (`ov.slideUrl` / `ov.slideMirror` / `ov.slideFit`), falling back to the Notion `Slide URL` /
+  `Slide Image` property for the URL. So authoring in the studio needs no Notion property, and a
+  property set in Notion is the readable copy. `slideUrl`, `slideMirror` and `slideFit` are
+  server-authored fields on `LiveFlowSequenceStep`, which puts them in the `interlude` /
+  `transition` class - CONTROL'S SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry
+  them or a reconnect erases the slide mid-lesson (`lessonFlowBuild.ts` is the fifth site;
+  `/api/control-remote` and `rehearsalFlow.ts` spread the step and inherit the field). Watch the
+  indentation trap when adding the next such field: the 8-space and 10-space mapping lines are
+  substrings of each other, so a naive replace double-applies - anchor on a leading newline.
+  MIRROR AND FIT ARE READ INDEPENDENTLY OF THE URL, and the reason is a silent failure fixed
+  2026-08-03: the function used to return as soon as it found a slide block carrying a url, so a
+  teacher who left the studio's url field blank (letting the Notion property supply it - the
+  documented readable-copy path) and flipped the mirror toggle got a toggle that saved correctly,
+  read back correctly, and never reached a projector. A block naming its own url is still the
+  authoritative one and its settings go with it; a bare block now lends its settings to the
+  property-supplied url. `slideFit` is a free-text inspector field, so it is trimmed and lowercased
+  before it decides anything - "Cover" is a teacher answering correctly. Pinned in
+  `npm run test:notion-lesson-contract`.
+  `slideFit` publishes ONLY when "cover" - every surface defaults to "contain", so publishing the
+  default would add a constant string to a snapshot Control full-replaces about once a second.
+  THE STUDIO AND DEMO PREVIEWS CANNOT SHOW A SLIDE FRAME, and it is not a bug in the frame.
+  `studioPreviewFlow.ts` carries `slideOverlay` but has never carried `slideUrl` / `slideMirror` /
+  `slideFit`, so the `?studioPreview=1` iframes on `/teacher/studio/edit` and `/demo` render the
+  step as though no slide were authored. Verify a slide on `/teacher/rehearse` instead, which builds
+  through the real `stepsFromLesson`. Closing the gap is three fields in that file's step mapping.
   THE NOTION PROPERTY IS `Slide Url`, NOT `Slide URL`, AND IT IS A FILE PROPERTY. Read it through
   `propByName` (notionLessons.ts), which normalizes case and punctuation - an exact-string property
   lookup fails SILENTLY, the site reads "" and the screen renders as though nothing was authored.
   That is the whole class of bug: verified live 2026-08-02, the property Steele created was `Slide
   Url` and the exact-match read would have found nothing with no error anywhere. Prefer `propByName`
   for any new property.
-  UNSOLVED, AND IT WILL BITE ON A REAL TEACHING DAY: a Notion-UPLOADED file resolves to a
+  THE NOTION-UPLOAD TRAP, AND THE ANSWER TO IT (2026-08-03). A Notion-UPLOADED file resolves to a
   short-lived SIGNED S3 url (about an hour), and Control builds its lineup ONCE at load and then
-  republishes that frozen url every second. A lesson opened at 7:30 has a dead image url by period
-  4, and the projector shows the four-second fallback card. An EXTERNAL link pasted into the
-  property has no expiry and is safe. The fix is a proxy route that re-resolves the step's file from
-  Notion per request so the snapshot carries a stable path; not built, needs Steele's word.
+  republishes that frozen url every second - so a lesson opened at 7:30 has a dead image url by
+  period 4 and the projector shows the four-second fallback card. NEVER put a classroom-critical
+  slide behind a Notion upload. An EXTERNAL link pasted into the property has no expiry and is safe.
+  THE PREFERRED SOURCE IS NOW A SAME-ORIGIN IMAGE: `resolveSlideSource` accepts a root-relative path
+  (`/slides/m1t1l1-d1-3.webp`) for an exported slide committed to `public/slides/`, served by the
+  same CDN that just delivered the page - if the page loaded, the slide loaded. No expiry, no third
+  party, nothing to re-fetch, and it is why the proxy-route idea this paragraph used to call for was
+  not built. Steele's standing ask when he chose it: most reliable and least likely to fail mid
+  lesson. `public/slides/README.md` carries the naming, format and FERPA rules. THE REPO BEING
+  PRIVATE DOES NOT MAKE THE FOLDER PRIVATE - everything under `public/` is served by Vercel to
+  anyone with the URL - so no student name, district email, named student work or roster screenshot
+  ever goes in it. Reserve a LIVE EMBED for a board being actively
+  edited during class (a Lucid or Figma canvas the room watches change) - that is the one case where
+  the live fetch is the point.
+  THE GUARD IS `/^\/[/\\]/`, NOT `startsWith("//")`. The URL spec treats `\` as `/` for http(s), so
+  `/\evil.com/x.png` resolves to https://evil.com/x.png and a `//`-only check let it through as
+  same-origin. `npm run test:embed-url` pins it along with the four product rewrites.
+  AN IMAGE GETS THE SAME WORDED FALLBACK AS AN EMBED (`SlideFrameScene`, `onError`). A bare `<img>`
+  answers a mistyped or never-committed filename with the browser's broken-image glyph, which at 25
+  feet is indistinguishable from a broken lesson - and "the file was never deployed" is the most
+  likely failure on the path this now recommends.
 - THREE DEMONSTRATION OBJECTS (`manipSplit` / `manipSnap` / `manipFree`) are a SEPARATE, EPHEMERAL
   palette (main projector only) the teacher drags live during class. Their type union is distinct from
   the 10 persisted component types, their live position lives in the studio's in-memory `manip` map
@@ -1182,7 +1377,22 @@ the invariants they protect are easy to break again.
   when to talk, when to listen, in whatever order that discussion needs. The current code is the
   opposite of that - `DISCUSSION_ROUNDS` hardcodes three 120-second rounds with fixed labels, so the
   sequence cannot vary and the durations cannot either.
-  THE AUTHORING FORMAT IS DECIDED AND TESTED; THE RUNTIME DOES NOT HONOUR IT YET.
+  **STALE AS OF 2026-08-03 - THE RUNTIME DOES HONOUR IT NOW, AND THIS LINE COST A REAL BUG.** The
+  paragraph below (and the "DO NOT ADD THE `Discussion Phases` NOTION PROPERTY" block after it) says
+  the wiring is outstanding. It landed: `notionLessons.ts:588` reads the property,
+  `lessonFlowBuild.ts:84` and `/api/control-remote:345` publish it onto `presentation`, and
+  `/teacher/present:466`, `/teacher/pace:257` and `/live-flow:596` all parse it into
+  `DiscussionTimeline`. Read the rest of this section as history, not as a plan.
+  WHAT IT COST: trusting this line, an agent wrote a contract asserting Control must NOT publish
+  `discussionPhases` - pinning a live bug in place. Control's full-replace republish was stripping
+  the field from `sequence.steps`, and `/api/control-remote` re-derives `presentation` FROM those
+  steps, so the first Remote-driven Next deleted the discussion timeline on both projectors and
+  every Chromebook, and the next rehydrate wrote the loss into Control's own lineup for good. Fixed
+  in `flowSnapshotForStep`; `npm run test:control-lineup` now asserts the field REACHES the room.
+  This is the second time a stale line here has produced a bug (see rule 9) - when a note says
+  "not wired yet", grep for the consumer before believing it.
+
+  THE AUTHORING FORMAT IS DECIDED AND TESTED. (Historic heading: "the runtime does not honour it yet".)
   `src/lib/discussionPhases.ts` + `npm run test:discussion-phases` (18 checks) own it. One beat per
   line, `<mode> <duration> | <direction>`, mode one of think / write / talk / listen, duration in
   seconds or `90s` or `2m`, and the direction after the pipe is REQUIRED because the mode word alone
@@ -1313,6 +1523,87 @@ the invariants they protect are easy to break again.
   symptom is that a shipped fix is not there. `UpdateReadyChip` polls `/api/build-id` and offers a
   tap-to-reload chip. It must NEVER reload on its own. When a fix is reported as not working, check
   what build the iPad is actually running before re-debugging the fix.
+- **PEN FEEL: THE GEOMETRY FIXES, AND WHY "JAGGED" WAS FOUR SEPARATE THINGS** (2026-08-03, from
+  Steele: "too jagged and doesnt respond well to writing. especially back to back strokes", then
+  "a few weeks ago it was running fantastic"). `npm run test:ink-geometry` (35 checks) pins all of
+  it; the contract measures the polygon with point-in-polygon rather than eyeballing a screenshot.
+  EVERY CASE WAS VERIFIED BY REVERTING ITS FIX AND CONFIRMING THE SUITE GOES RED - do that when
+  adding one, because the first version of this contract was GREEN with four of the fixes reverted
+  (the "A CONTRACT CAN PASS ON THE WRONG ELEMENT" trap below, arrived at from a new direction).
+  Three ways a case looked decisive and was not, all worth stealing: a CLEAN synthetic corner is
+  rescued by the resampler alone, so only densely sampled input with tremor on it separates
+  miter from no-miter; an EXACTLY retraced stroke takes the degenerate `mlen < 1e-6` branch and so
+  cannot test the miter clamp, while a retrace a hair off zero drives it; and a long GENTLE stroke
+  resamples about 1:1 and never reaches the argument-count cliff, while a long FAST one expands
+  (sparse samples subdivide) and does.
+  (1) **THE ROUND CAPS SWEPT THE WRONG WAY AND NEVER ONCE CAPPED A STROKE.** A cap joins one edge
+  to the other across the tip and there are two ways round; the fan swept the way that folds back
+  THROUGH the stroke body, so instead of a nib it cut a notch into the last few px. Every stroke
+  had blunt, forked ends from the day the engine was written - invisible on a long scribble,
+  about half the ink of a short one, and short strokes are what an equation is made of. The fix is
+  the sign of one term (`fromAngle - k*PI/steps`). Its symptom is a bbox: a horizontal stroke's
+  ring should reach half a nib PAST each tip, and it stopped exactly at them.
+  (2) **A CONSTANT-WIDTH MARKER MUST NOT THIN AT A CORNER.** Offsetting each point along its own
+  normal by exactly r leaves the outer edge of a turn at r*cos(theta/2) - about 30% pinched at a
+  right angle - and handwriting is almost entirely corners. `strokeOutline` now scales the offset
+  by 1/cos(theta/2) with `MITER_LIMIT` 2.5 so a retraced stroke cannot throw a spike. Measured
+  nib width kept at the corner: 94% -> 100% (right angle), 80% -> 100% (zig-zag).
+  (3) **THERE IS NO SEPARATE DE-JITTER PASS, AND THAT IS MEASURED, NOT AN OVERSIGHT.** One was
+  built (a binomial pre-filter over the control points) and then removed, because
+  `smoothCenterline`'s midpoint quadratic already averages each pair of samples and that is itself
+  a low-pass. On a line drawn slowly at 1.1px sampling: perfectly alternating chatter 0.320px raw
+  goes to 0.000px WITHOUT the filter; white noise 0.133px without vs 0.100px with; correlated hand
+  tremor 0.080px vs 0.076px. So it bought 0.03px and 0.004px - invisible on a 6px nib - while
+  costing two hypots per point on every frame of every stroke, and no contract check could be made
+  to fail without it, which is the same fact from the other side. What actually cleaned the line up
+  was the miter joint: a slightly wobbling stroke puts a run of small turns through the joint, and
+  an un-mitered joint pinches at every one of them, which is what made a plain rule look frayed.
+  If you are here to add smoothing, measure against the miter and the caps first.
+  (4) Resampling refines by the sagitta `c*c/(8R)`, so it only bites below about R=6 and costs
+  nothing elsewhere. Scale is NOT a reason to refine: strokes travel NORMALISED and each surface
+  re-fits the curve in its own pixels, so the projector's chords are the same 2.4px across a
+  proportionally larger stroke, not magnified ones.
+- **THE BACK-TO-BACK STROKE STALL WAS A REACT RE-RENDER, NOT THE INK** (2026-08-03). `InkBoard`
+  called `onHistoryChange` on every `recordOp`, and every consumer writes it into state
+  (`/ipad`: `setHistory({ undo, redo })` - a fresh object, so React never bails by value). So each
+  pen LIFT re-rendered the whole page. `notifyHistory` now fires only when the pair actually
+  CHANGES - after stroke one it is (true,false) and stays there - so later lifts notify nothing.
+  `clearLocal` must go through `notifyHistory` too, or the last-notified pair goes stale and
+  swallows the next real change.
+  THE COST IS SYNCHRONOUS RECONCILIATION INSIDE THE POINTERUP HANDLER, NOT A LAYOUT FLUSH, and the
+  distinction is worth keeping straight because the wrong version sounds better. A re-render whose
+  output is identical mutates no DOM, so there is nothing for `measure()`'s
+  `getBoundingClientRect()` to reflow - only stroke one actually changes anything (undo false ->
+  true flips `disabled`). What it does cost is React running start to finish inside the event
+  handler, which is on the critical path exactly when a pen lift and the next pen down fall in the
+  same frame. (An earlier version of this note claimed the forced-reflow mechanism; a review
+  measured it and it is wrong.)
+- **BACKDROP-FILTER OVER THE INK CANVAS IS A PER-FRAME COST** (2026-08-03). `.ip-palette` is 620px
+  wide, fixed over the writing stage, and open by default; `backdrop-filter: blur(16px)` makes the
+  browser re-sample and re-blur its backdrop every time that backdrop changes - and its backdrop is
+  the canvas, which repaints on every frame of every stroke. It is opaque now. The small
+  `.ip-handle` keeps its blur (a corner chip, not a sheet over the page). **"Hide tools" is the
+  one-gesture A/B** whenever the pen feels heavy: if hiding the palette sharpens it, an overlay is
+  the cause, not the geometry.
+- **THE /ipad AUTO-CLEAR POLL NEVER RAN, AND STILL COST A PARSE EVERY 2 SECONDS** (turned off
+  2026-08-03). It asked `GET /api/control-remote` with NO sessionId, and that route returns
+  `session: null` unless one is passed - so the step index was never a number and the board never
+  cleared on a lesson advance, from the day it shipped. Meanwhile it fetched and parsed
+  `sessions.map(serializeSession)` - every open session with its whole liveFlow snapshot - on the
+  pen surface's main thread every 2s, at moments it cannot choose. Deliberately NOT re-wired:
+  passing a session id switches on a DESTRUCTIVE auto-clear the board has never actually had, and
+  the first time Steele saw it would be his board wiping itself mid-lesson. Turning it on is his
+  call and is a one-line change.
+- **THE "FANTASTIC" PEN CONFIGURATION WAS STRUCTURALLY DIFFERENT, AND `Paper` IS THE A/B** (noted
+  2026-08-03). Before the 2026-07-30 one-surface rebuild, the surface the teacher wrote on was an
+  OPAQUE dotted `InkBoard` with no iframe mounted at all. Today it is `transparent={!paper}` - a
+  transparent canvas stacked on a permanently live `/teacher/present` iframe - so the compositor
+  blends three canvases against an independently rendering same-origin app on every frame, and the
+  `desynchronized: true` low-latency path Safari grants the wet canvas is exactly what that
+  arrangement can cost you. THIS IS UNMEASURED from code and needs a Safari layer trace on the
+  device. **Turning `Paper` ON makes the canvas opaque and is a free A/B a teacher can run in one
+  tap**: if the pen feels great on Paper and poor on Screen, the remaining problem is compositing,
+  not stroke geometry - do not go back to tuning `inkGeometry`.
 - **THE PROJECTOR IS A DISPLAY ON THE INK ROOM, NEVER A WRITER** (2026-07-30). `/teacher/present`'s
   board-scene `InkBoard` was mounted `interactive`, which made the projector the SECOND author on
   the shared room: `InkBoard`'s interactive-only effects broadcast `{t:"bg", url:null}` (wiping the
@@ -1405,6 +1696,38 @@ the invariants they protect are easy to break again.
   or Settle about one second after it started, then auto-advanced past it. Same class of bug wiped
   `remoteActions` and `slideOverlay` on any reconnect. When adding a server-authored `live_flow`
   field, add it to the `liveFlowSignature` snapshot in the same commit.
+  **THE STEP MAPPING NOW LIVES IN `src/lib/controlLineup.ts`, NOT IN `/control`** (extracted
+  2026-08-03). It was four hand-kept object literals in `page.tsx` at three different indents - two
+  rehydrate, one publish, one Notion-import - and the substring overlap between the 8-space and
+  10-space copies is exactly why a naive edit double-applied. They had ALREADY drifted, silently:
+  the remote-command rehydrate carried no `eyes`/`voice`/`supplies`/`body`, so a Control reconnect
+  or any remote-driven rehydrate mid-lesson KILLED THE CLASSROOM STATE STRIP on both projectors for
+  the rest of the period, and the server-hydration rehydrate dropped `advance`. Neither failed
+  loudly; a lesson with no strip reads as a lesson that never authored one. `flowSnapshotForStep`
+  (lineup -> published step) and `lineupItemFromStep` / `lineupFromSteps` (back again) are now the
+  only mapping, and `npm run test:control-lineup` fails if the round trip stops being lossless.
+  Adding a `LiveFlowSequenceStep` field means editing ONE literal per direction in that file.
+  TWO THINGS ABOUT THAT MODULE ARE LOAD-BEARING. Its imports are TYPE-ONLY and every runtime helper
+  arrives through the injected `FlowStepDeps`; that is what lets the contract compile it in
+  isolation, and a single runtime import breaks the build with a "Cannot find module" that looks
+  nothing like its cause (`liveClassFlow.ts` reaches for `@/lib/...`, which does not resolve under
+  the contract's tsconfig). And `matchLabel` is deliberately NOT `label`: the published label falls
+  back to "Lesson state", but `inferClassroomStage` and `usesDiscussionProtocol` were always handed
+  `""` when nothing was authored, and they pattern-match the label text - passing them the fallback
+  would let the words "Lesson state" steer the inferred stage.
+  The Notion-import mapper (`newLineup`) is deliberately still inline: its input is a Notion lesson
+  step, not a published step, so it is a different function with a different source shape, and it
+  cannot drop a field on reconnect - only on lesson load. Its one real risk is the inverse: a new
+  `LineupItem` field added to both shared mappers passes the contract while the importer forgets it,
+  and since Notion import is the PRIMARY path the field would be absent on first load and never
+  appear. Add to all three.
+  ONE KNOWN, DELIBERATE DIVERGENCE FROM `stepsFromLesson` (Steele's call, 2026-08-03: leave it and
+  document it). `lessonFlowBuild.ts:72-83` has a THIRD arm for stems and vocabulary - a step
+  carrying discussion phases keeps its AUTHORED stems even when it is not a `discussion` state.
+  Control has no such arm, so on that kind of step the server publishes the stems and Control's next
+  republish replaces them with `[]`. The contract pins Control's current behaviour, so closing the
+  gap means changing that assertion too. It is a real divergence and it changes what students read
+  on screen, which is why a refactor did not get to decide it.
 - **THE DISCUSSION OVERLAY COVERS `/control` AT z-index 50.** Any control the teacher needs mid-
   discussion must be reachable from inside `DiscussionProtocol`; Control's own Back is invisible.
 - **`resolveLessonVisual` TAKES TWO ID NAMESPACES.** `stateId` is the `ClassroomStageId` (warmup maps
@@ -1442,18 +1765,25 @@ the invariants they protect are easy to break again.
   stamped with the sequence index it was issued at and expires on the next advance with no clearing
   code anywhere. The strip DOES cross `studentSafeLiveFlow` on purpose - "voice 0" is announced to the
   room and painted on two projectors, and a head-down student needs the same read the room gets.
-- **OPEN BUG (2026-08-02, deferred by Steele): A TEACHER-LOADED BANK CLIP IS DECODED ON ONE
-  AudioContext AND PLAYED ON ANOTHER.** Symptom he reported: cues he uploaded a clip for make no
-  sound from the Stream Deck, while cues with no upload still fire their synthesized version. The
-  two `installUserClip` call sites in `/control` disagree - the UPLOAD path passes
-  `audioCtxRef.current`, the page-load RESTORE path (the `idbGet(bankClipKey(...))` loop) passes
-  nothing and falls back to `sharedContext()`, the bank's own second context. `playSoundCue` always
-  plays through `audioCtxRef.current`, and an AudioBuffer only crosses contexts cleanly when their
-  sample rates match; when they do not, `src.buffer = chosen` throws and the press is silent.
-  Synthesis never reads `userBuffers`, which is why the un-uploaded cues are unaffected. PREDICTION
-  TO CHECK BEFORE FIXING: a freshly uploaded clip should sound, and the same clip should go silent
-  after a `/control` reload. The mechanism is inferred from the code, not observed - the disagreeing
-  call sites are certain, the sample-rate cause is not. Fix is to make both sites use one context.
+- **FIXED 2026-08-03: A TEACHER-LOADED BANK CLIP WAS DECODED ON ONE AudioContext AND PLAYED ON
+  ANOTHER.** Symptom Steele reported: cues he uploaded a clip for made no sound from the Stream
+  Deck, while cues with no upload still fired their synthesized version. The two `installUserClip`
+  call sites in `/control` disagreed - the UPLOAD path passed `audioCtxRef.current`, the page-load
+  RESTORE path (the `idbGet(bankClipKey(...))` loop) passed nothing and fell back to
+  `sharedContext()`, the bank's own second context. `playSoundCue` always plays through
+  `audioCtxRef.current`, and an AudioBuffer only crosses contexts cleanly when their sample rates
+  match; when they do not, `src.buffer = chosen` throws and the press is silent. Synthesis never
+  reads `userBuffers`, which is why the un-uploaded cues were unaffected.
+  THE HALF-FIX THAT LOOKS RIGHT AND IS NOT: passing `audioCtxRef.current` at the restore site
+  changes nothing, because that ref is null until `genTone` lazily constructs it on the first cue -
+  and the restore loop runs at MOUNT. It would still fall through to `sharedContext()`. The fix is
+  `ensureAudioCtx()`, which constructs the page's one context on demand; a context may be built
+  before any gesture (it starts suspended, `decodeAudioData` still works, the first click resumes
+  it). The COMMITTED-file path was never affected - `primeCueFiles` is called from inside
+  `playSoundCue` with the same context it is about to play on.
+  This got more urgent when the clips were committed to `public/sounds/`, because `userBuffers`
+  WINS over `fileBuffers` - one broken restored buffer would shadow a perfectly good committed file
+  and the button would be silent with the right clip sitting right there.
 - **STATE MUSIC IS STOP-FIRST, AND CUES DUCK IT RATHER THAN STACK ON IT** (both found live
   2026-08-02, Steele: "a song that plays the whole time and then a sound when the first time alert
   and then another when time is up and they all played on top of eachother and the song continued
@@ -1613,13 +1943,26 @@ the invariants they protect are easy to break again.
 ## Notion + warm-up pipeline
 
 - `src/lib/notionLessons.ts` reads the "Math 6 Lessons" DB via the Notion data_sources API
-  (`NOTION_VERSION = 2025-09-03`, `POST /v1/data_sources/{id}/query`, three `DATA_SOURCE_IDS`), auth
+  (`NOTION_VERSION = 2025-09-03`, `POST /v1/data_sources/{id}/query`), auth
   `NOTION_TOKEN` (server-side; the literal `const NOTION_TOKEN = "secret"` on line ~13 is dead code -
-  ignore it, never put a real token there). THE DATABASE HAS THREE DATA SOURCES and published pages
-  really do live across them - any query that hits only one source is silently blind to the rest.
-  That bug shipped in `notionLessonArchive.ts` (fixed 2026-07-26): /api/lessons and
-  /api/teacher/lessons (the Studio + Slide-extras lesson pickers) missed two published launch-week
-  lessons that /api/today could see. Keep every lesson query iterating the SAME three-source list.
+  ignore it, never put a real token there). `DATA_SOURCE_IDS` NOW HOLDS EXACTLY ONE ID
+  (`e367e541-...`) - CORRECTED 2026-08-03, this section said "three" and told you to keep every query
+  iterating a three-source list, which is now the opposite of the truth and would send you to
+  "restore" two ids that break things. The other two were a schemaless sibling and one that was never
+  a data source of this database; every query against them FAILED, and under `requireComplete` that
+  sank whole lookups - the documented "by-code Notion lookup returned empty" symptom. The 2026-07-26
+  `notionLessonArchive.ts` fix (/api/lessons and /api/teacher/lessons missing two published
+  launch-week lessons /api/today could see) is still real history: the rule it earned is that every
+  lesson query iterates the SAME `DATA_SOURCE_IDS` list, whatever is in it - not that the number is
+  three.
+- THE LESSON STEPS DATA SOURCE IS QUERYABLE DIRECTLY, and that is the cheap way to read step fields
+  in bulk. `LESSON_STEP_DATA_SOURCE_ID` (`8e467c1b-...`, the same id `notionLessonStepWrites.ts`
+  writes through) carries a `Lesson` RELATION back to the lessons source, so one
+  `POST /v1/data_sources/{id}/query` with an `or` of `{ property: "Lesson", relation: { contains } }`
+  gets every step of several lessons at once. `mapPage`'s normal path does the opposite - a
+  `GET /v1/pages/{id}` PER STEP, about twelve a lesson - which is why
+  `getPublishedLessonsForDateRange` passes `includeRelations: false` and why /weekly-display (polled
+  by two TVs every 60s) could not simply turn it on.
 - `/api/today` returns the lesson whose `Publish Workflow` select equals `Published` AND `Date` equals
   today in `America/Los_Angeles` (not UTC). Renaming those properties or assuming UTC silently returns
   nothing.
@@ -1645,9 +1988,12 @@ the invariants they protect are easy to break again.
   "empty renders as nothing, wrong renders on a classroom screen".
 - One page per teaching day (locked convention) - never a Notion Date range. Ranges are only a
   fallback; single dates are what make `/api/today` and the day-to-day retention chain work.
-- THE LESSON DAY IS 50 MINUTES, not 55 (Steele, 2026-07-28). NOTHING IN CODE VALIDATES THE SUM -
-  verified: no check exists in `scripts/` or `src/lib/liveClassFlow.ts`, and `/control` will happily
-  run a 70-minute lineup into a 50-minute period. It is an AUTHORING contract, so the only thing
+- THE LESSON DAY IS 50 MINUTES, not 55 (Steele, 2026-07-28). NOTHING IN CODE ENFORCES THE SUM -
+  no check exists in `scripts/` or `src/lib/liveClassFlow.ts`, and `/control` will happily
+  run a 70-minute lineup into a 50-minute period. The ONE place it is even mentioned is
+  `/teacher/rehearse`, which WARNS (never blocks) when a lineup totals over 50, and does not warn at
+  all when a lineup comes in short - see the same claim at the `/teacher/rehearse` bullet above.
+  It is an AUTHORING contract, so the only thing
   protecting it is whoever enters the steps: add the `Duration` values up before publishing. The
   `abbies-classroom` plugin skills (`classroom-os-context` "50-minute spine",
   `lesson-database-builder`, `lesson-deployment-builder`) carry the canonical breakdown - build days
@@ -1857,9 +2203,64 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   the public `/api/build-id` on display routes (/board, /teacher/present, /teacher/pace,
   /live-flow, /warmup, /weekly-display - the pace projector and the all-day TVs joined
   2026-07-27; they are the longest-open tabs in the building and were silently missing
-  deploys) and reloads them when a new deploy ships. NEVER add /ipad to its DISPLAY_ROUTES - the pen surface
+  deploys - and /teacher/scoreboard joined 2026-08-03 when it became a first-class
+  second-screen card on the teacher home; it holds no local state a reload could lose,
+  since every standing is re-read from /api/teacher/scoreboard every 2s) and reloads them
+  when a new deploy ships. STILL MISSING and worth Steele's word: `/teacher/bruh/board`,
+  the BRUH projector, has the same profile and the same gap. NEVER add /ipad to its DISPLAY_ROUTES - the pen surface
   holds the authoritative ink state and an auto-reload would wipe the room's boards. Displays are
   safe to reload; ink resyncs via hello/state on mount.
+- **A COWORK SANDBOX SESSION CANNOT DELETE FILES IN THIS REPO, SO IT CANNOT BUILD OR COMMIT**
+  (found 2026-08-03). Claude Cowork reaches the folder through a FUSE mount that permits create and
+  write but returns `EPERM ... unlink` on every delete. Two consequences, and neither error names its
+  real cause. `npm run build` dies on `EPERM: operation not permitted, unlink '.next/BUILD_ID'` -
+  Next clears `.next` before writing, and `rm -rf .next` fails the same way, so there is no cleanup
+  that fixes it. And ANY git command that takes the index lock (`add`, `commit`, `checkout -b`) can
+  leave a `.git/index.lock` behind that the sandbox then cannot remove, which makes every later git
+  call in that folder fail with "Another git process seems to be running" until someone deletes the
+  lock from a REAL terminal. What DOES work from the sandbox: `npm run typecheck`, `npm test` (all 31
+  suites), and every read. So a Cowork session should verify with typecheck + the contract suites,
+  and hand the `npm run build`, the commit and the push to Steele rather than half-finishing them.
+  Claude Code in a normal terminal is unaffected - this is the mount, not the repo.
+  **NEVER RUN `git worktree add` FROM THE SANDBOX** (learned 2026-08-03). The worktree is created
+  successfully and then is unusable from macOS: its `.git` file records the gitdir as the SANDBOX
+  path (`/sessions/<id>/mnt/Big Dog Math Site/.git/worktrees/<name>`), so every git command run
+  against it from a real terminal or from Desktop Commander answers `fatal: not a git repository`.
+  Worse, `git worktree add` and `git worktree prune` both take and then fail to release locks,
+  which is how `.git/index.lock` appears in the MAIN repo and blocks Steele's next commit while
+  looking exactly like repo corruption.
+  THE ESCAPE HATCH IS DESKTOP COMMANDER, which runs a real macOS shell outside the mount and has
+  full unlink permission. Create worktrees, commit, merge and push through it; use the sandbox for
+  reads, `npm run typecheck` and `npm test`. Read-only sandbox git is still worth guarding with
+  `git --no-optional-locks`, because a plain `git status` can refresh and relock the index.
+  TWO RECOVERY NOTES. Remove a stale lock only after `ps aux | grep "[g]it "` shows no live git
+  process - concurrent sessions are normal in this repo and deleting a live lock is worse than
+  leaving it. And an EMPTY (zero-byte) ref file under `.git/refs/heads/` breaks `git fetch`
+  REPO-WIDE with `fatal: bad object refs/heads/<name>` plus a misleading "did not send all
+  necessary objects" that reads as a remote problem; `git update-ref -d` cannot remove it either
+  ("reference broken"), so delete the file directly. `find .git/refs -size 0` finds them.
+  FOUR MORE FROM 2026-08-03, the session that ran the whole flow from the sandbox anyway and paid
+  for it. (1) IT IS NOT ONLY `index.lock`. `HEAD.lock`, `ORIG_HEAD.lock` and
+  `refs/heads/<branch>.lock` strand identically, and the ref lock is the confusing one - the command
+  fails naming a file you were not thinking about. `find .git -name "*.lock"` lists the lot; hand
+  Steele that list, because he can `rm` them and the sandbox cannot.
+  (2) A STRANDED LOCK CANNOT BE `rm`ed FROM THE SANDBOX BUT CAN BE `mv`ed. Rename inside the same
+  directory succeeds where unlink returns EPERM, so `mv .git/index.lock .git/stale-index.lock`
+  unblocks the next command. It is for finishing a diagnosis, not a licence to keep writing - every
+  later write strands another one, and the renamed files are litter Steele then has to clear.
+  (3) A PRIVATE INDEX COMMITS WITHOUT TOUCHING THE SHARED ONE, which is the answer when another
+  session is mid-merge and the shared index is unmergeable: `GIT_INDEX_FILE=/tmp/i git read-tree
+  <base>`, then `git add <paths>`, `git write-tree`, `git commit-tree`, `git update-ref`. It takes no
+  index lock and cannot disturb another session's staging. Only `update-ref` takes a lock, so it
+  costs one, not five. `git merge-tree --write-tree` is NOT available as a treeless merge - this
+  repo's git is 2.34 and that wants 2.38+.
+  (4) THE BUILD CAN BE VERIFIED WITHOUT DESKTOP COMMANDER: `git archive <commit> | tar -x -C
+  /tmp/verify`, COPY node_modules in (about 750MB, a minute over the mount), and `npx next build`
+  there. It must be a real copy - Turbopack refuses a symlink that leaves the project root with
+  "Symlink [project]/node_modules is invalid, it points out of the filesystem root", which is the
+  same warning this file already gives about scratch worktrees. This is how the audit fixes were
+  build-verified on the exact shipping commit while the main tree was mid-merge and `.next` was
+  EPERM-locked.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like

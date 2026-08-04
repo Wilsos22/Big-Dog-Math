@@ -40,7 +40,10 @@ export const EMBED_HOST_ALLOWLIST: readonly string[] = [
 ];
 
 // Hosts we are willing to load an <img> from. Notion's own file CDN is included so a Files
-// property on the Lesson Step works without a separate upload step.
+// property on the Lesson Step works without a separate upload step - but a Notion UPLOAD resolves
+// to a signed S3 url that dies in about an hour, and Control republishes the url it froze at
+// lineup build, so a deck loaded at 7:30 is a fallback card by period 4. Prefer a same-origin
+// image (see below) for anything the room actually has to read.
 export const IMAGE_HOST_ALLOWLIST: readonly string[] = [
   "prod-files-secure.s3.us-west-2.amazonaws.com",
   "s3.us-west-2.amazonaws.com",
@@ -48,10 +51,40 @@ export const IMAGE_HOST_ALLOWLIST: readonly string[] = [
   "images.unsplash.com",
   "drive.google.com",
   "lh3.googleusercontent.com",
+  "bigdogmath.com",
 ];
 
 function hostAllowed(host: string, list: readonly string[]): boolean {
   return list.some((allowed) => host === allowed || host.endsWith("." + allowed));
+}
+
+// THE MOST RELIABLE SLIDE IS A SAME-ORIGIN IMAGE. A live Canva / Slides / Lucid embed depends on
+// school wifi at render time, on a third party staying up, and on that third party not changing its
+// framing policy - three ways to put a fallback card on a projector mid-lesson. An exported slide
+// committed to `public/slides/` is served by the same CDN that just delivered the page: if the page
+// loaded, the slide loaded. No expiry, nothing to re-share, nothing to re-fetch.
+//
+// So a root-relative path is accepted here, which the URL parser could never do (it demands a
+// scheme). Guarded narrowly: exactly ONE leading slash, and an image extension. A same-origin PAGE
+// is deliberately NOT framable - this app inside its own iframe on a projector is a recursion
+// nobody wants to debug during first period.
+//
+// THE SECOND SLASH MAY BE A BACKSLASH. `//evil.com/x.png` is the obvious protocol-relative escape,
+// but the URL spec treats `\` as `/` for http(s), so `/\evil.com/x.png` resolves to
+// https://evil.com/x.png just the same. Checking only for `//` let that through.
+function sameOriginImage(raw: string): SlideSource | null {
+  if (!raw.startsWith("/") || /^\/[/\\]/.test(raw)) return null;
+  const path = raw.split(/[?#]/)[0];
+  if (!IMAGE_EXTENSIONS.test(path)) {
+    return {
+      kind: "none",
+      url: "",
+      host: "",
+      reason: "A path on this site works for an image file only - use a full https:// link otherwise",
+      warning: "",
+    };
+  }
+  return { kind: "image", url: raw, host: "", reason: "", warning: "" };
 }
 
 function parse(raw: string): URL | null {
@@ -118,10 +151,15 @@ function rewriteGoogle(url: URL): URL | null {
 /**
  * Classify and normalise a pasted slide URL.
  *
- * An image URL passes through untouched. A board URL is rewritten to its product's embed form.
- * Anything else comes back as `kind: "none"` with a reason the studio can show the teacher.
+ * A root-relative path to an image on this site (`/slides/m1t1l1-3.webp`) is the preferred form and
+ * passes through untouched. An https image URL passes through too. A board URL is rewritten to its
+ * product's embed form. Anything else comes back as `kind: "none"` with a reason the studio can
+ * show the teacher.
  */
 export function resolveSlideSource(raw: string): SlideSource {
+  const sameOrigin = sameOriginImage(String(raw || "").trim());
+  if (sameOrigin) return sameOrigin;
+
   const url = parse(raw);
   if (!url) {
     const trimmed = String(raw || "").trim();
@@ -173,7 +211,9 @@ export function resolveSlideSource(raw: string): SlideSource {
 
 /** A one-line human label for the source, used in the studio inspector. */
 export function slideSourceLabel(source: SlideSource): string {
-  if (source.kind === "image") return "Image";
+  // Naming the same-origin case is worth a branch: it is the one source that cannot fail on
+  // school wifi, and a teacher checking the inspector should be able to see which one they got.
+  if (source.kind === "image") return source.host ? "Image" : "Image on this site";
   if (source.kind === "site") return "Website";
   if (source.kind !== "embed") return "";
   if (source.host.includes("lucid")) return "Lucid board";

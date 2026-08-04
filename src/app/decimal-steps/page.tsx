@@ -3,6 +3,8 @@
 import ToolNav from "@/components/ToolNav";
 import DecimalStepsBoard from "@/components/DecimalStepsBoard";
 
+// Static, like every other tool page. ?set= is read in the board before the
+// first paint - see the note on /division-house.
 export default function DecimalStepsPage() {
   return (
     <>

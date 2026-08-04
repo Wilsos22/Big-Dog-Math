@@ -2,15 +2,17 @@ import { after } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { broadcastLiveFlowChange, broadcastRemoteCommand } from "@/lib/liveFlowBroadcast";
 import { liveFlowScreensChanged } from "@/lib/liveFlowScreens";
-import { CLOSEOUT_DIRECTIONS, DEFAULT_STATES } from "@/lib/classStates";
-import { discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";
+import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
+import { usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { STATE_STRIP_SLOTS, stripFromStep, type ClassroomStateStripOverride, type StateStripSlot } from "@/lib/classroomStateStrip";
 import { discussionRoundCompletesState, normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { getLessonByCode, getPublishedLessonById, type LessonData } from "@/lib/notionLessons";
+// Shared with /teacher/rehearse so the rehearsal runner builds its sequence
+// with the same code the real start uses. Moved out of this file 2026-08-03.
+import { lessonSnapshotFromNotion, stepsFromLesson } from "@/lib/lessonFlowBuild";
 import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import { normalizePublicLessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { publicLiveLessonSnapshot } from "@/lib/liveFlowPrivacy";
-import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { parseStructuredNumericSpec, structuredNumericPollFields } from "@/lib/structuredNumeric";
 import {
   LIVE_FLOW_MODE,
@@ -18,15 +20,12 @@ import {
   TEACHER_REMOTE_ACTIONS,
   canRevealM2T1L1FinalScore,
   isDiscussionRemoteAction,
-  liveAssignedToolRoute,
   liveStepPollQuestion,
   pickRemoteSharerName,
   resolveLiveStepPollKind,
   resolveRemoteNextBehavior,
   shouldRunFlowNavigationDestination,
   liveTimerSeconds,
-  splitLiveFlowLines,
-  splitLiveFlowVocabulary,
   type LiveClassFlowSnapshot,
   type LiveFlowSequenceStep,
   type TeacherRemoteAction,
@@ -150,96 +149,6 @@ function serializeSession(session: RemoteSessionRow) {
     startedAt: session.started_at,
     remoteCommand: session.remote_command,
     liveFlow: session.live_flow,
-  };
-}
-
-function stepsFromLesson(lesson: LessonData): LiveFlowSequenceStep[] {
-  return lesson.steps.map((step) => {
-    const state = DEFAULT_STATES.find((candidate) => candidate.id === step.stateId);
-    const isDiscussion = usesDiscussionProtocol(step.stateId, step.title || state?.label || "");
-    // A concrete-phase timeline step wants its authored stems + vocabulary too.
-    const hasDiscussionPhases = Boolean(step.discussionPhases && step.discussionPhases.trim());
-    const configuredDiscussionSupports = discussionSupportsForLesson(lesson.lessonCode);
-    const resourceUrl = (step.responseMode.trim().toLowerCase() === "assigned tool" ? liveAssignedToolRoute(step.tool) : null)
-      || step.linkUrl
-      || (step.stateId === "warmup" ? lesson.warmUpLink : "")
-      || (step.stateId === "exit" ? lesson.exitTicketLink : "")
-      || "";
-    return {
-      stateId: step.stateId,
-      label: step.title || state?.label || "Lesson state",
-      description: step.studentDirections || state?.desc || "Wait for the teacher's directions.",
-      color: state?.color || "#35785a",
-      semantic: inferClassroomStage(step.stateId, step.title || state?.label || ""),
-      durationSeconds: Math.max(60, step.duration * 60),
-      question: step.question || "",
-      pollKind: isDiscussion
-        ? null
-        : resolveLiveStepPollKind(step.responseMode, step.pollKind, step.stateId),
-      choices: step.choices || [],
-      correctAnswer: step.correctAnswer || "",
-      standard: step.standard || "",
-      resourceUrl,
-      paperTask: step.paperTask || "",
-      notionStepId: step.id || null,
-      notionLessonId: lesson.id || null,
-      lessonCode: lesson.lessonCode || "",
-      mainDisplay: step.mainDisplay || "",
-      paceDirections: step.stateId === "closeout"
-        ? CLOSEOUT_DIRECTIONS
-        : step.paceDirections || state?.paceAction || step.studentDirections || state?.desc || "",
-      studentAction: step.stateId === "closeout"
-        ? CLOSEOUT_DIRECTIONS
-        : step.studentAction || state?.studentAction || step.studentDirections || state?.desc || "",
-      discussionStems: isDiscussion
-        ? splitLiveFlowLines(step.discussionStems || lesson.discussionStems)
-          .concat(step.discussionStems || lesson.discussionStems ? [] : configuredDiscussionSupports.sentenceStems)
-        : hasDiscussionPhases
-          ? splitLiveFlowLines(step.discussionStems || lesson.discussionStems)
-          : [],
-      vocabulary: isDiscussion
-        ? splitLiveFlowVocabulary(step.vocabulary || lesson.discussionVocabulary)
-          .concat(step.vocabulary || lesson.discussionVocabulary ? [] : configuredDiscussionSupports.keyVocabulary)
-        : hasDiscussionPhases
-          ? splitLiveFlowVocabulary(step.vocabulary || lesson.discussionVocabulary)
-          : [],
-      discussionPhases: step.discussionPhases || undefined,
-      responseMode: step.responseMode || "",
-      workSpaceAvailable: step.workSpaceAvailable,
-      slideOverlay: step.slideOverlay || undefined,
-      slideUrl: step.slideUrl || undefined,
-      slideMirror: step.slideMirror || undefined,
-      publicSurfaceMode: step.publicSurfaceMode,
-      routineConfig: step.routineConfig,
-      eyes: step.eyes || "",
-      voice: step.voice || "",
-      supplies: step.supplies || "",
-      body: step.body || "",
-    };
-  });
-}
-
-function lessonSnapshotFromNotion(lesson: LessonData): NonNullable<LiveClassFlowSnapshot["lesson"]> {
-  const criterion = publicSuccessCriterion(lesson.selectedSuccessCriterion);
-  return {
-    id: lesson.id || null,
-    code: lesson.lessonCode,
-    title: lesson.title,
-    learningIntention: lesson.learningIntention,
-    successCriteria: criterion,
-    selectedSuccessCriterion: criterion,
-    classroomMode: lesson.classroomMode,
-    discussionStems: splitLiveFlowLines(lesson.discussionStems),
-    discussionVocabulary: splitLiveFlowVocabulary(lesson.discussionVocabulary),
-    requiredPaperWork: lesson.requiredPaperWork,
-    requiredDigitalWork: lesson.requiredDigitalWork,
-    optionalSupport: lesson.optionalSupport,
-    bigDogChallenge: lesson.bigDogChallenge,
-    dueAndTurnIn: lesson.dueAndTurnIn,
-    helpPath: lesson.helpPath,
-    anchorProblem: lesson.anchorProblem,
-    agenda: lesson.agenda,
-    reminders: lesson.reminders,
   };
 }
 

@@ -41,6 +41,12 @@ import {
 import { discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { missingStripSlots, stripFromStep } from "@/lib/classroomStateStrip";
 import {
+  flowSnapshotForStep,
+  lineupFromSteps,
+  type FlowStepDeps,
+  type LineupItem,
+} from "@/lib/controlLineup";
+import {
   createDiscussionRoundSnapshot,
   normalizeDiscussionPhaseSnapshot,
 } from "@/lib/discussionProtocol";
@@ -102,46 +108,10 @@ import {
 
 import { CLOSEOUT_DIRECTIONS, DEFAULT_STATES, BANK_GROUPS, type ClassState } from "@/lib/classStates";
 
-interface LineupItem {
-  uid: string;
-  stateId: string;
-  minutes?: number;
-  title?: string;
-  studentDirections?: string;
-  question?: string;
-  pollKind?: LivePollKind | "";
-  choices?: string[];
-  correctAnswer?: string;
-  standard?: string;
-  notionStepId?: string;
-  notionLessonId?: string;
-  lessonCode?: string;
-  linkUrl?: string;
-  paperTask?: string;
-  advance?: string;
-  mainDisplay?: string;
-  paceDirections?: string;
-  studentAction?: string;
-  remoteActions?: string;
-  // Carried through the published sequence so a Control reconnect cannot wipe
-  // the slide overlays the lesson authored.
-  slideOverlay?: string;
-  slideUrl?: string;
-  slideMirror?: boolean;
-  discussionStems?: string;
-  vocabulary?: string;
-  discussionPhases?: string;
-  responseMode?: string;
-  workSpaceAvailable?: boolean;
-  publicSurfaceMode?: PublicSurfaceMode;
-  routineConfig?: PublicLessonRoutineConfig | null;
-  // The authored classroom state strip, carried through the published sequence
-  // and back out of it on reconnect for the same reason slideOverlay is.
-  eyes?: string;
-  voice?: string;
-  supplies?: string;
-  body?: string;
-}
+// LineupItem MOVED to src/lib/controlLineup.ts, together with the two mappers
+// that translate it to and from the published sequence. It lives there because
+// a contract can compile that module in isolation; it could never test an
+// object literal buried in this client component.
 
 interface TeacherSessionRow {
   id: string;
@@ -520,6 +490,7 @@ interface TodayLessonStep {
   slideOverlay?: string;
   slideUrl?: string;
   slideMirror?: boolean;
+  slideFit?: "contain" | "cover";
   title: string;
   duration: number;
   stateId: string;
@@ -740,6 +711,12 @@ export default function ControlPage() {
   const [showAdmissions, setShowAdmissions] = useState(false);
   const [presets, setPresets] = useState<LessonPreset[]>([]);
   const [presetSearch, setPresetSearch] = useState("");
+  // The Notion archive, browsable inside the Lesson Library. Before this the
+  // overlay could only load a lesson whose CODE you already remembered, which
+  // is fine the morning you authored it and useless a month later.
+  const [notionArchive, setNotionArchive] = useState<{ id: string; lessonCode: string; title: string; date: string }[]>([]);
+  const [notionArchiveError, setNotionArchiveError] = useState("");
+  const [notionSearch, setNotionSearch] = useState("");
   const [saveCode, setSaveCode] = useState("");
   const [saveTitle, setSaveTitle] = useState("");
   const [lessonMsg, setLessonMsg] = useState<string | null>(null);
@@ -792,6 +769,21 @@ export default function ControlPage() {
   const timerStartSecondsRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
+  // ONE AudioContext FOR THIS PAGE. An AudioBuffer only crosses contexts cleanly when their sample
+  // rates agree, so a clip decoded on one and played on another can throw on `src.buffer = ...` and
+  // the press is simply silent. Constructing here is safe before any gesture - a context starts
+  // suspended, decodeAudioData still works, and the teacher's first click resumes it.
+  const ensureAudioCtx = useCallback((): AudioContext | null => {
+    if (typeof window === "undefined") return null;
+    try {
+      audioCtxRef.current = audioCtxRef.current
+        ?? new (window.AudioContext
+          || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      return audioCtxRef.current;
+    } catch {
+      return null;
+    }
+  }, []);
   // A clock the teacher armed mid-state from the Remote, on a step that authored no Duration.
   // Lives here because Control's snapshot is a FULL REPLACE - the server sets it, but Control
   // republishes every second and would erase it within a tick if it did not hold it too.
@@ -953,12 +945,18 @@ export default function ControlPage() {
       setSoundUrls(next);
       // Hand the bank its clips. Until this resolves a press still sounds -
       // it just plays the built-in cue, same as a machine with nothing loaded.
+      // PASS THIS PAGE'S CONTEXT. The upload path already does; this restore path did not, so a
+      // clip decoded on the bank's own shared context and then failed on `src.buffer = chosen`
+      // when playSoundCue used Control's - a freshly uploaded clip sounded and the same clip went
+      // silent after a reload. It matters more now that clips are committed to public/sounds:
+      // `userBuffers` WINS over the committed file, so one broken restored buffer would shadow a
+      // working file and the button would be silent with a good clip sitting right there.
       for (const cue of SOUND_CUES) {
         const blob = await idbGet(bankClipKey(cue.id)).catch(() => undefined);
-        if (blob) void installUserClip(cue.id, await blob.arrayBuffer());
+        if (blob) void installUserClip(cue.id, await blob.arrayBuffer(), ensureAudioCtx());
       }
     })();
-  }, []);
+  }, [ensureAudioCtx]);
 
   // Recover the newest server-side open session. This keeps Control attached
   // even on a different teacher device or before Live Class Flow is selected.
@@ -1243,40 +1241,7 @@ export default function ControlPage() {
     markServerHydration(flow);
 
     if (flow.sequence.steps?.length) {
-      persistLineup(flow.sequence.steps.map((step) => ({
-        uid: uid(),
-        stateId: step.stateId,
-        minutes: Math.max(1, Math.round(step.durationSeconds / 60)),
-        title: step.label,
-        studentDirections: step.description,
-        question: step.question,
-        pollKind: step.pollKind || "",
-        choices: step.choices,
-        correctAnswer: step.correctAnswer,
-        standard: step.standard,
-        notionStepId: step.notionStepId || undefined,
-        notionLessonId: step.notionLessonId || undefined,
-        lessonCode: step.lessonCode,
-        linkUrl: step.resourceUrl,
-        paperTask: step.paperTask,
-        mainDisplay: step.mainDisplay,
-        paceDirections: step.paceDirections,
-        studentAction: step.studentAction,
-        remoteActions: step.remoteActions,
-        discussionStems: step.discussionStems?.join("\n"),
-        vocabulary: step.vocabulary?.join("\n"),
-        responseMode: step.responseMode,
-        workSpaceAvailable: step.workSpaceAvailable,
-        slideOverlay: step.slideOverlay || undefined,
-        slideUrl: step.slideUrl || undefined,
-        slideMirror: step.slideMirror || undefined,
-        publicSurfaceMode: step.publicSurfaceMode,
-        routineConfig: step.routineConfig,
-        eyes: step.eyes,
-        voice: step.voice,
-        supplies: step.supplies,
-        body: step.body,
-      })));
+      persistLineup(lineupFromSteps(flow.sequence.steps, uid));
     }
 
     setCurrentIndex(flow.sequence.currentIndex);
@@ -1942,56 +1907,22 @@ export default function ControlPage() {
           nextLabel: nextItem?.title || nextState?.label || null,
           nextDirections: nextItem?.paceDirections || nextItem?.studentDirections || nextState?.desc || null,
           advanceMode: autoAdvance ? "automatic" as const : "manual" as const,
-          steps: lineup.map((item) => {
-            const itemState = bank.find((candidate) => candidate.id === item.stateId);
-            return {
-              stateId: item.stateId,
-              label: item.title || itemState?.label || "Lesson state",
-              description: item.studentDirections || itemState?.desc || "Wait for the teacher's directions.",
-              color: itemState?.color || "#35785a",
-              semantic: inferClassroomStage(item.stateId, item.title || itemState?.label || ""),
-              durationSeconds: minutesForLineupItem(item, bank) * 60,
-              question: item.question || "",
-              pollKind: usesDiscussionProtocol(item.stateId, item.title || itemState?.label || "")
-                ? null
-                : resolveLiveStepPollKind(item.responseMode, item.pollKind, item.stateId),
-              choices: item.choices || [],
-              correctAnswer: item.correctAnswer || "",
-              standard: item.standard || "",
-              resourceUrl: item.linkUrl || "",
-              paperTask: item.paperTask || "",
-              notionStepId: item.notionStepId || null,
-              notionLessonId: item.notionLessonId || null,
-              lessonCode: item.lessonCode || activeLessonContext?.code || "",
-              mainDisplay: item.mainDisplay || "",
-              paceDirections: item.paceDirections || itemState?.paceAction || item.studentDirections || itemState?.desc || "",
-              studentAction: item.studentAction || itemState?.studentAction || item.studentDirections || itemState?.desc || "",
-              discussionStems: usesDiscussionProtocol(item.stateId, item.title || itemState?.label || "")
-                ? splitLiveFlowLines(item.discussionStems || activeLessonContext?.discussionStems)
-                  .concat(item.discussionStems || activeLessonContext?.discussionStems ? [] : discussionSupportsForLesson(item.lessonCode || activeLessonContext?.code).sentenceStems)
-                : [],
-              vocabulary: usesDiscussionProtocol(item.stateId, item.title || itemState?.label || "")
-                ? splitLiveFlowVocabulary(item.vocabulary || activeLessonContext?.discussionVocabulary)
-                  .concat(item.vocabulary || activeLessonContext?.discussionVocabulary ? [] : discussionSupportsForLesson(item.lessonCode || activeLessonContext?.code).keyVocabulary)
-                : [],
-              responseMode: item.responseMode || "",
-              workSpaceAvailable: item.workSpaceAvailable,
-              publicSurfaceMode: item.publicSurfaceMode || defaultPublicSurfaceModeForState(item.stateId),
-              routineConfig: item.routineConfig || null,
-              // Both of these are READ BACK during rehydration. Omitting them
-              // here meant any Control reconnect - or a remote-driven rehydrate -
-              // silently wiped the iPad's Remote Actions and every slide overlay,
-              // and the iPad then degraded to restating the pace directions.
-              remoteActions: item.remoteActions || "",
-              slideOverlay: item.slideOverlay || undefined,
-              slideUrl: item.slideUrl || undefined,
-              slideMirror: item.slideMirror || undefined,
-              eyes: item.eyes || "",
-              voice: item.voice || "",
-              supplies: item.supplies || "",
-              body: item.body || "",
-            };
-          }),
+          // ONE mapper, shared with the two rehydrate sites and pinned by
+          // scripts/control-lineup-contract.mjs. This snapshot is a FULL
+          // REPLACE, so a field missing here is deleted from the room's
+          // snapshot about a second later.
+          steps: lineup.map((item) =>
+            flowSnapshotForStep(item, bank, activeLessonContext ?? null, {
+              inferClassroomStage,
+              usesDiscussionProtocol,
+              resolveLiveStepPollKind,
+              splitLiveFlowLines,
+              splitLiveFlowVocabulary,
+              discussionSupportsForLesson,
+              defaultPublicSurfaceModeForState,
+              minutesForItem: (candidate) => minutesForLineupItem(candidate, bank),
+            } satisfies FlowStepDeps),
+          ),
         }
       : null;
     const activePaperTask = activeItem?.paperTask
@@ -2296,6 +2227,7 @@ export default function ControlPage() {
           slideOverlay: step.slideOverlay || undefined,
           slideUrl: step.slideUrl || undefined,
           slideMirror: step.slideMirror || undefined,
+          slideFit: step.slideFit === "cover" ? "cover" : undefined,
           publicSurfaceMode: step.publicSurfaceMode,
           routineConfig: step.routineConfig,
           eyes: step.eyes,
@@ -2418,6 +2350,34 @@ export default function ControlPage() {
       return false;
     }
   }
+
+  // Read the archive the first time the Lesson Library is opened, not on mount:
+  // Control is the tab that must stay responsive all period, and most sessions
+  // never open this overlay at all.
+  useEffect(() => {
+    if (!showLessons || notionArchive.length || notionArchiveError) return;
+    let stop = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/teacher/lessons", { credentials: "same-origin", cache: "no-store" });
+        const body = await res.json();
+        if (stop) return;
+        if (!res.ok) throw new Error(body?.error || "The lesson archive could not be read.");
+        setNotionArchive((body.lessons ?? []).filter((item: { id?: string }) => item.id));
+      } catch (error) {
+        if (!stop) setNotionArchiveError(error instanceof Error ? error.message : "The lesson archive could not be read.");
+      }
+    })();
+    return () => { stop = true; };
+  }, [showLessons, notionArchive.length, notionArchiveError]);
+
+  const filteredNotionArchive = useMemo(() => {
+    const q = notionSearch.trim().toLowerCase();
+    const items = q
+      ? notionArchive.filter((item) => `${item.lessonCode} ${item.title} ${item.date}`.toLowerCase().includes(q))
+      : notionArchive;
+    return items.slice(0, 200);
+  }, [notionArchive, notionSearch]);
 
   async function loadNotionLessonByCode() {
     await loadNotionLesson(notionLessonCode);
@@ -2788,36 +2748,10 @@ export default function ControlPage() {
       const publishedTimer = publishedFlow.timer;
       markServerHydration(publishedFlow);
       if (publishedFlow.sequence?.steps?.length) {
-        persistLineup(publishedFlow.sequence.steps.map((step) => ({
-          uid: uid(),
-          stateId: step.stateId,
-          minutes: Math.max(1, Math.round(step.durationSeconds / 60)),
-          title: step.label,
-          studentDirections: step.description,
-          question: step.question,
-          pollKind: step.pollKind || "",
-          choices: step.choices,
-          correctAnswer: step.correctAnswer,
-          standard: step.standard,
-          notionStepId: step.notionStepId || undefined,
-          notionLessonId: step.notionLessonId || undefined,
-          lessonCode: step.lessonCode,
-          linkUrl: step.resourceUrl,
-          paperTask: step.paperTask,
-          mainDisplay: step.mainDisplay,
-          paceDirections: step.paceDirections,
-          studentAction: step.studentAction,
-          remoteActions: step.remoteActions,
-          discussionStems: step.discussionStems?.join("\n"),
-          vocabulary: step.vocabulary?.join("\n"),
-          responseMode: step.responseMode,
-          workSpaceAvailable: step.workSpaceAvailable,
-          slideOverlay: step.slideOverlay || undefined,
-          slideUrl: step.slideUrl || undefined,
-          slideMirror: step.slideMirror || undefined,
-          publicSurfaceMode: step.publicSurfaceMode,
-          routineConfig: step.routineConfig,
-        })));
+        // Was its own literal, and it had drifted: no eyes/voice/supplies/body,
+        // so a remote-driven rehydrate mid-lesson silently killed the classroom
+        // state strip on both projectors for the rest of the period.
+        persistLineup(lineupFromSteps(publishedFlow.sequence.steps, uid));
       }
       if (publishedFlow.sequence) setCurrentIndex(publishedFlow.sequence.currentIndex);
       if (publishedFlow.sequence) setAutoAdvance(publishedFlow.sequence.advanceMode === "automatic");
@@ -4210,6 +4144,43 @@ export default function ControlPage() {
                 </div>
                 <p className="cx-hint">Loads a published Notion lesson and stages its warm-up for the open session. Instructional and projector screens do not change until you start it.</p>
                 {lessonMsg && <p className="cx-lessons-msg">{lessonMsg}</p>}
+              </div>
+
+              <div className="cx-lessons-save">
+                <p className="cx-lessons-sub">Or pick one from Notion</p>
+                <input
+                  className="cx-lessons-search"
+                  placeholder="Search every published lesson by code, title, or date…"
+                  value={notionSearch}
+                  onChange={(event) => setNotionSearch(event.target.value)}
+                />
+                <p className="cx-hint">Any published lesson loads here, on any date. The Date property still decides which lesson opens automatically.</p>
+                {notionArchiveError && <p className="cx-lessons-msg">{notionArchiveError}</p>}
+                <div className="cx-lessons-list">
+                  {!notionArchive.length && !notionArchiveError ? (
+                    <p className="cx-hint">Reading the lesson archive…</p>
+                  ) : filteredNotionArchive.length === 0 ? (
+                    <p className="cx-hint">No published lesson matches that search.</p>
+                  ) : (
+                    filteredNotionArchive.map((item) => (
+                      <div className="cx-lesson-card" key={item.id}>
+                        <div className="cx-lesson-meta">
+                          <span className="cx-lesson-code">{item.lessonCode || "No code"}</span>
+                          {item.title && <span className="cx-lesson-name">{item.title}</span>}
+                          {item.date && <span className="cx-lesson-stats">{item.date.slice(0, 10)}</span>}
+                        </div>
+                        <div className="cx-lesson-actions">
+                          <button
+                            className="cx-btn next"
+                            onClick={() => { void loadNotionLesson(item.lessonCode, { lessonId: item.id }); }}
+                          >
+                            Load
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
               <div className="cx-lessons-save">
