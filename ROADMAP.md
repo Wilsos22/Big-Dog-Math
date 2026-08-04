@@ -588,24 +588,56 @@ on the spinner has her call the pick; shared abbieBus, no new setup) ·
 cross-day memory note in the console woven into her context; personality tuned
 to complaining-teen, less Red Bull, shorter replies)
 
-## Known broken — reported live 2026-08-03, not yet fixed
-Steele found these while running a real lesson through the surfaces. None are
-started. Listed newest first; each is independent of the others.
+## Known broken — reported live 2026-08-03
+Steele found these while running a real lesson through the surfaces. Four are
+FIXED (commit `88a0a84`); the rest is diagnosed below and needs his call.
 
-- **"You Do" screen is broken on BOTH `/teacher/pace` and `/teacher/present`.**
-  Highest priority of this list — it is on both projectors at once.
-- **The final step has no End lesson / End session control** — the flow just
-  offers "Next state" forever, so there is no way to close out at the bell.
-- **`/teacher/pace` is broken for the Divisibility Rules tool state** — Steele
-  described it as showing "a your own partial screen".
-- **The first ready check shows the PREVIOUS state's directions.** The button
-  renders an anonymous bar first, then falls back to stale directions.
-- **The Student preview renders the homepage regardless of state.** Suspected
-  cause, unverified: `ClassSync` pushes a student sitting on `/live-flow` to `/`
-  whenever `live_flow.state.id` is null or `"warmup"` (ClassSync.tsx ~line 210).
-- **After a refused "I'm stuck", the student is bounced out and back and the
-  chip will not press again.** The refusal itself is correct (see below); the
-  bounce and the stuck disabled state are not. Same ClassSync suspicion.
+FIXED:
+- **"You Do" was broken on BOTH projectors, for two different reasons.** On
+  present the scene is nothing but a map over `paperSections`, so a step with no
+  work fields and no Main Display painted an empty grid inside an `inset:0`
+  section — a blank projector for the whole 14 minutes. It falls through to the
+  directions scene now. On pace it was the overlay bug below.
+- **`/teacher/pace` on the Divisibility tool state** — and on every `tool-*`
+  state, plus board / transition / exit / routine / warm-up / You Do. Not
+  Divisibility-specific. `showLessonSlide` on pace was written with only pace's
+  OWN scene branches in its exclusion list, so the auto-composed slide came up on
+  states the main projector does not show it for. Reproduced and confirmed fixed
+  in a browser.
+- **The final step now knows it is the final step.** Next reads "Last state" and
+  is disabled, an End lesson key appears in its own row, the notes card stops
+  advertising a step that does not exist, and a `commandError` flag replaces the
+  string-matching that swallowed the server's 409.
+- **The refused "I'm stuck" bounce.** `ClassSync` treated a MISSING
+  `live_flow.state` the same as the warm-up state and pushed a student who was
+  watching the lesson to `/`, then back the moment state returned. It holds
+  position now. The chips are gated on `flow.state`, so the same gap also took
+  the stuck chip off screen — one fault, not two.
+
+STILL OPEN:
+- **The first ready check shows the PREVIOUS state's directions.** Half of this
+  is NOT a bug: "renders an anonymous bar first" is `resolveRemoteNextBehavior`
+  deliberately turning Next into "Reveal anonymous bars" on a responding learning
+  check, and the bars read empty because no student write can land yet (see
+  below). The stale-directions half has three candidate causes, none proven, and
+  the strongest one is a `/control` change Steele should weigh: `controlPoll` is
+  cleared on a change of **state id**, not step (`control/page.tsx:1479`, `:1769`),
+  so advancing between two steps that share a state id republishes the previous
+  step's poll — question, id and revealed bars — under the new step, and the
+  auto-open guard then refuses to open the new check. Every other lifecycle
+  marker in that file keys on `activeItem.uid`; these two are the outliers.
+  Second candidate: the Remote indexes the Notion step list with the runtime
+  lineup's cursor when `presentation.notionStepId` is empty
+  (`teacher/remote/page.tsx:773-782`), which is exactly a step added from
+  /control's bank. Third: pace's ready-check scene is gated on `fist-to-five`
+  only (`pace/page.tsx:624`), so any other response kind falls through to plain
+  directions with no sign a check is open.
+- **The Student preview rendering the homepage was NOT reproducible.** The
+  ClassSync suspicion is wrong for a preview: `isTeacherPreview()` returns true
+  inside an iframe, so ClassSync is inert there. Driven on `/demo`, the student
+  pane rendered every state correctly through the same bridge `/teacher/rehearse`
+  uses. Worth re-checking which surface he meant — if it was a real Chromebook
+  rather than a preview pane, the ClassSync fix above is likely the same fault.
 
 NOT bugs, confirmed against the live database the same day: the stuck chip
 saying "wait for the teacher to let you in", and Fist-to-5 taps never reaching
