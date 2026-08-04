@@ -45,6 +45,13 @@ bars and live misconception grouping).
   into a curve, dense/careful strokes are barely touched, so a number's corners survive - and it is
   path shape only, so the constant-width marker is intact. That is why "rudimentary" and the width
   decision are NOT in conflict: one is the line's smoothness, the other its thickness.
+  A THIRD DIAL EXISTS AND IT IS NOT IN `inkGeometry` AT ALL (2026-08-03): what the canvas is
+  COMPOSITED AGAINST. See the pen-feel bullets under "Live sessions" - the caps and miter fixes
+  and their contract, the React re-render that stalled back-to-back strokes, the backdrop-filter
+  over the writing surface, and the `Paper` A/B that separates compositing cost from stroke
+  geometry. Reach for that A/B BEFORE tuning constants again. And note that the two fixes that
+  actually changed the picture were both GEOMETRY BUGS, not tuning: every dial in that file was
+  already set sensibly.
 
 ## Hard rules (non-negotiable)
 
@@ -1399,6 +1406,79 @@ the invariants they protect are easy to break again.
   symptom is that a shipped fix is not there. `UpdateReadyChip` polls `/api/build-id` and offers a
   tap-to-reload chip. It must NEVER reload on its own. When a fix is reported as not working, check
   what build the iPad is actually running before re-debugging the fix.
+- **PEN FEEL: THE GEOMETRY FIXES, AND WHY "JAGGED" WAS FOUR SEPARATE THINGS** (2026-08-03, from
+  Steele: "too jagged and doesnt respond well to writing. especially back to back strokes", then
+  "a few weeks ago it was running fantastic"). `npm run test:ink-geometry` (34 checks) pins all of
+  it; the contract measures the polygon with point-in-polygon rather than eyeballing a screenshot,
+  and it FAILS on the pre-fix code.
+  (1) **THE ROUND CAPS SWEPT THE WRONG WAY AND NEVER ONCE CAPPED A STROKE.** A cap joins one edge
+  to the other across the tip and there are two ways round; the fan swept the way that folds back
+  THROUGH the stroke body, so instead of a nib it cut a notch into the last few px. Every stroke
+  had blunt, forked ends from the day the engine was written - invisible on a long scribble,
+  about half the ink of a short one, and short strokes are what an equation is made of. The fix is
+  the sign of one term (`fromAngle - k*PI/steps`). Its symptom is a bbox: a horizontal stroke's
+  ring should reach half a nib PAST each tip, and it stopped exactly at them.
+  (2) **A CONSTANT-WIDTH MARKER MUST NOT THIN AT A CORNER.** Offsetting each point along its own
+  normal by exactly r leaves the outer edge of a turn at r*cos(theta/2) - about 30% pinched at a
+  right angle - and handwriting is almost entirely corners. `strokeOutline` now scales the offset
+  by 1/cos(theta/2) with `MITER_LIMIT` 2.5 so a retraced stroke cannot throw a spike. Measured
+  nib width kept at the corner: 94% -> 100% (right angle), 80% -> 100% (zig-zag).
+  (3) **THERE IS NO SEPARATE DE-JITTER PASS, AND THAT IS MEASURED, NOT AN OVERSIGHT.** One was
+  built (a binomial pre-filter over the control points) and then removed, because
+  `smoothCenterline`'s midpoint quadratic already averages each pair of samples and that is itself
+  a low-pass. On a line drawn slowly at 1.1px sampling: perfectly alternating chatter 0.320px raw
+  goes to 0.000px WITHOUT the filter; white noise 0.133px without vs 0.100px with; correlated hand
+  tremor 0.080px vs 0.076px. So it bought 0.03px and 0.004px - invisible on a 6px nib - while
+  costing two hypots per point on every frame of every stroke, and no contract check could be made
+  to fail without it, which is the same fact from the other side. What actually cleaned the line up
+  was the miter joint: a slightly wobbling stroke puts a run of small turns through the joint, and
+  an un-mitered joint pinches at every one of them, which is what made a plain rule look frayed.
+  If you are here to add smoothing, measure against the miter and the caps first.
+  (4) Resampling refines by the sagitta `c*c/(8R)`, so it only bites below about R=6 and costs
+  nothing elsewhere. Scale is NOT a reason to refine: strokes travel NORMALISED and each surface
+  re-fits the curve in its own pixels, so the projector's chords are the same 2.4px across a
+  proportionally larger stroke, not magnified ones.
+- **THE BACK-TO-BACK STROKE STALL WAS A REACT RE-RENDER, NOT THE INK** (2026-08-03). `InkBoard`
+  called `onHistoryChange` on every `recordOp`, and every consumer writes it into state
+  (`/ipad`: `setHistory({ undo, redo })` - a fresh object, so React never bails by value). So each
+  pen LIFT re-rendered the whole page. `notifyHistory` now fires only when the pair actually
+  CHANGES - after stroke one it is (true,false) and stays there - so later lifts notify nothing.
+  `clearLocal` must go through `notifyHistory` too, or the last-notified pair goes stale and
+  swallows the next real change.
+  THE COST IS SYNCHRONOUS RECONCILIATION INSIDE THE POINTERUP HANDLER, NOT A LAYOUT FLUSH, and the
+  distinction is worth keeping straight because the wrong version sounds better. A re-render whose
+  output is identical mutates no DOM, so there is nothing for `measure()`'s
+  `getBoundingClientRect()` to reflow - only stroke one actually changes anything (undo false ->
+  true flips `disabled`). What it does cost is React running start to finish inside the event
+  handler, which is on the critical path exactly when a pen lift and the next pen down fall in the
+  same frame. (An earlier version of this note claimed the forced-reflow mechanism; a review
+  measured it and it is wrong.)
+- **BACKDROP-FILTER OVER THE INK CANVAS IS A PER-FRAME COST** (2026-08-03). `.ip-palette` is 620px
+  wide, fixed over the writing stage, and open by default; `backdrop-filter: blur(16px)` makes the
+  browser re-sample and re-blur its backdrop every time that backdrop changes - and its backdrop is
+  the canvas, which repaints on every frame of every stroke. It is opaque now. The small
+  `.ip-handle` keeps its blur (a corner chip, not a sheet over the page). **"Hide tools" is the
+  one-gesture A/B** whenever the pen feels heavy: if hiding the palette sharpens it, an overlay is
+  the cause, not the geometry.
+- **THE /ipad AUTO-CLEAR POLL NEVER RAN, AND STILL COST A PARSE EVERY 2 SECONDS** (turned off
+  2026-08-03). It asked `GET /api/control-remote` with NO sessionId, and that route returns
+  `session: null` unless one is passed - so the step index was never a number and the board never
+  cleared on a lesson advance, from the day it shipped. Meanwhile it fetched and parsed
+  `sessions.map(serializeSession)` - every open session with its whole liveFlow snapshot - on the
+  pen surface's main thread every 2s, at moments it cannot choose. Deliberately NOT re-wired:
+  passing a session id switches on a DESTRUCTIVE auto-clear the board has never actually had, and
+  the first time Steele saw it would be his board wiping itself mid-lesson. Turning it on is his
+  call and is a one-line change.
+- **THE "FANTASTIC" PEN CONFIGURATION WAS STRUCTURALLY DIFFERENT, AND `Paper` IS THE A/B** (noted
+  2026-08-03). Before the 2026-07-30 one-surface rebuild, the surface the teacher wrote on was an
+  OPAQUE dotted `InkBoard` with no iframe mounted at all. Today it is `transparent={!paper}` - a
+  transparent canvas stacked on a permanently live `/teacher/present` iframe - so the compositor
+  blends three canvases against an independently rendering same-origin app on every frame, and the
+  `desynchronized: true` low-latency path Safari grants the wet canvas is exactly what that
+  arrangement can cost you. THIS IS UNMEASURED from code and needs a Safari layer trace on the
+  device. **Turning `Paper` ON makes the canvas opaque and is a free A/B a teacher can run in one
+  tap**: if the pen feels great on Paper and poor on Screen, the remaining problem is compositing,
+  not stroke geometry - do not go back to tuning `inkGeometry`.
 - **THE PROJECTOR IS A DISPLAY ON THE INK ROOM, NEVER A WRITER** (2026-07-30). `/teacher/present`'s
   board-scene `InkBoard` was mounted `interactive`, which made the projector the SECOND author on
   the shared room: `InkBoard`'s interactive-only effects broadcast `{t:"bg", url:null}` (wiping the
