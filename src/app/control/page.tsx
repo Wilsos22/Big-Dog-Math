@@ -740,6 +740,12 @@ export default function ControlPage() {
   const [showAdmissions, setShowAdmissions] = useState(false);
   const [presets, setPresets] = useState<LessonPreset[]>([]);
   const [presetSearch, setPresetSearch] = useState("");
+  // The Notion archive, browsable inside the Lesson Library. Before this the
+  // overlay could only load a lesson whose CODE you already remembered, which
+  // is fine the morning you authored it and useless a month later.
+  const [notionArchive, setNotionArchive] = useState<{ id: string; lessonCode: string; title: string; date: string }[]>([]);
+  const [notionArchiveError, setNotionArchiveError] = useState("");
+  const [notionSearch, setNotionSearch] = useState("");
   const [saveCode, setSaveCode] = useState("");
   const [saveTitle, setSaveTitle] = useState("");
   const [lessonMsg, setLessonMsg] = useState<string | null>(null);
@@ -2418,6 +2424,34 @@ export default function ControlPage() {
       return false;
     }
   }
+
+  // Read the archive the first time the Lesson Library is opened, not on mount:
+  // Control is the tab that must stay responsive all period, and most sessions
+  // never open this overlay at all.
+  useEffect(() => {
+    if (!showLessons || notionArchive.length || notionArchiveError) return;
+    let stop = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/teacher/lessons", { credentials: "same-origin", cache: "no-store" });
+        const body = await res.json();
+        if (stop) return;
+        if (!res.ok) throw new Error(body?.error || "The lesson archive could not be read.");
+        setNotionArchive((body.lessons ?? []).filter((item: { id?: string }) => item.id));
+      } catch (error) {
+        if (!stop) setNotionArchiveError(error instanceof Error ? error.message : "The lesson archive could not be read.");
+      }
+    })();
+    return () => { stop = true; };
+  }, [showLessons, notionArchive.length, notionArchiveError]);
+
+  const filteredNotionArchive = useMemo(() => {
+    const q = notionSearch.trim().toLowerCase();
+    const items = q
+      ? notionArchive.filter((item) => `${item.lessonCode} ${item.title} ${item.date}`.toLowerCase().includes(q))
+      : notionArchive;
+    return items.slice(0, 200);
+  }, [notionArchive, notionSearch]);
 
   async function loadNotionLessonByCode() {
     await loadNotionLesson(notionLessonCode);
@@ -4210,6 +4244,43 @@ export default function ControlPage() {
                 </div>
                 <p className="cx-hint">Loads a published Notion lesson and stages its warm-up for the open session. Instructional and projector screens do not change until you start it.</p>
                 {lessonMsg && <p className="cx-lessons-msg">{lessonMsg}</p>}
+              </div>
+
+              <div className="cx-lessons-save">
+                <p className="cx-lessons-sub">Or pick one from Notion</p>
+                <input
+                  className="cx-lessons-search"
+                  placeholder="Search every published lesson by code, title, or date…"
+                  value={notionSearch}
+                  onChange={(event) => setNotionSearch(event.target.value)}
+                />
+                <p className="cx-hint">Any published lesson loads here, on any date. The Date property still decides which lesson opens automatically.</p>
+                {notionArchiveError && <p className="cx-lessons-msg">{notionArchiveError}</p>}
+                <div className="cx-lessons-list">
+                  {!notionArchive.length && !notionArchiveError ? (
+                    <p className="cx-hint">Reading the lesson archive…</p>
+                  ) : filteredNotionArchive.length === 0 ? (
+                    <p className="cx-hint">No published lesson matches that search.</p>
+                  ) : (
+                    filteredNotionArchive.map((item) => (
+                      <div className="cx-lesson-card" key={item.id}>
+                        <div className="cx-lesson-meta">
+                          <span className="cx-lesson-code">{item.lessonCode || "No code"}</span>
+                          {item.title && <span className="cx-lesson-name">{item.title}</span>}
+                          {item.date && <span className="cx-lesson-stats">{item.date.slice(0, 10)}</span>}
+                        </div>
+                        <div className="cx-lesson-actions">
+                          <button
+                            className="cx-btn next"
+                            onClick={() => { void loadNotionLesson(item.lessonCode, { lessonId: item.id }); }}
+                          >
+                            Load
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
 
               <div className="cx-lessons-save">

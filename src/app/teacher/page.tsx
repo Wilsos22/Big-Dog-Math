@@ -312,10 +312,18 @@ export default function TeacherHome() {
         return leftFuture ? leftDate - rightDate : rightDate - leftDate;
       });
   }, [publishedLessons, q]);
-  const visibleNotionLessons = notionLessonMatches.slice(0, 6);
+  // The cap exists so a thousand-lesson archive cannot build a thousand rows;
+  // it is not an editorial filter. Six was too tight to browse with, and the
+  // "refine the search" line assumed you already knew what you were looking for
+  // - which is exactly not the case when you are hunting for a lesson to
+  // rehearse. Searching still narrows; this just stops hiding the rest.
+  const visibleNotionLessons = notionLessonMatches.slice(0, 200);
 
-  // Default view: only what's near - yesterday, today, tomorrow - as small
-  // cards. The full published list appears only while searching.
+  // Default view: yesterday, today and tomorrow as small cards, because that is
+  // what a teacher wants at 7:30am. "Show every lesson" opens the full archive
+  // for any other purpose - previewing next week, or finding an old lesson to
+  // run again without touching its date.
+  const [showAllLessons, setShowAllLessons] = useState(false);
   const dayCards = useMemo(() => {
     const dayIso = (offset: number) => {
       const date = new Date();
@@ -573,26 +581,34 @@ export default function TeacherHome() {
               <p className="bd-lesson-state" role="status">Loading published lessons.</p>
             ) : publishedLessonsError ? (
               <p className="bd-lesson-state error" role="alert">{publishedLessonsError}</p>
-            ) : !q ? (
-              <div className="bd-day-cards">
-                {dayCards.map(({ label, lesson }) => (
-                  <div className={`bd-day-card${lesson ? "" : " empty"}`} key={label}>
-                    <p className="bd-day-label">{label}</p>
-                    {lesson ? (
-                      <>
-                        <span className="bd-day-code">{lesson.lessonCode}</span>
-                        <p className="bd-day-title" title={lesson.title}>{lesson.title || "Untitled lesson"}</p>
-                        <div className="bd-day-actions">
-                          <Link className="bd-btn" href={`/teacher/studio?lessonId=${encodeURIComponent(lesson.id)}`}>Edit screens</Link>
-                          <Link className="bd-btn p" href={`/control?notionLessonId=${encodeURIComponent(lesson.id)}&run=1`}>Begin</Link>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="bd-day-none">Nothing scheduled</p>
-                    )}
-                  </div>
-                ))}
-              </div>
+            ) : !q && !showAllLessons ? (
+              <>
+                <div className="bd-day-cards">
+                  {dayCards.map(({ label, lesson }) => (
+                    <div className={`bd-day-card${lesson ? "" : " empty"}`} key={label}>
+                      <p className="bd-day-label">{label}</p>
+                      {lesson ? (
+                        <>
+                          <span className="bd-day-code">{lesson.lessonCode}</span>
+                          <p className="bd-day-title" title={lesson.title}>{lesson.title || "Untitled lesson"}</p>
+                          <div className="bd-day-actions">
+                            <Link className="bd-btn" href={`/teacher/studio?lessonId=${encodeURIComponent(lesson.id)}`}>Edit screens</Link>
+                            <Link className="bd-btn" href={`/teacher/rehearse?lessonId=${encodeURIComponent(lesson.id)}`}>Rehearse</Link>
+                            <Link className="bd-btn p" href={`/control?notionLessonId=${encodeURIComponent(lesson.id)}&run=1`}>Begin</Link>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="bd-day-none">Nothing scheduled</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="bd-lesson-more">
+                  <button type="button" className="bd-btn" onClick={() => setShowAllLessons(true)}>
+                    Show every published lesson{publishedLessons.length ? ` (${publishedLessons.length})` : ""}
+                  </button>
+                </p>
+              </>
             ) : visibleNotionLessons.length === 0 ? (
               <p className="bd-lesson-state">
                 {q ? `No published lessons match "${query.trim()}".` : "No published lessons with usable lesson codes were found."}
@@ -609,6 +625,7 @@ export default function TeacherHome() {
                         <p className="bd-lesson-title" title={lesson.title}>{lesson.title || "Untitled lesson"}</p>
                         <div className="bd-lesson-actions">
                           <Link className="bd-btn" href={`/teacher/studio?lessonId=${encodedId}`}>Edit screens</Link>
+                          <Link className="bd-btn" href={`/teacher/rehearse?lessonId=${encodedId}`}>Rehearse</Link>
                           <Link className="bd-btn p" href={`/control?notionLessonId=${encodedId}&run=1`}>Begin lesson</Link>
                         </div>
                       </div>
@@ -616,7 +633,14 @@ export default function TeacherHome() {
                   })}
                 </div>
                 {notionLessonMatches.length > visibleNotionLessons.length && (
-                  <p className="bd-lesson-more">Showing {visibleNotionLessons.length} of {notionLessonMatches.length}. Refine the search to find another lesson.</p>
+                  <p className="bd-lesson-more">Showing {visibleNotionLessons.length} of {notionLessonMatches.length}. Search to narrow it down.</p>
+                )}
+                {!q && showAllLessons && (
+                  <p className="bd-lesson-more">
+                    <button type="button" className="bd-btn" onClick={() => setShowAllLessons(false)}>
+                      Back to this week
+                    </button>
+                  </p>
                 )}
               </>
             )}
