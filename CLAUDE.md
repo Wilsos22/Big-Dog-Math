@@ -782,12 +782,27 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   That is the whole class of bug: verified live 2026-08-02, the property Steele created was `Slide
   Url` and the exact-match read would have found nothing with no error anywhere. Prefer `propByName`
   for any new property.
-  UNSOLVED, AND IT WILL BITE ON A REAL TEACHING DAY: a Notion-UPLOADED file resolves to a
+  THE NOTION-UPLOAD TRAP, AND THE ANSWER TO IT (2026-08-03). A Notion-UPLOADED file resolves to a
   short-lived SIGNED S3 url (about an hour), and Control builds its lineup ONCE at load and then
-  republishes that frozen url every second. A lesson opened at 7:30 has a dead image url by period
-  4, and the projector shows the four-second fallback card. An EXTERNAL link pasted into the
-  property has no expiry and is safe. The fix is a proxy route that re-resolves the step's file from
-  Notion per request so the snapshot carries a stable path; not built, needs Steele's word.
+  republishes that frozen url every second - so a lesson opened at 7:30 has a dead image url by
+  period 4 and the projector shows the four-second fallback card. NEVER put a classroom-critical
+  slide behind a Notion upload. An EXTERNAL link pasted into the property has no expiry and is safe.
+  THE PREFERRED SOURCE IS NOW A SAME-ORIGIN IMAGE: `resolveSlideSource` accepts a root-relative path
+  (`/slides/m1t1l1-d1-3.webp`) for an exported slide committed to `public/slides/`, served by the
+  same CDN that just delivered the page - if the page loaded, the slide loaded. No expiry, no third
+  party, nothing to re-fetch, and it is why the proxy-route idea this paragraph used to call for was
+  not built. Steele's standing ask when he chose it: most reliable and least likely to fail mid
+  lesson. `public/slides/README.md` carries the naming, format and FERPA rules; the folder is in a
+  PUBLIC repo, so no student name ever goes in it. Reserve a LIVE EMBED for a board being actively
+  edited during class (a Lucid or Figma canvas the room watches change) - that is the one case where
+  the live fetch is the point.
+  THE GUARD IS `/^\/[/\\]/`, NOT `startsWith("//")`. The URL spec treats `\` as `/` for http(s), so
+  `/\evil.com/x.png` resolves to https://evil.com/x.png and a `//`-only check let it through as
+  same-origin. `npm run test:embed-url` pins it along with the four product rewrites.
+  AN IMAGE GETS THE SAME WORDED FALLBACK AS AN EMBED (`SlideFrameScene`, `onError`). A bare `<img>`
+  answers a mistyped or never-committed filename with the browser's broken-image glyph, which at 25
+  feet is indistinguishable from a broken lesson - and "the file was never deployed" is the most
+  likely failure on the path this now recommends.
 - THREE DEMONSTRATION OBJECTS (`manipSplit` / `manipSnap` / `manipFree`) are a SEPARATE, EPHEMERAL
   palette (main projector only) the teacher drags live during class. Their type union is distinct from
   the 10 persisted component types, their live position lives in the studio's in-memory `manip` map

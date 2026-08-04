@@ -140,23 +140,175 @@ check("multiplying is two digits at a time, never a whole row at once", () => {
   assert.ok(!t.steps.some((s) => /every digit of/i.test(s.question)));
 });
 
-check("the correct answer is not parked in the first slot", () => {
+check("the correct answer is not parked in the same slot, step by step", () => {
   // Steele: "make sure the correct answer isnt in the first slot every itme".
-  // Every builder writes the right answer first, so without seating, a student
-  // beats the tool by always tapping the top button.
+  //
+  // THE OVERALL RATE IS NOT THE TEST. Step ids are constant across problems, so
+  // hashing the id alone seated every board identically - `lineup` was the third
+  // button on every problem ever built, `qpoint` the second - and a student
+  // working a four-problem set learned the seat by problem two without reading
+  // it. That arrangement satisfies "rarely first" perfectly. What has to hold is
+  // that a given STEP moves between problems.
+  const SET = [
+    "12.4 + 3.75", "10.4 - 3.75", "1.5 + 2.25", "8.75 - 1.05", "7.2 + 2.8",
+    "3.6 x 2.4", "0.25 x 0.4", "6.2 x 3", "0.3 x 0.3", "2.5 x 4",
+    "9.6 / 0.4", "7.35 / 2.1", "1.2 / 0.03", "4.5 / 5", "8.4 / 2.1",
+    "100.5 - 99.75", "12.5 / 2.5", "6.3 / 0.9",
+  ];
+  const seats = new Map();
   let first = 0;
   let total = 0;
-  for (const text of ["12.4 + 3.75", "10.4 - 3.75", "3.6 x 2.4", "0.25 x 0.4", "9.6 / 0.4", "7.35 / 2.1", "1.2 / 0.03", "4.5 / 5", "100.5 - 99.75", "6.2 x 3"]) {
+  for (const text of SET) {
     for (const s of traceFor(text).steps) {
       if (s.kind !== "choice" || s.choices.length < 2) continue;
       total += 1;
       if (s.choices[0].correct) first += 1;
+      if (!seats.has(s.id)) seats.set(s.id, []);
+      seats.get(s.id).push(s.choices.findIndex((c) => c.correct));
     }
   }
-  assert.ok(total > 20, "needs a real sample");
-  // Seating is deterministic, so this is a fact about the build, not a flake.
-  assert.ok(first < total * 0.55, `correct sat first in ${first} of ${total} choice steps`);
+  assert.ok(total > 60, "needs a real sample");
+  for (const [id, list] of seats) {
+    if (list.length < 4) continue;
+    assert.ok(new Set(list).size > 1, `${id} sits in slot ${list[0]} on all ${list.length} problems`);
+  }
+  // Deterministic, so both of these are facts about the build, not flakes.
   assert.ok(first > 0, "an order that never puts it first is just as learnable");
+  assert.ok(first < total * 0.55, `correct sat first in ${first} of ${total} choice steps`);
+  assert.deepEqual(
+    traceFor("9.6 / 0.4").steps.map((s) => s.choices.map((c) => c.text)),
+    traceFor("9.6 / 0.4").steps.map((s) => s.choices.map((c) => c.text)),
+  );
+});
+
+check("the answer row spells the answer once the point has landed", () => {
+  // 0.3 x 0.3 laid its product row from the UNPADDED product, so the board
+  // spelled ". 9" - a hole where the tenths zero belongs - while the headline
+  // above it said 0.09. The placeholder zero is the hardest idea in multiplying
+  // decimals and the reason this board exists.
+  const read = (t) => {
+    const row = t.layout === "house" ? "quotient" : "sum";
+    const cells = t.cells.filter((c) => c.row === row).sort((a, b) => a.col - b.col);
+    const marker = t.markers.find((m) => m.row === row);
+    const move = t.steps.find((s) => s.action?.target === "product");
+    let at = marker ? marker.boundary : null;
+    if (at !== null && move) at += move.action.places * (move.action.direction === "left" ? -1 : 1);
+    let out = "";
+    for (const c of cells) {
+      if (at !== null && c.col === at) out += ".";
+      out += c.text;
+    }
+    return out;
+  };
+  const table = [
+    "0.3 x 0.3", "0.07 x 0.8", "0.008 x 9", "0.25 x 0.4", "6.2 x 0.4", "6.2 x 3",
+    "0.25 x 0.75", "3.6 x 2.4", "4.8 x 2.7",
+    "9.6 / 0.4", "7.35 / 2.1", "4.5 / 5", "0.9 / 3", "1.2 / 0.03",
+  ];
+  for (const text of table) {
+    const t = traceFor(text);
+    assert.equal(read(t), t.answerText, `${text} board vs answerText`);
+  }
+});
+
+check("a quotient under one still writes the zero in the ones place", () => {
+  // 4.5 / 5 built only q-1, so the board read ".9" - and "write the zero in the
+  // ones place" is graded convention. The skip itself is right and necessary:
+  // 7.35 / 2.1 must stay 3.5 and never 03.5.
+  const small = traceFor("4.5 / 5");
+  const ones = small.cells.filter((c) => c.row === "quotient").sort((a, b) => a.col - b.col)[0];
+  assert.equal(ones.text, "0");
+  assert.equal(ones.col, small.markers.find((m) => m.row === "quotient").boundary - 1);
+  assert.ok(stepById(small, "qpoint").reveal.includes(ones.id), "the zero has to arrive with the point");
+  // And a quotient that does reach the ones place gets no extra zero.
+  const big = traceFor("7.35 / 2.1");
+  const lead = big.cells.filter((c) => c.row === "quotient").sort((a, b) => a.col - b.col)[0];
+  assert.equal(lead.text, "3");
+});
+
+check("the reason the decimal moves left is place value, not size", () => {
+  // "counting in from the right end makes the answer smaller, which is what
+  // multiplying by a piece of a number does" was said unconditionally - so
+  // 6.2 x 3 = 18.6 told a student that 3 is a piece of a number and that 18.6
+  // is smaller than 6.2. Delivered as the confirmation of a CORRECT answer.
+  for (const text of ["6.2 x 3", "2.5 x 4", "0.3 x 0.3", "3.6 x 2.4"]) {
+    const dir = stepById(traceFor(text), "direction");
+    for (const c of dir.choices) {
+      assert.ok(!/smaller/i.test(c.why), `${text}: ${c.text} still argues from size`);
+      assert.ok(!/piece of a number/i.test(c.why), `${text}: ${c.text} still argues from size`);
+    }
+    assert.match(dir.choices.find((c) => c.correct).why, /after their points|decimal place/i, text);
+  }
+});
+
+check("the estimate is judged around the TRUE value, and refuses a negative", () => {
+  // Three defects in one line: a flat one-wide floor swallowed every answer
+  // under 1 (0.056 accepted -1 and 1 alike), the band was centred on the
+  // ROUNDED value so 9.6 / 0.4 failed 19 - "round 0.4 up to a half" - while
+  // passing 28, and nothing rejected a minus sign.
+  const band = (text) => {
+    const e = traceFor(text).steps[1];
+    assert.equal(e.id, "estimate");
+    if (e.kind === "choice") return null;
+    assert.ok(e.input.about !== undefined, `${text} estimate is not nearness-judged`);
+    assert.ok(e.input.tolerance > 0);
+    return [e.input.about - e.input.tolerance, e.input.about + e.input.tolerance];
+  };
+  const accepts = (text, n) => {
+    const b = band(text);
+    return b !== null && n >= b[0] && n <= b[1];
+  };
+  assert.ok(accepts("9.6 / 0.4", 19), "rounding 0.4 up to a half gives about 19 and has to pass");
+  assert.ok(accepts("9.6 / 0.4", 24));
+  assert.ok(accepts("12.4 + 3.75", 16) && accepts("12.4 + 3.75", 17));
+  assert.ok(!accepts("12.4 + 3.75", 4), "an estimate has to be able to be wrong");
+  for (const text of ["9.6 / 0.4", "12.4 + 3.75", "6.2 x 3", "6.2 x 0.4"]) {
+    assert.ok(!accepts(text, -1), `${text} accepts a negative estimate`);
+    assert.ok(!accepts(text, 0), `${text} accepts zero`);
+  }
+  // Below one the whole-number question means nothing, so it becomes a size
+  // question with a real wrong answer instead of a step that accepts anything.
+  for (const text of ["0.07 x 0.8", "0.25 x 0.4", "100.5 - 99.75", "4.5 / 5"]) {
+    const e = traceFor(text).steps[1];
+    assert.equal(e.kind, "choice", `${text} should ask about size, not a whole number`);
+    assert.equal(e.choices.filter((c) => c.correct).length, 1);
+    assert.match(e.choices.find((c) => c.correct).text, /between 0 and 1/i);
+  }
+});
+
+check("the partial rows are added a column at a time, like every other addition", () => {
+  // One box asking for 125 + 1750 was the same failure as multiplying a whole
+  // row at once - and it was the LAST step, so a student who could not do it in
+  // their head had a one-line hint and no way through.
+  const t = traceFor("0.25 x 0.75");
+  assert.ok(!t.steps.some((s) => s.id === "addpartials"), "the one-box row addition is gone");
+  const cols = t.steps.filter((s) => /^sum-\d+$/.test(s.id));
+  assert.ok(cols.length >= 3, "one step per column of the partial sum");
+  for (const s of cols) assert.equal(s.kind, "input");
+  // A carry in that addition is still a decision plus a physical act.
+  const carried = traceFor("4.8 x 2.7");
+  const what = carried.steps.find((s) => /^sum-\d+-what$/.test(s.id));
+  const write = carried.steps.find((s) => /^sum-\d+-write$/.test(s.id));
+  assert.ok(what && write, "a carrying column of the partial sum needs both moves");
+  assert.equal(what.kind, "choice");
+  assert.equal(write.kind, "input");
+  const box = carried.cells.find((c) => c.id === write.input.fills[0]);
+  assert.equal(box.kind, "carrybox");
+  assert.equal(box.row, "sumcarry", "the partial-sum carry sits on its own row, above the rule");
+});
+
+check("a walk too long or too wide for a period is refused", () => {
+  // 9999.999 x 9999.999 is inside the documented input range and builds 177
+  // steps across 14 columns - unusable on a Chromebook, impossible in a period,
+  // and /control printed "1 problem." with no warning.
+  const { problems, rejected } = parseDecimalSet("9999.999 x 9999.999, 12.4 + 3.75");
+  assert.equal(problems.length, 1);
+  assert.equal(rejected.length, 1);
+  assert.match(rejected[0].reason, /too many steps|smaller numbers/i);
+  for (const p of parseDecimalSet(DEFAULT_DECIMAL_SET).problems) {
+    const t = buildDecimalTrace(p);
+    assert.ok(t.steps.length <= 40 && t.columns <= 9, `${p.a.text} ${p.op} ${p.b.text} is over the ceiling`);
+  }
 });
 
 check("arithmetic is typed, decisions are chosen", () => {
@@ -212,7 +364,12 @@ check("every step has exactly one right answer and no repeated choice", () => {
 });
 
 check("nothing on the board is unreachable, and nothing reveals a cell that is not there", () => {
-  for (const text of ["12.4 + 3.75", "10.4 - 3.75", "3.6 x 2.4", "9.6 / 0.4", "7.35 / 2.1", "100.5 - 99.75"]) {
+  for (const text of [
+    "12.4 + 3.75", "10.4 - 3.75", "3.6 x 2.4", "9.6 / 0.4", "7.35 / 2.1", "100.5 - 99.75",
+    // The placeholder zeros a one-digit multiplier needs, and the ones place a
+    // quotient under one needs, are cells too - they have to arrive somewhere.
+    "0.3 x 0.3", "0.07 x 0.8", "0.25 x 0.4", "0.25 x 0.75", "4.8 x 2.7", "4.5 / 5", "0.9 / 3",
+  ]) {
     const t = traceFor(text);
     const ids = new Set([...t.cells.map((c) => c.id), ...t.markers.map((m) => m.id)]);
     const revealed = new Set(t.steps.flatMap((s) => s.reveal));

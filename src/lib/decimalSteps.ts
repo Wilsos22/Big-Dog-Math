@@ -29,6 +29,13 @@ export const DECIMAL_MAX_PLACES = 3;
 export const DECIMAL_MAX_PROBLEMS = 12;
 /** A quotient that never terminates cannot be walked, so a set is refused. */
 export const DECIMAL_MAX_QUOTIENT_PLACES = 3;
+/**
+ * A walk longer than this is not a lesson, it is an endurance test - and the
+ * board is unusable past nine columns on a Chromebook. Both are inside the
+ * documented input range, so the ceiling has to be its own refusal.
+ */
+export const DECIMAL_MAX_STEPS = 40;
+export const DECIMAL_MAX_COLUMNS = 9;
 
 /** A decimal literal, held exactly: value = int / 10^places. */
 export interface Dec {
@@ -47,6 +54,8 @@ export type DecimalLayout = "column" | "product" | "house";
 
 export type DecimalRow =
   | "carry"
+  /** Carries for the addition of the PARTIAL rows, which sit lower down. */
+  | "sumcarry"
   | "regroup"
   | "a"
   | "b"
@@ -99,7 +108,16 @@ export interface DecInput {
   fills: string[];
   /** Said when they type something else - a nudge, never the answer. */
   hint: string;
-  /** An estimate is judged by nearness. Absent means exact match. */
+  /**
+   * An estimate is judged by NEARNESS to this value, not by matching `expect`.
+   *
+   * It is the true answer, not the rounded one, and the band is centred here.
+   * Centring on the rounded value instead is what made "round 0.4 up to a half,
+   * so about 19" fail on 9.6 / 0.4 while 28 passed - the exact move the step is
+   * asking for, marked wrong.
+   */
+  about?: number;
+  /** Half-width of the band around `about`. Absent means exact match. */
   tolerance?: number;
 }
 
@@ -188,10 +206,6 @@ export function trimTrailingZeros(text: string): string {
   return trimmed || "0";
 }
 
-export function decValue(d: Dec): number {
-  return d.int / 10 ** d.places;
-}
-
 const DEC_PLACES = ["tenths", "hundredths", "thousandths"];
 const INT_PLACES = ["ones", "tens", "hundreds", "thousands"];
 
@@ -212,19 +226,43 @@ function colOf(posFromLeft: number, intW: number): number {
  * Steele: "make sure the correct answer isnt in the first slot every itme".
  * Every builder writes the right answer first because that is how you read the
  * code, and the result was a tool a student could beat by always tapping the
- * top button. The order is derived from the step id so it never reshuffles
- * under a student mid-question, and never depends on Math.random.
+ * top button.
+ *
+ * THE SEED IS THE STEP ID **PLUS THE PROBLEM**, and the second half is what was
+ * missing. Step ids are constant across problems, so hashing the id alone gave
+ * every problem the same seat: `lineup` was the third button on every board
+ * ever built, and a student working a four-problem set learned to tap it by
+ * problem two without reading it. Determinism is only there so a re-render
+ * cannot reshuffle under a student mid-question - it never needed to hold
+ * across problems.
  */
 function seatChoices(id: string, choices: DecChoice[]): DecChoice[] {
   if (choices.length < 2) return choices;
-  let h = 0;
-  for (let i = 0; i < id.length; i += 1) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < id.length; i += 1) {
+    h = (h ^ id.charCodeAt(i)) >>> 0;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  // Avalanche, so two seeds one character apart do not draw the same slot.
+  // Without it the two-choice "Which way" step seated Left second on seven of
+  // eight problems, which is the same learnable pattern in a different seat.
+  h = (h ^ (h >>> 16)) >>> 0;
+  h = Math.imul(h, 2246822507) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  h = Math.imul(h, 3266489909) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
   const out = [...choices];
   // Fisher-Yates driven by the hash, so the arrangement is a pure function of
   // the step and cannot land the answer in the same slot every time.
+  //
+  // EVERY STEP HERE IS 32-BIT INTEGER MATH. The old `h * 1103515245` ran past
+  // 2^53, so the low bits - the only ones `% (i + 1)` reads - were rounding
+  // noise rather than the generator's output, and the "shuffle" barely moved:
+  // the correct answer landed in the first slot twice in fifty steps.
   for (let i = out.length - 1; i > 0; i -= 1) {
-    h = (h * 1103515245 + 12345) >>> 0;
-    const j = h % (i + 1);
+    h = (Math.imul(h, 1103515245) + 12345) >>> 0;
+    // Take the HIGH bits: an LCG's low bits have short periods.
+    const j = (h >>> 16) % (i + 1);
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
@@ -264,12 +302,22 @@ function operationStep(op: DecimalOp): DecStep {
  * Estimate first (Steele: "we should make an estimation feature first").
  *
  * Judged by NEARNESS, not equality - a student who rounds differently but lands
- * in the right neighbourhood has done the thinking. The band is generous on
- * purpose, and the hint teaches the rounding rather than leaking the answer.
+ * in the right neighbourhood has done the thinking. The band is centred on the
+ * TRUE value and scales with it, and the hint teaches the rounding rather than
+ * leaking the answer.
+ *
+ * BELOW ONE THE WHOLE-NUMBER QUESTION IS MEANINGLESS and the step becomes a
+ * size question instead. Asking "about what whole number" when the answer is
+ * 0.056 accepted anything at all - a flat one-wide band swallowed the entire
+ * neighbourhood, including 0 and -1 - so the step ran and taught nothing on
+ * most of the multiply curriculum.
  */
+const ESTIMATE_BAND = 0.25;
+
 function estimateStep(a: Dec, b: Dec, op: DecimalOp, value: number): DecStep {
+  if (Math.abs(value) < 1) return smallEstimateStep(a, b, op);
   const rounded = Math.round(value);
-  const tolerance = Math.max(1, Math.abs(value) * 0.2);
+  const tolerance = Math.max(1, Math.abs(value) * ESTIMATE_BAND);
   const nudge: Record<DecimalOp, string> = {
     "+": `Round ${a.text} and ${b.text} to the nearest whole number, then add those.`,
     "-": `Round ${a.text} and ${b.text} to the nearest whole number, then subtract those.`,
@@ -287,11 +335,48 @@ function estimateStep(a: Dec, b: Dec, op: DecimalOp, value: number): DecStep {
       label: "About",
       fills: [],
       hint: nudge[op],
+      about: value,
       tolerance,
     },
     reveal: [],
     highlight: [],
     say: "Now we have something to check the answer against.",
+  };
+}
+
+/** The estimate when the answer is smaller than one whole. */
+function smallEstimateStep(a: Dec, b: Dec, op: DecimalOp): DecStep {
+  const nudge: Record<DecimalOp, string> = {
+    "+": `${a.text} and ${b.text} are both small. Put them together roughly - do they reach a whole one?`,
+    "-": `${b.text} takes away nearly all of ${a.text}. What is left of one whole?`,
+    "x": `Taking ${b.text} of ${a.text} means taking a PIECE of it. A piece of something small.`,
+    "/": `How many whole ${b.text}s fit inside ${a.text}? If ${b.text} is bigger, not even one.`,
+  };
+  return {
+    id: "estimate",
+    kind: "choice",
+    rail: "Estimate",
+    question: "Before we work it out - about how big will the answer be?",
+    choices: [
+      {
+        text: "Between 0 and 1",
+        correct: true,
+        why: "Right - the answer is a piece of one whole, not a whole number. That is what we check it against.",
+      },
+      {
+        text: "Between 1 and 10",
+        correct: false,
+        why: `That needs the answer to be at least one whole. Look at the size of ${a.text} and ${b.text} again. ${nudge[op]}`,
+      },
+      {
+        text: "More than 10",
+        correct: false,
+        why: `That is far bigger than anything these two numbers can make. ${nudge[op]}`,
+      },
+    ],
+    reveal: [],
+    highlight: [],
+    say: "Less than one whole. Now we have something to check the answer against.",
   };
 }
 
@@ -719,9 +804,21 @@ function buildMultiplication(a: Dec, b: Dec): DecimalTrace {
   // ONE PAIR OF DIGITS AT A TIME. Steele: "we can only multiple 2 numbers at
   // once. So we strt with the 4 and the 2" - a whole row in one step is the
   // answer appearing, not the algorithm being taught.
+  // The characters of `prod` that exist ONLY because of the padStart - the
+  // placeholder zeros that give the decimal point somewhere to travel into.
+  // 0.3 x 0.3 is nine hundredths written into a row one digit wide; without
+  // them the board spells ". 9" while its own headline says 0.09.
+  const placeholderIds = Array.from(
+    { length: prod.length - String(productInt).length },
+    (_, z) => `prod-${z}`,
+  );
+
   partials.forEach((value, j) => {
     const mult = Number(db[db.length - 1 - j]);
-    const text = String(value);
+    // On a one-digit multiplier the partial row IS the product row, so it has
+    // to be laid from the PADDED string - the unpadded one never created the
+    // placeholder cells at all.
+    const text = single ? prod : String(value);
     const prefix = single ? "prod" : `p${j}`;
     const offset = columns - text.length;
     text.split("").forEach((ch, i) => {
@@ -778,23 +875,11 @@ function buildMultiplication(a: Dec, b: Dec): DecimalTrace {
 
   if (!single) {
     lay("sum", prod, "prod");
-    steps.push({
-      id: "addpartials",
-      kind: "input",
-      rail: "Add rows",
-      question: "Add the rows together.",
-      choices: [],
-      input: {
-        expect: String(productInt),
-        label: `${partials.join(" + ")} =`,
-        fills: prod.split("").map((_, i) => `prod-${i}`),
-        hint: "Each row is one piece of the product. Add the pieces.",
-      },
-      reveal: prod.split("").map((_, i) => `prod-${i}`),
-      highlight: prod.split("").map((_, i) => `prod-${i}`),
-      say: `${partials.join(" + ")} = ${productInt}.`,
-    });
+    steps.push(...partialSumSteps(partials, prod, columns, placeholderIds.length, cells));
   }
+  // An empty row still takes its height on the board, so the carry row for the
+  // partial addition only exists when that addition actually carries.
+  const sumCarryRow: DecimalRow[] = cells.some((c) => c.row === "sumcarry") ? ["sumcarry"] : [];
 
   // The decimal, exactly as Steele described it: count the digits right of the
   // points, then say WHICH WAY and HOW FAR, then physically move it.
@@ -820,13 +905,30 @@ function buildMultiplication(a: Dec, b: Dec): DecimalTrace {
     kind: "choice",
     rail: "Which way",
     question: `Which way does the decimal point move to make ${places} place${places === 1 ? "" : "s"}?`,
+    // The reason is PLACE VALUE, never size. An earlier version said the answer
+    // "gets smaller, which is what multiplying by a piece of a number does" -
+    // unconditionally, so 6.2 x 3 = 18.6 told a student that three is a piece
+    // of a number and that 18.6 is smaller than 6.2. Delivered as the
+    // confirmation of a correct answer, at the moment the rule is forming.
     choices: [
-      { text: "Left", correct: true, why: "Right - counting in from the right end makes the answer smaller, which is what multiplying by a piece of a number does." },
-      { text: "Right", correct: false, why: "Moving right makes the number bigger. Multiplying by less than one has to end up smaller." },
+      {
+        text: "Left",
+        correct: true,
+        why: `Right - the two numbers have ${places} digit${places === 1 ? "" : "s"} after their points altogether, so the answer needs ${places}. You count those in from the right end, which puts the point to the left.`,
+      },
+      {
+        text: "Right",
+        correct: false,
+        why: `Moving right takes decimal places away. We counted ${places}, so the point has to end up with ${places} digit${places === 1 ? "" : "s"} behind it - count in from the right end.`,
+      },
     ],
-    reveal: [],
-    highlight: ["prod-dot"],
-    say: `${places} place${places === 1 ? "" : "s"} to the left.`,
+    // The placeholder zeros arrive HERE, at the moment they are needed: the
+    // point has further to travel than the row has digits.
+    reveal: placeholderIds,
+    highlight: ["prod-dot", ...placeholderIds],
+    say: placeholderIds.length
+      ? `${places} place${places === 1 ? "" : "s"} to the left - there are not enough digits, so a zero holds each empty place.`
+      : `${places} place${places === 1 ? "" : "s"} to the left.`,
   });
   steps.push({
     id: "move-product",
@@ -849,11 +951,93 @@ function buildMultiplication(a: Dec, b: Dec): DecimalTrace {
     steps,
     rows: single
       ? ["carry", "a", "b", "rule", "sum"]
-      : ["carry", "a", "b", "rule", ...partials.map((_, i) => `part${i}` as DecimalRow), "rule", "sum"],
+      : ["carry", "a", "b", "rule", ...partials.map((_, i) => `part${i}` as DecimalRow), ...sumCarryRow, "rule", "sum"],
     columns,
     answerText: formatDec(productInt, places),
     shift: 0,
   };
+}
+
+/**
+ * Adding the partial rows, column by column, with the same carry ritual every
+ * other addition in this tool uses.
+ *
+ * The one-line `125 + 1750 =` step this replaces was the same failure as
+ * multiplying a whole row at once, arriving on the addition side - and it was
+ * the LAST step, so a student who could not do it in their head was stuck with
+ * a one-line hint and no way through.
+ *
+ * The placeholder columns are deliberately NOT walked: those zeros exist only
+ * so the decimal point has somewhere to travel, and they arrive at the step
+ * that needs them, not as a column with nothing in it to add.
+ */
+function partialSumSteps(
+  partials: number[],
+  prod: string,
+  columns: number,
+  placeholders: number,
+  cells: DecCell[],
+): DecStep[] {
+  const texts = partials.map((p) => String(p));
+  const offsets = texts.map((t) => columns - t.length);
+  const prodOffset = columns - prod.length;
+  const steps: DecStep[] = [];
+  let carry = 0;
+
+  for (let c = columns - 1; c >= prodOffset + placeholders; c -= 1) {
+    const addends: number[] = [];
+    texts.forEach((t, j) => {
+      if (c >= offsets[j]) addends.push(Number(t[c - offsets[j]]));
+    });
+    const total = addends.reduce((sum, d) => sum + d, 0) + carry;
+    const digit = total % 10;
+    const carryOut = Math.floor(total / 10);
+    const cellId = `prod-${c - prodOffset}`;
+
+    if (addends.length + (carry ? 1 : 0) < 2) {
+      // One digit and nothing to add to it. It comes down with the step before
+      // rather than becoming a question with a single number in it - and the
+      // step before SAYS so, or the digit appears from nowhere.
+      const prev = steps[steps.length - 1];
+      if (prev) {
+        prev.reveal.push(cellId);
+        prev.say = `${prev.say} ${addends.length === 0
+          ? `The carried ${carry} lands in the next column on its own.`
+          : `Nothing to add in the next column, so the ${digit} comes straight down.`}`;
+      }
+      carry = carryOut;
+      continue;
+    }
+
+    const label = `${addends.join(" + ")}${carry ? ` + ${carry}` : ""} =`;
+    steps.push({
+      id: `sum-${c}`,
+      kind: "input",
+      rail: "Add down",
+      question: "Add this column of the rows together.",
+      choices: [],
+      input: {
+        expect: String(total),
+        label,
+        fills: [cellId],
+        hint: carry
+          ? `Add just this column, and do not forget the ${carry} carried into it.`
+          : "Add just this column - one column at a time, the same as any other addition.",
+      },
+      reveal: [cellId],
+      highlight: [cellId, ...texts.map((t, j) => (c >= offsets[j] ? `p${j}-${c - offsets[j]}` : "")).filter(Boolean)],
+      say: total >= 10 ? `${total} - only the ${digit} fits in this column.` : `${total} in this column.`,
+    });
+
+    if (carryOut) {
+      const box = `pcarry-${c - 1}`;
+      cells.push({ id: box, row: "sumcarry", col: c - 1, text: String(carryOut), kind: "carrybox" });
+      steps.push(...carrySteps(`sum-${c}`, total, carryOut, digit, box, "column"));
+    }
+    carry = carryOut;
+  }
+
+  return steps;
 }
 
 // ── division ────────────────────────────────────────────────────────────────
@@ -904,6 +1088,18 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
   cycles.forEach((c) => {
     cells.push({ id: `q-${c.pos}`, row: "quotient", col: c.pos, text: String(c.q), kind: "digit" });
   });
+
+  // A quotient smaller than one still needs its zero in the ones place.
+  //
+  // The cycle loop skips every position the divisor does not reach, which is
+  // exactly right for 7.35 / 2.1 - that reads 3.5, never 03.5 - but wrong when
+  // NO digit ever lands left of the point: 4.5 / 5 built only q-1 and the board
+  // spelled ".9" while `answerText` said 0.9. Writing the zero in the ones
+  // place is graded convention, and this is where a 6th grade unit starts.
+  const onesZeroId = cycles.some((c) => c.pos < dotAt) ? null : `q-${dotAt - 1}`;
+  if (onesZeroId) {
+    cells.push({ id: onesZeroId, row: "quotient", col: dotAt - 1, text: "0", kind: "digit" });
+  }
 
   markers.push({ id: "ds-dot", row: "divisor", boundary: String(b.int).length - b.places, muted: false });
   markers.push({ id: "dv-dot", row: "dividend", boundary: a.text.includes(".") ? a.text.indexOf(".") : givenDigits, muted: false });
@@ -996,9 +1192,11 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
       { text: "At the end of the answer", correct: false, why: "That would make the answer a whole number when it is not one." },
       { text: "Where the decimal started, before we moved it", correct: false, why: "The old spot belongs to the old problem. The point goes up from where the dividend's decimal is NOW." },
     ],
-    reveal: ["q-dot"],
-    highlight: ["dv-dot", "q-dot"],
-    say: "Put it up before you divide and you cannot lose it.",
+    reveal: onesZeroId ? ["q-dot", onesZeroId] : ["q-dot"],
+    highlight: onesZeroId ? ["dv-dot", "q-dot", onesZeroId] : ["dv-dot", "q-dot"],
+    say: onesZeroId
+      ? "Put it up before you divide and you cannot lose it. Nothing lands in the ones place here, so a zero holds it."
+      : "Put it up before you divide and you cannot lose it.",
   });
 
   const CYCLE = ["Divide", "Multiply", "Subtract", "Bring down"];
@@ -1127,10 +1325,13 @@ function quotientText(cycles: { pos: number; q: number }[], dotAt: number, total
  */
 function finish(trace: DecimalTrace): DecimalTrace {
   const ids = new Set([...trace.cells.map((c) => c.id), ...trace.markers.map((m) => m.id)]);
+  // The seat has to vary BETWEEN problems, or a set teaches its own button
+  // positions - see seatChoices.
+  const signature = `${trace.problem.a.text}${trace.problem.op}${trace.problem.b.text}`;
   for (const step of trace.steps) {
     step.reveal = step.reveal.filter((id) => ids.has(id));
     step.highlight = step.highlight.filter((id) => ids.has(id));
-    if (step.kind === "choice") step.choices = seatChoices(step.id, step.choices);
+    if (step.kind === "choice") step.choices = seatChoices(`${step.id}@${signature}`, step.choices);
   }
   return trace;
 }
@@ -1183,13 +1384,22 @@ export function parseDecimalSet(raw: string | null | undefined): DecimalSetParse
       rejected.push({ text, reason: "cannot divide by zero" });
       continue;
     }
-    if (!buildDecimalTrace({ a, b, op })) {
+    const trace = buildDecimalTrace({ a, b, op });
+    if (!trace) {
       rejected.push({
         text,
         reason: op === "-"
           ? "the answer would be negative"
           : `the answer does not end within ${DECIMAL_MAX_QUOTIENT_PLACES} decimal places`,
       });
+      continue;
+    }
+    // A problem inside the documented input range can still be far too big to
+    // walk: 9999.999 x 9999.999 builds 140 steps across 14 columns, which is
+    // unusable on a Chromebook and impossible in a period. Refused OUT LOUD,
+    // with a reason /control prints verbatim.
+    if (trace.steps.length > DECIMAL_MAX_STEPS || trace.columns > DECIMAL_MAX_COLUMNS) {
+      rejected.push({ text, reason: "too many steps to walk in class - use smaller numbers" });
       continue;
     }
     out.push({ a, b, op });

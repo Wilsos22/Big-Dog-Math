@@ -34,6 +34,7 @@ import {
   type DecimalRow,
   type DecimalTrace,
 } from "@/lib/decimalSteps";
+import { useTeacherDevice } from "@/lib/teacherDevice";
 import { LiveToolBanner, useLiveToolConfig } from "./useLiveToolConfig";
 
 type Mode = "teacher" | "student";
@@ -67,6 +68,11 @@ function resumeIndex(sig: string, count: number): number {
 
 export default function DecimalStepsBoard({ set }: { set?: string | null }) {
   const liveTool = useLiveToolConfig("/decimal-steps");
+  // Teacher mode holds an answer reveal, so it is derived from the httpOnly
+  // teacher cookie, never from a toggle a student can reach. This is a public
+  // route: the toggle used to sit in the top bar of every Chromebook's screen,
+  // two taps from the answer.
+  const teacherDevice = useTeacherDevice();
   const [published, setPublished] = useState<string | null>(null);
   const [linked, setLinked] = useState<string | null>(null);
 
@@ -87,33 +93,43 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
   const [picked, setPicked] = useState<DecimalProblem | null>(null);
   const [mode, setMode] = useState<Mode>("student");
   const [stepIdx, setStepIdx] = useState(0);
-  const [wrong, setWrong] = useState<number[]>([]);
+  // Only the MOST RECENT wrong choice is marked, and no choice is ever removed
+  // from play - Steele, 2026-08-03. Disabling each wrong one turned a 3-choice
+  // step into brute force in two taps, and left the elimination on screen.
+  const [lastWrong, setLastWrong] = useState<number | null>(null);
   const [solvedStep, setSolvedStep] = useState(false);
   const [revealed, setRevealed] = useState<string[]>([]);
   const [moved, setMoved] = useState(0);
   const [shown, setShown] = useState(false);
   const [typed, setTyped] = useState("");
-  const [typedWrong, setTypedWrong] = useState(false);
+  /** Why the last submission was not accepted - blank is not the same as wrong. */
+  const [typedIssue, setTypedIssue] = useState<"none" | "empty" | "negative" | "wrong">("none");
   const [cheer, setCheer] = useState(0);
   const [snap, setSnap] = useState(0);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const problem = picked ?? problems[Math.min(idx, problems.length - 1)];
   const trace = useMemo(() => buildDecimalTrace(problem), [problem]);
 
   const resetProblem = useCallback(() => {
     setStepIdx(0);
-    setWrong([]);
+    setLastWrong(null);
     setSolvedStep(false);
     setRevealed([]);
     setMoved(0);
     setShown(false);
     setTyped("");
-    setTypedWrong(false);
+    setTypedIssue("none");
   }, []);
 
   const liveToolId = liveTool?.id;
   useEffect(() => {
-    if (!liveTool || liveTool.route !== "/decimal-steps") return;
+    // An UNPUBLISH has to release the set, or students keep working the old one
+    // until they happen to reload.
+    if (!liveTool || liveTool.route !== "/decimal-steps") {
+      setPublished(null);
+      return;
+    }
     if (!parseDecimalSet(liveTool.config.set).problems.length) return;
     setPublished(liveTool.config.set);
     setPicked(null);
@@ -134,14 +150,30 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
     }
   }, [signature, idx]);
 
+  // The box takes focus on every typed step. Most steps in this tool ARE typed
+  // - 11 of 11 on an addition, 15 on a division - and without this each one is
+  // tap-the-box-then-type on a trackpad, with Enter unreachable until the tap
+  // lands. preventScroll so the question the student is reading stays put.
   useEffect(() => {
+    if (!trace || solvedStep) return;
+    if (trace.steps[stepIdx]?.kind !== "input") return;
+    inputRef.current?.focus({ preventScroll: true });
+  }, [trace, stepIdx, solvedStep]);
+
+  useEffect(() => {
+    if (!teacherDevice) {
+      // A device that was the teacher's and is not any more must not keep the
+      // remembered mode.
+      setMode("student");
+      return;
+    }
     try {
       const saved = window.localStorage.getItem(MODE_KEY);
       if (saved === "teacher" || saved === "student") setMode(saved);
     } catch {
       /* the toggle still works, it just will not be remembered */
     }
-  }, []);
+  }, [teacherDevice]);
   const pickMode = (m: Mode) => {
     setMode(m);
     try {
@@ -189,27 +221,34 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
       setRevealed((r) => [...r, ...step.reveal]);
       celebrate();
       if (step.id === "lineup") setSnap((s) => s + 1);
-    } else if (!wrong.includes(i)) {
-      setWrong((w) => [...w, i]);
+    } else {
+      setLastWrong(i);
     }
   };
 
   const submitTyped = () => {
     if (!step?.input || solvedStep) return;
-    const value = Number(typed.trim());
-    if (!typed.trim() || !Number.isFinite(value)) {
-      setTypedWrong(true);
+    const raw = typed.trim();
+    const value = Number(raw);
+    if (!raw || !Number.isFinite(value)) {
+      // Blank is not a wrong answer, and answering it with the arithmetic hint
+      // reads as "your number is wrong" when there is no number.
+      setTypedIssue("empty");
       return;
     }
-    const target = Number(step.input.expect);
-    const ok = step.input.tolerance !== undefined
-      ? Math.abs(value - target) <= step.input.tolerance
-      : typed.trim() === step.input.expect;
+    const near = step.input.about;
+    if (near !== undefined && value < 0 && near >= 0) {
+      setTypedIssue("negative");
+      return;
+    }
+    const ok = near !== undefined && step.input.tolerance !== undefined
+      ? Math.abs(value - near) <= step.input.tolerance
+      : raw === step.input.expect;
     if (!ok) {
-      setTypedWrong(true);
+      setTypedIssue("wrong");
       return;
     }
-    setTypedWrong(false);
+    setTypedIssue("none");
     setSolvedStep(true);
     setRevealed((r) => [...r, ...step.reveal]);
     celebrate();
@@ -217,12 +256,12 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
 
   const advance = () => {
     setStepIdx((s) => s + 1);
-    setWrong([]);
+    setLastWrong(null);
     setSolvedStep(false);
     setMoved(0);
     setShown(false);
     setTyped("");
-    setTypedWrong(false);
+    setTypedIssue("none");
   };
 
   const hop = (delta: number) => {
@@ -381,7 +420,13 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
           40% { transform:translateX(-50%) scale(1); }
           100% { opacity:0; transform:translateX(-50%) scale(1) translateY(-40px); }
         }
-        @media (prefers-reduced-motion: reduce) { .ds-yes { animation:none; opacity:1; } }
+        /* Not animation:none - that left a permanent "Yes!" pinned over the
+           board from the first correct answer onward. Same class of bug as the
+           division board's, which vanished the confirmation instead. */
+        @keyframes ds-yes-quiet { 0%,70% { opacity:1; } 100% { opacity:0; } }
+        @media (prefers-reduced-motion: reduce) {
+          .ds-yes { animation:ds-yes-quiet 1200ms ease-out forwards; transform:translateX(-50%); }
+        }
       `}</style>
 
       <LiveToolBanner tool={liveTool} />
@@ -409,10 +454,14 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
               </button>
             ))}
           </div>
-          <div className="ds-seg">
-            <button className={mode === "teacher" ? "on" : ""} onClick={() => pickMode("teacher")} type="button">Teacher led</button>
-            <button className={mode === "student" ? "on" : ""} onClick={() => pickMode("student")} type="button">Student</button>
-          </div>
+          {/* Teacher led carries the answer reveal, so the toggle only exists
+              on a device the teacher cookie vouches for. */}
+          {teacherDevice && (
+            <div className="ds-seg">
+              <button className={mode === "teacher" ? "on" : ""} onClick={() => pickMode("teacher")} type="button">Teacher led</button>
+              <button className={mode === "student" ? "on" : ""} onClick={() => pickMode("student")} type="button">Student</button>
+            </div>
+          )}
           <button className="ds-btn" onClick={resetProblem} type="button">Start over</button>
           {problems.length > 1 && <button className="ds-btn" onClick={nextProblem} type="button">Next problem</button>}
         </div>
@@ -473,7 +522,7 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
               <p className="ds-q">{step.question}</p>
 
               {step.kind === "choice" && step.choices.map((c, i) => {
-                const isWrong = wrong.includes(i);
+                const isWrong = lastWrong === i;
                 const isRight = solvedStep && c.correct;
                 const hinted = shown && c.correct && !solvedStep;
                 return (
@@ -481,7 +530,7 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
                     key={c.text}
                     className={`ds-choice ${isRight ? "good" : ""} ${isWrong ? "bad" : ""} ${hinted ? "hint" : ""}`.replace(/\s+/g, " ").trim()}
                     onClick={() => pick(i)}
-                    disabled={solvedStep || isWrong}
+                    disabled={solvedStep}
                     type="button"
                   >
                     {c.text}
@@ -493,9 +542,13 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
                 <div className="ds-entry">
                   <span className="ds-entrylbl">{step.input.label}</span>
                   <input
-                    className={`ds-input ${typedWrong ? "bad" : ""} ${solvedStep ? "good" : ""}`.replace(/\s+/g, " ").trim()}
-                    value={solvedStep ? step.input.expect : typed}
-                    onChange={(e) => { setTyped(e.target.value); setTypedWrong(false); }}
+                    ref={inputRef}
+                    className={`ds-input ${typedIssue !== "none" ? "bad" : ""} ${solvedStep ? "good" : ""}`.replace(/\s+/g, " ").trim()}
+                    // The student's own number stays in the box. Rewriting an
+                    // accepted estimate of 17 to 16 with no explanation reads
+                    // as "you were wrong" on the step that just said Yes.
+                    value={typed}
+                    onChange={(e) => { setTyped(e.target.value); setTypedIssue("none"); }}
                     onKeyDown={(e) => { if (e.key === "Enter") submitTyped(); }}
                     disabled={solvedStep}
                     inputMode="decimal"
@@ -521,18 +574,20 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
               )}
 
               {solvedStep && chosen >= 0 && <p className="ds-why good">{step.choices[chosen].why}</p>}
-              {!solvedStep && wrong.length > 0 && <p className="ds-why bad">{step.choices[wrong[wrong.length - 1]].why}</p>}
-              {typedWrong && step.input && <p className="ds-why bad">{step.input.hint}</p>}
+              {!solvedStep && lastWrong !== null && <p className="ds-why bad">{step.choices[lastWrong].why}</p>}
+              {typedIssue === "empty" && <p className="ds-why bad">Type a number in the box first.</p>}
+              {typedIssue === "negative" && <p className="ds-why bad">An estimate of this answer cannot be less than zero. Check the minus sign.</p>}
+              {typedIssue === "wrong" && step.input && <p className="ds-why bad">{step.input.hint}</p>}
               {solvedStep && step.kind === "input" && <p className="ds-why good">{step.say}</p>}
 
               <div style={{ display: "flex", gap: 9, flexWrap: "wrap", marginTop: 2 }}>
                 <button className="ds-btn go" onClick={advance} disabled={!canAdvance} type="button">
                   {needsMove && movesLeft !== 0 ? "Move it first" : "Next step"}
                 </button>
-                {mode === "teacher" && !solved && (
+                {teacherDevice && mode === "teacher" && !solved && (
                   <button className="ds-btn" onClick={() => setShown(true)} type="button">Show the answer</button>
                 )}
-                {mode === "teacher" && shown && step.kind === "input" && step.input && (
+                {teacherDevice && mode === "teacher" && shown && step.kind === "input" && step.input && (
                   <span className="ds-entrylbl" style={{ alignSelf: "center" }}>{step.input.expect}</span>
                 )}
               </div>
@@ -689,7 +744,7 @@ function Board({
               className={magnet ? "ds-snap" : undefined}
               style={{ position: "relative", ["--ds-from" as string]: row === "a" ? "-46px" : "46px" }}
             >
-              {renderCells(row, row === "carry" || row === "regroup")}
+              {renderCells(row, row === "carry" || row === "sumcarry" || row === "regroup")}
               {renderMarkers(row)}
             </div>
           </div>

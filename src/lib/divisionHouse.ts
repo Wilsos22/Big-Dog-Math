@@ -56,6 +56,15 @@ export interface HousePrompt {
   slots?: string[];
   /** The operation that must be chosen, for kind "operation". */
   op?: HouseOp;
+  /**
+   * The order the four operation buttons are offered in, for kind "operation".
+   *
+   * Fixed cycle order made "tap the leftmost unlit chip" answer every operation
+   * question without reading it. The Divide / Multiply / Subtract / Bring down
+   * STRIP stays in cycle order - that is the reference the drill is teaching -
+   * but the buttons a student presses are seated.
+   */
+  options?: HouseOp[];
   /** Slots that get written in once this prompt is answered. */
   fill: string[];
   /** The sign to animate between two slots, and where it goes. */
@@ -90,6 +99,34 @@ interface Cycle {
   q: number;
   product: number;
   rest: number;
+}
+
+/**
+ * Seat the four operation buttons.
+ *
+ * Deterministic on the seed so a re-render cannot reshuffle under a student
+ * mid-question, and the seed carries the PROBLEM as well as the prompt so a set
+ * does not teach its own button positions - the same lesson /decimal-steps
+ * learned when every board seated `lineup` in the same slot.
+ */
+function seatOps(seed: string): HouseOp[] {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    h = (h ^ seed.charCodeAt(i)) >>> 0;
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  h = (h ^ (h >>> 16)) >>> 0;
+  h = Math.imul(h, 2246822507) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  h = Math.imul(h, 3266489909) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  const out = HOUSE_OPS.map((o) => o.op);
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    h = (Math.imul(h, 1103515245) + 12345) >>> 0;
+    const j = (h >>> 16) % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
 
 /**
@@ -199,7 +236,17 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
 
   // ── the prompts ───────────────────────────────────────────────────────────
   const prompts: HousePrompt[] = [];
-  const firstDivisorSlot = "ds-0";
+  // EVERY DIGIT OF THE DIVISOR, not just the first.
+  //
+  // The divisor is laid one digit per cell and every cell is a live button, so
+  // on 144 / 12 a student who tapped the 2 - which IS the divisor - was told
+  // "It sits outside the house, on the left." The pulse lit only the 1, which
+  // also presented "12" as though the 1 were a number on its own. That inverts
+  // the rule this tool is built on: a multi-digit number is ONE number, which
+  // is why a prompt carries `slots: string[]` and not a single id.
+  const divisorSlots = dsText.split("").map((_, i) => `ds-${i}`);
+  const firstDivisorSlot = divisorSlots[0];
+  const signature = `${dividend}/${divisor}`;
 
   cycles.forEach((c, i) => {
     const qSlot = `q-${c.pos}`;
@@ -216,18 +263,31 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       ];
     const partialSlot = partialSlots[0];
 
+    // ROUND ZERO WHEN THE DIVISOR DOES NOT FIT THE FIRST DIGIT is the single
+    // most important case in the whole drill, and it used to be the one nothing
+    // said out loud: 138 / 6 pulsed two cells under an ask that said "the first
+    // number" and a hint that said "the first digit", and the reason - 6 does
+    // not go into 1, so we take 13 - appeared nowhere.
+    const takesExtraDigits = i === 0 && c.pos > 0;
     prompts.push({
       id: `pick-partial-${i}`,
       kind: "slot",
-      ask: i === 0
-        ? "Start with the first number inside the house. Click it."
-        : "Which number are we dividing now? Click it.",
+      ask: takesExtraDigits
+        ? `${divisor} does not fit into the first digit. Click the smallest number at the front of the house that it does fit into.`
+        : i === 0
+          ? "Start with the first number inside the house. Click it."
+          : "Which number are we dividing now? Click it.",
       slots: partialSlots,
       fill: [],
-      say: `We are dividing ${c.partial}.`,
-      hint: i === 0
-        ? "It is the first digit under the bracket, on the left."
-        : "It is what was left over, with the digit you brought down beside it.",
+      // NOT "We are dividing 13" - the very next prompt asks what operation we
+      // are doing, and the rail keeps the previous sentence on screen while it
+      // asks. The question was answering itself, every round of every problem.
+      say: `${c.partial} is the number under the bracket now.`,
+      hint: takesExtraDigits
+        ? `${divisor} is bigger than ${digits[0]}, so one digit is not enough. Take the next one with it and click any part of that number.`
+        : i === 0
+          ? "It is the first digit under the bracket, on the left."
+          : "It is what was left over, with the digit you brought down beside it.",
       round: i,
     });
     prompts.push({
@@ -235,6 +295,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       kind: "operation",
       ask: "What operation are we doing here?",
       op: "divide",
+      options: seatOps(`op-divide-${i}@${signature}`),
       fill: [],
       visual: { sign: "÷", from: partialSlot, to: firstDivisorSlot },
       say: "Divide.",
@@ -245,7 +306,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       id: `pick-divisor-${i}`,
       kind: "slot",
       ask: "Where is the number we are dividing WITH? Click it.",
-      slots: [firstDivisorSlot],
+      slots: divisorSlots,
       fill: [],
       say: `Dividing by ${divisor}.`,
       hint: "It sits outside the house, on the left.",
@@ -257,7 +318,10 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       ask: "Where does that answer go? Click the spot.",
       slots: [qSlot],
       fill: [qSlot],
-      say: `${divisor} goes into ${c.partial} ${c.q} time${c.q === 1 ? "" : "s"}, and it goes up top.`,
+      // Two numerals with only a space between them read as one: "4 goes into
+      // 9 2 times", and on a zero quotient "3 goes into 1 0 times", which a
+      // sixth grader reads as "3 goes into 10 times".
+      say: `${c.partial} ÷ ${divisor} = ${c.q}, and the ${c.q} goes up top.`,
       hint: "The answer to a division step goes above the bracket, over the digit you just used.",
       round: i,
     });
@@ -267,6 +331,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       kind: "operation",
       ask: "Now what operation?",
       op: "multiply",
+      options: seatOps(`op-multiply-${i}@${signature}`),
       fill: [],
       say: "Multiply.",
       hint: "Next we find out how much of the number we just used up.",
@@ -276,7 +341,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       id: `pick-mult-${i}`,
       kind: "slot",
       ask: "Multiply that answer by which spot? Click it.",
-      slots: [firstDivisorSlot],
+      slots: divisorSlots,
       fill: [],
       visual: { sign: "x", from: qSlot, to: firstDivisorSlot },
       say: `${c.q} x ${divisor} = ${c.product}.`,
@@ -299,6 +364,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       kind: "operation",
       ask: "What operation now?",
       op: "subtract",
+      options: seatOps(`op-subtract-${i}@${signature}`),
       fill: [],
       visual: { sign: "−", from: partialSlot, to: productIds[0] },
       say: "Subtract.",
@@ -323,6 +389,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
         kind: "operation",
         ask: "What is the next step?",
         op: "bringdown",
+        options: seatOps(`op-bring-${i}@${signature}`),
         fill: [],
         say: "Bring down.",
         hint: "There are still digits under the bracket that have not been divided.",
@@ -397,14 +464,22 @@ export function parseHouseSet(raw: string | null | undefined): HouseSetParse {
     if (!buildHouseTrace(dividend, divisor)) {
       rejected.push({
         text,
-        reason: divisor > dividend
-          ? "the divisor is bigger than the dividend"
-          : `whole numbers only, dividend up to ${HOUSE_MAX_DIVIDEND} and divisor up to 99`,
+        reason: divisor === 0 || dividend === 0
+          ? "nothing can be divided by zero, and zero has nothing to divide"
+          : divisor > dividend
+            ? "the divisor is bigger than the dividend"
+            : `whole numbers only, dividend up to ${HOUSE_MAX_DIVIDEND} and divisor up to 99`,
       });
       continue;
     }
+    // Past the ceiling the extras are REPORTED, not silently dropped - a
+    // teacher who pastes fifteen problems and reads "12 problems." has no way
+    // to know which three went missing or why.
+    if (problems.length >= HOUSE_MAX_PROBLEMS) {
+      rejected.push({ text, reason: `only the first ${HOUSE_MAX_PROBLEMS} problems run in one set` });
+      continue;
+    }
     problems.push({ dividend, divisor });
-    if (problems.length >= HOUSE_MAX_PROBLEMS) break;
   }
   return { problems, rejected };
 }
