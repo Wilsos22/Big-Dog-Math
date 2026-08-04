@@ -588,6 +588,32 @@ on the spinner has her call the pick; shared abbieBus, no new setup) ·
 cross-day memory note in the console woven into her context; personality tuned
 to complaining-teen, less Red Bull, shorter replies)
 
+## Known broken — reported live 2026-08-03, not yet fixed
+Steele found these while running a real lesson through the surfaces. None are
+started. Listed newest first; each is independent of the others.
+
+- **"You Do" screen is broken on BOTH `/teacher/pace` and `/teacher/present`.**
+  Highest priority of this list — it is on both projectors at once.
+- **The final step has no End lesson / End session control** — the flow just
+  offers "Next state" forever, so there is no way to close out at the bell.
+- **`/teacher/pace` is broken for the Divisibility Rules tool state** — Steele
+  described it as showing "a your own partial screen".
+- **The first ready check shows the PREVIOUS state's directions.** The button
+  renders an anonymous bar first, then falls back to stale directions.
+- **The Student preview renders the homepage regardless of state.** Suspected
+  cause, unverified: `ClassSync` pushes a student sitting on `/live-flow` to `/`
+  whenever `live_flow.state.id` is null or `"warmup"` (ClassSync.tsx ~line 210).
+- **After a refused "I'm stuck", the student is bounced out and back and the
+  chip will not press again.** The refusal itself is correct (see below); the
+  bounce and the stuck disabled state are not. Same ClassSync suspicion.
+
+NOT bugs, confirmed against the live database the same day: the stuck chip
+saying "wait for the teacher to let you in", and Fist-to-5 taps never reaching
+the board. Both are the verified-student gate working as designed — 0 of 167
+students have an `auth_user_id` and the open session has 0 joins. Nothing
+student-writing can pass until the Workspace half of the FERPA cutover lands
+(`supabase/FERPA-CUTOVER.md` steps 1, 2, 5, 6, 8 — Steele's hands only).
+
 ## In progress
 - **iPad ink engine + the glass sheet** (7/21, commit c68da00) — Phase 1 of the
   "get the pen surface as close to Notability as the web allows" push. Strokes
