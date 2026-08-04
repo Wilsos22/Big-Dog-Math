@@ -343,6 +343,12 @@ export default function TeacherRemotePage() {
     spinnerStateKey: string | null;
   } | null>(null);
   const [lastReceipt, setLastReceipt] = useState<string | null>(null);
+  // showCommandStatus used to infer "something went wrong" by pattern-matching
+  // the status string for "Disconnected" / "did not confirm" / "failed". A
+  // server refusal that says neither - "This is the last lesson state." is the
+  // one that bit - set the status and then rendered nowhere, so the tap was a
+  // silent no-op. An explicit flag cannot drift from the wording.
+  const [commandError, setCommandError] = useState(false);
   const [completedSpinnerStateKey, setCompletedSpinnerStateKey] = useState<string | null>(null);
   const [pollAnswers, setPollAnswers] = useState<PollAnswer[]>([]);
   const [privateLessonSteps, setPrivateLessonSteps] = useState<LessonStepData[]>([]);
@@ -598,6 +604,7 @@ export default function TeacherRemotePage() {
     commandInFlightRef.current = true;
     setBusy(button.action);
     setLastReceipt(null);
+    setCommandError(false);
     setStatus(`Sending to classroom: ${button.label}`);
     setSession((current) => current?.liveFlow
       ? { ...current, liveFlow: optimisticRemoteFlow(current.liveFlow, button.action) }
@@ -619,6 +626,7 @@ export default function TeacherRemotePage() {
       const data = await response.json() as { command?: TeacherRemoteCommand; liveFlow?: LiveClassFlowSnapshot; error?: string };
       if (!response.ok || !data.command) {
         setSession(confirmedSession);
+        setCommandError(true);
         setStatus(data.error || "Command failed.");
       } else if (data.command.receivedAt) {
         if (data.liveFlow) setSession((current) => current ? { ...current, liveFlow: data.liveFlow || null, remoteCommand: data.command || null } : current);
@@ -676,6 +684,7 @@ export default function TeacherRemotePage() {
       const data = await response.json() as { command?: TeacherRemoteCommand; liveFlow?: LiveClassFlowSnapshot; error?: string };
       if (!response.ok || !data.command) {
         setSession(confirmedSession);
+        setCommandError(true);
         setStatus(data.error || "Command failed.");
       } else if (data.command.receivedAt) {
         if (data.liveFlow) setSession((current) => current ? { ...current, liveFlow: data.liveFlow || null, remoteCommand: data.command || null } : current);
@@ -808,16 +817,30 @@ export default function TeacherRemotePage() {
     flow?.poll
     && resolveRemoteNextBehavior(flow.state?.id, flow.state?.semantic, flow.poll.stage) === "reveal-results",
   );
-  const stageControlButtons: readonly RemoteDeckButton[] = STAGE_BUTTONS.map((button) => (
-    button.action === "next" && learningCheckAwaitingReveal
-      ? {
-          action: "reveal-results",
-          label: "Reveal anonymous bars",
-          detail: "Stay on this Learning Check",
-          tone: "purple",
-        }
-      : button
-  ));
+  // The Remote had no idea a lesson could run out of states. navigateFlow throws
+  // "This is the last lesson state." and the 409 never reaches the status line,
+  // so the last step offered a green "Next state" forever that did nothing at
+  // all - which is what "there is no way to close out at the bell" was.
+  const isLastStep = Boolean(
+    sequence && sequence.totalSteps > 0 && sequence.currentIndex + 1 >= sequence.totalSteps,
+  );
+  const stageControlButtons: readonly RemoteDeckButton[] = STAGE_BUTTONS.map((button) => {
+    if (button.action !== "next") return button;
+    if (learningCheckAwaitingReveal) {
+      return {
+        action: "reveal-results",
+        label: "Reveal anonymous bars",
+        detail: "Stay on this Learning Check",
+        tone: "purple",
+      };
+    }
+    // Reveal still wins on the final step: a Learning Check has results to show
+    // before the lesson can be finished.
+    if (isLastStep) {
+      return { action: "next", label: "Last state", detail: "No more states in this lesson", tone: "neutral" };
+    }
+    return button;
+  });
   const launchScoreboardAvailable = Boolean(
     flow && canRevealM2T1L1FinalScore(flow.lesson?.code, flow.state?.id, flow.state?.semantic),
   );
@@ -914,7 +937,7 @@ export default function TeacherRemotePage() {
       ? "Syncing"
       : "Classroom connected";
   const mirrorMeta = timer ? formatTime(timerSeconds) : "Ready";
-  const showCommandStatus = !session || connectionNeedsAttention || connectionInFlight || Boolean(lastReceipt);
+  const showCommandStatus = !session || connectionNeedsAttention || connectionInFlight || commandError || Boolean(lastReceipt);
 
   if (boardPanelOpen && session) {
     return (
@@ -1086,7 +1109,10 @@ export default function TeacherRemotePage() {
         .deck-key.gold { border-color:#d4ad55; background:#fff5d8; color:#6e5211; }
         .deck-key.purple { border-color:#a995d2; background:#f4efff; color:#65459a; }
         .deck-key.green { border-color:#76b494; background:#edf8f1; color:#216947; }
-        .deck-key.red { border-color:#d88d94; background:#fff0f1; color:#f2a3ac; }
+        /* The label used to be #f2a3ac on #fff0f1 - about 1.9:1, unreadable in a
+           dim room, and the odd one out: every sibling tone above sets a dark
+           ink. #93323c is the same hue family at about 7:1. */
+        .deck-key.red { border-color:#d88d94; background:#fff0f1; color:#93323c; }
         .response-list { display:grid; gap:8px; margin:0; padding:0; list-style:none; }
         .response-row { display:grid; grid-template-columns:minmax(92px,0.8fr) minmax(0,1.8fr); gap:9px; border-top:1px solid rgba(255,255,255,0.09); padding-top:8px; color:#EFE8D8; font-size:0.8rem; }
         .response-name { font-weight:900; }
@@ -1282,11 +1308,28 @@ export default function TeacherRemotePage() {
                           key={button.action}
                           button={button}
                           busy={busy}
-                          disabled={controlsDisabled}
+                          disabled={controlsDisabled || (button.action === "next" && isLastStep)}
                           onSend={send}
                         />
                       ))}
                     </div>
+                    {/* The close-out lives in its OWN row, never in the slot Next
+                        just occupied - a destructive key inheriting the position
+                        the teacher's thumb has tapped all period is a mis-tap
+                        waiting to happen. endSession carries its own confirm. */}
+                    {isLastStep ? (
+                      <div className="deck-grid spinner-control">
+                        <button
+                          className="deck-key red"
+                          type="button"
+                          disabled={endingSession || !session}
+                          onClick={() => { void endSession(); }}
+                        >
+                          <span className="deck-key-label">{endingSession ? "Ending lesson" : "End lesson"}</span>
+                          <span className="deck-key-detail">Close the session and release every screen</span>
+                        </button>
+                      </div>
+                    ) : null}
                     {/* Persistent cold-call: spins one student on the projector,
                         any state. The state-scoped readers/iPad Spin is separate,
                         below. */}
@@ -1452,7 +1495,15 @@ export default function TeacherRemotePage() {
                     {launchScoreboardAvailable ? (
                       <p className="current-live-note">{finalScoreShowing ? "Final score 60 to 40 is showing" : "Halftime score 30 to 20 is showing"}</p>
                     ) : null}
-                    <p className="current-next"><strong>Next:</strong> {sequence?.nextLabel || "Lesson closeout"}{sequence?.nextDirections ? ` - ${sequence.nextDirections}` : ""}</p>
+                    {/* nextLabel is null on the final step, and the old fallback
+                        read "Next: Lesson closeout" - naming a step that does not
+                        exist, on the one screen the teacher trusts for what is
+                        coming. */}
+                    <p className="current-next">
+                      {isLastStep
+                        ? <><strong>Last state.</strong> End the lesson when the room is done.</>
+                        : <><strong>Next:</strong> {sequence?.nextLabel || "Lesson closeout"}{sequence?.nextDirections ? ` - ${sequence.nextDirections}` : ""}</>}
+                    </p>
                   </section>
 
                   <section className="deck-section compact-private" aria-labelledby="response-title">

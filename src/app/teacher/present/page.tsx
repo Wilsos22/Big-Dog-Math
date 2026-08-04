@@ -954,7 +954,11 @@ export default function ClassroomStagePage() {
         .stage-stems li { color:var(--ink); font-size:clamp(0.78rem,1.25vw,0.98rem); line-height:1.28; font-weight:700; }
         .stage-vocabulary { display:flex; flex-wrap:wrap; gap:7px; }
         .stage-word { border:1px solid var(--hair); border-radius:999px; background:#F6F3EC; padding:6px 9px; color:var(--ink); font-size:clamp(0.72rem,1.1vw,0.88rem); font-weight:800; }
-        .stage-independent { position:absolute; inset:0; display:grid; place-items:center; padding:clamp(22px,3.4vw,48px); }
+        /* overflow:auto matches the board-open rule below. .stage-page is
+           overflow:hidden, so a lesson authoring all six work fields ran its
+           bottom rows off the stage and lost them silently - on a projector a
+           clipped card is indistinguishable from a card nobody wrote. */
+        .stage-independent { position:absolute; inset:0; display:grid; place-items:center; padding:clamp(22px,3.4vw,48px); overflow:auto; }
         .stage-independent-grid { width:min(100%,1240px); max-height:100%; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; align-content:center; }
         .stage-independent-card { min-width:0; border:1px solid var(--hair); border-top:4px solid var(--acc); border-radius:16px; background:var(--card); padding:14px 17px; box-shadow:0 2px 10px rgba(40,32,20,0.06); }
         .stage-independent-card.required-paper-work,
@@ -1366,7 +1370,14 @@ export default function ClassroomStagePage() {
                 </section>
               </aside>
             </section>
-          ) : theme.id === "independent" ? (
+          ) : theme.id === "independent" && paperSections.length ? (
+            // Only enter the work-card grid when there ARE cards. The scene
+            // renders nothing but this map, so an independent step whose work
+            // fields and Main Display are all empty used to paint an empty grid
+            // inside an inset:0 section - a blank projector for the whole 14
+            // minutes of You Do, with no way to tell it from a crashed screen.
+            // Falling through hands the room the directions scene instead, which
+            // still shows the learning intention, the state marker and the clock.
             <section className="stage-independent" aria-label="Independent paper work directions">
               <div className="stage-independent-grid">
                 {paperSections.map((section) => (

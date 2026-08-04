@@ -63,9 +63,21 @@ if (!readyEffect.includes("setIdentityReady(true)") || readyEffect.includes("rou
 if (!teacherSession.includes('status: "open", broadcast: "free"')) {
   throw new Error("A new class session must leave verified students free on the homepage until Begin lesson.");
 }
-if (!classSync.includes('!liveStateId || liveStateId === "warmup"')
+// Warm-up and a MISSING state are deliberately SEPARATE branches, and this
+// contract used to pin them as one combined condition. Warm-up is an authored
+// destination: a student sitting on /live-flow is sent back to the homepage. A
+// missing state is only a gap - a reconnect, a Control republish between steps,
+// a snapshot that has not landed - and it must HOLD every student exactly where
+// they are. Collapsing the two is how this shipped, and it bounced a student who
+// was watching the lesson out to "/" and back the moment state returned (the
+// signal chips are gated on flow.state, so the stuck chip went with it).
+if (!classSync.includes("if (!liveStateId) {")
+  || !classSync.includes("target = currentPath;")) {
+  throw new Error("A missing live_flow state must hold students in place, never route them away.");
+}
+if (!classSync.includes('} else if (liveStateId === "warmup") {')
   || !classSync.includes('currentPath === LIVE_FLOW_ROUTE ? "/" : null')) {
-  throw new Error("Live Flow Warm-Up and its null-state handoff must preserve the student homepage.");
+  throw new Error("Live Flow Warm-Up must preserve the student homepage.");
 }
 const classSyncTick = classSync.slice(classSync.indexOf("const tick = async"), classSync.indexOf("void tick();"));
 if (!classSyncTick.includes("getStoredStudentSessionId()")) {
