@@ -34,5 +34,5 @@ a school year. Keep a slide under about 300KB; if it is much larger, the export 
 ## Before you commit one
 
 NO STUDENT NAMES, no district emails, no student work with a name on it, no roster screenshots.
-This repository is public and these files are served publicly. See the FERPA boundary in
-`CLAUDE.md`.
+The repository is private, but that does NOT make this folder private - everything under `public/`
+is served by Vercel to anyone with the URL. See the FERPA boundary in `CLAUDE.md`.

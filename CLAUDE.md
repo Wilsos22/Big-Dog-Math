@@ -17,6 +17,27 @@ bars and live misconception grouping).
 - Live: https://bigdogmath.com (also website-prototype-three.vercel.app).
 - Repo: https://github.com/Wilsos22/Big-Dog-Math (default branch `main`; renamed from
   Website-prototype on 2026-07-27 - old URLs redirect, Vercel and CI followed automatically).
+  **PRIVATE as of 2026-08-03** (Steele's call, so the sound-bank clips and exported slide images can
+  be committed - see the sound bank section). Consequences to know: GitHub Actions minutes are no
+  longer unlimited (private repos get a monthly free allowance, and CI runs typecheck plus the whole
+  contract suite on every push, so watch it if pushes get frequent), and the repo is no longer a
+  thing Steele can hand someone to look at - `/demo` on the live site is the portfolio front door
+  instead, and it is unaffected.
+  **DO NOT TRUST "Vercel builds from a private repo unchanged" - IT IS IN DOUBT AS OF 2026-08-04.**
+  That is what this line used to say flatly. Observed instead: four commits pushed to `main` at
+  06:38Z (confirmed on GitHub, `gh api repos/Wilsos22/Big-Dog-Math/commits/main` returned the new
+  sha) produced NO Vercel deployment at all - not queued, not building, not failed, simply absent -
+  and `list_deployments` showed zero deployments created in the preceding two hours. The last
+  successful production deploy still records `githubRepoVisibility: "public"` in its metadata while
+  the repo is now private, which points at the GitHub App losing repo access at the visibility flip.
+  NOT PROVEN, and Steele can settle it in one click by redeploying from the Vercel dashboard.
+  WHY THIS MATTERS MORE THAN IT LOOKS: rule 3 says a push to `main` is what deploys, so an agent that
+  pushes and reports "shipped" is now reporting something it has not checked. **VERIFY THE LIVE
+  `/api/build-id` ACTUALLY CHANGES** before calling anything deployed - the id is the deployed commit
+  sha, so it is a direct check - and if it does not move within a few minutes, say so plainly rather
+  than assuming Vercel is slow. Classroom displays make this worse: `DeployRefresh` reloads them when
+  the build id changes, so a build that never ships leaves every projector on the old code with
+  nothing anywhere saying why.
 - Local working folder: `/Users/steelewilson/Big Dog Math Site` (renamed by Steele 2026-07-27
   from "Website prototype"; an EMPTY decoy folder may exist at the old path - some agent
   sessions are anchored there and keep a launcher shim in its .claude/launch.json. Renaming
@@ -90,6 +111,16 @@ bars and live misconception grouping).
    are. Diagnose before clearing: `git apply --check .git/rebase-apply/0001` usually reports "patch
    does not apply" because the patch's content ALREADY landed by another route - grep its symbols in
    `src/` and the session is simply litter. A spurious `.git/index.lock` is often the first symptom.
+   THE INVERSE HAZARD IS REAL TOO: YOUR UNCOMMITTED WORK CAN BE SWEPT INTO SOMEONE ELSE'S COMMIT
+   (2026-08-03). This rule tells you to stage only your own paths; it did not say that the files you
+   are still editing, sitting modified in the shared working tree, are equally reachable by every
+   other session's `git add`. Found live during the division-tools audit: a concurrent session
+   committed and PUSHED eleven of this session's files while four more edits were still to come, so
+   the work landed on `main` one edit early and needed a follow-up commit to correct. Two defences,
+   both cheap. Commit early to a branch rather than holding a large change in the working tree. And
+   when you find your own files already on `origin/main`, diff branch against remote per path
+   (`git diff --quiet origin/main <branch> -- <file>`) to find exactly which ones went out stale,
+   rather than assuming the whole change did or did not land.
 3. Verified work ships without waiting for Steele (his standing request, 2026-07-21 - routing
    merges through him twice stranded finished work). A push to `main` is what deploys - Vercel
    auto-builds it. Flow: push the feature branch first (a local-only branch is invisible to
@@ -533,9 +564,24 @@ Codex and cloud sessions need them too (rule 9).
   like mapped") - twenty-five cues, not the original seven: air horn, applause, cheering, crickets,
   drum roll, dun dun dun, Jeopardy, locked in, stank face, true, a few moments later, another one,
   bingo, bruh, directed by Robert B, we will never know, law and order, what, Metro, money, record
-  scratch, straight up, OMG, be right back, you. THE CLIPS ARE NOT IN THE REPO AND MUST NOT BE:
-  half are copyrighted recordings and this repository is public, and it is 14MB of binary besides.
-  They live in IndexedDB on the classroom laptop, which is the whole point of the loadable bank.
+  scratch, straight up, OMG, be right back, you.
+  THE CLIPS MAY NOW LIVE IN THE REPO (reversed 2026-08-03 by Steele: "sound clips and slide images
+  can go into the repo"). The old rule here said they MUST NOT BE, for two reasons - 14MB of binary,
+  and half being copyrighted recordings in a PUBLIC repository. He settled the size, and settled the
+  copyright by MAKING THE REPO PRIVATE the same day (github.com/Wilsos22/Big-Dog-Math, flipped with
+  zero forks and zero stars, so nothing was mirrored first). Commit them to `public/sounds/<id>.mp3`
+  - see that folder's README. `npm run sounds:name -- ~/Downloads` maps a folder of download-named
+  clips onto their cue ids using the SAME `matchSoundCueFile` the drag-and-drop loader uses, dry-run
+  by default.
+  TWO THINGS THE PRIVATE REPO DOES NOT DO, and both matter. (1) It does not make the files private:
+  `public/` is served by Vercel, so `bigdogmath.com/sounds/jeopardy.mp3` is fetchable by anyone who
+  guesses the URL. Private only stops repo browsing, cloning and code search - it is a real
+  reduction in exposure, not a wall. Gating audio behind a teacher route is possible (only teacher
+  surfaces ever play a cue; the student attention pulse is visual-only by design) and is NOT built.
+  (2) Git keeps history, so removing a clip later needs a history rewrite, not a delete - which is
+  why the repo must not go public again without pulling these first.
+  The per-device IndexedDB loader is UNCHANGED and still first in the source order, so a clip can
+  still be tried on one laptop without a commit.
   `matchSoundCueFile` places a dropped file on the right button by filename, normalizing past
   capitals, spaces, " copy" and the random suffix a download site appends, so one multi-file load
   fills the bank; a file nothing claims is reported back, never placed arbitrarily. Most cues are
@@ -794,6 +840,11 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   `npm run test:notion-lesson-contract`.
   `slideFit` publishes ONLY when "cover" - every surface defaults to "contain", so publishing the
   default would add a constant string to a snapshot Control full-replaces about once a second.
+  THE STUDIO AND DEMO PREVIEWS CANNOT SHOW A SLIDE FRAME, and it is not a bug in the frame.
+  `studioPreviewFlow.ts` carries `slideOverlay` but has never carried `slideUrl` / `slideMirror` /
+  `slideFit`, so the `?studioPreview=1` iframes on `/teacher/studio/edit` and `/demo` render the
+  step as though no slide were authored. Verify a slide on `/teacher/rehearse` instead, which builds
+  through the real `stepsFromLesson`. Closing the gap is three fields in that file's step mapping.
   THE NOTION PROPERTY IS `Slide Url`, NOT `Slide URL`, AND IT IS A FILE PROPERTY. Read it through
   `propByName` (notionLessons.ts), which normalizes case and punctuation - an exact-string property
   lookup fails SILENTLY, the site reads "" and the screen renders as though nothing was authored.
@@ -810,8 +861,10 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   same CDN that just delivered the page - if the page loaded, the slide loaded. No expiry, no third
   party, nothing to re-fetch, and it is why the proxy-route idea this paragraph used to call for was
   not built. Steele's standing ask when he chose it: most reliable and least likely to fail mid
-  lesson. `public/slides/README.md` carries the naming, format and FERPA rules; the folder is in a
-  PUBLIC repo, so no student name ever goes in it. Reserve a LIVE EMBED for a board being actively
+  lesson. `public/slides/README.md` carries the naming, format and FERPA rules. THE REPO BEING
+  PRIVATE DOES NOT MAKE THE FOLDER PRIVATE - everything under `public/` is served by Vercel to
+  anyone with the URL - so no student name, district email, named student work or roster screenshot
+  ever goes in it. Reserve a LIVE EMBED for a board being actively
   edited during class (a Lucid or Figma canvas the room watches change) - that is the one case where
   the live fetch is the point.
   THE GUARD IS `/^\/[/\\]/`, NOT `startsWith("//")`. The URL spec treats `\` as `/` for http(s), so
@@ -895,6 +948,28 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   NOTE the DIRECTION above still holds: the eventual full rewrite should target the FRAME wrapping an
   imported slide, not a native 9-component grid - this step just put the auto-composed native slide on
   the wall first.
+  **THE TWO `showLessonSlide` GATES ARE ONE LIST IN TWO FILES, AND THEY SHIPPED DIFFERENT** (fixed
+  2026-08-03, one day after the overlay landed; it was two of Steele's six live bugs). The overlay is
+  `position:fixed; inset:0; z-index:12` - it does not sit BESIDE the host surface's scenes, it COVERS
+  them completely, and pace passes `screen="main"`, so wherever the gate is wrong pace stops showing
+  its own frame and draws the MAIN screen's zones instead. On a tool state that is a green band, a step
+  counter and one empty text column, which is exactly what "a your own partial screen" was. present's
+  gate was written from present's scene list and pace's from pace's, and pace has NO tool, resource,
+  board, transition, exit or independent scene to exclude - so every one of those states fell through
+  and got the slide. The rule is that the gate is not "does pace have another scene", it is **does MAIN
+  show the slide here** - anywhere present keeps a bespoke scene, pace showing the auto-composed slide
+  is not mirroring the room, it is showing the room something the main projector is not. Keep the two
+  clause lists together and edit them in the same commit.
+  A PAYLOAD CHECK IS NOT A STATE CHECK. `flow.tool` is only set once the teacher presses Send tool
+  setup on `/control`, and `flow.resource` only when Response Mode is literally `Assigned Tool` AND the
+  `Tool` name resolves - so a step authored with State ID `tool-divisibility` and neither of those is
+  still a tool state and still got the slide. Test the `tool-` PREFIX (the canonical test, see
+  `classStates.ts` `isAssignedTool`) as well as the payload. Nothing about that bug was
+  Divisibility-specific; it fired for every `tool-*` state, and Divisibility is just the one he ran.
+  DIAGNOSE THIS CLASS OF BUG BY LOOKING FOR THE OVERLAY, NOT BY READING THE SCENES: in the surface's
+  document, find every element with `position:fixed` and `z-index >= 10`. One unnamed full-viewport div
+  means the overlay is up; none means the surface is rendering its own frame. That check is what
+  separated "pace is broken" from "pace is covered" in about a minute.
 
 The lesson-content editor's previews are the REAL surfaces, not copies: `/teacher/studio/edit` embeds
 `/teacher/present?studioPreview=1` and `/teacher/pace?studioPreview=1` in scaled iframes and posts
@@ -1052,6 +1127,14 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   the SAME deliberate room-facing FERPA exception the reader and speaker spinners carry (rule 8),
   for the same reason. Nothing in this feature writes or transmits a name; `supply_checks` has no
   student reference at all, because a table is furniture.
+  **THE PROJECTOR'S COPY HAS NO BUTTONS ON PURPOSE - THE TAPS ARE ON THE REMOTE.**
+  `SupplyCheckBoard` takes `mode`, and `mode === "board"` returns EARLY with a read-only card grid
+  ("Captains, answer for your table"); only `mode === "remote"` renders the tap rows, and the
+  Remote gates them to `SUPPLY_CHECK_STATE_IDS` (closeout plus the three supplies-away states).
+  Steele reported "the captain supplies check at the end doesnt have clickable buttons" on
+  2026-08-03 and the answer was that he was looking at the display. Do NOT "fix" this by adding
+  buttons to the board branch - an agent (this one) started exactly that patch before TypeScript
+  refused it, because `mode` is already narrowed past the early return.
 
 - Browser client: `getSupabase()` in `src/lib/supabase.ts` (`NEXT_PUBLIC_SUPABASE_URL` +
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`). Server client: `getSupabaseAdmin()` in `src/lib/supabaseServer.ts`
@@ -1177,6 +1260,19 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   button. Before debugging signals, check `select count(*) from session_joins where student_id is
   not null` - if it is zero, nothing is broken and nothing can be proven either. THE WHOLE CHAIN
   IS STILL UNPROVEN END TO END; the first real verified student to tap a chip is the test.
+  **IT IS NOT JUST SIGNALS - THE SAME GATE STOPS EVERY STUDENT WRITE, AND THEY ALL PRESENT AS A
+  DEAD BUTTON** (2026-08-03, live). Steele reported the fist-to-5 "lets the student click it but it
+  doesnt register on the board" and the stuck chip saying "wait for the teacher to let you in", and
+  both are this one gate: `/api/student/poll-answer`, `/api/student/signal` and
+  `/api/student/tool-evidence` all call `requireVerifiedStudent`. Measured that day on the live DB:
+  `students` 167 rows, students with `auth_user_id` **0**, `session_joins` on the open session
+  **0**, `student_signals` lifetime **0**, poll answers on the running session **0** against 6
+  polls created. So no student write can succeed AT ALL until the Workspace half of the FERPA
+  cutover lands (rule 8; `supabase/FERPA-CUTOVER.md` steps 1, 2, 5, 6, 8 - the roster Sheet, the
+  HMAC key, the Apps Script paste-ins, the roster push, one real warm-up). THE ONE QUERY that
+  settles it before debugging any student-facing write:
+  `select count(*) from students where auth_user_id is not null;` - zero means the surface is
+  behaving correctly and no amount of front-end work will change it.
   HOW TO TEST THE HALF THAT CAN BE TESTED (2026-07-30): the WRITE needs a district Google account and
   cannot be faked - seeding a roster row does NOT help, because the gate is `linkedStudent(auth.uid)`
   at the auth layer, not a `students` row. Everything downstream - the `/api/live/signals` read, the
@@ -1451,6 +1547,12 @@ the invariants they protect are easy to break again.
   Still true and still load-bearing: `.ip-ink-layer` carries `pointer-events:none` so the wrapper div
   cannot swallow a stroke before it reaches the canvas (a plain div defaults to `auto`; that cost a
   whole debugging round when the sheet sat over the old whiteboard panel).
+  **AND `.ip-screen-frame` - THE EMBEDDED `/teacher/present` IFRAME - IS ALSO `pointer-events:none`,
+  SO NOTHING INSIDE IT CAN EVER BE TAPPED FROM THE PEN SURFACE.** That is correct for ink (the whole
+  point is that a stroke lands on the canvas no matter what is nested underneath), and it is the
+  reason a control only ever belongs on `/teacher/remote`, never on `/teacher/present`. Anything
+  interactive placed on the main projector is decoration from the iPad's side. Check this before
+  concluding a button on a present-hosted panel is broken.
 - **THE PEN SURFACE SAYS WHEN A NEW BUILD IS WAITING** (2026-07-30). `/ipad` is deliberately absent
   from `DeployRefresh` - it holds the authoritative ink, so an automatic reload would wipe the room's
   boards mid-lesson - and the cost of that correct decision is that it can sit on a build from days
@@ -1746,18 +1848,25 @@ the invariants they protect are easy to break again.
   stamped with the sequence index it was issued at and expires on the next advance with no clearing
   code anywhere. The strip DOES cross `studentSafeLiveFlow` on purpose - "voice 0" is announced to the
   room and painted on two projectors, and a head-down student needs the same read the room gets.
-- **OPEN BUG (2026-08-02, deferred by Steele): A TEACHER-LOADED BANK CLIP IS DECODED ON ONE
-  AudioContext AND PLAYED ON ANOTHER.** Symptom he reported: cues he uploaded a clip for make no
-  sound from the Stream Deck, while cues with no upload still fire their synthesized version. The
-  two `installUserClip` call sites in `/control` disagree - the UPLOAD path passes
-  `audioCtxRef.current`, the page-load RESTORE path (the `idbGet(bankClipKey(...))` loop) passes
-  nothing and falls back to `sharedContext()`, the bank's own second context. `playSoundCue` always
-  plays through `audioCtxRef.current`, and an AudioBuffer only crosses contexts cleanly when their
-  sample rates match; when they do not, `src.buffer = chosen` throws and the press is silent.
-  Synthesis never reads `userBuffers`, which is why the un-uploaded cues are unaffected. PREDICTION
-  TO CHECK BEFORE FIXING: a freshly uploaded clip should sound, and the same clip should go silent
-  after a `/control` reload. The mechanism is inferred from the code, not observed - the disagreeing
-  call sites are certain, the sample-rate cause is not. Fix is to make both sites use one context.
+- **FIXED 2026-08-03: A TEACHER-LOADED BANK CLIP WAS DECODED ON ONE AudioContext AND PLAYED ON
+  ANOTHER.** Symptom Steele reported: cues he uploaded a clip for made no sound from the Stream
+  Deck, while cues with no upload still fired their synthesized version. The two `installUserClip`
+  call sites in `/control` disagreed - the UPLOAD path passed `audioCtxRef.current`, the page-load
+  RESTORE path (the `idbGet(bankClipKey(...))` loop) passed nothing and fell back to
+  `sharedContext()`, the bank's own second context. `playSoundCue` always plays through
+  `audioCtxRef.current`, and an AudioBuffer only crosses contexts cleanly when their sample rates
+  match; when they do not, `src.buffer = chosen` throws and the press is silent. Synthesis never
+  reads `userBuffers`, which is why the un-uploaded cues were unaffected.
+  THE HALF-FIX THAT LOOKS RIGHT AND IS NOT: passing `audioCtxRef.current` at the restore site
+  changes nothing, because that ref is null until `genTone` lazily constructs it on the first cue -
+  and the restore loop runs at MOUNT. It would still fall through to `sharedContext()`. The fix is
+  `ensureAudioCtx()`, which constructs the page's one context on demand; a context may be built
+  before any gesture (it starts suspended, `decodeAudioData` still works, the first click resumes
+  it). The COMMITTED-file path was never affected - `primeCueFiles` is called from inside
+  `playSoundCue` with the same context it is about to play on.
+  This got more urgent when the clips were committed to `public/sounds/`, because `userBuffers`
+  WINS over `fileBuffers` - one broken restored buffer would shadow a perfectly good committed file
+  and the button would be silent with the right clip sitting right there.
 - **STATE MUSIC IS STOP-FIRST, AND CUES DUCK IT RATHER THAN STACK ON IT** (both found live
   2026-08-02, Steele: "a song that plays the whole time and then a sound when the first time alert
   and then another when time is up and they all played on top of eachother and the song continued
@@ -1804,6 +1913,23 @@ the invariants they protect are easy to break again.
   rendered "Open work space". Once the writing surface was up there was no way to put it away, and
   it covered the slide for the rest of the lesson. The deck key is now a toggle driven by
   `flow.presentation.boardOpen`.
+  SAME FAMILY, FOUND LIVE 2026-08-03: **A LESSON HAD NO END.** `navigateFlow` THROWS "This is the last
+  lesson state." on a Next past the final step, and `/api/control-remote` returns it as a 409 - but the
+  Remote's `showCommandStatus` decided whether to render the status line by PATTERN-MATCHING the string
+  for "Disconnected" / "did not confirm" / "failed", and that message contains none of them, so the tap
+  was a silent no-op. `/control` knew about the last step (`hasNext`, a disabled Next, "Lesson
+  complete!"); the iPad in his hand did not, and offered a green "Next state" forever. Now the Remote
+  derives `isLastStep`, disables Next, drops the "Next: Lesson closeout" line that named a step which
+  does not exist, and shows an End lesson key IN ITS OWN ROW - never in the slot Next just occupied,
+  because a destructive control inheriting the position a thumb has tapped all period is a mis-tap
+  waiting to happen. THE SERVER SIDE ALREADY EXISTED and still does: ending a session is
+  `POST /api/teacher/session {action:"close"}` (not `"end"`), and `endSession` on the Remote carries its
+  own `window.confirm`. There is deliberately NO `end-lesson` member in `TEACHER_REMOTE_ACTIONS` -
+  adding one would also mean touching the sound-bank contract, which asserts that union.
+  THE GENERAL RULE, and it is the third time this file has had to write it: **inferring an error from
+  the wording of a status string is not error handling.** Set an explicit flag at the point of failure.
+  A message parked behind a condition that cannot see it is a message nobody reads - the same fault as
+  the signal chips' `setPollSubmitError` above.
 - **`/teacher` CAN START THE LESSON.** The live-session card has a Start lesson button that POSTs
   `start-lesson` to `/api/control-remote` - the complete server-side start (seeds the sequence,
   flips broadcast, arms step zero) that needs no `/control` tab anywhere. `/control?...&run=1` is
@@ -2213,6 +2339,28 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   REPO-WIDE with `fatal: bad object refs/heads/<name>` plus a misleading "did not send all
   necessary objects" that reads as a remote problem; `git update-ref -d` cannot remove it either
   ("reference broken"), so delete the file directly. `find .git/refs -size 0` finds them.
+  FOUR MORE FROM 2026-08-03, the session that ran the whole flow from the sandbox anyway and paid
+  for it. (1) IT IS NOT ONLY `index.lock`. `HEAD.lock`, `ORIG_HEAD.lock` and
+  `refs/heads/<branch>.lock` strand identically, and the ref lock is the confusing one - the command
+  fails naming a file you were not thinking about. `find .git -name "*.lock"` lists the lot; hand
+  Steele that list, because he can `rm` them and the sandbox cannot.
+  (2) A STRANDED LOCK CANNOT BE `rm`ed FROM THE SANDBOX BUT CAN BE `mv`ed. Rename inside the same
+  directory succeeds where unlink returns EPERM, so `mv .git/index.lock .git/stale-index.lock`
+  unblocks the next command. It is for finishing a diagnosis, not a licence to keep writing - every
+  later write strands another one, and the renamed files are litter Steele then has to clear.
+  (3) A PRIVATE INDEX COMMITS WITHOUT TOUCHING THE SHARED ONE, which is the answer when another
+  session is mid-merge and the shared index is unmergeable: `GIT_INDEX_FILE=/tmp/i git read-tree
+  <base>`, then `git add <paths>`, `git write-tree`, `git commit-tree`, `git update-ref`. It takes no
+  index lock and cannot disturb another session's staging. Only `update-ref` takes a lock, so it
+  costs one, not five. `git merge-tree --write-tree` is NOT available as a treeless merge - this
+  repo's git is 2.34 and that wants 2.38+.
+  (4) THE BUILD CAN BE VERIFIED WITHOUT DESKTOP COMMANDER: `git archive <commit> | tar -x -C
+  /tmp/verify`, COPY node_modules in (about 750MB, a minute over the mount), and `npx next build`
+  there. It must be a real copy - Turbopack refuses a symlink that leaves the project root with
+  "Symlink [project]/node_modules is invalid, it points out of the filesystem root", which is the
+  same warning this file already gives about scratch worktrees. This is how the audit fixes were
+  build-verified on the exact shipping commit while the main tree was mid-merge and `.next` was
+  EPERM-locked.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like
@@ -2225,6 +2373,24 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   vanish seconds afterward because your earlier `rm` only now synced - if a freshly checked-out
   file is missing, `git checkout -- <path>` again and re-verify before concluding anything.
 - A PANE SCREENSHOT CAN DISAGREE WITH THE LAYOUT. Against a REMOTE origin the capture is composited independently of the live tree: /weekly-display screenshotted as a board filling only the top-left ~60% of the frame while `getBoundingClientRect()` said it filled the viewport exactly. Do not chase a scaling bug off a screenshot - settle it with geometry (`elementFromPoint` at all four viewport corners is decisive, and cheap). The same capture was correct against localhost minutes earlier, so distrust it specifically on remote origins.
+- **`/demo` IS THE PROJECTOR TEST HARNESS, NOT JUST THE PORTFOLIO FRONT DOOR** (2026-08-03, how four
+  of the six live surface bugs were reproduced without a teacher cookie, a session, Supabase or
+  Notion). It is PUBLIC, and its `/demo/present` + `/demo/pace` wrappers re-export the REAL gated page
+  components, with `/live-flow?studioPreview=1` as the student pane - so `npm run dev` plus one
+  navigation puts all three classroom surfaces on screen, driven step by step, in a same-origin page
+  whose iframes you can read straight out of `contentDocument`. Pause its auto-advance and use the dot
+  buttons to pin one state (note the dots are NOT 1:1 with steps - a poll contributes a second dot for
+  its results beat).
+  FOR A STATE THE DEMO LESSON DOES NOT CONTAIN, POST YOUR OWN SNAPSHOT. Open
+  `/demo/present?studioPreview=1&embed=1` directly and `window.postMessage({type:"bdm-studio-preview",
+  snapshot}, "*")` from the page itself - a window posts to its own listeners, so no parent frame is
+  needed - and the surface renders it through the ordinary path. That is how the blank You Do was
+  reproduced and both its branches (empty vs authored work fields) checked in about a minute.
+  TWO LIMITS. `?studioPreview=1` cannot show a `slide` frame (`studioPreviewFlow.ts` never carries
+  `slideUrl`), so verify those on `/teacher/rehearse`. And the FIRST navigation to a route the dev
+  server has not compiled can Fast-Refresh the PARENT page and silently reset its React state
+  mid-verification - curl each route once to pre-compile before driving it, and re-establish any
+  helper you defined on `window`.
 - Verifying in the in-app Browser pane: the preview throttles rendering, so CSS animations sit at
   their first frame and screenshots wait for motion to settle - prove motion with
   `el.getAnimations()` or keyed-remount node identity instead of watching. TRANSITIONS freeze the

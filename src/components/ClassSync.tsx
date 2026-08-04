@@ -204,10 +204,23 @@ export default function ClassSync() {
       if (d.broadcast === LIVE_FLOW_MODE) {
         // Warm-up stays on the student homepage. The assigned Google Form opens
         // in a second tab, and verified students may use solo challenge games
-        // until the teacher advances into the instructional lesson flow. Also
-        // hold the homepage during the brief handoff before state zero arrives.
+        // until the teacher advances into the instructional lesson flow.
         const liveStateId = d.live_flow?.state?.id || null;
-        if (!liveStateId || liveStateId === "warmup") {
+        if (!liveStateId) {
+          // A MISSING state is not the same as the warm-up state, and treating
+          // the two alike is what bounced students. "warmup" is a real, authored
+          // destination; a missing one is just a gap - a reconnect, a Control
+          // republish between steps, a snapshot that has not landed yet - and it
+          // resolves in about a second. The old branch pushed a student who was
+          // watching the lesson to "/" and then straight back to /live-flow the
+          // moment state returned - the "bounced out and back" report. Note the
+          // signal chips on /live-flow are themselves gated on `flow?.state`, so
+          // the same missing state that caused the bounce also takes the stuck
+          // chip off the screen; they are one fault, not two. Hold everyone
+          // exactly where they are: target equals the current path, so the
+          // dispatch below finds nothing to do.
+          target = currentPath;
+        } else if (liveStateId === "warmup") {
           target = currentPath === LIVE_FLOW_ROUTE ? "/" : null;
         } else {
           // A published live tool moves the whole class to it. An assigned-tool

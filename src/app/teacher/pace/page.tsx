@@ -375,9 +375,33 @@ export default function PaceSupportPage() {
       })
     : null;
   const lessonSlideZones: ScreenZones = lessonSlideData ? defaultZones(lessonSlideData, "main") : [];
+  // Mirroring main means showing the slide only where MAIN shows the slide. The
+  // overlay is position:fixed inset:0 z-index:12, so anywhere present keeps a
+  // bespoke scene and pace puts the auto-composed slide up instead, pace is not
+  // mirroring the room - it is covering its own frame with something the main
+  // projector is not showing. Found live 2026-08-03 on the Divisibility tool
+  // state ("a your own partial screen") and on You Do. Every clause below has a
+  // twin in present/page.tsx's own showLessonSlide; keep the two lists together.
+  const isTransition = Boolean(state?.id?.startsWith("transition"));
+  const isExitState = state?.id === "exit" || theme.id === "exit";
+  // The fact of a published tool, not its URL - pace never embeds one, it shows
+  // the directions for it, which is exactly its documented second purpose.
+  // The state id is checked DIRECTLY as well as the payload, because both
+  // payload signals are conditional: flow.tool needs the teacher to have pressed
+  // Send tool setup, and flow.resource needs Response Mode to be literally
+  // "Assigned Tool" with a Tool name that resolves. A step authored with State
+  // ID tool-divisibility and neither of those is still a tool state, and it was
+  // still getting the slide. `tool-` is the canonical prefix test (classStates.ts).
+  const hasLiveTool = Boolean(flow?.tool) || Boolean(state?.id?.startsWith("tool-"));
+  const hasAssignedResource = Boolean(
+    flow?.resource?.url?.startsWith("/")
+    && !["discussion", "independent", "closeout"].includes(theme.id),
+  );
   const showLessonSlide = Boolean(
     lessonSlideData && connected && !interlude && !mirroredSlideUrl && !warmupAgenda &&
-    !anchorPose && !linkedSpinnerMode && !poll && !hasDiscussionTimeline && !isDiscussion && !isLearningCheck,
+    !anchorPose && !linkedSpinnerMode && !poll && !hasDiscussionTimeline && !isDiscussion && !isLearningCheck &&
+    !isTransition && !isExitState && !routineConfig && !hasLiveTool && !hasAssignedResource &&
+    theme.id !== "independent" && flow?.presentation?.mode !== "board" && state?.id !== "warmup",
   );
 
   return (

@@ -769,6 +769,21 @@ export default function ControlPage() {
   const timerStartSecondsRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
+  // ONE AudioContext FOR THIS PAGE. An AudioBuffer only crosses contexts cleanly when their sample
+  // rates agree, so a clip decoded on one and played on another can throw on `src.buffer = ...` and
+  // the press is simply silent. Constructing here is safe before any gesture - a context starts
+  // suspended, decodeAudioData still works, and the teacher's first click resumes it.
+  const ensureAudioCtx = useCallback((): AudioContext | null => {
+    if (typeof window === "undefined") return null;
+    try {
+      audioCtxRef.current = audioCtxRef.current
+        ?? new (window.AudioContext
+          || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      return audioCtxRef.current;
+    } catch {
+      return null;
+    }
+  }, []);
   // A clock the teacher armed mid-state from the Remote, on a step that authored no Duration.
   // Lives here because Control's snapshot is a FULL REPLACE - the server sets it, but Control
   // republishes every second and would erase it within a tick if it did not hold it too.
@@ -930,12 +945,18 @@ export default function ControlPage() {
       setSoundUrls(next);
       // Hand the bank its clips. Until this resolves a press still sounds -
       // it just plays the built-in cue, same as a machine with nothing loaded.
+      // PASS THIS PAGE'S CONTEXT. The upload path already does; this restore path did not, so a
+      // clip decoded on the bank's own shared context and then failed on `src.buffer = chosen`
+      // when playSoundCue used Control's - a freshly uploaded clip sounded and the same clip went
+      // silent after a reload. It matters more now that clips are committed to public/sounds:
+      // `userBuffers` WINS over the committed file, so one broken restored buffer would shadow a
+      // working file and the button would be silent with a good clip sitting right there.
       for (const cue of SOUND_CUES) {
         const blob = await idbGet(bankClipKey(cue.id)).catch(() => undefined);
-        if (blob) void installUserClip(cue.id, await blob.arrayBuffer());
+        if (blob) void installUserClip(cue.id, await blob.arrayBuffer(), ensureAudioCtx());
       }
     })();
-  }, []);
+  }, [ensureAudioCtx]);
 
   // Recover the newest server-side open session. This keeps Control attached
   // even on a different teacher device or before Live Class Flow is selected.
