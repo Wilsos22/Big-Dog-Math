@@ -277,11 +277,21 @@ export function parseBoardFigure(line: string): BoardFigure | null {
  * so nothing new has to be authored for the vocabulary cards and this board to
  * agree.
  */
+/** One vocabulary line per newline or semicolon - never per comma. */
+const VOCABULARY_LINES = /[\n;]+/;
+
+/**
+ * "Ratio table - a table of equivalent ratios." The whitespace before the dash
+ * is required, which is what keeps a figure line ("table: Cups = 3, 6, 9") from
+ * reading as a term called "table".
+ */
+const TERM_DEFINITION = /^(.{1,48}?)\s+[-–—:]\s+(.+)$/;
+
 export function readBoardVocabulary(raw: string): BoardVocabulary {
   let figure: BoardFigure | null = null;
   const entries: VocabularyEntry[] = [];
 
-  for (const line of (raw || "").split(/[\n;]+/)) {
+  for (const line of (raw || "").split(VOCABULARY_LINES)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
     const parsed = parseBoardFigure(trimmed);
@@ -289,13 +299,52 @@ export function readBoardVocabulary(raw: string): BoardVocabulary {
       figure = figure ?? parsed;
       continue;
     }
-    const split = trimmed.match(/^(.{1,48}?)\s+[-–—:]\s+(.+)$/);
+    const split = trimmed.match(TERM_DEFINITION);
     entries.push(split
       ? { term: split[1].trim(), definition: split[2].trim() }
       : { term: trimmed, definition: "" });
   }
 
   return { entries, figure };
+}
+
+/**
+ * Folds several Lesson Steps' `Vocabulary` blocks into one block this board can
+ * read.
+ *
+ * The board's reveal reads the LESSON-level `Discussion Vocabulary`, but a
+ * lesson's vocabulary is just as often authored per STEP, in each step's own
+ * `Vocabulary` property - the two are different Notion fields with near-identical
+ * names. M1.T1.L2-D1 went live authored the second way, so the board found no
+ * term, and the highlight, the travel and the definition lens all silently
+ * stopped: the terms existed, on the pages nothing here read.
+ *
+ * A DEFINED term always beats a bare repeat of the same term, however late it
+ * arrives. That is the load-bearing rule, not a nicety: a warm-up step lists
+ * bare terms ("factor", "factor pair", "divisible") and a later step is where
+ * they get defined, so first-one-wins would keep the bare copy and leave the
+ * reveal with nothing to say - the exact failure this function exists to end.
+ * Otherwise first mention wins, so terms stay in the order the lesson teaches
+ * them.
+ */
+export function mergeVocabularyBlocks(blocks: string[]): string {
+  // Map keeps insertion order, and re-setting a key does not move it, so a term
+  // upgraded to its defined form keeps the position of its first mention.
+  const chosen = new Map<string, { line: string; defined: boolean }>();
+
+  for (const block of blocks) {
+    for (const line of (block || "").split(VOCABULARY_LINES)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const split = trimmed.match(TERM_DEFINITION);
+      const defined = Boolean(split);
+      const key = (split ? split[1] : trimmed).trim().toLocaleLowerCase();
+      const held = chosen.get(key);
+      if (!held || (!held.defined && defined)) chosen.set(key, { line: trimmed, defined });
+    }
+  }
+
+  return [...chosen.values()].map((entry) => entry.line).join("\n");
 }
 
 export interface PhraseMatch {

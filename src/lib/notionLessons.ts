@@ -25,6 +25,9 @@ const DATA_SOURCE_IDS = [
   "e367e541-c0c7-4613-8066-d2e61b6fee64",
 ];
 const LESSON_DATABASE_ID = "613d13a5-ac90-4ab3-9f5f-b7da95911ec3";
+// The Lesson Steps data source, queried directly by getStepVocabularyForLessons.
+// Same id notionLessonStepWrites.ts writes through.
+const LESSON_STEP_DATA_SOURCE_ID = "8e467c1b-8937-4902-811e-ca0a2e15af4d";
 const NOTION_API = "https://api.notion.com/v1";
 const NOTION_VERSION = "2025-09-03";
 
@@ -761,6 +764,73 @@ export async function getPublishedLessonsForDateRange(startDate: string, endDate
     },
     { includeRelations: false },
   );
+}
+
+/**
+ * Every Lesson Step `Vocabulary` block for the given lessons, in step order,
+ * keyed by the lesson id exactly as it was passed in.
+ *
+ * This exists for /weekly-display, whose vocabulary reveal reads the
+ * LESSON-level `Discussion Vocabulary` while a lesson's terms are just as often
+ * authored per STEP - two Notion fields, near-identical names, and the board
+ * simply found nothing.
+ *
+ * It queries the Lesson Steps data source ONCE with an `or` of relation filters
+ * rather than walking each lesson's `Lesson Steps` relation, because that walk
+ * is a page fetch per step (about twelve a lesson) and this route is polled by
+ * two classroom TVs every sixty seconds. It also never throws: a board with no
+ * reveal is a working board, so a failure here returns what it has.
+ */
+export async function getStepVocabularyForLessons(lessonIds: string[]): Promise<Map<string, string[]>> {
+  const byLesson = new Map<string, string[]>();
+  // Notion hands relation ids back dashed or compact depending on the surface,
+  // so match on the compact form and answer on the caller's own id.
+  const wanted = new Map<string, string>();
+  for (const id of lessonIds) {
+    const compact = compactNotionId(id);
+    if (compact) wanted.set(compact, id);
+  }
+  const token = process.env.NOTION_TOKEN;
+  if (!wanted.size || !token) return byLesson;
+
+  let startCursor: string | null = null;
+  do {
+    const res: Response = await fetch(`${NOTION_API}/data_sources/${LESSON_STEP_DATA_SOURCE_ID}/query`, {
+      signal: AbortSignal.timeout(8000),
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "Notion-Version": NOTION_VERSION,
+      },
+      body: JSON.stringify({
+        filter: {
+          or: [...wanted.values()].map((id) => ({ property: "Lesson", relation: { contains: id } })),
+        },
+        sorts: [{ property: "Order", direction: "ascending" }],
+        page_size: 100,
+        ...(startCursor ? { start_cursor: startCursor } : {}),
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return byLesson;
+
+    const data = (await res.json()) as NotionQueryResponse;
+    for (const page of data.results ?? []) {
+      const vocabulary = extractText(page.properties["Vocabulary"]).trim();
+      if (!vocabulary) continue;
+      for (const related of page.properties["Lesson"]?.relation ?? []) {
+        const owner = wanted.get(compactNotionId(related.id));
+        if (!owner) continue;
+        const blocks = byLesson.get(owner) ?? [];
+        blocks.push(vocabulary);
+        byLesson.set(owner, blocks);
+      }
+    }
+    startCursor = data.has_more ? data.next_cursor ?? null : null;
+  } while (startCursor);
+
+  return byLesson;
 }
 
 export async function getAllPublishedLessons(): Promise<LessonData[]> {
