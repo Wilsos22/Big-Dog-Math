@@ -46,7 +46,27 @@ const ERASE_SCALE = 5; // pixel eraser is 5x the dialled pen width, as before
 const HL_SCALE = 3; // highlighter band is 3x the dialled pen width
 const LASER_MS = 850; // how long the laser trail lingers
 const HOLD_SNAP_MS = 600; // hold the pen still this long to straighten the stroke
-const HOLD_SNAP_RADIUS = 8; // "still" = within this many px
+// "Still" has to mean still FOR A HAND, not still for a machine. At 8px a resting
+// Apple Pencil's own tremor kept stepping outside the circle, and every step
+// RE-ARMS the timer from zero (see onMove), so the 600ms never accumulated and
+// hold-to-straighten was close to untriggerable by hand. 18px is about 3mm on an
+// iPad: wider than tremor, far tighter than a deliberate slow stroke, which would
+// have to crawl under 30px/sec to sit inside it for the full 600ms.
+const HOLD_SNAP_RADIUS = 18;
+// A tap ROLLS. `moved` (14px) still arms pinch/pan and must stay where it is, but
+// reusing that same 14px to invalidate the tap meant a two-finger tap on glass
+// usually died as a "pinch" that never actually zoomed. Tap validity gets its own
+// wider slop, plus a direct check that the view scale did not really change.
+const TAP_SLOP = 26;
+// One finger, tapped twice, with the SECOND tap landing inside this window. It is
+// measured lift-of-the-first to touch-of-the-second - the actual gap between taps
+// - so a slow second press does not spend the budget on itself. 450ms rather than
+// the ~300ms iOS uses because on /ipad the first tap of the pair also closes the
+// tool palette, and that React re-render delays delivery of the second tap; a
+// budget that a single re-render can exhaust is a gesture that works on the bench
+// and not in the room.
+const DOUBLE_TAP_MS = 450;
+const DOUBLE_TAP_SLOP = 44; // and the second tap lands this close to the first
 const PREDICT_LEAD_MAX = 10; // px the predicted tip may run ahead of the real one
 const ZOOM_MAX = 5; // pinch zoom ceiling; floor is always 1 (the full page)
 const DOT_PITCH = 26; // Warm Notebook dot spacing at 100%
@@ -150,7 +170,13 @@ export default function InkBoard({
   const holdAnchorRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const laserRef = useRef<Map<string, { pts: { x: number; y: number; t: number }[] }>>(new Map());
   const laserIdRef = useRef<string | null>(null);
-  const touchTapsRef = useRef<Map<number, { x0: number; y0: number; x: number; y: number; t: number; moved: boolean; up: boolean }>>(new Map());
+  const touchTapsRef = useRef<Map<number, { x0: number; y0: number; x: number; y: number; t: number; moved: boolean; up: boolean; maxD: number }>>(new Map());
+  // The view scale when the CURRENT finger gesture began. A tap is only a tap if
+  // the scale is unchanged by the end of it - the honest test for "did that turn
+  // into a pinch", far better than inferring it from how far a finger drifted.
+  const gestureScaleRef = useRef(1);
+  // The last clean ONE-finger tap, for double-tap undo.
+  const lastTapRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const lastStatusRef = useRef<InkConnectionStatus>("connecting");
 
   // Phase 3 state: the view transform (pinch zoom + pan, pen surface only) and
@@ -1006,13 +1032,18 @@ export default function InkBoard({
     snapTimerRef.current = window.setTimeout(trySnap, HOLD_SNAP_MS);
   }, [clearSnapTimer, trySnap]);
 
-  // Two-finger tap = undo, three-finger tap = redo (fingers are free for
-  // gestures because they never draw unless "Finger draws" is on). Once a
-  // finger MOVES past the tap radius the taps are dead and, where zoom is
-  // allowed, the same two fingers become pinch-to-zoom and one finger pans.
+  // One finger tapped TWICE = undo, two-finger tap = undo, three-finger tap =
+  // redo (fingers are free for gestures because they never draw unless "Finger
+  // draws" is on). The double-tap is the one a teacher reaches for; the
+  // multi-finger taps are the iPad idiom and cost nothing to keep. Once a finger
+  // drifts past TAP_SLOP, or the gesture actually changes the zoom, the taps are
+  // dead and, where zoom is allowed, two fingers pinch and one finger pans.
   const noteTouchDown = useCallback((e: React.PointerEvent) => {
     measure();
-    touchTapsRef.current.set(e.pointerId, { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: performance.now(), moved: false, up: false });
+    // First finger of a fresh gesture: remember the scale, so on lift we can ask
+    // whether this actually became a pinch instead of guessing from drift.
+    if (touchTapsRef.current.size === 0) gestureScaleRef.current = viewRef.current.s;
+    touchTapsRef.current.set(e.pointerId, { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t: performance.now(), moved: false, up: false, maxD: 0 });
   }, [measure]);
   const noteTouchMove = useCallback((e: React.PointerEvent) => {
     const rec = touchTapsRef.current.get(e.pointerId);
@@ -1020,7 +1051,9 @@ export default function InkBoard({
     const prevX = rec.x, prevY = rec.y;
     rec.x = e.clientX;
     rec.y = e.clientY;
-    if (Math.hypot(e.clientX - rec.x0, e.clientY - rec.y0) > 14) rec.moved = true;
+    const d = Math.hypot(e.clientX - rec.x0, e.clientY - rec.y0);
+    if (d > rec.maxD) rec.maxD = d;
+    if (d > 14) rec.moved = true; // arms pinch/pan only - tap validity uses TAP_SLOP
     if (!allowZoomRef.current) return;
     const act = [...touchTapsRef.current.values()].filter((r) => !r.up);
     if (act.length === 2) {
@@ -1048,12 +1081,27 @@ export default function InkBoard({
     const all = [...touchTapsRef.current.values()];
     if (!all.every((r) => r.up)) return;
     const now = performance.now();
-    const clean = all.every((r) => !r.moved && now - r.t < 500);
+    const zoomed = Math.abs(viewRef.current.s - gestureScaleRef.current) > 0.01;
+    const clean = !zoomed && all.every((r) => r.maxD <= TAP_SLOP && now - r.t < 500);
     const n = all.length;
+    const first = all[0];
     touchTapsRef.current.clear();
-    if (!clean) return;
-    if (n === 2) performUndo();
-    else if (n === 3) performRedo();
+    if (!clean) { lastTapRef.current = null; return; }
+    if (n === 2) { lastTapRef.current = null; performUndo(); return; }
+    if (n === 3) { lastTapRef.current = null; performRedo(); return; }
+    if (n !== 1 || !first) { lastTapRef.current = null; return; }
+    // ONE finger. A single tap must keep doing nothing on its own - on /ipad it
+    // is also how the tool palette is dismissed - so undo fires only on the
+    // SECOND of a quick pair. That is the motion actually being made at the
+    // board; the two-finger tap above is kept because it is the iPad idiom and
+    // costs nothing to leave in.
+    const prev = lastTapRef.current;
+    if (prev && first.t - prev.t < DOUBLE_TAP_MS && Math.hypot(first.x0 - prev.x, first.y0 - prev.y) < DOUBLE_TAP_SLOP) {
+      lastTapRef.current = null;
+      performUndo();
+      return;
+    }
+    lastTapRef.current = { x: first.x0, y: first.y0, t: now };
   }, [performRedo, performUndo]);
 
   const onDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
