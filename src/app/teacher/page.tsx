@@ -25,6 +25,18 @@ const RUN: LinkItem[] = [
   { href: "/weekly-display", label: "Weekly display", letter: "L", color: "#8b4fb3", desc: "Open today's Notion learning target on a separate screen", newWindow: true },
 ];
 
+// Review games, plus the panel that follows them. BRUH and Grudge Ball are
+// launchers and both ride an open class session; Challenge results is the
+// after-the-fact read, and it says where a challenge is actually launched from
+// so this section is never a dead end mid-class. Another game means one more
+// entry here - nothing else on this page changes.
+const GAMES: LinkItem[] = [
+  { href: "/teacher/bruh", label: "BRUH", letter: "B", color: "#7c5cd6", desc: "Pick a bank, name the teams, deploy - the board shows who is in and who is locked out" },
+  { href: "/teacher/grudge", label: "Grudge Ball", letter: "G", color: "#f95335", desc: "Answer to earn the hoop, then knock X's off whoever you want" },
+  { href: "/teacher/scoreboard", label: "Scoreboard", letter: "S", color: "#cf6f9b", desc: "Live standings for whichever game is running - open on a second screen", newWindow: true },
+  { href: "/teacher/challenges", label: "Challenge results", letter: "C", color: "#2f9e6f", desc: "How students did in game mode - launch one from the Session page" },
+];
+
 // See the learning.
 const LEARN: LinkItem[] = [
   { href: "/teacher/rightnow", label: "Growth", letter: "G", color: "#2f9e6f", desc: "Who to pull, grouped by misconception" },
@@ -33,7 +45,6 @@ const LEARN: LinkItem[] = [
   { href: "/teacher/checkpoints", label: "Checkpoints", letter: "K", color: "#fcaf38", desc: "Tier-2 checkpoint results" },
   { href: "/teacher/exit-tickets", label: "Exit tickets", letter: "X", color: "#f95335", desc: "End-of-class checks" },
   { href: "/teacher/assignments", label: "Practice", letter: "P", color: "#674a40", desc: "Assignments and attempts" },
-  { href: "/teacher/challenges", label: "Challenges", letter: "H", color: "#7c5cd6", desc: "Game-mode results" },
   { href: "/teacher/analytics", label: "Analytics", letter: "A", color: "#3b7fc4", desc: "Warm-up form insights" },
 ];
 
@@ -100,6 +111,7 @@ const JUMP = [
   { label: "Right now", href: "#now" },
   { label: "Find lesson", href: "#lesson-finder" },
   { label: "Run class", href: "#run" },
+  { label: "Games", href: "#games" },
   { label: "See learning", href: "#learn" },
   { label: "Manage", href: "#manage" },
   { label: "Teaching tools", href: "#tools" },
@@ -424,8 +436,12 @@ export default function TeacherHome() {
         .bd-grid.tools { grid-template-columns:repeat(auto-fill, minmax(198px,1fr)); }
         .bd-card { display:flex; align-items:center; gap:12px; background:var(--bdb-card); border:1px solid var(--bdb-line); border-radius:var(--bdb-r); padding:13px 15px; box-shadow:var(--bdb-shadow-sm); transition:transform 120ms ease, box-shadow 120ms ease, border-color 120ms; }
         .bd-card:hover { transform:translateY(-1px); box-shadow:var(--bdb-shadow); border-color:color-mix(in srgb, var(--c,#674a40) 45%, var(--bdb-line)); }
+        /* The letter mixes to 55% black, not 80%. At 80% the bright accents read
+           under 4.5:1 on their own 16% tint - amber was 2.5:1 - and the letter is
+           16px/800, below the large-text threshold, so AA applies. 55% clears it
+           for every accent in use without needing a per-color deep companion. */
         .bd-tile { width:38px; height:38px; border-radius:10px; display:grid; place-items:center; font-weight:800; font-size:1rem; flex:none;
-          background:color-mix(in srgb, var(--c) 16%, white); color:color-mix(in srgb, var(--c) 80%, black); }
+          background:color-mix(in srgb, var(--c) 16%, white); color:color-mix(in srgb, var(--c) 55%, black); }
         .bd-card-text { min-width:0; }
         .bd-card h3 { margin:0; font-size:0.98rem; font-weight:700; letter-spacing:-0.01em; }
         .bd-card p { margin:2px 0 0; font-size:0.8rem; color:var(--bdb-ink-soft); line-height:1.3; }
@@ -649,6 +665,10 @@ export default function TeacherHome() {
           {/* RUN CLASS */}
           <h2 className="bd-sec-h" id="run">Run class</h2>
           <div className="bd-grid">{RUN.map((i) => <LinkCard key={i.href} item={i} />)}</div>
+
+          {/* GAMES */}
+          <h2 className="bd-sec-h" id="games">Games</h2>
+          <div className="bd-grid">{GAMES.map((i) => <LinkCard key={i.href} item={i} />)}</div>
 
           {/* SEE LEARNING */}
           <h2 className="bd-sec-h" id="learn">See the learning</h2>

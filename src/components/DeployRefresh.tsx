@@ -14,7 +14,10 @@ import { usePathname } from "next/navigation";
 // /teacher/pace (the Support projector) and /weekly-display (the two all-day
 // TVs in the back of the room) joined 2026-07-27 - they are the longest-open
 // tabs in the building and were silently missing deploys. NEVER add /ipad.
-const DISPLAY_ROUTES = ["/board", "/teacher/present", "/teacher/pace", "/live-flow", "/warmup", "/weekly-display"];
+// /teacher/scoreboard joined 2026-08-03: it is opened once on the room panel and
+// left there for the period, and it holds no local state a reload could lose -
+// every standing it draws is re-read from /api/teacher/scoreboard every 2s.
+const DISPLAY_ROUTES = ["/board", "/teacher/present", "/teacher/pace", "/live-flow", "/warmup", "/weekly-display", "/teacher/scoreboard"];
 const POLL_MS = 4 * 60 * 1000;
 
 export default function DeployRefresh() {
