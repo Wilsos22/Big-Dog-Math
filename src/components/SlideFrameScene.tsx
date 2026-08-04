@@ -28,10 +28,12 @@ export default function SlideFrameScene({
   const source = resolveSlideSource(url);
   const [loaded, setLoaded] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     setLoaded(false);
     setTimedOut(false);
+    setFailed(false);
     if (source.kind !== "embed" && source.kind !== "site") return;
     const timer = setTimeout(() => setTimedOut(true), 4000);
     return () => clearTimeout(timer);
@@ -40,10 +42,27 @@ export default function SlideFrameScene({
   if (source.kind === "none") return null;
 
   if (source.kind === "image") {
+    // AN IMAGE NEEDS THE SAME WORDED FALLBACK AS AN EMBED. A same-origin path is the recommended
+    // slide source, which makes "the file was never committed" or a mistyped name the most likely
+    // failure there is - and a bare <img> answers that with the browser's broken-image glyph,
+    // which at 25 feet is indistinguishable from a broken lesson. Hide it and say so in words.
     return (
       <div className={className}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={source.url} alt="" style={{ width: "100%", height: "100%", objectFit: fit, display: "block" }} />
+        {failed ? null : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={source.url}
+            alt=""
+            onError={() => setFailed(true)}
+            style={{ width: "100%", height: "100%", objectFit: fit, display: "block" }}
+          />
+        )}
+        {failed ? (
+          <div className="stage-slide-fallback">
+            <p>Slide did not load</p>
+            <span>Keep going - it is not part of the math</span>
+          </div>
+        ) : null}
       </div>
     );
   }

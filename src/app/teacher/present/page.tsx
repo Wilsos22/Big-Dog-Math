@@ -564,6 +564,9 @@ export default function ClassroomStagePage() {
   // A poll, a published tool and the board scene still win over it: those are things the room is
   // DOING, and one of them being up means the slide is no longer what the step is about.
   const slideFrameUrl = String(activeSequenceStep?.slideUrl || "").trim();
+  // "contain" letterboxes and never crops, which is what a 16:9 deck and anything with words near
+  // the edges needs. Only an explicit "cover" from the studio inspector changes it.
+  const slideFrameFit = activeSequenceStep?.slideFit === "cover" ? "cover" : "contain";
   const lessonVisual = flow ? resolveLessonVisual({
     lessonCode: lesson?.code || activeSequenceStep?.lessonCode,
     stateId: theme.id,
@@ -1286,7 +1289,7 @@ export default function ClassroomStagePage() {
           ) : liveToolUrl ? (
             <iframe className="stage-tool" src={liveToolUrl} title={flow.tool?.label || "Lesson tool"} />
           ) : slideFrameUrl ? (
-            <SlideFrameScene url={slideFrameUrl} />
+            <SlideFrameScene url={slideFrameUrl} fit={slideFrameFit} />
           ) : presentation?.mode === "board" ? (
             <div className="stage-board-scene">
               <div className="stage-board-wrap">
