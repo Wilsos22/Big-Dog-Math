@@ -41,6 +41,12 @@ import {
 import { discussionSupportsForLesson, inferClassroomStage, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { missingStripSlots, stripFromStep } from "@/lib/classroomStateStrip";
 import {
+  flowSnapshotForStep,
+  lineupFromSteps,
+  type FlowStepDeps,
+  type LineupItem,
+} from "@/lib/controlLineup";
+import {
   createDiscussionRoundSnapshot,
   normalizeDiscussionPhaseSnapshot,
 } from "@/lib/discussionProtocol";
@@ -102,46 +108,10 @@ import {
 
 import { CLOSEOUT_DIRECTIONS, DEFAULT_STATES, BANK_GROUPS, type ClassState } from "@/lib/classStates";
 
-interface LineupItem {
-  uid: string;
-  stateId: string;
-  minutes?: number;
-  title?: string;
-  studentDirections?: string;
-  question?: string;
-  pollKind?: LivePollKind | "";
-  choices?: string[];
-  correctAnswer?: string;
-  standard?: string;
-  notionStepId?: string;
-  notionLessonId?: string;
-  lessonCode?: string;
-  linkUrl?: string;
-  paperTask?: string;
-  advance?: string;
-  mainDisplay?: string;
-  paceDirections?: string;
-  studentAction?: string;
-  remoteActions?: string;
-  // Carried through the published sequence so a Control reconnect cannot wipe
-  // the slide overlays the lesson authored.
-  slideOverlay?: string;
-  slideUrl?: string;
-  slideMirror?: boolean;
-  discussionStems?: string;
-  vocabulary?: string;
-  discussionPhases?: string;
-  responseMode?: string;
-  workSpaceAvailable?: boolean;
-  publicSurfaceMode?: PublicSurfaceMode;
-  routineConfig?: PublicLessonRoutineConfig | null;
-  // The authored classroom state strip, carried through the published sequence
-  // and back out of it on reconnect for the same reason slideOverlay is.
-  eyes?: string;
-  voice?: string;
-  supplies?: string;
-  body?: string;
-}
+// LineupItem MOVED to src/lib/controlLineup.ts, together with the two mappers
+// that translate it to and from the published sequence. It lives there because
+// a contract can compile that module in isolation; it could never test an
+// object literal buried in this client component.
 
 interface TeacherSessionRow {
   id: string;
@@ -1249,40 +1219,7 @@ export default function ControlPage() {
     markServerHydration(flow);
 
     if (flow.sequence.steps?.length) {
-      persistLineup(flow.sequence.steps.map((step) => ({
-        uid: uid(),
-        stateId: step.stateId,
-        minutes: Math.max(1, Math.round(step.durationSeconds / 60)),
-        title: step.label,
-        studentDirections: step.description,
-        question: step.question,
-        pollKind: step.pollKind || "",
-        choices: step.choices,
-        correctAnswer: step.correctAnswer,
-        standard: step.standard,
-        notionStepId: step.notionStepId || undefined,
-        notionLessonId: step.notionLessonId || undefined,
-        lessonCode: step.lessonCode,
-        linkUrl: step.resourceUrl,
-        paperTask: step.paperTask,
-        mainDisplay: step.mainDisplay,
-        paceDirections: step.paceDirections,
-        studentAction: step.studentAction,
-        remoteActions: step.remoteActions,
-        discussionStems: step.discussionStems?.join("\n"),
-        vocabulary: step.vocabulary?.join("\n"),
-        responseMode: step.responseMode,
-        workSpaceAvailable: step.workSpaceAvailable,
-        slideOverlay: step.slideOverlay || undefined,
-        slideUrl: step.slideUrl || undefined,
-        slideMirror: step.slideMirror || undefined,
-        publicSurfaceMode: step.publicSurfaceMode,
-        routineConfig: step.routineConfig,
-        eyes: step.eyes,
-        voice: step.voice,
-        supplies: step.supplies,
-        body: step.body,
-      })));
+      persistLineup(lineupFromSteps(flow.sequence.steps, uid));
     }
 
     setCurrentIndex(flow.sequence.currentIndex);
@@ -1948,56 +1885,22 @@ export default function ControlPage() {
           nextLabel: nextItem?.title || nextState?.label || null,
           nextDirections: nextItem?.paceDirections || nextItem?.studentDirections || nextState?.desc || null,
           advanceMode: autoAdvance ? "automatic" as const : "manual" as const,
-          steps: lineup.map((item) => {
-            const itemState = bank.find((candidate) => candidate.id === item.stateId);
-            return {
-              stateId: item.stateId,
-              label: item.title || itemState?.label || "Lesson state",
-              description: item.studentDirections || itemState?.desc || "Wait for the teacher's directions.",
-              color: itemState?.color || "#35785a",
-              semantic: inferClassroomStage(item.stateId, item.title || itemState?.label || ""),
-              durationSeconds: minutesForLineupItem(item, bank) * 60,
-              question: item.question || "",
-              pollKind: usesDiscussionProtocol(item.stateId, item.title || itemState?.label || "")
-                ? null
-                : resolveLiveStepPollKind(item.responseMode, item.pollKind, item.stateId),
-              choices: item.choices || [],
-              correctAnswer: item.correctAnswer || "",
-              standard: item.standard || "",
-              resourceUrl: item.linkUrl || "",
-              paperTask: item.paperTask || "",
-              notionStepId: item.notionStepId || null,
-              notionLessonId: item.notionLessonId || null,
-              lessonCode: item.lessonCode || activeLessonContext?.code || "",
-              mainDisplay: item.mainDisplay || "",
-              paceDirections: item.paceDirections || itemState?.paceAction || item.studentDirections || itemState?.desc || "",
-              studentAction: item.studentAction || itemState?.studentAction || item.studentDirections || itemState?.desc || "",
-              discussionStems: usesDiscussionProtocol(item.stateId, item.title || itemState?.label || "")
-                ? splitLiveFlowLines(item.discussionStems || activeLessonContext?.discussionStems)
-                  .concat(item.discussionStems || activeLessonContext?.discussionStems ? [] : discussionSupportsForLesson(item.lessonCode || activeLessonContext?.code).sentenceStems)
-                : [],
-              vocabulary: usesDiscussionProtocol(item.stateId, item.title || itemState?.label || "")
-                ? splitLiveFlowVocabulary(item.vocabulary || activeLessonContext?.discussionVocabulary)
-                  .concat(item.vocabulary || activeLessonContext?.discussionVocabulary ? [] : discussionSupportsForLesson(item.lessonCode || activeLessonContext?.code).keyVocabulary)
-                : [],
-              responseMode: item.responseMode || "",
-              workSpaceAvailable: item.workSpaceAvailable,
-              publicSurfaceMode: item.publicSurfaceMode || defaultPublicSurfaceModeForState(item.stateId),
-              routineConfig: item.routineConfig || null,
-              // Both of these are READ BACK during rehydration. Omitting them
-              // here meant any Control reconnect - or a remote-driven rehydrate -
-              // silently wiped the iPad's Remote Actions and every slide overlay,
-              // and the iPad then degraded to restating the pace directions.
-              remoteActions: item.remoteActions || "",
-              slideOverlay: item.slideOverlay || undefined,
-              slideUrl: item.slideUrl || undefined,
-              slideMirror: item.slideMirror || undefined,
-              eyes: item.eyes || "",
-              voice: item.voice || "",
-              supplies: item.supplies || "",
-              body: item.body || "",
-            };
-          }),
+          // ONE mapper, shared with the two rehydrate sites and pinned by
+          // scripts/control-lineup-contract.mjs. This snapshot is a FULL
+          // REPLACE, so a field missing here is deleted from the room's
+          // snapshot about a second later.
+          steps: lineup.map((item) =>
+            flowSnapshotForStep(item, bank, activeLessonContext ?? null, {
+              inferClassroomStage,
+              usesDiscussionProtocol,
+              resolveLiveStepPollKind,
+              splitLiveFlowLines,
+              splitLiveFlowVocabulary,
+              discussionSupportsForLesson,
+              defaultPublicSurfaceModeForState,
+              minutesForItem: (candidate) => minutesForLineupItem(candidate, bank),
+            } satisfies FlowStepDeps),
+          ),
         }
       : null;
     const activePaperTask = activeItem?.paperTask
@@ -2822,36 +2725,10 @@ export default function ControlPage() {
       const publishedTimer = publishedFlow.timer;
       markServerHydration(publishedFlow);
       if (publishedFlow.sequence?.steps?.length) {
-        persistLineup(publishedFlow.sequence.steps.map((step) => ({
-          uid: uid(),
-          stateId: step.stateId,
-          minutes: Math.max(1, Math.round(step.durationSeconds / 60)),
-          title: step.label,
-          studentDirections: step.description,
-          question: step.question,
-          pollKind: step.pollKind || "",
-          choices: step.choices,
-          correctAnswer: step.correctAnswer,
-          standard: step.standard,
-          notionStepId: step.notionStepId || undefined,
-          notionLessonId: step.notionLessonId || undefined,
-          lessonCode: step.lessonCode,
-          linkUrl: step.resourceUrl,
-          paperTask: step.paperTask,
-          mainDisplay: step.mainDisplay,
-          paceDirections: step.paceDirections,
-          studentAction: step.studentAction,
-          remoteActions: step.remoteActions,
-          discussionStems: step.discussionStems?.join("\n"),
-          vocabulary: step.vocabulary?.join("\n"),
-          responseMode: step.responseMode,
-          workSpaceAvailable: step.workSpaceAvailable,
-          slideOverlay: step.slideOverlay || undefined,
-          slideUrl: step.slideUrl || undefined,
-          slideMirror: step.slideMirror || undefined,
-          publicSurfaceMode: step.publicSurfaceMode,
-          routineConfig: step.routineConfig,
-        })));
+        // Was its own literal, and it had drifted: no eyes/voice/supplies/body,
+        // so a remote-driven rehydrate mid-lesson silently killed the classroom
+        // state strip on both projectors for the rest of the period.
+        persistLineup(lineupFromSteps(publishedFlow.sequence.steps, uid));
       }
       if (publishedFlow.sequence) setCurrentIndex(publishedFlow.sequence.currentIndex);
       if (publishedFlow.sequence) setAutoAdvance(publishedFlow.sequence.advanceMode === "automatic");
