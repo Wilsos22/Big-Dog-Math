@@ -119,6 +119,17 @@ export interface DecInput {
   about?: number;
   /** Half-width of the band around `about`. Absent means exact match. */
   tolerance?: number;
+  /**
+   * A hard floor under the band, refused with its own message.
+   *
+   * The band alone is not enough. A one-wide tolerance is right for a
+   * whole-number estimate - rounding each operand to the nearest whole can move
+   * the answer that far, so both 1 and 2 are sensible for 1.53 - but it also
+   * accepted 0 for an answer of 1, and "zero" is not a rounding of anything
+   * this step is ever asked about: the step only exists when the answer is at
+   * least one whole.
+   */
+  atLeast?: number;
 }
 
 /**
@@ -337,6 +348,10 @@ function estimateStep(a: Dec, b: Dec, op: DecimalOp, value: number): DecStep {
       hint: nudge[op],
       about: value,
       tolerance,
+      // This step only runs when the answer is at least one whole, so anything
+      // below one is not a rounding of it - it is a different claim about the
+      // size of the answer, and it gets its own answer back.
+      atLeast: 1,
     },
     reveal: [],
     highlight: [],
@@ -983,6 +998,8 @@ function partialSumSteps(
   const prodOffset = columns - prod.length;
   const steps: DecStep[] = [];
   let carry = 0;
+  /** The last step that was actually a COLUMN, so a bring-down attaches there. */
+  let lastColumn = -1;
 
   for (let c = columns - 1; c >= prodOffset + placeholders; c -= 1) {
     const addends: number[] = [];
@@ -998,11 +1015,15 @@ function partialSumSteps(
       // One digit and nothing to add to it. It comes down with the step before
       // rather than becoming a question with a single number in it - and the
       // step before SAYS so, or the digit appears from nowhere.
-      const prev = steps[steps.length - 1];
+      // It attaches to the last COLUMN step, not to whatever step happens to be
+      // last - a carry-write step's sentence already names the same digit, and
+      // appending there produced "1 is waiting in the next column. The carried
+      // 1 lands in the next column on its own."
+      const prev = steps[lastColumn];
       if (prev) {
         prev.reveal.push(cellId);
         prev.say = `${prev.say} ${addends.length === 0
-          ? `The carried ${carry} lands in the next column on its own.`
+          ? `The carried ${carry} is the last piece, and it lands on its own.`
           : `Nothing to add in the next column, so the ${digit} comes straight down.`}`;
       }
       carry = carryOut;
@@ -1010,6 +1031,7 @@ function partialSumSteps(
     }
 
     const label = `${addends.join(" + ")}${carry ? ` + ${carry}` : ""} =`;
+    lastColumn = steps.length;
     steps.push({
       id: `sum-${c}`,
       kind: "input",
@@ -1085,21 +1107,27 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
   String(divisor).split("").forEach((ch, i) => {
     cells.push({ id: `ds-${i}`, row: "divisor", col: i, text: ch, kind: "digit" });
   });
-  cycles.forEach((c) => {
-    cells.push({ id: `q-${c.pos}`, row: "quotient", col: c.pos, text: String(c.q), kind: "digit" });
-  });
-
-  // A quotient smaller than one still needs its zero in the ones place.
+  // THE QUOTIENT ROW IS BUILT FROM THE SAME SLOTS AS `quotientText`, so the
+  // board and the headline above it cannot disagree.
   //
-  // The cycle loop skips every position the divisor does not reach, which is
-  // exactly right for 7.35 / 2.1 - that reads 3.5, never 03.5 - but wrong when
-  // NO digit ever lands left of the point: 4.5 / 5 built only q-1 and the board
-  // spelled ".9" while `answerText` said 0.9. Writing the zero in the ones
-  // place is graded convention, and this is where a 6th grade unit starts.
-  const onesZeroId = cycles.some((c) => c.pos < dotAt) ? null : `q-${dotAt - 1}`;
-  if (onesZeroId) {
-    cells.push({ id: onesZeroId, row: "quotient", col: dotAt - 1, text: "0", kind: "digit" });
+  // One cell per cycle left a hole at every position the divisor did not reach:
+  // 0.45 / 5 drew "0." then a gap then "9" under a headline that said 0.09, and
+  // 4.5 / 5 drew ".9". Skipping the leading positions is right for 7.35 / 2.1 -
+  // that is 3.5, never 03.5 - but only the ones that are LEFT OF THE POINT and
+  // not the ones place itself, because "write the zero in the ones place" is
+  // graded convention.
+  const quotientSlots = Array.from({ length: totalDigits }, () => "0");
+  cycles.forEach((c) => { quotientSlots[c.pos] = String(c.q); });
+  let qFrom = 0;
+  while (qFrom < dotAt - 1 && quotientSlots[qFrom] === "0") qFrom += 1;
+  for (let p = qFrom; p < totalDigits; p += 1) {
+    cells.push({ id: `q-${p}`, row: "quotient", col: p, text: quotientSlots[p], kind: "digit" });
   }
+  // Cycles run unbroken from the first one to the end, so the only cells with
+  // no step of their own are the placeholder zeros in front. They arrive with
+  // the point, which is the moment they mean something.
+  const qPlaceholderIds: string[] = [];
+  for (let p = qFrom; p < cycles[0].pos; p += 1) qPlaceholderIds.push(`q-${p}`);
 
   markers.push({ id: "ds-dot", row: "divisor", boundary: String(b.int).length - b.places, muted: false });
   markers.push({ id: "dv-dot", row: "dividend", boundary: a.text.includes(".") ? a.text.indexOf(".") : givenDigits, muted: false });
@@ -1192,10 +1220,10 @@ function buildDivision(a: Dec, b: Dec): DecimalTrace | null {
       { text: "At the end of the answer", correct: false, why: "That would make the answer a whole number when it is not one." },
       { text: "Where the decimal started, before we moved it", correct: false, why: "The old spot belongs to the old problem. The point goes up from where the dividend's decimal is NOW." },
     ],
-    reveal: onesZeroId ? ["q-dot", onesZeroId] : ["q-dot"],
-    highlight: onesZeroId ? ["dv-dot", "q-dot", onesZeroId] : ["dv-dot", "q-dot"],
-    say: onesZeroId
-      ? "Put it up before you divide and you cannot lose it. Nothing lands in the ones place here, so a zero holds it."
+    reveal: ["q-dot", ...qPlaceholderIds],
+    highlight: ["dv-dot", "q-dot", ...qPlaceholderIds],
+    say: qPlaceholderIds.length
+      ? "Put it up before you divide and you cannot lose it. Nothing lands in these places, so a zero holds each one."
       : "Put it up before you divide and you cannot lose it.",
   });
 
@@ -1307,11 +1335,20 @@ function rangeIds(cells: DecCell[], row: DecimalRow, from: number, to: number): 
   return cells.filter((c) => c.row === row && c.col >= from && c.col <= to).map((c) => c.id);
 }
 
+/**
+ * The quotient as the algorithm writes it, INCLUDING a trailing zero.
+ *
+ * It used to strip them, which put the string and the board a character apart -
+ * 4.0 / 2 drew "2.0" under a headline that said "2". A product keeps its
+ * trailing zeros for exactly this reason (0.25 x 0.4 really is 0.100 out of the
+ * algorithm) and `trimTrailingZeros` is what names the tidy value afterwards;
+ * the quotient now behaves the same way.
+ */
 function quotientText(cycles: { pos: number; q: number }[], dotAt: number, totalDigits: number): string {
   const slots = Array.from({ length: totalDigits }, () => "0");
   cycles.forEach((c) => { slots[c.pos] = String(c.q); });
   const whole = slots.slice(0, dotAt).join("").replace(/^0+(?=\d)/, "") || "0";
-  const frac = slots.slice(dotAt).join("").replace(/0+$/, "");
+  const frac = slots.slice(dotAt).join("");
   return frac ? `${whole}.${frac}` : whole;
 }
 
@@ -1382,6 +1419,13 @@ export function parseDecimalSet(raw: string | null | undefined): DecimalSetParse
     }
     if (b.int === 0 && op === "/") {
       rejected.push({ text, reason: "cannot divide by zero" });
+      continue;
+    }
+    // A zero operand has nothing to walk, and on a multiply it builds a step
+    // that writes into a cell left of the board (12.34 x 0 asked "0 x 1 = " and
+    // filled prod--1, a dead end in a tool with no skip).
+    if (a.int === 0 || b.int === 0) {
+      rejected.push({ text, reason: "one of the numbers is zero - there is nothing to walk through" });
       continue;
     }
     const trace = buildDecimalTrace({ a, b, op });

@@ -204,6 +204,11 @@ check("the answer row spells the answer once the point has landed", () => {
     "0.3 x 0.3", "0.07 x 0.8", "0.008 x 9", "0.25 x 0.4", "6.2 x 0.4", "6.2 x 3",
     "0.25 x 0.75", "3.6 x 2.4", "4.8 x 2.7",
     "9.6 / 0.4", "7.35 / 2.1", "4.5 / 5", "0.9 / 3", "1.2 / 0.03",
+    // The quotient row had two more ways to disagree with its own headline: a
+    // zero between the point and the first digit it reaches (0.45 / 5 drew
+    // "0." then a gap then 9), and a trailing zero the string dropped but the
+    // board kept (4.0 / 2 drew "2.0" under a headline that said "2").
+    "0.45 / 5", "0.24 / 6", "0.045 / 5", "4.0 / 2", "2.50 / 5", "1.05 / 5",
   ];
   for (const text of table) {
     const t = traceFor(text);
@@ -255,6 +260,10 @@ check("the estimate is judged around the TRUE value, and refuses a negative", ()
     return [e.input.about - e.input.tolerance, e.input.about + e.input.tolerance];
   };
   const accepts = (text, n) => {
+    const e = traceFor(text).steps[1];
+    if (e.kind === "choice") return null;
+    const floor = e.input.atLeast;
+    if (floor !== undefined && n < floor) return false;
     const b = band(text);
     return b !== null && n >= b[0] && n <= b[1];
   };
@@ -262,10 +271,19 @@ check("the estimate is judged around the TRUE value, and refuses a negative", ()
   assert.ok(accepts("9.6 / 0.4", 24));
   assert.ok(accepts("12.4 + 3.75", 16) && accepts("12.4 + 3.75", 17));
   assert.ok(!accepts("12.4 + 3.75", 4), "an estimate has to be able to be wrong");
-  for (const text of ["9.6 / 0.4", "12.4 + 3.75", "6.2 x 3", "6.2 x 0.4"]) {
+  // The band alone is not enough. A one-wide tolerance is right for a
+  // whole-number estimate - rounding each operand can move the answer that far,
+  // so 1 and 2 are both sensible for 1.53 - but it also accepted 0 for an
+  // answer of 1, and zero is not a rounding of anything this step is asked
+  // about. A floor under the band is what makes both true at once.
+  for (const text of ["9.6 / 0.4", "12.4 + 3.75", "6.2 x 3", "6.2 x 0.4", "1.2 - 0.2", "5.0 - 3.47"]) {
     assert.ok(!accepts(text, -1), `${text} accepts a negative estimate`);
     assert.ok(!accepts(text, 0), `${text} accepts zero`);
+    assert.equal(traceFor(text).steps[1].input.atLeast, 1, `${text} has no floor under the band`);
   }
+  // ... and the floor must not cost a sensible rounding its pass.
+  assert.ok(accepts("5.0 - 3.47", 1), "rounding 3.47 up to 4 gives 1, which is sensible");
+  assert.ok(accepts("5.0 - 3.47", 2), "rounding 3.47 down to 3 gives 2, which is sensible");
   // Below one the whole-number question means nothing, so it becomes a size
   // question with a real wrong answer instead of a step that accepts anything.
   for (const text of ["0.07 x 0.8", "0.25 x 0.4", "100.5 - 99.75", "4.5 / 5"]) {
@@ -369,6 +387,7 @@ check("nothing on the board is unreachable, and nothing reveals a cell that is n
     // The placeholder zeros a one-digit multiplier needs, and the ones place a
     // quotient under one needs, are cells too - they have to arrive somewhere.
     "0.3 x 0.3", "0.07 x 0.8", "0.25 x 0.4", "0.25 x 0.75", "4.8 x 2.7", "4.5 / 5", "0.9 / 3",
+    "0.45 / 5", "0.045 / 5", "4.0 / 2", "2.50 / 5",
   ]) {
     const t = traceFor(text);
     const ids = new Set([...t.cells.map((c) => c.id), ...t.markers.map((m) => m.id)]);
@@ -427,6 +446,18 @@ check("a problem the board cannot walk is refused OUT LOUD, never silently", () 
   assert.match(reasons["4.2 - 9.1"], /negative/);
   assert.match(reasons["5 / 0"], /divide by zero/);
   assert.match(reasons["banana"], /not a problem/);
+  // A zero operand built a multiply step that wrote into a cell left of the
+  // board - "0 x 1 = " filling prod--1, a dead end in a tool with no skip.
+  const zero = parseDecimalSet("12.34 x 0, 0 + 5, 12.4 + 3.75");
+  assert.equal(zero.problems.length, 1);
+  for (const r of zero.rejected) assert.match(r.reason, /zero/i);
+  for (const p of zero.problems) {
+    const t = buildDecimalTrace(p);
+    const ids = new Set(t.cells.map((c) => c.id));
+    for (const s of t.steps) {
+      for (const f of s.input?.fills ?? []) assert.ok(ids.has(f), `${s.id} fills a cell that is not there: ${f}`);
+    }
+  }
 });
 
 check("the set format round-trips and takes every operator a teacher might type", () => {

@@ -6,6 +6,36 @@ it was written down. Nothing was changed.
 
 Findings are ranked by what would hurt in a live class, not by how hard they are to fix.
 
+## STATUS: all of it is fixed (2026-08-03, same day)
+
+Every numbered finding, every polish bullet, and both judgment calls - Steele took both: the four
+Division House operation buttons are seated now, and Decimal Steps no longer removes a wrong choice
+from play. A second agent then reviewed the fixes against this document and found four things worth
+fixing before shipping plus a defect nobody had caught; all five are in as well:
+
+- `wrongSlot` was never cleared on a correct tap, so a cell a student once got wrong stayed coral
+  for the rest of the problem, overrode green when it was filled, and killed the amber pulse when
+  it later became the spot to tap.
+- The quotient row was still short in two more ways: `0.45 / 5` drew `0.` then a gap then `9`, and
+  `4.0 / 2` drew `2.0` under a headline that said `2`. The row is built from the same slots as
+  `quotientText` now, and `quotientText` keeps the algorithm's trailing zero the way a product does.
+- The estimate band still accepted `0` for an answer of `1`. A one-wide tolerance is right - both 1
+  and 2 are sensible for 1.53 - so the fix is a floor under the band (`DecInput.atLeast`), not a
+  narrower band.
+- The Division House confirmation vanished while a miss was on screen, and the trail deliberately
+  excludes it, so it was in neither place at the moment a student needed it.
+- `12.34 x 0` built a step that filled `prod--1`, a cell left of the board. A zero operand is
+  refused now.
+
+Three things are DELIBERATELY unchanged and are Steele's call, not oversights: how big the board
+should get on the projector (`CELL_MAX` puts digits near 54px where `CLAUDE.md`'s own arithmetic
+says 85px, and `.stage-tool` still applies no transform of its own); "Drag the decimal point", which
+is a click, not a drag; and the `6.2 x 3` count-places hint, which reads oddly when both readings
+give the same answer.
+
+Contracts grew from 33 checks to 45 across the two suites, and every one of the fixes above is
+pinned by one.
+
 ---
 
 ## The two that will embarrass you in front of the room

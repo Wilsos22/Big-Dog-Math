@@ -111,7 +111,7 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
   const [shown, setShown] = useState(false);
   const [typed, setTyped] = useState("");
   /** Why the last submission was not accepted - blank is not the same as wrong. */
-  const [typedIssue, setTypedIssue] = useState<"none" | "empty" | "negative" | "wrong">("none");
+  const [typedIssue, setTypedIssue] = useState<"none" | "empty" | "negative" | "too-small" | "wrong">("none");
   const [cheer, setCheer] = useState(0);
   const [snap, setSnap] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -169,19 +169,13 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
   }, [trace, stepIdx, solvedStep]);
 
   useEffect(() => {
-    if (!teacherDevice) {
-      // A device that was the teacher's and is not any more must not keep the
-      // remembered mode.
-      setMode("student");
-      return;
-    }
     try {
       const saved = window.localStorage.getItem(MODE_KEY);
       if (saved === "teacher" || saved === "student") setMode(saved);
     } catch {
       /* the toggle still works, it just will not be remembered */
     }
-  }, [teacherDevice]);
+  }, []);
   const pickMode = (m: Mode) => {
     setMode(m);
     try {
@@ -247,6 +241,11 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
     const near = step.input.about;
     if (near !== undefined && value < 0 && near >= 0) {
       setTypedIssue("negative");
+      return;
+    }
+    const floor = step.input.atLeast;
+    if (floor !== undefined && value < floor) {
+      setTypedIssue("too-small");
       return;
     }
     const ok = near !== undefined && step.input.tolerance !== undefined
@@ -462,14 +461,14 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
               </button>
             ))}
           </div>
-          {/* Teacher led carries the answer reveal, so the toggle only exists
-              on a device the teacher cookie vouches for. */}
-          {teacherDevice && (
-            <div className="ds-seg">
-              <button className={mode === "teacher" ? "on" : ""} onClick={() => pickMode("teacher")} type="button">Teacher led</button>
-              <button className={mode === "student" ? "on" : ""} onClick={() => pickMode("student")} type="button">Student</button>
-            </div>
-          )}
+          {/* SIZE IS NOT AN ANSWER KEY. Gating the whole "Teacher led" mode on
+              the teacher cookie also took the bigger board away from students,
+              which is the opposite of "the content fills the screen" - so the
+              size is everyone's and only the reveal is the teacher's. */}
+          <div className="ds-seg">
+            <button className={mode === "teacher" ? "on" : ""} onClick={() => pickMode("teacher")} type="button">Bigger</button>
+            <button className={mode === "student" ? "on" : ""} onClick={() => pickMode("student")} type="button">Normal</button>
+          </div>
           <button className="ds-btn" onClick={resetProblem} type="button">Start over</button>
           {problems.length > 1 && <button className="ds-btn" onClick={nextProblem} type="button">Next problem</button>}
         </div>
@@ -532,7 +531,7 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
               {step.kind === "choice" && step.choices.map((c, i) => {
                 const isWrong = lastWrong === i;
                 const isRight = solvedStep && c.correct;
-                const hinted = shown && c.correct && !solvedStep;
+                const hinted = teacherDevice && shown && c.correct && !solvedStep;
                 return (
                   <button
                     key={c.text}
@@ -585,6 +584,7 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
               {!solvedStep && lastWrong !== null && <p className="ds-why bad">{step.choices[lastWrong].why}</p>}
               {typedIssue === "empty" && <p className="ds-why bad">Type a number in the box first.</p>}
               {typedIssue === "negative" && <p className="ds-why bad">An estimate of this answer cannot be less than zero. Check the minus sign.</p>}
+              {typedIssue === "too-small" && <p className="ds-why bad">This answer is at least one whole, so the estimate has to be too. Round each number and try again.</p>}
               {typedIssue === "wrong" && step.input && <p className="ds-why bad">{step.input.hint}</p>}
               {solvedStep && step.kind === "input" && <p className="ds-why good">{step.say}</p>}
 
@@ -592,10 +592,10 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
                 <button className="ds-btn go" onClick={advance} disabled={!canAdvance} type="button">
                   {needsMove && movesLeft !== 0 ? "Move it first" : "Next step"}
                 </button>
-                {teacherDevice && mode === "teacher" && !solved && (
+                {teacherDevice && !solved && (
                   <button className="ds-btn" onClick={() => setShown(true)} type="button">Show the answer</button>
                 )}
-                {teacherDevice && mode === "teacher" && shown && step.kind === "input" && step.input && (
+                {teacherDevice && shown && step.kind === "input" && step.input && (
                   <span className="ds-entrylbl" style={{ alignSelf: "center" }}>{step.input.expect}</span>
                 )}
               </div>

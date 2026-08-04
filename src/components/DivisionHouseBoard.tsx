@@ -43,7 +43,9 @@ const ROW = 96;
  * It also grew off the bottom of a 1366x768 Chromebook on a four-round problem.
  * Both are the same missing thing: nothing ever measured the container.
  */
-const CELL_MIN = 54;
+// The floor is set by the 44px touch target, not by taste: a cell is `rowPx`
+// tall less 4px of margin top and bottom, and rowPx is cellPx * 96/104.
+const CELL_MIN = 58;
 const CELL_MAX = 168;
 /** Half the clear space kept around the sign so the arrow never runs through it. */
 const SIGN_GAP = 30;
@@ -185,6 +187,11 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
   const advance = (p: HousePrompt) => {
     setFilled((f) => [...f, ...p.fill]);
     setMissed(null);
+    // Left set, the coral mark outlives the miss: `.dh-slot.wrong` comes after
+    // `.filled` and `.target` at the same specificity, so a cell they once got
+    // wrong renders coral instead of green when it is filled, and its shake
+    // overrides the amber pulse when it later becomes the spot to tap.
+    setWrongSlot(null);
     setCheer((c) => c + 1);
     if (p.visual) setVisualKey((v) => v + 1);
     setStep((s) => s + 1);
@@ -615,8 +622,12 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
                   })}
                 </div>
               )}
+              {/* The confirmation stays up THROUGH a miss. Hiding it while the
+                  nudge showed took "13 is the number under the bracket now" off
+                  the screen at the moment the student needed it - and the trail
+                  below deliberately excludes it, so it was in neither place. */}
+              {step > 0 && <p className="dh-say" aria-live="polite">{trace.prompts[step - 1].say}</p>}
               {missed && <p className="dh-hint" role="alert">{missed}</p>}
-              {step > 0 && !missed && <p className="dh-say" aria-live="polite">{trace.prompts[step - 1].say}</p>}
               {/* The green line above IS prompt[step - 1], so the trail starts
                   before it - otherwise the same sentence is stacked twice. */}
               <div className="dh-trail">
