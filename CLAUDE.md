@@ -17,6 +17,12 @@ bars and live misconception grouping).
 - Live: https://bigdogmath.com (also website-prototype-three.vercel.app).
 - Repo: https://github.com/Wilsos22/Big-Dog-Math (default branch `main`; renamed from
   Website-prototype on 2026-07-27 - old URLs redirect, Vercel and CI followed automatically).
+  **PRIVATE as of 2026-08-03** (Steele's call, so the sound-bank clips and exported slide images can
+  be committed - see the sound bank section). Consequences to know: GitHub Actions minutes are no
+  longer unlimited (private repos get a monthly free allowance, and CI runs typecheck plus the whole
+  contract suite on every push, so watch it if pushes get frequent), and the repo is no longer a
+  thing Steele can hand someone to look at - `/demo` on the live site is the portfolio front door
+  instead, and it is unaffected. Vercel builds from a private repo unchanged.
 - Local working folder: `/Users/steelewilson/Big Dog Math Site` (renamed by Steele 2026-07-27
   from "Website prototype"; an EMPTY decoy folder may exist at the old path - some agent
   sessions are anchored there and keep a launcher shim in its .claude/launch.json. Renaming
@@ -533,9 +539,24 @@ Codex and cloud sessions need them too (rule 9).
   like mapped") - twenty-five cues, not the original seven: air horn, applause, cheering, crickets,
   drum roll, dun dun dun, Jeopardy, locked in, stank face, true, a few moments later, another one,
   bingo, bruh, directed by Robert B, we will never know, law and order, what, Metro, money, record
-  scratch, straight up, OMG, be right back, you. THE CLIPS ARE NOT IN THE REPO AND MUST NOT BE:
-  half are copyrighted recordings and this repository is public, and it is 14MB of binary besides.
-  They live in IndexedDB on the classroom laptop, which is the whole point of the loadable bank.
+  scratch, straight up, OMG, be right back, you.
+  THE CLIPS MAY NOW LIVE IN THE REPO (reversed 2026-08-03 by Steele: "sound clips and slide images
+  can go into the repo"). The old rule here said they MUST NOT BE, for two reasons - 14MB of binary,
+  and half being copyrighted recordings in a PUBLIC repository. He settled the size, and settled the
+  copyright by MAKING THE REPO PRIVATE the same day (github.com/Wilsos22/Big-Dog-Math, flipped with
+  zero forks and zero stars, so nothing was mirrored first). Commit them to `public/sounds/<id>.mp3`
+  - see that folder's README. `npm run sounds:name -- ~/Downloads` maps a folder of download-named
+  clips onto their cue ids using the SAME `matchSoundCueFile` the drag-and-drop loader uses, dry-run
+  by default.
+  TWO THINGS THE PRIVATE REPO DOES NOT DO, and both matter. (1) It does not make the files private:
+  `public/` is served by Vercel, so `bigdogmath.com/sounds/jeopardy.mp3` is fetchable by anyone who
+  guesses the URL. Private only stops repo browsing, cloning and code search - it is a real
+  reduction in exposure, not a wall. Gating audio behind a teacher route is possible (only teacher
+  surfaces ever play a cue; the student attention pulse is visual-only by design) and is NOT built.
+  (2) Git keeps history, so removing a clip later needs a history rewrite, not a delete - which is
+  why the repo must not go public again without pulling these first.
+  The per-device IndexedDB loader is UNCHANGED and still first in the source order, so a clip can
+  still be tried on one laptop without a commit.
   `matchSoundCueFile` places a dropped file on the right button by filename, normalizing past
   capitals, spaces, " copy" and the random suffix a download site appends, so one multi-file load
   fills the bank; a file nothing claims is reported back, never placed arbitrarily. Most cues are
@@ -810,8 +831,10 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   same CDN that just delivered the page - if the page loaded, the slide loaded. No expiry, no third
   party, nothing to re-fetch, and it is why the proxy-route idea this paragraph used to call for was
   not built. Steele's standing ask when he chose it: most reliable and least likely to fail mid
-  lesson. `public/slides/README.md` carries the naming, format and FERPA rules; the folder is in a
-  PUBLIC repo, so no student name ever goes in it. Reserve a LIVE EMBED for a board being actively
+  lesson. `public/slides/README.md` carries the naming, format and FERPA rules. THE REPO BEING
+  PRIVATE DOES NOT MAKE THE FOLDER PRIVATE - everything under `public/` is served by Vercel to
+  anyone with the URL - so no student name, district email, named student work or roster screenshot
+  ever goes in it. Reserve a LIVE EMBED for a board being actively
   edited during class (a Lucid or Figma canvas the room watches change) - that is the one case where
   the live fetch is the point.
   THE GUARD IS `/^\/[/\\]/`, NOT `startsWith("//")`. The URL spec treats `\` as `/` for http(s), so
