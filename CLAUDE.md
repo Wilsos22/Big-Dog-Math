@@ -1813,9 +1813,12 @@ the invariants they protect are easy to break again.
   "empty renders as nothing, wrong renders on a classroom screen".
 - One page per teaching day (locked convention) - never a Notion Date range. Ranges are only a
   fallback; single dates are what make `/api/today` and the day-to-day retention chain work.
-- THE LESSON DAY IS 50 MINUTES, not 55 (Steele, 2026-07-28). NOTHING IN CODE VALIDATES THE SUM -
-  verified: no check exists in `scripts/` or `src/lib/liveClassFlow.ts`, and `/control` will happily
-  run a 70-minute lineup into a 50-minute period. It is an AUTHORING contract, so the only thing
+- THE LESSON DAY IS 50 MINUTES, not 55 (Steele, 2026-07-28). NOTHING IN CODE ENFORCES THE SUM -
+  no check exists in `scripts/` or `src/lib/liveClassFlow.ts`, and `/control` will happily
+  run a 70-minute lineup into a 50-minute period. The ONE place it is even mentioned is
+  `/teacher/rehearse`, which WARNS (never blocks) when a lineup totals over 50, and does not warn at
+  all when a lineup comes in short - see the same claim at the `/teacher/rehearse` bullet above.
+  It is an AUTHORING contract, so the only thing
   protecting it is whoever enters the steps: add the `Duration` values up before publishing. The
   `abbies-classroom` plugin skills (`classroom-os-context` "50-minute spine",
   `lesson-database-builder`, `lesson-deployment-builder`) carry the canonical breakdown - build days
@@ -2025,9 +2028,25 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   the public `/api/build-id` on display routes (/board, /teacher/present, /teacher/pace,
   /live-flow, /warmup, /weekly-display - the pace projector and the all-day TVs joined
   2026-07-27; they are the longest-open tabs in the building and were silently missing
-  deploys) and reloads them when a new deploy ships. NEVER add /ipad to its DISPLAY_ROUTES - the pen surface
+  deploys - and /teacher/scoreboard joined 2026-08-03 when it became a first-class
+  second-screen card on the teacher home; it holds no local state a reload could lose,
+  since every standing is re-read from /api/teacher/scoreboard every 2s) and reloads them
+  when a new deploy ships. STILL MISSING and worth Steele's word: `/teacher/bruh/board`,
+  the BRUH projector, has the same profile and the same gap. NEVER add /ipad to its DISPLAY_ROUTES - the pen surface
   holds the authoritative ink state and an auto-reload would wipe the room's boards. Displays are
   safe to reload; ink resyncs via hello/state on mount.
+- **A COWORK SANDBOX SESSION CANNOT DELETE FILES IN THIS REPO, SO IT CANNOT BUILD OR COMMIT**
+  (found 2026-08-03). Claude Cowork reaches the folder through a FUSE mount that permits create and
+  write but returns `EPERM ... unlink` on every delete. Two consequences, and neither error names its
+  real cause. `npm run build` dies on `EPERM: operation not permitted, unlink '.next/BUILD_ID'` -
+  Next clears `.next` before writing, and `rm -rf .next` fails the same way, so there is no cleanup
+  that fixes it. And ANY git command that takes the index lock (`add`, `commit`, `checkout -b`) can
+  leave a `.git/index.lock` behind that the sandbox then cannot remove, which makes every later git
+  call in that folder fail with "Another git process seems to be running" until someone deletes the
+  lock from a REAL terminal. What DOES work from the sandbox: `npm run typecheck`, `npm test` (all 31
+  suites), and every read. So a Cowork session should verify with typecheck + the contract suites,
+  and hand the `npm run build`, the commit and the push to Steele rather than half-finishing them.
+  Claude Code in a normal terminal is unaffected - this is the mount, not the repo.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like

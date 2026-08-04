@@ -20,6 +20,7 @@
 // snapshots come from rehearsalFlow.ts, the DB-free twin of navigateFlow.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import SiteNav from "@/components/SiteNav";
 import { STUDIO_PREVIEW_MESSAGE } from "@/lib/studioPreviewFlow";
 import { rehearsalSnapshot, rehearsalTotalMinutes, type RehearsalLesson } from "@/lib/rehearsalFlow";
 import { STATE_STRIP_SLOTS } from "@/lib/classroomStateStrip";
@@ -244,15 +245,19 @@ export default function RehearsePage() {
       notes.push(`The classroom state strip is part-filled (${filledSlots.join(", ")}), so no strip renders at all. Fill all four or clear them.`);
     }
     if (step.pollKind && !step.question.trim() && step.pollKind !== "fist-to-five") {
-      notes.push("This step opens a response box with no authored Question.");
+      notes.push("No response opens on this step - with no Question, no poll is built at all. Every student screen will sit on \"your response box is opening\" until you advance.");
     }
     return notes;
   }, [step]);
 
   return (
     <div className="rh-root">
+      <SiteNav variant="teacher" />
       <style>{`
         .rh-root { font-family: var(--bdb-font); color: var(--bdb-ink); background: var(--bdb-ground); min-height: 100vh; padding: 14px clamp(12px,2vw,24px) 40px; }
+        /* Align the shared nav with this page's wider content column instead of
+           its own 1200px default, so the brand lines up with the title below. */
+        .rh-root .nav-bar { max-width: 1700px; padding-left: 0; padding-right: 0; padding-top: 0; }
         .rh-top { max-width: 1700px; margin: 0 auto 14px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
         .rh-title { font-size: clamp(1.1rem,2vw,1.5rem); font-weight: 800; margin: 0; letter-spacing: -0.02em; }
         .rh-sub { margin: 3px 0 0; font-size: 0.85rem; font-weight: 600; color: var(--bdb-ink-soft); }

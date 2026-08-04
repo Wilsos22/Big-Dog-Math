@@ -298,6 +298,17 @@ export default function LcmBouncerBoard() {
 
   const vbW = PAD_L + trackLen * CELL + PAD_R;
 
+  // The stage now scrolls instead of shrinking, so the balls have to be kept in
+  // frame. Centre the viewport on the moving pair, clamped to the two ends.
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    if (max <= 0) return;
+    el.scrollLeft = clamp((colX(p) / vbW) * el.scrollWidth - el.clientWidth / 2, 0, max);
+  }, [p, vbW]);
+
   return (
     <div className="lcb-root">
       <style>{`
@@ -354,8 +365,14 @@ export default function LcmBouncerBoard() {
         }
         .lcb-count { font-size: 0.82rem; font-weight: 700; color: var(--bdb-ink-soft); margin-top: 8px; }
         .lcb-count b { color: var(--bdb-ink); font-size: 1.05rem; }
-        .lcb-stage { background: var(--bdb-card); border: 1px solid var(--bdb-line); border-radius: var(--bdb-r-sm); box-shadow: var(--bdb-shadow-sm); padding: 10px; }
-        .lcb-svg { width: 100%; height: auto; display: block; }
+        .lcb-stage { background: var(--bdb-card); border: 1px solid var(--bdb-line); border-radius: var(--bdb-r-sm); box-shadow: var(--bdb-shadow-sm); padding: 10px; overflow-x: auto; overflow-y: hidden; }
+        /* Fixed HEIGHT, natural width - not the other way round. The viewBox
+           grows wider with the track while VB_H stays put, so sizing by width
+           would let the aspect ratio decide the height: 4 and 6 renders 15px
+           numbers and 9 and 10 collapses to a 67px sliver with 4px numbers.
+           Pinning the height keeps one column the same size on every pair and
+           lets a long track scroll instead of shrink. */
+        .lcb-svg { height: min(46vh, 420px); width: auto; max-width: none; display: block; margin: 0 auto; }
         .lcb-num { text-anchor: middle; dominant-baseline: central; font-weight: 800; font-family: var(--bdb-font); }
         .lcb-cell { stroke-width: 3; }
         .lcb-cell.on { animation: lcb-pop 420ms ease-out; }
@@ -505,8 +522,8 @@ export default function LcmBouncerBoard() {
 
         {/* CENTER - the thing being acted on. */}
         <div>
-          <div className="lcb-stage">
-            <svg className="lcb-svg" viewBox={`0 0 ${vbW} ${VB_H}`} role="img" aria-label={`Track of ${trackLen} squares. Ball A hops ${stepA}, Ball B hops ${stepB}.`}>
+          <div className="lcb-stage" ref={stageRef}>
+            <svg className="lcb-svg" viewBox={`0 0 ${vbW} ${VB_H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={`Track of ${trackLen} squares. Ball A hops ${stepA}, Ball B hops ${stepB}.`}>
               <TrackCells trackLen={trackLen} hitA={hitA} hitB={hitB} both={both} />
               {/* Start line - where both balls begin, so zero is visibly not a landing. */}
               <line x1={PAD_L - 14} y1={ROW_A_Y - 6} x2={PAD_L - 14} y2={ROW_B_Y + ROW_H + 6} stroke={C_LINE} strokeWidth={4} strokeDasharray="10 8" />
@@ -566,9 +583,12 @@ export default function LcmBouncerBoard() {
                 Look at the gap between the amber columns. Every meeting is {meetings[0]} further along than the one before it - so every common multiple is a multiple of the least one.
               </p>
             )}
-            {coprime && meetings.length === 0 && (
+            {/* This names the answer, so it waits until the balls have actually
+                met. Shown any earlier it sits opposite the prediction box and
+                hands over the number the student is being asked to guess. */}
+            {coprime && meetings.length > 0 && (
               <p className="lcb-note">
-                {stepA} and {stepB} share no factors, so the earliest they can meet is {stepA} x {stepB} = {lcm}. That is a long walk.
+                {stepA} and {stepB} share no factors, so the earliest they could meet was {stepA} x {stepB} = {lcm}. That is why the walk was so long.
               </p>
             )}
           </div>
