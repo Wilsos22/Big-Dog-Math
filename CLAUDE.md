@@ -96,6 +96,16 @@ bars and live misconception grouping).
    are. Diagnose before clearing: `git apply --check .git/rebase-apply/0001` usually reports "patch
    does not apply" because the patch's content ALREADY landed by another route - grep its symbols in
    `src/` and the session is simply litter. A spurious `.git/index.lock` is often the first symptom.
+   THE INVERSE HAZARD IS REAL TOO: YOUR UNCOMMITTED WORK CAN BE SWEPT INTO SOMEONE ELSE'S COMMIT
+   (2026-08-03). This rule tells you to stage only your own paths; it did not say that the files you
+   are still editing, sitting modified in the shared working tree, are equally reachable by every
+   other session's `git add`. Found live during the division-tools audit: a concurrent session
+   committed and PUSHED eleven of this session's files while four more edits were still to come, so
+   the work landed on `main` one edit early and needed a follow-up commit to correct. Two defences,
+   both cheap. Commit early to a branch rather than holding a large change in the working tree. And
+   when you find your own files already on `origin/main`, diff branch against remote per path
+   (`git diff --quiet origin/main <branch> -- <file>`) to find exactly which ones went out stale,
+   rather than assuming the whole change did or did not land.
 3. Verified work ships without waiting for Steele (his standing request, 2026-07-21 - routing
    merges through him twice stranded finished work). A push to `main` is what deploys - Vercel
    auto-builds it. Flow: push the feature branch first (a local-only branch is invisible to
@@ -2197,6 +2207,28 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   REPO-WIDE with `fatal: bad object refs/heads/<name>` plus a misleading "did not send all
   necessary objects" that reads as a remote problem; `git update-ref -d` cannot remove it either
   ("reference broken"), so delete the file directly. `find .git/refs -size 0` finds them.
+  FOUR MORE FROM 2026-08-03, the session that ran the whole flow from the sandbox anyway and paid
+  for it. (1) IT IS NOT ONLY `index.lock`. `HEAD.lock`, `ORIG_HEAD.lock` and
+  `refs/heads/<branch>.lock` strand identically, and the ref lock is the confusing one - the command
+  fails naming a file you were not thinking about. `find .git -name "*.lock"` lists the lot; hand
+  Steele that list, because he can `rm` them and the sandbox cannot.
+  (2) A STRANDED LOCK CANNOT BE `rm`ed FROM THE SANDBOX BUT CAN BE `mv`ed. Rename inside the same
+  directory succeeds where unlink returns EPERM, so `mv .git/index.lock .git/stale-index.lock`
+  unblocks the next command. It is for finishing a diagnosis, not a licence to keep writing - every
+  later write strands another one, and the renamed files are litter Steele then has to clear.
+  (3) A PRIVATE INDEX COMMITS WITHOUT TOUCHING THE SHARED ONE, which is the answer when another
+  session is mid-merge and the shared index is unmergeable: `GIT_INDEX_FILE=/tmp/i git read-tree
+  <base>`, then `git add <paths>`, `git write-tree`, `git commit-tree`, `git update-ref`. It takes no
+  index lock and cannot disturb another session's staging. Only `update-ref` takes a lock, so it
+  costs one, not five. `git merge-tree --write-tree` is NOT available as a treeless merge - this
+  repo's git is 2.34 and that wants 2.38+.
+  (4) THE BUILD CAN BE VERIFIED WITHOUT DESKTOP COMMANDER: `git archive <commit> | tar -x -C
+  /tmp/verify`, COPY node_modules in (about 750MB, a minute over the mount), and `npx next build`
+  there. It must be a real copy - Turbopack refuses a symlink that leaves the project root with
+  "Symlink [project]/node_modules is invalid, it points out of the filesystem root", which is the
+  same warning this file already gives about scratch worktrees. This is how the audit fixes were
+  build-verified on the exact shipping commit while the main tree was mid-merge and `.next` was
+  EPERM-locked.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like
