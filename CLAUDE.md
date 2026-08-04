@@ -1520,6 +1520,45 @@ the invariants they protect are easy to break again.
   `.ip-handle` keeps its blur (a corner chip, not a sheet over the page). **"Hide tools" is the
   one-gesture A/B** whenever the pen feels heavy: if hiding the palette sharpens it, an overlay is
   the cause, not the geometry.
+  THE OPAQUE LOOK IS CONFIRMED, NOT PROVISIONAL (Steele was offered the blur back on 2026-08-03 and
+  kept it opaque). Do not restore `backdrop-filter` on `.ip-palette` as a polish pass - it is a
+  per-stroke-frame cost on the one surface whose responsiveness is the priority.
+- **THE PEN-SURFACE GESTURES: ONE FINGER TWICE = UNDO, AND THE TWO TOLERANCES THAT MADE THE OLD ONES
+  UNREACHABLE** (2026-08-03, from Steele: "previously the ipad writing component had the hold for a
+  straight line ... and it had the double tap to undo"). Nothing had been deleted - `git log -L` on
+  both blocks returns only the Phase 2 commit that shipped them - so this was never a regression in
+  the code. It was that ONE of them was never wired the way he reaches for it, and the OTHER was
+  tuned past what a hand can do.
+  UNDO WAS TWO FINGERS AT ONCE, NEVER ONE FINGER TAPPED TWICE. A single-finger double-tap matched
+  nothing, so the motion he was making did nothing and read as "it used to work". It is wired now and
+  is the primary gesture; two-finger undo and three-finger redo stay, because they are the iPad idiom
+  and cost nothing. A LONE single tap must keep doing nothing - on /ipad it is also how the tool
+  palette is dismissed.
+  THE DOUBLE-TAP WINDOW IS MEASURED GAP-STYLE AND IS DELIBERATELY GENEROUS (`DOUBLE_TAP_MS` 450,
+  lift-of-the-first to touch-of-the-second, so a slow second press does not spend the budget on
+  itself). The reason is specific and was caught by instrumenting, not by reading: the FIRST tap of
+  the pair also fires /ipad's `closeTools()`, and that React re-render delays delivery of the second
+  tap - measured at 316ms to 1000ms in the preview pane. At the original 350ms up-to-up budget the
+  gesture failed exactly when the palette was open, which is the normal state. A budget that a single
+  re-render can exhaust is a gesture that works on the bench and not in the room.
+  `HOLD_SNAP_RADIUS` WENT 8px -> 18px because any move past it RE-ARMS the 600ms timer from zero, so
+  a resting Pencil's own tremor kept resetting the clock and hold-to-straighten was close to
+  untriggerable by hand. 18px is about 3mm - wider than tremor, far tighter than a deliberate slow
+  stroke, which would have to crawl under 30px/sec to sit inside it for the full 600ms.
+  TAP VALIDITY IS NO LONGER THE PINCH THRESHOLD. `moved` (14px) still arms pinch/pan and must stay
+  where it is; killing the tap at that same 14px meant a two-finger tap on glass usually died as a
+  "pinch" that never actually zoomed. Taps now use their own `TAP_SLOP` (26px) plus a direct check
+  that the view scale really changed - ask whether it zoomed, do not infer it from drift.
+  HOW TO VERIFY ANY OF THIS IN THE PREVIEW PANE, because two obvious observables LIE. (1) CANVAS
+  PIXELS ARE NOT A VALID OBSERVABLE - `scheduleRedraw` goes through `requestAnimationFrame`, the pane
+  throttles it, and the ink count sat frozen at its old value even while undo/redo were provably
+  working from the buttons. (2) THE UNDO/REDO BUTTONS VANISH WHEN YOU TOUCH THE CANVAS, because the
+  touch closes the palette that contains them - a read straight after a gesture finds no button and
+  looks like "nothing happened". Reopen the palette, then read `disabled`. The honest observable is
+  that pair. And note an end state of undo-empty/redo-full is reached by SEVERAL different gesture
+  sequences, so it does not by itself prove which gesture fired - instrument, or drive one gesture at
+  a time from a known state. Verified live 2026-08-03: a 90px-bulge arc snapped to ink 6px tall (the
+  nib), and the double-tap undid with the palette open.
 - **THE /ipad AUTO-CLEAR POLL NEVER RAN, AND STILL COST A PARSE EVERY 2 SECONDS** (turned off
   2026-08-03). It asked `GET /api/control-remote` with NO sessionId, and that route returns
   `session: null` unless one is passed - so the step index was never a number and the board never
@@ -1527,8 +1566,15 @@ the invariants they protect are easy to break again.
   `sessions.map(serializeSession)` - every open session with its whole liveFlow snapshot - on the
   pen surface's main thread every 2s, at moments it cannot choose. Deliberately NOT re-wired:
   passing a session id switches on a DESTRUCTIVE auto-clear the board has never actually had, and
-  the first time Steele saw it would be his board wiping itself mid-lesson. Turning it on is his
-  call and is a one-line change.
+  the first time Steele saw it would be his board wiping itself mid-lesson.
+  **ASKED AND DECLINED (Steele, 2026-08-03): IT STAYS OFF.** He clears the board by hand. Do not
+  re-raise it or wire it as a convenience - the decision is made, and the 2s fetch stays off the
+  pen surface's main thread. AND IT IS NOT THE ONE-LINE CHANGE THIS NOTE USED TO CALL IT: passing
+  the session id is one line, but `clearLocal` (InkBoard.tsx) resets `historyRef` and `redoRef` to
+  empty on purpose - "Clear is deliberate and destructive - history does not survive it" - so an
+  auto-clear firing mid-explanation is UNRECOVERABLE, not one undo tap away. Anyone turning it on
+  in future should first make clear record an erase op of every stroke instead of resetting
+  history, which is what makes the surprise survivable.
 - **THE "FANTASTIC" PEN CONFIGURATION WAS STRUCTURALLY DIFFERENT, AND `Paper` IS THE A/B** (noted
   2026-08-03). Before the 2026-07-30 one-surface rebuild, the surface the teacher wrote on was an
   OPAQUE dotted `InkBoard` with no iframe mounted at all. Today it is `transparent={!paper}` - a
