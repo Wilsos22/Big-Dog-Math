@@ -895,6 +895,14 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   the SAME deliberate room-facing FERPA exception the reader and speaker spinners carry (rule 8),
   for the same reason. Nothing in this feature writes or transmits a name; `supply_checks` has no
   student reference at all, because a table is furniture.
+  **THE PROJECTOR'S COPY HAS NO BUTTONS ON PURPOSE - THE TAPS ARE ON THE REMOTE.**
+  `SupplyCheckBoard` takes `mode`, and `mode === "board"` returns EARLY with a read-only card grid
+  ("Captains, answer for your table"); only `mode === "remote"` renders the tap rows, and the
+  Remote gates them to `SUPPLY_CHECK_STATE_IDS` (closeout plus the three supplies-away states).
+  Steele reported "the captain supplies check at the end doesnt have clickable buttons" on
+  2026-08-03 and the answer was that he was looking at the display. Do NOT "fix" this by adding
+  buttons to the board branch - an agent (this one) started exactly that patch before TypeScript
+  refused it, because `mode` is already narrowed past the early return.
 
 - Browser client: `getSupabase()` in `src/lib/supabase.ts` (`NEXT_PUBLIC_SUPABASE_URL` +
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`). Server client: `getSupabaseAdmin()` in `src/lib/supabaseServer.ts`
@@ -1020,6 +1028,19 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   button. Before debugging signals, check `select count(*) from session_joins where student_id is
   not null` - if it is zero, nothing is broken and nothing can be proven either. THE WHOLE CHAIN
   IS STILL UNPROVEN END TO END; the first real verified student to tap a chip is the test.
+  **IT IS NOT JUST SIGNALS - THE SAME GATE STOPS EVERY STUDENT WRITE, AND THEY ALL PRESENT AS A
+  DEAD BUTTON** (2026-08-03, live). Steele reported the fist-to-5 "lets the student click it but it
+  doesnt register on the board" and the stuck chip saying "wait for the teacher to let you in", and
+  both are this one gate: `/api/student/poll-answer`, `/api/student/signal` and
+  `/api/student/tool-evidence` all call `requireVerifiedStudent`. Measured that day on the live DB:
+  `students` 167 rows, students with `auth_user_id` **0**, `session_joins` on the open session
+  **0**, `student_signals` lifetime **0**, poll answers on the running session **0** against 6
+  polls created. So no student write can succeed AT ALL until the Workspace half of the FERPA
+  cutover lands (rule 8; `supabase/FERPA-CUTOVER.md` steps 1, 2, 5, 6, 8 - the roster Sheet, the
+  HMAC key, the Apps Script paste-ins, the roster push, one real warm-up). THE ONE QUERY that
+  settles it before debugging any student-facing write:
+  `select count(*) from students where auth_user_id is not null;` - zero means the surface is
+  behaving correctly and no amount of front-end work will change it.
   HOW TO TEST THE HALF THAT CAN BE TESTED (2026-07-30): the WRITE needs a district Google account and
   cannot be faked - seeding a roster row does NOT help, because the gate is `linkedStudent(auth.uid)`
   at the auth layer, not a `students` row. Everything downstream - the `/api/live/signals` read, the
@@ -1279,6 +1300,12 @@ the invariants they protect are easy to break again.
   Still true and still load-bearing: `.ip-ink-layer` carries `pointer-events:none` so the wrapper div
   cannot swallow a stroke before it reaches the canvas (a plain div defaults to `auto`; that cost a
   whole debugging round when the sheet sat over the old whiteboard panel).
+  **AND `.ip-screen-frame` - THE EMBEDDED `/teacher/present` IFRAME - IS ALSO `pointer-events:none`,
+  SO NOTHING INSIDE IT CAN EVER BE TAPPED FROM THE PEN SURFACE.** That is correct for ink (the whole
+  point is that a stroke lands on the canvas no matter what is nested underneath), and it is the
+  reason a control only ever belongs on `/teacher/remote`, never on `/teacher/present`. Anything
+  interactive placed on the main projector is decoration from the iPad's side. Check this before
+  concluding a button on a present-hosted panel is broken.
 - **THE PEN SURFACE SAYS WHEN A NEW BUILD IS WAITING** (2026-07-30). `/ipad` is deliberately absent
   from `DeployRefresh` - it holds the authoritative ink, so an automatic reload would wipe the room's
   boards mid-lesson - and the cost of that correct decision is that it can sit on a build from days
