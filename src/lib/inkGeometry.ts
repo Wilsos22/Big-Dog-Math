@@ -42,55 +42,29 @@ export function thinPoints(pts: InkRenderPoint[], minDist = 0.75): InkRenderPoin
   return out;
 }
 
-// Take the sample-level tremor out of the control points before a curve is
-// fitted to them. A digitiser reports the hand's real micro-wobble, and a
-// smooth curve through wobbly control points is a wobbly curve - fine chatter
-// along a slowly drawn line, which is most of what "jagged" looks like up
-// close.
+// THERE IS NO SEPARATE DE-JITTER PASS, AND THAT IS A MEASURED DECISION, NOT AN
+// OVERSIGHT (2026-08-03). A binomial pre-filter over the control points was
+// built to take the hand's micro-wobble out before the curve is fitted, then
+// removed once measured against smoothCenterline alone on a slowly drawn line
+// sampled every 1.1px:
 //
-// THE STRENGTH FOLLOWS SAMPLE DENSITY, and only that. Samples arrive at a
-// fixed rate, so tightly bunched ones mean the hand was barely travelling, and
-// sub-pixel movement between consecutive samples cannot be intent - it is
-// tremor by definition. Widely spaced samples are the pen genuinely moving and
-// are left alone; fitting a curve through those is smoothCenterline's job, and
-// averaging them would be filtering the handwriting itself.
+//   perfectly alternating chatter  0.320px raw -> 0.000px WITHOUT the filter
+//   white noise                    0.201px raw -> 0.133px without, 0.100px with
+//   correlated hand tremor         0.084px raw -> 0.080px without, 0.076px with
 //
-// IT DELIBERATELY DOES NOT TRY TO DETECT CORNERS. An earlier version passed
-// sharp turns through untouched to protect the corner of a 4 - but a corner is
-// a SUSTAINED direction change while tremor ALTERNATES, and measured
-// point-to-point the two are indistinguishable, so the guard switched the
-// filter off exactly where the noise was worst. It is also unnecessary: at
-// full strength this pass moves a corner sample by under 0.75px, which is a
-// quarter of the 3px nib radius and invisible, and the corner still measures
-// 100% of the nib width afterwards (see the contract). Both facts are pinned,
-// so do not reintroduce a turn-angle term without new evidence.
+// The midpoint quadratic below already averages each pair of samples, which is
+// itself a low-pass, and it annihilates alternating noise outright. A second
+// pass bought 0.03px on white noise and 0.004px on realistic tremor - both far
+// under one pixel of a 6px nib, i.e. invisible - while costing two hypots per
+// point on EVERY frame of every in-flight stroke. It was also impossible to
+// write a contract check that failed without it, which is the same fact from
+// the other side: it changed nothing anyone could see.
 //
-// THE ENDS ARE FIXED ON PURPOSE. The last control point is the pen tip while a
-// stroke is in flight; averaging it with its neighbours would drag the tip
-// backwards every frame, which is exactly what makes an ink engine feel laggy.
-// This is a shape filter, not an input filter - it adds no latency.
-const JITTER_DENSE_PX = 1.6; // spacing at or under this is tremor, not travel
-const JITTER_SPARSE_PX = 4.5; // beyond this the pen is really moving - hands off
-const JITTER_MAX = 0.5; // full strength - the plain 1/4, 1/2, 1/4 binomial pass
-
-export function dejitter(pts: InkRenderPoint[]): InkRenderPoint[] {
-  const n = pts.length;
-  if (n < 3) return pts;
-  const out: InkRenderPoint[] = [pts[0]];
-  for (let i = 1; i < n - 1; i += 1) {
-    const a = pts[i - 1], b = pts[i], c = pts[i + 1];
-    const spacing = (Math.hypot(b.x - a.x, b.y - a.y) + Math.hypot(c.x - b.x, c.y - b.y)) / 2;
-    const density = Math.max(0, Math.min(1, (JITTER_SPARSE_PX - spacing) / (JITTER_SPARSE_PX - JITTER_DENSE_PX)));
-    const w = JITTER_MAX * density;
-    out.push({
-      x: b.x + ((a.x + c.x) / 2 - b.x) * w,
-      y: b.y + ((a.y + c.y) / 2 - b.y) * w,
-      p: b.p + ((a.p + c.p) / 2 - b.p) * w,
-    });
-  }
-  out.push(pts[n - 1]);
-  return out;
-}
+// What actually cleaned up the "jagged" line was the miter joint (a stroke
+// wobbling slightly puts a run of small turns through the joint, and an
+// un-mitered joint pinches at every one of them, which is what made a straight
+// rule look frayed) and the round caps. If you are here to add smoothing,
+// measure against those first.
 
 // Smooth the centreline so a stroke FLOWS as a curve instead of showing the
 // straight segments between raw pointer samples - the thing that reads as
@@ -171,31 +145,34 @@ const MITER_LIMIT = 2.5;
 // Build the outline polygon: left edge out, right edge back, with round caps.
 // Returns a flat [x0,y0, x1,y1, ...] ring, or null for a dot (use fillDot).
 export function strokeOutline(raw: InkRenderPoint[], baseWidth: number, taper = false): number[] | null {
-  const pts = smoothCenterline(dejitter(thinPoints(raw)));
+  const pts = smoothCenterline(thinPoints(raw));
   if (pts.length < 2) return null;
 
   const left: number[] = [];
   const right: number[] = [];
   const n = pts.length;
 
+  // Unit tangent per SEGMENT, computed once. Every interior point needs the
+  // tangent either side of it, and the tangent out of point i is the tangent
+  // into point i+1 - computing them per point normalises each segment twice,
+  // and this runs on the whole in-flight stroke every frame.
+  const segX = new Array<number>(n - 1);
+  const segY = new Array<number>(n - 1);
+  for (let i = 0; i < n - 1; i += 1) {
+    const dx = pts[i + 1].x - pts[i].x, dy = pts[i + 1].y - pts[i].y;
+    const l = Math.hypot(dx, dy) || 1;
+    segX[i] = dx / l; segY[i] = dy / l;
+  }
+
   for (let i = 0; i < n; i += 1) {
     const cur = pts[i];
     // The unit tangents INTO and OUT OF this point. At either end there is
     // only one, so the joint degenerates to a plain perpendicular offset and
     // the caps below still read the edge point they expect.
-    const prev = i > 0 ? pts[i - 1] : null;
-    const next = i < n - 1 ? pts[i + 1] : null;
-    let inX = 0, inY = 0, outX = 0, outY = 0;
-    if (prev) {
-      inX = cur.x - prev.x; inY = cur.y - prev.y;
-      const l = Math.hypot(inX, inY) || 1; inX /= l; inY /= l;
-    }
-    if (next) {
-      outX = next.x - cur.x; outY = next.y - cur.y;
-      const l = Math.hypot(outX, outY) || 1; outX /= l; outY /= l;
-    }
-    if (!prev) { inX = outX; inY = outY; }
-    if (!next) { outX = inX; outY = inY; }
+    const inX = i > 0 ? segX[i - 1] : segX[0];
+    const inY = i > 0 ? segY[i - 1] : segY[0];
+    const outX = i < n - 1 ? segX[i] : segX[n - 2];
+    const outY = i < n - 1 ? segY[i] : segY[n - 2];
 
     // Left normal of each segment, then the bisector between them.
     const n1x = -inY, n1y = inX;

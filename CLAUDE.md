@@ -46,10 +46,12 @@ bars and live misconception grouping).
   path shape only, so the constant-width marker is intact. That is why "rudimentary" and the width
   decision are NOT in conflict: one is the line's smoothness, the other its thickness.
   A THIRD DIAL EXISTS AND IT IS NOT IN `inkGeometry` AT ALL (2026-08-03): what the canvas is
-  COMPOSITED AGAINST. See the pen-feel bullets under "Live sessions" - the caps/miter/dejitter
-  fixes and their contract, the React re-render that stalled back-to-back strokes, the
-  backdrop-filter over the writing surface, and the `Paper` A/B that separates compositing cost
-  from stroke geometry. Reach for that A/B BEFORE tuning constants again.
+  COMPOSITED AGAINST. See the pen-feel bullets under "Live sessions" - the caps and miter fixes
+  and their contract, the React re-render that stalled back-to-back strokes, the backdrop-filter
+  over the writing surface, and the `Paper` A/B that separates compositing cost from stroke
+  geometry. Reach for that A/B BEFORE tuning constants again. And note that the two fixes that
+  actually changed the picture were both GEOMETRY BUGS, not tuning: every dial in that file was
+  already set sensibly.
 
 ## Hard rules (non-negotiable)
 
@@ -1410,28 +1412,36 @@ the invariants they protect are easy to break again.
   right angle - and handwriting is almost entirely corners. `strokeOutline` now scales the offset
   by 1/cos(theta/2) with `MITER_LIMIT` 2.5 so a retraced stroke cannot throw a spike. Measured
   nib width kept at the corner: 94% -> 100% (right angle), 80% -> 100% (zig-zag).
-  (3) **`dejitter` FILTERS BY SAMPLE DENSITY AND NOTHING ELSE.** Bunched samples mean a barely
-  moving hand, so sub-pixel movement between them is tremor by definition; widely spaced samples
-  are real travel and are left to `smoothCenterline`. THE ENDS ARE PINNED - filtering the newest
-  point drags the live tip backwards, which IS the feeling of lag. A corner-detecting term was
-  tried and REMOVED: a corner is a sustained direction change while tremor alternates, and
-  point-to-point the two are identical, so the guard switched the filter off exactly where the
-  noise was worst. It is also unnecessary - the flat pass moves a corner sample under 0.75px and
-  the corner still measures a full nib. Do not reintroduce it without new evidence.
+  (3) **THERE IS NO SEPARATE DE-JITTER PASS, AND THAT IS MEASURED, NOT AN OVERSIGHT.** One was
+  built (a binomial pre-filter over the control points) and then removed, because
+  `smoothCenterline`'s midpoint quadratic already averages each pair of samples and that is itself
+  a low-pass. On a line drawn slowly at 1.1px sampling: perfectly alternating chatter 0.320px raw
+  goes to 0.000px WITHOUT the filter; white noise 0.133px without vs 0.100px with; correlated hand
+  tremor 0.080px vs 0.076px. So it bought 0.03px and 0.004px - invisible on a 6px nib - while
+  costing two hypots per point on every frame of every stroke, and no contract check could be made
+  to fail without it, which is the same fact from the other side. What actually cleaned the line up
+  was the miter joint: a slightly wobbling stroke puts a run of small turns through the joint, and
+  an un-mitered joint pinches at every one of them, which is what made a plain rule look frayed.
+  If you are here to add smoothing, measure against the miter and the caps first.
   (4) Resampling refines by the sagitta `c*c/(8R)`, so it only bites below about R=6 and costs
   nothing elsewhere. Scale is NOT a reason to refine: strokes travel NORMALISED and each surface
   re-fits the curve in its own pixels, so the projector's chords are the same 2.4px across a
   proportionally larger stroke, not magnified ones.
 - **THE BACK-TO-BACK STROKE STALL WAS A REACT RE-RENDER, NOT THE INK** (2026-08-03). `InkBoard`
   called `onHistoryChange` on every `recordOp`, and every consumer writes it into state
-  (`/ipad`: `setHistory({ undo, redo })` - a fresh object, so React never bails). So each pen LIFT
-  re-rendered the whole page, dirtying layout; the very next `pointerdown` calls `measure()`, whose
-  `getBoundingClientRect()` must SYNCHRONOUSLY FLUSH that layout before the first sample of the new
-  stroke is taken. `notifyHistory` now fires only when the pair actually CHANGES - after stroke one
-  it is (true,false) and stays there - so later lifts notify nothing. `clearLocal` must go through
-  `notifyHistory` too, or the last-notified pair goes stale and swallows the next real change.
-  The trigger is old; what made it expensive is that the page it re-renders now carries a live
-  presenter iframe and fixed overlays where it once carried a flat toolbar.
+  (`/ipad`: `setHistory({ undo, redo })` - a fresh object, so React never bails by value). So each
+  pen LIFT re-rendered the whole page. `notifyHistory` now fires only when the pair actually
+  CHANGES - after stroke one it is (true,false) and stays there - so later lifts notify nothing.
+  `clearLocal` must go through `notifyHistory` too, or the last-notified pair goes stale and
+  swallows the next real change.
+  THE COST IS SYNCHRONOUS RECONCILIATION INSIDE THE POINTERUP HANDLER, NOT A LAYOUT FLUSH, and the
+  distinction is worth keeping straight because the wrong version sounds better. A re-render whose
+  output is identical mutates no DOM, so there is nothing for `measure()`'s
+  `getBoundingClientRect()` to reflow - only stroke one actually changes anything (undo false ->
+  true flips `disabled`). What it does cost is React running start to finish inside the event
+  handler, which is on the critical path exactly when a pen lift and the next pen down fall in the
+  same frame. (An earlier version of this note claimed the forced-reflow mechanism; a review
+  measured it and it is wrong.)
 - **BACKDROP-FILTER OVER THE INK CANVAS IS A PER-FRAME COST** (2026-08-03). `.ip-palette` is 620px
   wide, fixed over the writing stage, and open by default; `backdrop-filter: blur(16px)` makes the
   browser re-sample and re-blur its backdrop every time that backdrop changes - and its backdrop is

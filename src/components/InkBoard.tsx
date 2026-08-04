@@ -8,8 +8,8 @@
 // equations, not calligraphy. Pressure is still captured, smoothed and carried
 // on the wire, so the feel could return by changing radiusFor alone; do not
 // read "variable-width polygon" here and restore pressure ink. FLUIDITY IS A
-// SEPARATE DIAL FROM WIDTH: how smooth the line is lives in smoothCenterline
-// and dejitter, how thick it is lives in radiusFor. Three stacked canvases:
+// SEPARATE DIAL FROM WIDTH: how smooth the line is lives in smoothCenterline,
+// how thick it is lives in radiusFor. Three stacked canvases:
 //
 //   highlight  - dry highlighter strokes (translucent, under the ink)
 //   dry        - finished pen strokes, baked once
@@ -395,14 +395,22 @@ export default function InkBoard({
   const onHistoryChangeRef = useRef(onHistoryChange);
   useEffect(() => { onHistoryChangeRef.current = onHistoryChange; }, [onHistoryChange]);
   // Only fire when the two booleans actually CHANGE. They are consumed as
-  // `disabled` on Undo/Redo, and every consumer writes them into React state,
-  // so firing per stroke re-rendered the whole host page on every pen lift -
-  // /ipad carries the toolbar, the panels and the present iframe. That dirties
-  // layout, and the very next pointerdown calls measure(), whose
-  // getBoundingClientRect has to synchronously flush the layout it just
-  // dirtied before the first sample of the new stroke is taken. That is the
-  // back-to-back stroke stall: after the first stroke the pair is (true,
-  // false) and stays there, so every later lift now notifies nothing.
+  // `disabled` on Undo/Redo, and every consumer writes them into React state -
+  // /ipad does `setHistory({ undo, redo })`, a fresh object literal, so React
+  // could never bail out by value and re-rendered the whole page on EVERY pen
+  // lift. (It is the only /ipad state that changes per stroke.)
+  //
+  // What that costs is React reconciliation running SYNCHRONOUSLY inside the
+  // pointerup handler, which lands on the critical path exactly when a pen
+  // lift and the next pen down fall in the same frame - the back-to-back case.
+  // It is NOT a forced layout flush: after the first stroke the rendered output
+  // is identical, so there is no DOM mutation for measure()'s
+  // getBoundingClientRect to reflow. Only stroke one actually mutates anything
+  // (undo false -> true flips `disabled`). Said plainly because the wrong
+  // version of this explanation is more convincing than the right one.
+  //
+  // After stroke one the pair is (true, false) and stays there, so every later
+  // lift now notifies nothing at all.
   const lastHistoryRef = useRef<{ undo: boolean; redo: boolean } | null>(null);
   const notifyHistory = useCallback(() => {
     const undo = historyRef.current.length > 0;

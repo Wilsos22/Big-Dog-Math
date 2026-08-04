@@ -38,7 +38,7 @@ function ok(label, condition) {
 const compiled = path.join(root, ".tmp-mastery", "inkGeometry.js");
 if (!fs.existsSync(compiled)) throw new Error(`missing compiled module at ${compiled} - run the tsc step first`);
 const geom = require(compiled);
-const { strokeOutline, smoothCenterline, dejitter, thinPoints } = geom;
+const { strokeOutline, smoothCenterline, thinPoints } = geom;
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -71,7 +71,7 @@ function inside(ring, x, y) {
 
 // The centreline strokeOutline actually builds from, so a test can measure the
 // same path the renderer drew.
-const centreline = (raw) => smoothCenterline(dejitter(thinPoints(raw)));
+const centreline = (raw) => smoothCenterline(thinPoints(raw));
 
 // Every point of a disc of radius r about c must be inside the ring. Ends are
 // skipped: the round cap is a 7-step fan, so a full disc at the very tip pokes
@@ -168,6 +168,36 @@ const W = 6; // the middle of the three pen widths offered on /ipad
   ok("straight stroke is not inflated by the miter", thickness <= W + 0.35);
 }
 
+{
+  // THE CASE THAT ACTUALLY SEPARATES MITER FROM NO-MITER. The clean synthetic
+  // corners above do NOT: the adaptive resampler alone rescues them, so with
+  // the miter reverted they still measure 88-100% and this suite stays green
+  // while the pen goes back to pinching. Real input is densely sampled with
+  // tremor on it, which puts a spread of small turns through the joint instead
+  // of one clean one. Measured on this figure: 79% without the miter, 100%
+  // with. Keep a case of this shape here or the suite is decorative.
+  let n = 0;
+  const noisy = (ax, ay, bx, by) => {
+    const out = [];
+    const d = Math.hypot(bx - ax, by - ay);
+    const steps = Math.max(2, Math.round(d / 1.0));
+    for (let k = 0; k < steps; k += 1) {
+      const t = k / steps;
+      n = (n * 1664525 + 1013904223) >>> 0;
+      const j1 = (n / 4294967296 - 0.5) * 0.5;
+      n = (n * 1664525 + 1013904223) >>> 0;
+      const j2 = (n / 4294967296 - 0.5) * 0.5;
+      out.push(pt(ax + (bx - ax) * t + j1, ay + (by - ay) * t + j2));
+    }
+    return out;
+  };
+  // The diagonal-and-bar of a hand-drawn 4.
+  const raw = [...noisy(108, 0, 72, 56), ...noisy(72, 56, 124, 56)];
+  raw.push(pt(124, 56));
+  const cover = minNibCoverage(raw, W);
+  ok(`a hand-drawn 4 keeps the nib through its corner (covered ${(cover * 100).toFixed(0)}% >= 95%)`, cover >= 0.95);
+}
+
 // ── round caps ─────────────────────────────────────────────────────────────
 //
 // Each cap joins one edge to the other across the tip, and there are two ways
@@ -201,11 +231,8 @@ const W = 6; // the middle of the three pen widths offered on /ipad
 
 // ── the miter limit ────────────────────────────────────────────────────────
 
-{
-  // A hairpin: retracing a stroke back over itself. Without a limit the miter
-  // is unbounded and throws a long spike off the fold.
-  const raw = samplePath([pt(20, 60), pt(160, 60), pt(160, 63), pt(20, 63)]);
-  const ring = strokeOutline(raw, W);
+const furthestVertexFromPath = (raw, w) => {
+  const ring = strokeOutline(raw, w);
   const line = centreline(raw);
   let maxReach = 0;
   for (let i = 0; i < ring.length; i += 2) {
@@ -213,65 +240,109 @@ const W = 6; // the middle of the three pen widths offered on /ipad
     for (const c of line) best = Math.min(best, Math.hypot(ring[i] - c.x, ring[i + 1] - c.y));
     maxReach = Math.max(maxReach, best);
   }
-  // MITER_LIMIT is 2.5, so no vertex may sit further than 2.5 nib radii out.
-  ok(`hairpin fold throws no spike (furthest vertex ${maxReach.toFixed(2)}px <= ${(2.5 * W) / 2}px)`, maxReach <= (2.5 * W) / 2 + 0.01);
-}
-
-// ── dejitter ───────────────────────────────────────────────────────────────
-
-const swing = (pts) => {
-  let s = 0;
-  for (let i = 1; i < pts.length - 1; i += 1) s += Math.abs(pts[i].y - (pts[i - 1].y + pts[i + 1].y) / 2);
-  return s;
+  return maxReach;
 };
 
 {
-  // Tremor: dense samples (a slowly drawn line) wobbling either side of true.
-  // Samples arrive at a fixed rate, so bunched samples mean a barely-moving
-  // hand, and sub-pixel movement between them cannot be intent.
+  // A near-hairpin: out and back with a small gap. Note this one does NOT bind
+  // the limit - it is here as the ordinary case, and on its own it cannot tell
+  // a clamped miter from an unclamped one.
+  const raw = samplePath([pt(20, 60), pt(160, 60), pt(160, 63), pt(20, 63)]);
+  const reach = furthestVertexFromPath(raw, W);
+  ok(`hairpin fold throws no spike (furthest vertex ${reach.toFixed(2)}px <= ${(2.5 * W) / 2}px)`, reach <= (2.5 * W) / 2 + 0.01);
+}
+
+{
+  // THE CASE THAT BINDS THE LIMIT: an EXACT retrace, gap zero - a teacher
+  // scribbling out a wrong answer by dragging back along the line just drawn.
+  // As the turn approaches 180 degrees the miter 1/cos(theta/2) runs away;
+  // measured with the clamp removed this vertex lands about 3000px off the
+  // stroke, which on a projector is a black wedge across the slide. The
+  // near-hairpin above measures the same with and without the clamp, so
+  // WITHOUT this case the clamp is untested.
+  // THE GAP MATTERS. At gap EXACTLY zero the bisector vanishes and the
+  // `mlen < 1e-6` branch takes over, which is bounded on its own - so that
+  // case, useful as it is, cannot test the clamp. A hair off zero is what
+  // drives 1/cos(theta/2) up: measured, the clamp binds at exactly 7.50px
+  // (2.5 nib radii) for every gap from 0.001px upward, and with the clamp
+  // removed the same vertex lands about 3000px off the stroke - a black wedge
+  // across the projector.
+  const near = [];
+  for (let i = 0; i <= 70; i += 1) near.push(pt(20 + i * 2, 60));
+  for (let i = 70; i >= 0; i -= 1) near.push(pt(20 + i * 2, 60.01));
+  const nearReach = furthestVertexFromPath(near, W);
+  ok(`a near-retrace is clamped to the miter limit (${nearReach.toFixed(2)}px <= ${(2.5 * W) / 2}px)`, nearReach <= (2.5 * W) / 2 + 0.01);
+
+  const out = [];
+  for (let i = 0; i <= 70; i += 1) out.push(pt(20 + i * 2, 60));
+  for (let i = 70; i >= 0; i -= 1) out.push(pt(20 + i * 2, 60));
+  const reach = furthestVertexFromPath(out, W);
+  ok(`an exact retrace stays bounded too (${reach.toFixed(2)}px <= ${(2.5 * W) / 2}px)`, reach <= (2.5 * W) / 2 + 0.01);
+  ok("an exact retrace stays finite", strokeOutline(out, W).every((v) => Number.isFinite(v)));
+}
+
+{
+  // Read through the OUTLINE, not the helpers. Checks that call the geometry
+  // functions directly keep agreeing with themselves even if strokeOutline
+  // stops calling them, so at least one check has to measure what actually
+  // gets filled: a densely sampled straight line carrying sub-pixel chatter
+  // must come out with a smooth edge.
   const raw = [];
-  for (let i = 0; i <= 60; i += 1) raw.push(pt(i * 1.1, (i % 2 ? 0.45 : -0.45)));
-  const out = dejitter(raw);
-  ok("dejitter keeps the point count", out.length === raw.length);
-  ok("dejitter pins the first point", out[0].x === raw[0].x && out[0].y === raw[0].y);
-  // The pen tip must never be dragged backwards - that is what feels laggy.
-  ok("dejitter pins the last point (the live pen tip)", out[out.length - 1].x === raw[raw.length - 1].x && out[out.length - 1].y === raw[raw.length - 1].y);
-  ok(`dense tremor is filtered hard (${swing(out).toFixed(2)} vs ${swing(raw).toFixed(2)})`, swing(out) < swing(raw) * 0.55);
+  for (let i = 0; i <= 80; i += 1) raw.push(pt(20 + i * 1.1, 60 + (i % 2 ? 0.32 : -0.32)));
+  const ring = strokeOutline(raw, W);
+  let minEdge = Infinity, maxEdge = -Infinity;
+  for (let i = 0; i < ring.length; i += 2) {
+    if (ring[i] < 40 || ring[i] > 90) continue; // mid-run only, clear of the caps
+    if (ring[i + 1] < 60) { minEdge = Math.min(minEdge, ring[i + 1]); maxEdge = Math.max(maxEdge, ring[i + 1]); }
+  }
+  const wobble = maxEdge - minEdge;
+  ok(`chatter is filtered before the outline is built (edge wobble ${wobble.toFixed(2)}px < 0.35px)`, wobble < 0.35);
 }
 
-{
-  // A fast stroke's samples are far apart, so its shape is travel, not tremor.
-  // Filtering it would be filtering the handwriting itself; smoothCenterline
-  // is what serves those, by fitting a curve rather than averaging points.
-  const raw = [pt(0, 0), pt(10, 4), pt(20, -4), pt(30, 4), pt(40, -4), pt(50, 0)];
-  const out = dejitter(raw);
-  let moved = 0;
-  for (let i = 0; i < raw.length; i += 1) moved = Math.max(moved, Math.hypot(out[i].x - raw[i].x, out[i].y - raw[i].y));
-  ok(`widely spaced samples pass through untouched (max move ${moved.toFixed(3)}px)`, moved < 1e-9);
-}
+// ── what the smoother owes the line ─────────────────────────────────
+//
+// There is no separate de-jitter pass. One was built and then removed once
+// measured: smoothCenterline's midpoint quadratic already averages each pair
+// of samples, which annihilates alternating chatter outright and leaves a
+// second pass worth 0.03px on white noise and 0.004px on realistic tremor -
+// invisible on a 6px nib, and costing two hypots per point every frame. These
+// checks pin what the remaining smoother must still do.
 
 {
-  const short = [pt(0, 0), pt(5, 5)];
-  ok("dejitter leaves a 2-point stroke alone", dejitter(short) === short);
-}
-
-{
-  // The filter does not try to detect corners, so what protects the corner of
-  // a 4 is that the pass is gentle in absolute terms: no sample moves by a
-  // meaningful fraction of the nib, and the corner still measures a full nib
-  // wide afterwards (checked at the top of this file). Both numbers are the
-  // reason a turn-angle term is not needed - and that term actively misfired,
-  // because alternating tremor reads as a corner point-to-point.
+  // The pen tip must never be dragged backwards - a filtered live tip is
+  // exactly what an ink engine feeling laggy is made of. The smoother emits
+  // the true first and last samples unchanged.
   const raw = samplePath([pt(0, 0), pt(60, 0), pt(60, 60)], 2);
-  const out = dejitter(raw);
-  let corner = -1;
-  for (let i = 0; i < raw.length; i += 1) if (raw[i].x === 60 && raw[i].y === 0) corner = i;
-  ok("the corner sample is found", corner > 0);
-  const cornerMove = Math.hypot(out[corner].x - raw[corner].x, out[corner].y - raw[corner].y);
-  ok(`a sharp corner moves under a quarter nib (${cornerMove.toFixed(2)}px < ${(W / 4).toFixed(2)}px)`, cornerMove < W / 4);
-  let far = 0;
-  for (let i = 0; i < raw.length; i += 1) far = Math.max(far, Math.hypot(out[i].x - raw[i].x, out[i].y - raw[i].y));
-  ok(`dejitter moves no point more than half a nib (${far.toFixed(2)}px)`, far <= W / 2);
+  const line = smoothCenterline(raw);
+  ok("the smoother pins the first point", line[0].x === raw[0].x && line[0].y === raw[0].y);
+  ok("the smoother pins the last point (the live pen tip)",
+    line[line.length - 1].x === raw[raw.length - 1].x && line[line.length - 1].y === raw[raw.length - 1].y);
+}
+
+{
+  // A deliberate corner may round, never collapse: the drawn path must still
+  // pass within half a nib of where the hand actually turned.
+  const raw = samplePath([pt(0, 0), pt(60, 0), pt(60, 60)], 2);
+  const line = centreline(raw);
+  let nearest = Infinity;
+  for (const p of line) nearest = Math.min(nearest, Math.hypot(p.x - 60, p.y - 0));
+  ok(`the drawn path holds the corner (${nearest.toFixed(2)}px from it, under ${(W / 2).toFixed(1)}px)`, nearest <= W / 2);
+}
+
+{
+  // Sub-pixel chatter on a slowly drawn line must not survive into the shape.
+  const raw = [];
+  for (let i = 0; i <= 120; i += 1) raw.push(pt(20 + i * 1.1, 60 + (i % 2 ? 0.32 : -0.32)));
+  const line = centreline(raw);
+  let worst = 0;
+  for (const p of line) if (p.x > 40 && p.x < 140) worst = Math.max(worst, Math.abs(p.y - 60));
+  ok(`chatter does not survive into the drawn path (${worst.toFixed(3)}px < 0.1px)`, worst < 0.1);
+}
+
+{
+  // A short stroke has nothing to smooth and must come through untouched.
+  const short = [pt(0, 0), pt(5, 5)];
+  ok("a 2-point stroke is left alone", smoothCenterline(short) === short);
 }
 
 // ── curve and cap resolution ───────────────────────────────────────────────
@@ -301,15 +372,19 @@ const swing = (pts) => {
   // This is NOT just the chord facet - it also carries the midpoint quadratic's
   // inherent pull toward the inside of a bend, which dominates here because a
   // 4px radius sampled every 2px turns nearly 30 degrees per sample. A real pen
-  // samples a loop that small far more densely. Half a pixel on a 6px nib is
-  // the bound worth holding: it keeps the whole pipeline honest end to end.
+  // samples a loop that small far more densely.
+  //
+  // The bound is set where it SEPARATES: measured 0.247px with sagitta
+  // refinement and 0.339px on fixed spacing, so 0.30 is what makes reverting
+  // the refinement fail here. A looser bound passes either way and pins
+  // nothing.
   const line = centreline(arcPath(100, 100, 4, 0, Math.PI * 1.6, 2));
   let worstBulge = 0;
   for (let i = 1; i < line.length; i += 1) {
     const mx = (line[i].x + line[i - 1].x) / 2, my = (line[i].y + line[i - 1].y) / 2;
     worstBulge = Math.max(worstBulge, Math.abs(Math.hypot(mx - 100, my - 100) - 4));
   }
-  ok(`the drawn path tracks a tight loop within half a px (${worstBulge.toFixed(3)}px)`, worstBulge < 0.5);
+  ok(`the drawn path tracks a tight loop to 0.30px (${worstBulge.toFixed(3)}px)`, worstBulge < 0.30);
 }
 
 {
@@ -330,16 +405,36 @@ const swing = (pts) => {
 // ── no argument-limit cliff ────────────────────────────────────────────────
 
 {
-  // A long unbroken stroke - an underline held right across the board. The ring
-  // is built with plain pushes; `ring.push(...arr)` used to spread tens of
-  // thousands of arguments and would take the pen out mid-stroke.
+  // A long unbroken stroke. The ring is built with plain pushes;
+  // `ring.push(...arr)` spreads one argument PER NUMBER and blows the
+  // call-argument limit.
+  //
+  // THE STROKE SHAPE IS THE WHOLE TEST, and it is not the obvious one. A
+  // gentle, densely sampled 9000-point curve resamples roughly 1:1 - about
+  // 18k arguments, under the limit, so it passes WITH the spread and proves
+  // nothing. Nor does a tight scribble: dense samples get thinned, and a
+  // 9000-sample spiral came out at only 3.4k centreline points.
+  //
+  // What reaches the cliff is a long FAST stroke. Fast means widely spaced
+  // samples, and the resampler subdivides each gap by up to SMOOTH_MAX_STEPS,
+  // so sparse input EXPANDS - here 6000 samples become ~75k centreline points
+  // and a 300k-number ring. Measured on this engine the spread dies at ~86k
+  // arguments, so this input is comfortably past it and the gentle cases are
+  // comfortably short of it.
+  let seed = 1;
   const raw = [];
-  for (let i = 0; i < 9000; i += 1) raw.push(pt(i * 0.9, 60 + Math.sin(i / 9) * 18));
+  let x = 0, y = 0, ang = 0;
+  for (let i = 0; i < 6000; i += 1) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    ang += (seed / 4294967296 - 0.5) * 1.2;
+    x += Math.cos(ang) * 30; y += Math.sin(ang) * 30;
+    raw.push(pt(x, y));
+  }
   let ring = null;
   let threw = null;
   try { ring = strokeOutline(raw, W); } catch (err) { threw = err; }
-  ok(`a 9000-point stroke does not throw (${threw ? threw.constructor.name : "ok"})`, threw === null);
-  ok("a 9000-point stroke still produces a ring", Array.isArray(ring) && ring.length > 1000);
+  ok(`a long fast stroke does not throw (${threw ? threw.constructor.name : "ok"})`, threw === null);
+  ok(`and its ring is past any spread limit (${ring ? ring.length : 0} numbers > 120000)`, Array.isArray(ring) && ring.length > 120000);
 }
 
 // ── degenerate input ───────────────────────────────────────────────────────
