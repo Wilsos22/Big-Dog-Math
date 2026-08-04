@@ -72,6 +72,17 @@ bars and live misconception grouping).
    `git branch -a --contains <sha>` finds it. On 2026-07-21 the live tool banner's cream-surface
    restyle was one such commit; wiring eleven more cream pages to the un-restyled banner would have
    shipped pale-on-pale text no student could read.
+   NEVER `--abort` A STUCK GIT OPERATION HERE - USE `--quit` (2026-08-03). `git am --abort`,
+   `git rebase --abort` and `git merge --abort` all HARD-RESET the working tree to the pre-operation
+   commit, and because concurrent sessions leave this repo's tree essentially never clean, that
+   discards THEIR uncommitted work along with yours. Found live: the repo sat mid-`git am` on a stale
+   patch, and git's own status message recommends `--abort` - taking it would have reset to `4371be7`,
+   dropping a commit already merged and pushed to `main` plus about 516 uncommitted lines of another
+   session's in-flight work (decimalSteps, divisionHouse, embedUrl, notionLessons, DecimalStepsBoard).
+   `git am --quit` removes `.git/rebase-apply` and leaves HEAD and the working tree exactly as they
+   are. Diagnose before clearing: `git apply --check .git/rebase-apply/0001` usually reports "patch
+   does not apply" because the patch's content ALREADY landed by another route - grep its symbols in
+   `src/` and the session is simply litter. A spurious `.git/index.lock` is often the first symptom.
 3. Verified work ships without waiting for Steele (his standing request, 2026-07-21 - routing
    merges through him twice stranded finished work). A push to `main` is what deploys - Vercel
    auto-builds it. Flow: push the feature branch first (a local-only branch is invisible to
