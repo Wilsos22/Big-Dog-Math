@@ -412,7 +412,9 @@ export default function LessonScreen({
             <div
               key={zoneIndex}
               onClick={editing ? () => onSelectZone?.() : undefined}
-              style={{ display: "flex", flexDirection: "column", gap: 26, minWidth: 0, flex: ZONE_FLEX[screen][zoneIndex], borderRadius: 26 }}
+              // On the live wall the content is centred vertically so a short slide reads as
+              // intentional instead of top-heavy; the studio editor keeps top alignment for authoring.
+              style={{ display: "flex", flexDirection: "column", justifyContent: editing ? "flex-start" : "center", gap: 26, minWidth: 0, flex: ZONE_FLEX[screen][zoneIndex], borderRadius: 26 }}
             >
               {blocks.map((block) => renderBlock(block, zoneIndex))}
               {blocks.length === 0 && editing ? (
