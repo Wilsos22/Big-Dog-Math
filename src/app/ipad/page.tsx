@@ -184,32 +184,23 @@ export default function IpadPage() {
   // The pen surface polls for this itself instead of being told by the Remote,
   // because it has to behave the same standing alone in its own tab as it does
   // embedded in the Remote's work space.
-  const lastStepRef = useRef<number | null>(null);
-  useEffect(() => {
-    let stopped = false;
-    const readStep = async () => {
-      try {
-        const response = await fetch("/api/control-remote", { cache: "no-store" });
-        if (!response.ok) return;
-        const data = await response.json() as {
-          session?: { liveFlow?: { sequence?: { currentIndex?: number } | null } | null } | null;
-        };
-        const index = data.session?.liveFlow?.sequence?.currentIndex;
-        if (stopped || typeof index !== "number") return;
-        const previous = lastStepRef.current;
-        lastStepRef.current = index;
-        // The FIRST read only learns where the lesson is. Clearing on it would
-        // wipe the board of a teacher who opened the pen surface mid-step.
-        if (previous !== null && previous !== index) setClearSignal((n) => n + 1);
-      } catch {
-        // No session, or offline. The pen keeps working either way - it just
-        // stops clearing itself, which is the safe direction to fail in.
-      }
-    };
-    void readStep();
-    const interval = window.setInterval(readStep, 2000);
-    return () => { stopped = true; window.clearInterval(interval); };
-  }, []);
+  // TURNED OFF 2026-08-03, AND IT NEVER ONCE RAN. The poll below asked
+  // GET /api/control-remote with NO sessionId, and that route answers
+  // `session: requestedSession ? ... : null` where requestedSession is null
+  // unless a sessionId was passed (route.ts ~927) - so `index` was never a
+  // number and the clear never fired, from the day it shipped. What it DID do
+  // was fetch and JSON.parse `sessions.map(serializeSession)` - every open
+  // session, each carrying its whole liveFlow snapshot - on the pen surface's
+  // main thread, every 2 seconds, at moments it cannot choose. A parse landing
+  // between two quick strokes is indistinguishable from the pen being slow to
+  // start, which is exactly the complaint that led here.
+  //
+  // NOT re-wired, on purpose: passing a session id would switch on a
+  // DESTRUCTIVE behaviour the board has never actually had, so the first time
+  // Steele saw it would be his board wiping itself mid-lesson. Turning it on
+  // is his call, and it is small - pass ?sessionId= (or read sessions[0],
+  // given one open session at a time is an invariant here) and restore the
+  // effect. Until then the pen pays nothing for a feature it does not have.
 
   // ── The stage: fit to the wall's shape, then pinch the whole thing ─────────
   // Sized in JS because the CSS version could not letterbox: width:100% plus an
@@ -300,7 +291,17 @@ export default function IpadPage() {
         .ip-dot { width:8px; height:8px; border-radius:50%; background:#c78b24; }
         .ip-dot.connected { background:#2f9e6f; }
         .ip-dot.disconnected { background:#d05f3c; }
-        .ip-palette { position:fixed; top:58px; left:10px; z-index:29; width:min(620px, calc(100vw - 20px)); display:flex; flex-direction:column; gap:8px; padding:12px; border-radius:16px; border:1px solid rgba(32,30,26,0.10); background:rgba(255,255,255,0.80); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); box-shadow:0 18px 44px rgba(40,32,20,0.18); }
+        /* NO backdrop-filter here, deliberately. This panel is 620px wide,
+           fixed over the writing stage, and open by default - and a
+           backdrop-filtered box has to re-sample and re-blur whatever is
+           behind it every time that changes. Behind it is the ink canvas,
+           which repaints on every frame of every stroke, so the blur was
+           being recomputed per frame across the area the teacher writes in.
+           It is opaque instead: same panel, none of the per-frame cost. The
+           small handle keeps its blur - it is a corner chip, not a sheet over
+           the page. If the pen ever feels heavy again, "Hide tools" is the
+           one-gesture A/B that tells you whether an overlay is the cause. */
+        .ip-palette { position:fixed; top:58px; left:10px; z-index:29; width:min(620px, calc(100vw - 20px)); display:flex; flex-direction:column; gap:8px; padding:12px; border-radius:16px; border:1px solid rgba(32,30,26,0.10); background:#fffdf8; box-shadow:0 18px 44px rgba(40,32,20,0.18); }
         .ip-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
         .ip-group { display:flex; align-items:center; gap:6px; }
         .ip-sub { color:var(--bdb-ink-faint); font-size:0.72rem; font-weight:700; }

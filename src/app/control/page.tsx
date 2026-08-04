@@ -490,6 +490,7 @@ interface TodayLessonStep {
   slideOverlay?: string;
   slideUrl?: string;
   slideMirror?: boolean;
+  slideFit?: "contain" | "cover";
   title: string;
   duration: number;
   stateId: string;
@@ -2205,6 +2206,7 @@ export default function ControlPage() {
           slideOverlay: step.slideOverlay || undefined,
           slideUrl: step.slideUrl || undefined,
           slideMirror: step.slideMirror || undefined,
+          slideFit: step.slideFit === "cover" ? "cover" : undefined,
           publicSurfaceMode: step.publicSurfaceMode,
           routineConfig: step.routineConfig,
           eyes: step.eyes,

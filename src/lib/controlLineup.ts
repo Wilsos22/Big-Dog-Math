@@ -64,6 +64,10 @@ export interface LineupItem {
   slideOverlay?: string;
   slideUrl?: string;
   slideMirror?: boolean;
+  // Only ever published as "cover". "contain" is the default on every surface,
+  // so publishing it would add a constant string to a snapshot Control
+  // full-replaces about once a second for no gain.
+  slideFit?: "contain" | "cover";
   discussionStems?: string;
   vocabulary?: string;
   discussionPhases?: string;
@@ -215,6 +219,7 @@ export function flowSnapshotForStep(
     slideOverlay: item.slideOverlay || undefined,
     slideUrl: item.slideUrl || undefined,
     slideMirror: item.slideMirror || undefined,
+    slideFit: item.slideFit === "cover" ? "cover" : undefined,
     eyes: item.eyes || "",
     voice: item.voice || "",
     supplies: item.supplies || "",
@@ -261,6 +266,7 @@ export function lineupItemFromStep(step: LiveFlowSequenceStep, uid: () => string
     slideOverlay: step.slideOverlay || undefined,
     slideUrl: step.slideUrl || undefined,
     slideMirror: step.slideMirror || undefined,
+    slideFit: step.slideFit === "cover" ? "cover" : undefined,
     publicSurfaceMode: step.publicSurfaceMode,
     routineConfig: step.routineConfig,
     eyes: step.eyes,

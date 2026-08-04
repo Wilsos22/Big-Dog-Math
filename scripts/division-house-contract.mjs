@@ -31,24 +31,46 @@ function check(name, fn) {
 
 const shape = (t) => t.prompts.map((p) => (p.kind === "operation" ? p.op : p.id.replace(/-\d+$/, "")));
 
+/** Steele's twelve, in his order. A round that is not the last runs all of it. */
+const ROUND = [
+  "pick-partial",
+  "divide",
+  "pick-divisor",
+  "place-quotient",
+  "multiply",
+  "pick-mult",
+  "place-product",
+  "subtract",
+  "place-rest",
+  "bringdown",
+  "pick-bring",
+  "place-bring",
+];
+/** The last round has nothing left to bring down. */
+const LAST_ROUND = ROUND.slice(0, 9);
+const roundCount = (t) => new Set(t.prompts.map((p) => p.round)).size;
+
+/** Six shapes: two rounds, a zero quotient, a short quotient, a two-digit divisor, three rounds. */
+const SHAPES = [[96, 4], [618, 6], [138, 6], [84, 9], [144, 12], [1000, 8]];
+
 console.log("division-house contract");
 
-check("one round is Steele's sequence, in his order", () => {
-  const t = buildHouseTrace(96, 4);
-  assert.deepEqual(shape(t).slice(0, 12), [
-    "pick-partial",
-    "divide",
-    "pick-divisor",
-    "place-quotient",
-    "multiply",
-    "pick-mult",
-    "place-product",
-    "subtract",
-    "place-rest",
-    "bringdown",
-    "pick-bring",
-    "place-bring",
-  ]);
+check("every round of every shape is Steele's sequence, in his order", () => {
+  // This used to check twelve steps of ONE round of ONE problem, so a
+  // regression that dropped pick-divisor from round two, or reordered a
+  // zero-quotient round, passed the whole suite green.
+  for (const [dividend, divisor] of SHAPES) {
+    const t = buildHouseTrace(dividend, divisor);
+    const s = shape(t);
+    const rounds = roundCount(t);
+    for (let r = 0; r < rounds - 1; r += 1) {
+      assert.deepEqual(s.slice(r * 12, r * 12 + 12), ROUND, `${dividend}/${divisor} round ${r}`);
+    }
+    assert.deepEqual(s.slice((rounds - 1) * 12), LAST_ROUND, `${dividend}/${divisor} last round`);
+    assert.equal(t.prompts.length, (rounds - 1) * 12 + 9, `${dividend}/${divisor} prompt count`);
+    // Every prompt is stamped with the round it belongs to, in order.
+    t.prompts.forEach((p, i) => assert.equal(p.round, Math.floor(i / 12), `${dividend}/${divisor} ${p.id}`));
+  }
 });
 
 check("and then it resets", () => {
@@ -134,6 +156,95 @@ check("a multi-digit number is pointed at as ONE number", () => {
   assert.equal(prod.slots.length, 2);
 });
 
+check("a two-digit divisor is one number, and every digit of it counts", () => {
+  // 144/12 used to name only ds-0, so a student who tapped the 2 of "12" - the
+  // divisor - was told "It sits outside the house, on the left", and the pulse
+  // lit the 1 alone as though 12 were two numbers.
+  const t = buildHouseTrace(144, 12);
+  assert.equal(t.divisorWidth, 2);
+  for (const id of ["pick-divisor-0", "pick-mult-0", "pick-divisor-1", "pick-mult-1"]) {
+    const p = t.prompts.find((x) => x.id === id);
+    assert.ok(p, `${id} is missing`);
+    assert.deepEqual(p.slots, ["ds-0", "ds-1"], `${id} must name the whole divisor`);
+  }
+  // And the sign still anchors on one end of it, not on a slot that is missing.
+  const ids = new Set(t.slots.map((s) => s.id));
+  for (const p of t.prompts) {
+    if (p.visual) assert.ok(ids.has(p.visual.to) && ids.has(p.visual.from), p.id);
+  }
+});
+
+check("a sentence never answers the question that comes after it", () => {
+  // `.dh-say` shows the PREVIOUS prompt's sentence while the next one is asked,
+  // so "We are dividing 13." sat directly above "What operation are we doing?"
+  // on the first operation question of every round of every problem.
+  const NAMES = { divide: /divid/i, multiply: /multipl/i, subtract: /subtract/i, bringdown: /bring/i };
+  for (const [dividend, divisor] of SHAPES) {
+    const t = buildHouseTrace(dividend, divisor);
+    t.prompts.forEach((p, i) => {
+      const next = t.prompts[i + 1];
+      if (!next || next.kind !== "operation") return;
+      assert.ok(
+        !NAMES[next.op].test(p.say),
+        `${dividend}/${divisor}: ${p.id} says "${p.say}" and ${next.id} then asks for ${next.op}`,
+      );
+    });
+  }
+});
+
+check("two numerals never sit side by side with only a space between them", () => {
+  // "4 goes into 9 2 times" reads as one number, and "3 goes into 1 0 times"
+  // reads as ten. Every round of every problem said one of those.
+  for (const [dividend, divisor] of [...SHAPES, [936, 4], [824, 4], [100, 99], [7, 7]]) {
+    const t = buildHouseTrace(dividend, divisor);
+    for (const p of t.prompts) {
+      for (const [field, text] of [["say", p.say], ["ask", p.ask], ["hint", p.hint]]) {
+        assert.ok(!/\d\s\d/.test(text), `${dividend}/${divisor} ${p.id}.${field}: ${text}`);
+      }
+    }
+  }
+});
+
+check("the round-zero ask says WHY the first digit is not enough", () => {
+  // 6 does not go into 1, so we take 13 - the single most important idea in
+  // this case, and the ask used to say "the first number" while the hint said
+  // "the first digit" and two cells pulsed.
+  for (const [dividend, divisor] of [[138, 6], [84, 9], [100, 99], [144, 12]]) {
+    const t = buildHouseTrace(dividend, divisor);
+    const first = t.prompts[0];
+    assert.ok(first.slots.length > 1, `${dividend}/${divisor} takes more than one digit`);
+    assert.match(first.ask, /does not fit into the first digit/i, `${dividend}/${divisor}`);
+    assert.match(first.hint, /bigger than/i, `${dividend}/${divisor}`);
+  }
+  // And the ordinary case keeps its ordinary wording.
+  assert.match(buildHouseTrace(96, 4).prompts[0].ask, /first number inside the house/i);
+});
+
+check("the four operation buttons are seated, and hold all four operations", () => {
+  // In fixed cycle order, "tap the leftmost chip that is not lit yet" answered
+  // every operation question without reading it.
+  const slotsById = new Map();
+  for (const [dividend, divisor] of [...SHAPES, [936, 4], [824, 4], [7, 7], [9999, 3]]) {
+    const t = buildHouseTrace(dividend, divisor);
+    for (const p of t.prompts) {
+      if (p.kind !== "operation") continue;
+      assert.ok(p.options, `${p.id} has no seated order`);
+      assert.deepEqual([...p.options].sort(), HOUSE_OPS.map((o) => o.op).sort(), `${p.id} must offer all four`);
+      const key = p.id.replace(/-\d+$/, "");
+      if (!slotsById.has(key)) slotsById.set(key, []);
+      slotsById.get(key).push(p.options.indexOf(p.op));
+    }
+  }
+  for (const [key, seats] of slotsById) {
+    assert.ok(seats.length >= 4, `${key} needs a real sample`);
+    assert.ok(new Set(seats).size > 1, `${key} seats the answer in slot ${seats[0]} every time`);
+  }
+  // Deterministic, so this is a fact about the build and not a flake.
+  const a = buildHouseTrace(96, 4).prompts.find((p) => p.id === "op-divide-0");
+  const b = buildHouseTrace(96, 4).prompts.find((p) => p.id === "op-divide-0");
+  assert.deepEqual(a.options, b.options);
+});
+
 check("the arithmetic behind the board is right", () => {
   for (const [dividend, divisor] of [[96, 4], [738, 6], [618, 6], [875, 4], [84, 4], [7, 7]]) {
     const t = buildHouseTrace(dividend, divisor);
@@ -175,11 +286,23 @@ check("a problem the house cannot draw is refused out loud", () => {
   const reasons = Object.fromEntries(rejected.map((r) => [r.text, r.reason]));
   assert.match(reasons["4/96"], /bigger than the dividend/);
   assert.match(reasons["banana"], /not a problem/);
-  assert.ok(reasons["12/0"]);
+  // Dividing by zero was answered with a message about the size ceiling that
+  // never mentioned zero.
+  assert.match(reasons["12/0"], /zero/i);
   assert.ok(reasons["99999/3"]);
   assert.equal(buildHouseTrace(96, 0), null);
   assert.equal(buildHouseTrace(0, 4), null);
   assert.equal(buildHouseTrace(9.5, 4), null);
+});
+
+check("problems past the ceiling are reported, not silently dropped", () => {
+  // The module promises the opposite of a silent drop, and a teacher who pastes
+  // fifteen and reads "12 problems." has no way to know which three vanished.
+  const raw = Array.from({ length: 15 }, (_, i) => `${100 + i}/4`).join(", ");
+  const { problems, rejected } = parseHouseSet(raw);
+  assert.equal(problems.length, 12);
+  assert.equal(rejected.length, 3);
+  for (const r of rejected) assert.match(r.reason, /only the first 12/i);
 });
 
 check("the set round-trips", () => {

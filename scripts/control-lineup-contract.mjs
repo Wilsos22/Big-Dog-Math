@@ -82,6 +82,7 @@ const FULL_ITEM = {
   slideOverlay: "overlay-blob",
   slideUrl: "https://example.com/deck",
   slideMirror: true,
+  slideFit: "cover",
   discussionStems: "stem one\nstem two",
   vocabulary: "word one\nword two",
   discussionPhases: "think 60 | Think about it",

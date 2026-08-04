@@ -10,6 +10,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import SiteNav from "@/components/SiteNav";
 import LessonScreen, { type BlockAction } from "@/components/screen/LessonScreen";
 import { TeacherApiError, teacherApiRequest } from "@/lib/teacherApi";
 import { decodeScreenLayout, encodeScreenLayout } from "@/lib/lessonScreenLayout";
@@ -415,6 +416,7 @@ function StudioInner() {
   return (
     <div className="lss-root">
       <style>{STUDIO_CSS}</style>
+      <SiteNav variant="teacher" />
 
       <header className="lss-topbar">
         <div className="lss-brand">Lesson Screen Studio</div>
@@ -643,6 +645,10 @@ const STUDIO_CSS = `
 .lss-alert { margin:0; border:1px solid #F0B7AB; background:#FCEDE9; color:#C43418; border-radius:12px;
   padding:9px 13px; font-size:13px; font-weight:750; }
 .lss-alert-inline { border-radius:12px; }
+
+/* The shared teacher nav sits above this page's own topbar. Strip its centering
+   and side padding so it lines up with the panels rather than floating narrow. */
+.lss-root .nav-bar { max-width:none; margin:0; padding:0; }
 
 .lss-topbar { display:flex; align-items:center; gap:16px; flex-wrap:wrap; border:1px solid #DBD5C9;
   border-radius:20px; background:#fff; padding:12px 18px; box-shadow:0 6px 18px rgba(40,32,20,.07); }

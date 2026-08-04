@@ -45,6 +45,13 @@ bars and live misconception grouping).
   into a curve, dense/careful strokes are barely touched, so a number's corners survive - and it is
   path shape only, so the constant-width marker is intact. That is why "rudimentary" and the width
   decision are NOT in conflict: one is the line's smoothness, the other its thickness.
+  A THIRD DIAL EXISTS AND IT IS NOT IN `inkGeometry` AT ALL (2026-08-03): what the canvas is
+  COMPOSITED AGAINST. See the pen-feel bullets under "Live sessions" - the caps and miter fixes
+  and their contract, the React re-render that stalled back-to-back strokes, the backdrop-filter
+  over the writing surface, and the `Paper` A/B that separates compositing cost from stroke
+  geometry. Reach for that A/B BEFORE tuning constants again. And note that the two fixes that
+  actually changed the picture were both GEOMETRY BUGS, not tuning: every dial in that file was
+  already set sensibly.
 
 ## Hard rules (non-negotiable)
 
@@ -72,6 +79,17 @@ bars and live misconception grouping).
    `git branch -a --contains <sha>` finds it. On 2026-07-21 the live tool banner's cream-surface
    restyle was one such commit; wiring eleven more cream pages to the un-restyled banner would have
    shipped pale-on-pale text no student could read.
+   NEVER `--abort` A STUCK GIT OPERATION HERE - USE `--quit` (2026-08-03). `git am --abort`,
+   `git rebase --abort` and `git merge --abort` all HARD-RESET the working tree to the pre-operation
+   commit, and because concurrent sessions leave this repo's tree essentially never clean, that
+   discards THEIR uncommitted work along with yours. Found live: the repo sat mid-`git am` on a stale
+   patch, and git's own status message recommends `--abort` - taking it would have reset to `4371be7`,
+   dropping a commit already merged and pushed to `main` plus about 516 uncommitted lines of another
+   session's in-flight work (decimalSteps, divisionHouse, embedUrl, notionLessons, DecimalStepsBoard).
+   `git am --quit` removes `.git/rebase-apply` and leaves HEAD and the working tree exactly as they
+   are. Diagnose before clearing: `git apply --check .git/rebase-apply/0001` usually reports "patch
+   does not apply" because the patch's content ALREADY landed by another route - grep its symbols in
+   `src/` and the session is simply litter. A spurious `.git/index.lock` is often the first symptom.
 3. Verified work ships without waiting for Steele (his standing request, 2026-07-21 - routing
    merges through him twice stranded finished work). A push to `main` is what deploys - Vercel
    auto-builds it. Flow: push the feature branch first (a local-only branch is invisible to
@@ -408,9 +426,18 @@ Codex and cloud sessions need them too (rule 9).
   decimals" for all four has exactly the misconception this tool exists to catch, so the adding rule
   is deliberately OFFERED as a wrong choice on the multiply board. `npm run test:decimal-steps` pins
   all four, and a change making one answer serve every operation has broken the tool's reason to
-  exist. Same rule for counting places: the answer ADDS the two factors' decimal counts, and
-  "whichever number has more" is the offered trap - except when the two numbers agree (6.2 x 3),
-  where the trap would be a right answer marked wrong and drops out.
+  exist. COUNTING PLACES IS A TYPED INPUT, NOT A CHOICE (corrected 2026-08-03; this paragraph
+  described an offered "whichever number has more" trap and an equal-counts drop-out, and the v2
+  rewrite had already made `count` an input - `decimalSteps.ts` - so there are no choices there at
+  all). The student types the total; the HINT carries the rule ("6.2 has 1, and 3 has 0. Add them,
+  do not take the bigger one"), which is the only place the trap survives, and it reads oddly when
+  both readings give the same number.
+  THE DIRECTION STEP ARGUES FROM PLACE VALUE, NEVER FROM SIZE (fixed 2026-08-03). It used to
+  confirm a correct "Left" with "counting in from the right end makes the answer smaller, which is
+  what multiplying by a piece of a number does" - unconditionally, so `6.2 x 3 = 18.6` told a
+  student that three is a piece of a number and that 18.6 is smaller than 6.2, at the moment the
+  rule is forming. The size argument only holds when both factors are under one; the contract now
+  refuses any `why` on that step that mentions size.
   DIVISION MAKES THEM ACTUALLY MOVE THE DECIMAL. Naming the number of places is a separate step from
   doing it: after answering "how many places", the student hops the divisor's decimal that many
   times, then answers what happens to the dividend and hops it too (moving only the divisor is the
@@ -747,25 +774,53 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   room its second channel. The toggle is per step, in the studio inspector on a selected slide frame.
   THE URL REACHES THE RUNTIME FROM TWO PLACES AND THE BLOB WINS: `slideFrameFromLayout` in
   notionLessons.ts decodes the saved screen layout and reads the main screen's slide block
-  (`ov.slideUrl` / `ov.slideMirror`), falling back to the Notion `Slide URL` / `Slide Image`
-  property. So authoring in the studio needs no Notion property, and a property set in Notion is
-  the readable copy. `slideUrl` and `slideMirror` are server-authored fields on
-  `LiveFlowSequenceStep`, which puts them in the `interlude` / `transition` class - CONTROL'S
-  SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry them or a reconnect erases the
-  slide mid-lesson. Watch the indentation trap when adding the next such field: the 8-space and
-  10-space mapping lines are substrings of each other, so a naive replace double-applies.
+  (`ov.slideUrl` / `ov.slideMirror` / `ov.slideFit`), falling back to the Notion `Slide URL` /
+  `Slide Image` property for the URL. So authoring in the studio needs no Notion property, and a
+  property set in Notion is the readable copy. `slideUrl`, `slideMirror` and `slideFit` are
+  server-authored fields on `LiveFlowSequenceStep`, which puts them in the `interlude` /
+  `transition` class - CONTROL'S SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry
+  them or a reconnect erases the slide mid-lesson (`lessonFlowBuild.ts` is the fifth site;
+  `/api/control-remote` and `rehearsalFlow.ts` spread the step and inherit the field). Watch the
+  indentation trap when adding the next such field: the 8-space and 10-space mapping lines are
+  substrings of each other, so a naive replace double-applies - anchor on a leading newline.
+  MIRROR AND FIT ARE READ INDEPENDENTLY OF THE URL, and the reason is a silent failure fixed
+  2026-08-03: the function used to return as soon as it found a slide block carrying a url, so a
+  teacher who left the studio's url field blank (letting the Notion property supply it - the
+  documented readable-copy path) and flipped the mirror toggle got a toggle that saved correctly,
+  read back correctly, and never reached a projector. A block naming its own url is still the
+  authoritative one and its settings go with it; a bare block now lends its settings to the
+  property-supplied url. `slideFit` is a free-text inspector field, so it is trimmed and lowercased
+  before it decides anything - "Cover" is a teacher answering correctly. Pinned in
+  `npm run test:notion-lesson-contract`.
+  `slideFit` publishes ONLY when "cover" - every surface defaults to "contain", so publishing the
+  default would add a constant string to a snapshot Control full-replaces about once a second.
   THE NOTION PROPERTY IS `Slide Url`, NOT `Slide URL`, AND IT IS A FILE PROPERTY. Read it through
   `propByName` (notionLessons.ts), which normalizes case and punctuation - an exact-string property
   lookup fails SILENTLY, the site reads "" and the screen renders as though nothing was authored.
   That is the whole class of bug: verified live 2026-08-02, the property Steele created was `Slide
   Url` and the exact-match read would have found nothing with no error anywhere. Prefer `propByName`
   for any new property.
-  UNSOLVED, AND IT WILL BITE ON A REAL TEACHING DAY: a Notion-UPLOADED file resolves to a
+  THE NOTION-UPLOAD TRAP, AND THE ANSWER TO IT (2026-08-03). A Notion-UPLOADED file resolves to a
   short-lived SIGNED S3 url (about an hour), and Control builds its lineup ONCE at load and then
-  republishes that frozen url every second. A lesson opened at 7:30 has a dead image url by period
-  4, and the projector shows the four-second fallback card. An EXTERNAL link pasted into the
-  property has no expiry and is safe. The fix is a proxy route that re-resolves the step's file from
-  Notion per request so the snapshot carries a stable path; not built, needs Steele's word.
+  republishes that frozen url every second - so a lesson opened at 7:30 has a dead image url by
+  period 4 and the projector shows the four-second fallback card. NEVER put a classroom-critical
+  slide behind a Notion upload. An EXTERNAL link pasted into the property has no expiry and is safe.
+  THE PREFERRED SOURCE IS NOW A SAME-ORIGIN IMAGE: `resolveSlideSource` accepts a root-relative path
+  (`/slides/m1t1l1-d1-3.webp`) for an exported slide committed to `public/slides/`, served by the
+  same CDN that just delivered the page - if the page loaded, the slide loaded. No expiry, no third
+  party, nothing to re-fetch, and it is why the proxy-route idea this paragraph used to call for was
+  not built. Steele's standing ask when he chose it: most reliable and least likely to fail mid
+  lesson. `public/slides/README.md` carries the naming, format and FERPA rules; the folder is in a
+  PUBLIC repo, so no student name ever goes in it. Reserve a LIVE EMBED for a board being actively
+  edited during class (a Lucid or Figma canvas the room watches change) - that is the one case where
+  the live fetch is the point.
+  THE GUARD IS `/^\/[/\\]/`, NOT `startsWith("//")`. The URL spec treats `\` as `/` for http(s), so
+  `/\evil.com/x.png` resolves to https://evil.com/x.png and a `//`-only check let it through as
+  same-origin. `npm run test:embed-url` pins it along with the four product rewrites.
+  AN IMAGE GETS THE SAME WORDED FALLBACK AS AN EMBED (`SlideFrameScene`, `onError`). A bare `<img>`
+  answers a mistyped or never-committed filename with the browser's broken-image glyph, which at 25
+  feet is indistinguishable from a broken lesson - and "the file was never deployed" is the most
+  likely failure on the path this now recommends.
 - THREE DEMONSTRATION OBJECTS (`manipSplit` / `manipSnap` / `manipFree`) are a SEPARATE, EPHEMERAL
   palette (main projector only) the teacher drags live during class. Their type union is distinct from
   the 10 persisted component types, their live position lives in the studio's in-memory `manip` map
@@ -1403,6 +1458,79 @@ the invariants they protect are easy to break again.
   symptom is that a shipped fix is not there. `UpdateReadyChip` polls `/api/build-id` and offers a
   tap-to-reload chip. It must NEVER reload on its own. When a fix is reported as not working, check
   what build the iPad is actually running before re-debugging the fix.
+- **PEN FEEL: THE GEOMETRY FIXES, AND WHY "JAGGED" WAS FOUR SEPARATE THINGS** (2026-08-03, from
+  Steele: "too jagged and doesnt respond well to writing. especially back to back strokes", then
+  "a few weeks ago it was running fantastic"). `npm run test:ink-geometry` (34 checks) pins all of
+  it; the contract measures the polygon with point-in-polygon rather than eyeballing a screenshot,
+  and it FAILS on the pre-fix code.
+  (1) **THE ROUND CAPS SWEPT THE WRONG WAY AND NEVER ONCE CAPPED A STROKE.** A cap joins one edge
+  to the other across the tip and there are two ways round; the fan swept the way that folds back
+  THROUGH the stroke body, so instead of a nib it cut a notch into the last few px. Every stroke
+  had blunt, forked ends from the day the engine was written - invisible on a long scribble,
+  about half the ink of a short one, and short strokes are what an equation is made of. The fix is
+  the sign of one term (`fromAngle - k*PI/steps`). Its symptom is a bbox: a horizontal stroke's
+  ring should reach half a nib PAST each tip, and it stopped exactly at them.
+  (2) **A CONSTANT-WIDTH MARKER MUST NOT THIN AT A CORNER.** Offsetting each point along its own
+  normal by exactly r leaves the outer edge of a turn at r*cos(theta/2) - about 30% pinched at a
+  right angle - and handwriting is almost entirely corners. `strokeOutline` now scales the offset
+  by 1/cos(theta/2) with `MITER_LIMIT` 2.5 so a retraced stroke cannot throw a spike. Measured
+  nib width kept at the corner: 94% -> 100% (right angle), 80% -> 100% (zig-zag).
+  (3) **THERE IS NO SEPARATE DE-JITTER PASS, AND THAT IS MEASURED, NOT AN OVERSIGHT.** One was
+  built (a binomial pre-filter over the control points) and then removed, because
+  `smoothCenterline`'s midpoint quadratic already averages each pair of samples and that is itself
+  a low-pass. On a line drawn slowly at 1.1px sampling: perfectly alternating chatter 0.320px raw
+  goes to 0.000px WITHOUT the filter; white noise 0.133px without vs 0.100px with; correlated hand
+  tremor 0.080px vs 0.076px. So it bought 0.03px and 0.004px - invisible on a 6px nib - while
+  costing two hypots per point on every frame of every stroke, and no contract check could be made
+  to fail without it, which is the same fact from the other side. What actually cleaned the line up
+  was the miter joint: a slightly wobbling stroke puts a run of small turns through the joint, and
+  an un-mitered joint pinches at every one of them, which is what made a plain rule look frayed.
+  If you are here to add smoothing, measure against the miter and the caps first.
+  (4) Resampling refines by the sagitta `c*c/(8R)`, so it only bites below about R=6 and costs
+  nothing elsewhere. Scale is NOT a reason to refine: strokes travel NORMALISED and each surface
+  re-fits the curve in its own pixels, so the projector's chords are the same 2.4px across a
+  proportionally larger stroke, not magnified ones.
+- **THE BACK-TO-BACK STROKE STALL WAS A REACT RE-RENDER, NOT THE INK** (2026-08-03). `InkBoard`
+  called `onHistoryChange` on every `recordOp`, and every consumer writes it into state
+  (`/ipad`: `setHistory({ undo, redo })` - a fresh object, so React never bails by value). So each
+  pen LIFT re-rendered the whole page. `notifyHistory` now fires only when the pair actually
+  CHANGES - after stroke one it is (true,false) and stays there - so later lifts notify nothing.
+  `clearLocal` must go through `notifyHistory` too, or the last-notified pair goes stale and
+  swallows the next real change.
+  THE COST IS SYNCHRONOUS RECONCILIATION INSIDE THE POINTERUP HANDLER, NOT A LAYOUT FLUSH, and the
+  distinction is worth keeping straight because the wrong version sounds better. A re-render whose
+  output is identical mutates no DOM, so there is nothing for `measure()`'s
+  `getBoundingClientRect()` to reflow - only stroke one actually changes anything (undo false ->
+  true flips `disabled`). What it does cost is React running start to finish inside the event
+  handler, which is on the critical path exactly when a pen lift and the next pen down fall in the
+  same frame. (An earlier version of this note claimed the forced-reflow mechanism; a review
+  measured it and it is wrong.)
+- **BACKDROP-FILTER OVER THE INK CANVAS IS A PER-FRAME COST** (2026-08-03). `.ip-palette` is 620px
+  wide, fixed over the writing stage, and open by default; `backdrop-filter: blur(16px)` makes the
+  browser re-sample and re-blur its backdrop every time that backdrop changes - and its backdrop is
+  the canvas, which repaints on every frame of every stroke. It is opaque now. The small
+  `.ip-handle` keeps its blur (a corner chip, not a sheet over the page). **"Hide tools" is the
+  one-gesture A/B** whenever the pen feels heavy: if hiding the palette sharpens it, an overlay is
+  the cause, not the geometry.
+- **THE /ipad AUTO-CLEAR POLL NEVER RAN, AND STILL COST A PARSE EVERY 2 SECONDS** (turned off
+  2026-08-03). It asked `GET /api/control-remote` with NO sessionId, and that route returns
+  `session: null` unless one is passed - so the step index was never a number and the board never
+  cleared on a lesson advance, from the day it shipped. Meanwhile it fetched and parsed
+  `sessions.map(serializeSession)` - every open session with its whole liveFlow snapshot - on the
+  pen surface's main thread every 2s, at moments it cannot choose. Deliberately NOT re-wired:
+  passing a session id switches on a DESTRUCTIVE auto-clear the board has never actually had, and
+  the first time Steele saw it would be his board wiping itself mid-lesson. Turning it on is his
+  call and is a one-line change.
+- **THE "FANTASTIC" PEN CONFIGURATION WAS STRUCTURALLY DIFFERENT, AND `Paper` IS THE A/B** (noted
+  2026-08-03). Before the 2026-07-30 one-surface rebuild, the surface the teacher wrote on was an
+  OPAQUE dotted `InkBoard` with no iframe mounted at all. Today it is `transparent={!paper}` - a
+  transparent canvas stacked on a permanently live `/teacher/present` iframe - so the compositor
+  blends three canvases against an independently rendering same-origin app on every frame, and the
+  `desynchronized: true` low-latency path Safari grants the wet canvas is exactly what that
+  arrangement can cost you. THIS IS UNMEASURED from code and needs a Safari layer trace on the
+  device. **Turning `Paper` ON makes the canvas opaque and is a free A/B a teacher can run in one
+  tap**: if the pen feels great on Paper and poor on Screen, the remaining problem is compositing,
+  not stroke geometry - do not go back to tuning `inkGeometry`.
 - **THE PROJECTOR IS A DISPLAY ON THE INK ROOM, NEVER A WRITER** (2026-07-30). `/teacher/present`'s
   board-scene `InkBoard` was mounted `interactive`, which made the projector the SECOND author on
   the shared room: `InkBoard`'s interactive-only effects broadcast `{t:"bg", url:null}` (wiping the
@@ -1995,9 +2123,25 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   the public `/api/build-id` on display routes (/board, /teacher/present, /teacher/pace,
   /live-flow, /warmup, /weekly-display - the pace projector and the all-day TVs joined
   2026-07-27; they are the longest-open tabs in the building and were silently missing
-  deploys) and reloads them when a new deploy ships. NEVER add /ipad to its DISPLAY_ROUTES - the pen surface
+  deploys - and /teacher/scoreboard joined 2026-08-03 when it became a first-class
+  second-screen card on the teacher home; it holds no local state a reload could lose,
+  since every standing is re-read from /api/teacher/scoreboard every 2s) and reloads them
+  when a new deploy ships. STILL MISSING and worth Steele's word: `/teacher/bruh/board`,
+  the BRUH projector, has the same profile and the same gap. NEVER add /ipad to its DISPLAY_ROUTES - the pen surface
   holds the authoritative ink state and an auto-reload would wipe the room's boards. Displays are
   safe to reload; ink resyncs via hello/state on mount.
+- **A COWORK SANDBOX SESSION CANNOT DELETE FILES IN THIS REPO, SO IT CANNOT BUILD OR COMMIT**
+  (found 2026-08-03). Claude Cowork reaches the folder through a FUSE mount that permits create and
+  write but returns `EPERM ... unlink` on every delete. Two consequences, and neither error names its
+  real cause. `npm run build` dies on `EPERM: operation not permitted, unlink '.next/BUILD_ID'` -
+  Next clears `.next` before writing, and `rm -rf .next` fails the same way, so there is no cleanup
+  that fixes it. And ANY git command that takes the index lock (`add`, `commit`, `checkout -b`) can
+  leave a `.git/index.lock` behind that the sandbox then cannot remove, which makes every later git
+  call in that folder fail with "Another git process seems to be running" until someone deletes the
+  lock from a REAL terminal. What DOES work from the sandbox: `npm run typecheck`, `npm test` (all 31
+  suites), and every read. So a Cowork session should verify with typecheck + the contract suites,
+  and hand the `npm run build`, the commit and the push to Steele rather than half-finishing them.
+  Claude Code in a normal terminal is unaffected - this is the mount, not the repo.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like

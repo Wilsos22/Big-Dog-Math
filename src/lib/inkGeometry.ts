@@ -42,6 +42,30 @@ export function thinPoints(pts: InkRenderPoint[], minDist = 0.75): InkRenderPoin
   return out;
 }
 
+// THERE IS NO SEPARATE DE-JITTER PASS, AND THAT IS A MEASURED DECISION, NOT AN
+// OVERSIGHT (2026-08-03). A binomial pre-filter over the control points was
+// built to take the hand's micro-wobble out before the curve is fitted, then
+// removed once measured against smoothCenterline alone on a slowly drawn line
+// sampled every 1.1px:
+//
+//   perfectly alternating chatter  0.320px raw -> 0.000px WITHOUT the filter
+//   white noise                    0.201px raw -> 0.133px without, 0.100px with
+//   correlated hand tremor         0.084px raw -> 0.080px without, 0.076px with
+//
+// The midpoint quadratic below already averages each pair of samples, which is
+// itself a low-pass, and it annihilates alternating noise outright. A second
+// pass bought 0.03px on white noise and 0.004px on realistic tremor - both far
+// under one pixel of a 6px nib, i.e. invisible - while costing two hypots per
+// point on EVERY frame of every in-flight stroke. It was also impossible to
+// write a contract check that failed without it, which is the same fact from
+// the other side: it changed nothing anyone could see.
+//
+// What actually cleaned up the "jagged" line was the miter joint (a stroke
+// wobbling slightly puts a run of small turns through the joint, and an
+// un-mitered joint pinches at every one of them, which is what made a straight
+// rule look frayed) and the round caps. If you are here to add smoothing,
+// measure against those first.
+
 // Smooth the centreline so a stroke FLOWS as a curve instead of showing the
 // straight segments between raw pointer samples - the thing that reads as
 // "rudimentary" ink, worst on fast strokes where the samples are far apart.
@@ -51,8 +75,10 @@ export function thinPoints(pts: InkRenderPoint[], minDist = 0.75): InkRenderPoin
 // TOWARD a sample, so it can never overshoot or loop the way a Catmull-Rom
 // spline can on a sharp corner. Path shape only - width stays constant and
 // pressure is carried through untouched.
-const SMOOTH_SPACING = 2.4; // px between resampled points along the curve
-const SMOOTH_MAX_STEPS = 16; // cap per segment so one long fast flick cannot explode the point count
+const SMOOTH_SPACING = 2.4; // px between resampled points on a gentle curve
+const SMOOTH_TIGHT_SPACING = 1.0; // floor, so a hairpin cannot demand endless points
+const SMOOTH_SAGITTA = 0.12; // px a chord may bulge off the true curve before it reads as a facet
+const SMOOTH_MAX_STEPS = 24; // cap per segment so one long fast flick cannot explode the point count
 
 export function smoothCenterline(pts: InkRenderPoint[]): InkRenderPoint[] {
   const n = pts.length;
@@ -65,8 +91,32 @@ export function smoothCenterline(pts: InkRenderPoint[]): InkRenderPoint[] {
     const start = i === 1 ? pts[0] : mid(pts[i - 1], pts[i]);
     const ctrl = pts[i];
     const end = mid(pts[i], pts[i + 1]);
-    const approx = Math.hypot(ctrl.x - start.x, ctrl.y - start.y) + Math.hypot(end.x - ctrl.x, end.y - ctrl.y);
-    const steps = Math.max(1, Math.min(SMOOTH_MAX_STEPS, Math.round(approx / SMOOTH_SPACING)));
+    const d1x = ctrl.x - start.x, d1y = ctrl.y - start.y;
+    const d2x = end.x - ctrl.x, d2y = end.y - ctrl.y;
+    const l1 = Math.hypot(d1x, d1y), l2 = Math.hypot(d2x, d2y);
+    const approx = l1 + l2;
+    // Resample finer only where a chord would actually show. A chord of length
+    // c across a curve of radius R bulges away from it by about c*c/(8R), so
+    // the fixed spacing is already invisible on anything gently curved - at
+    // 2.4px it is 0.02px out at R=30 - and only starts to read as a flat facet
+    // below about R=6, which is a loop no bigger than the nib itself. Solving
+    // that for c gives the spacing a tight bend needs, and it self-limits:
+    // everywhere else this returns SMOOTH_SPACING and costs nothing.
+    //
+    // (Scale is not a factor. Strokes travel NORMALISED and every surface
+    // re-fits the curve in its OWN pixels, so the projector's chords are the
+    // same 2.4px across a proportionally larger stroke, not magnified ones.)
+    let spacing = SMOOTH_SPACING;
+    if (l1 > 1e-6 && l2 > 1e-6) {
+      const cos = Math.max(-1, Math.min(1, (d1x * d2x + d1y * d2y) / (l1 * l2)));
+      const turn = Math.acos(cos);
+      if (turn > 1e-4) {
+        const radius = approx / 2 / turn;
+        const chord = Math.sqrt(8 * radius * SMOOTH_SAGITTA);
+        spacing = Math.max(SMOOTH_TIGHT_SPACING, Math.min(SMOOTH_SPACING, chord));
+      }
+    }
+    const steps = Math.max(1, Math.min(SMOOTH_MAX_STEPS, Math.round(approx / spacing)));
     for (let s = 1; s <= steps; s += 1) {
       const t = s / steps, u = 1 - t;
       out.push({
@@ -80,6 +130,18 @@ export function smoothCenterline(pts: InkRenderPoint[]): InkRenderPoint[] {
   return out;
 }
 
+// A corner is where a constant-width offset goes wrong, and handwriting is
+// almost entirely corners. Offsetting each point along its own normal by
+// exactly r leaves the OUTER edge of a turn at r*cos(theta/2) instead of r,
+// so every corner comes out chamfered and pinched - the flat-cut notch that
+// reads as "jagged" on a digit or an operator. Scaling the offset by
+// 1/cos(theta/2) puts that corner back where a real nib would leave it. The
+// limit caps the spike a near-reversal would otherwise throw (retracing a
+// stroke back over itself approaches theta = 180, where the miter is
+// unbounded); past it the corner bevels instead, which is what every 2D
+// renderer does with miterLimit.
+const MITER_LIMIT = 2.5;
+
 // Build the outline polygon: left edge out, right edge back, with round caps.
 // Returns a flat [x0,y0, x1,y1, ...] ring, or null for a dot (use fillDot).
 export function strokeOutline(raw: InkRenderPoint[], baseWidth: number, taper = false): number[] | null {
@@ -90,25 +152,67 @@ export function strokeOutline(raw: InkRenderPoint[], baseWidth: number, taper = 
   const right: number[] = [];
   const n = pts.length;
 
+  // Unit tangent per SEGMENT, computed once. Every interior point needs the
+  // tangent either side of it, and the tangent out of point i is the tangent
+  // into point i+1 - computing them per point normalises each segment twice,
+  // and this runs on the whole in-flight stroke every frame.
+  const segX = new Array<number>(n - 1);
+  const segY = new Array<number>(n - 1);
+  for (let i = 0; i < n - 1; i += 1) {
+    const dx = pts[i + 1].x - pts[i].x, dy = pts[i + 1].y - pts[i].y;
+    const l = Math.hypot(dx, dy) || 1;
+    segX[i] = dx / l; segY[i] = dy / l;
+  }
+
   for (let i = 0; i < n; i += 1) {
-    const a = pts[Math.max(0, i - 1)];
-    const b = pts[Math.min(n - 1, i + 1)];
-    let dx = b.x - a.x, dy = b.y - a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    dx /= len; dy /= len;
-    const r = radiusFor(baseWidth, pts[i].p) * (taper ? taperScale(i, n) : 1);
-    // normal = (-dy, dx)
-    left.push(pts[i].x - dy * r, pts[i].y + dx * r);
-    right.push(pts[i].x + dy * r, pts[i].y - dx * r);
+    const cur = pts[i];
+    // The unit tangents INTO and OUT OF this point. At either end there is
+    // only one, so the joint degenerates to a plain perpendicular offset and
+    // the caps below still read the edge point they expect.
+    const inX = i > 0 ? segX[i - 1] : segX[0];
+    const inY = i > 0 ? segY[i - 1] : segY[0];
+    const outX = i < n - 1 ? segX[i] : segX[n - 2];
+    const outY = i < n - 1 ? segY[i] : segY[n - 2];
+
+    // Left normal of each segment, then the bisector between them.
+    const n1x = -inY, n1y = inX;
+    const n2x = -outY, n2y = outX;
+    let mx = n1x + n2x, my = n1y + n2y;
+    const mlen = Math.hypot(mx, my);
+    let miter = 1;
+    if (mlen < 1e-6) {
+      // A true 180-degree reversal has no bisector to build on - fall back to
+      // the outgoing normal and let the round cap logic carry the tip.
+      mx = n2x; my = n2y;
+    } else {
+      mx /= mlen; my /= mlen;
+      const cosHalf = mx * n1x + my * n1y; // = cos(theta/2)
+      miter = Math.min(MITER_LIMIT, 1 / Math.max(cosHalf, 1e-3));
+    }
+    const r = radiusFor(baseWidth, cur.p) * (taper ? taperScale(i, n) : 1) * miter;
+    left.push(cur.x + mx * r, cur.y + my * r);
+    right.push(cur.x - mx * r, cur.y - my * r);
   }
 
   // Round caps: a small fan of points around each end, oriented by the local
   // direction so the cap wraps the tip.
+  //
+  // THE SWEEP RUNS BACKWARDS, and that sign is the whole cap. Each cap joins
+  // one edge to the other across the tip, and there are two ways round: one
+  // passes outside the end (the round nib), the other folds back through the
+  // stroke body. Sweeping FORWARDS took the second one, so from the day this
+  // engine was written no stroke had a cap at all - the fan cut a notch into
+  // the last few px instead, blunting the end of every letter and digit. It
+  // was invisible on a long scribble and about 6px of every short stroke.
+  // Pinned by `npm run test:ink-geometry`.
   const cap = (cx: number, cy: number, fromAngle: number, r: number): number[] => {
     const out: number[] = [];
-    const steps = 7;
+    // Segment count follows the radius: a fixed 7 is a smooth half-circle on a
+    // 3px nib and a visible heptagon on the 12px pen or the highlighter, which
+    // is 3x the dialled width.
+    const steps = Math.max(7, Math.min(24, Math.round(r * 1.6)));
     for (let k = 1; k < steps; k += 1) {
-      const t = fromAngle + (Math.PI * k) / steps;
+      const t = fromAngle - (Math.PI * k) / steps;
       out.push(cx + Math.cos(t) * r, cy + Math.sin(t) * r);
     }
     return out;
@@ -119,11 +223,17 @@ export function strokeOutline(raw: InkRenderPoint[], baseWidth: number, taper = 
   const startAngle = Math.atan2(left[1] - pts[0].y, left[0] - pts[0].x);
   const endAngle = Math.atan2(right[right.length - 1] - pts[n - 1].y, right[right.length - 2] - pts[n - 1].x);
 
+  // Built with plain pushes, never `push(...arr)`: a long unbroken stroke (an
+  // underline held across the board) resamples into tens of thousands of
+  // numbers, and spreading that many arguments blows the call-argument limit -
+  // the pen would simply die mid-stroke with a RangeError.
   const ring: number[] = [];
-  ring.push(...left);
-  ring.push(...cap(pts[n - 1].x, pts[n - 1].y, endAngle + Math.PI, endR));
+  for (let i = 0; i < left.length; i += 1) ring.push(left[i]);
+  const endCap = cap(pts[n - 1].x, pts[n - 1].y, endAngle + Math.PI, endR);
+  for (let i = 0; i < endCap.length; i += 1) ring.push(endCap[i]);
   for (let i = n - 1; i >= 0; i -= 1) ring.push(right[i * 2], right[i * 2 + 1]);
-  ring.push(...cap(pts[0].x, pts[0].y, startAngle + Math.PI, startR));
+  const startCap = cap(pts[0].x, pts[0].y, startAngle + Math.PI, startR);
+  for (let i = 0; i < startCap.length; i += 1) ring.push(startCap[i]);
   return ring;
 }
 

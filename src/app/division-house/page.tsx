@@ -4,6 +4,11 @@
 import ToolNav from "@/components/ToolNav";
 import DivisionHouseBoard from "@/components/DivisionHouseBoard";
 
+// DELIBERATELY STATIC, and ?set= is read in the board before the first paint
+// rather than here. Taking searchParams as a prop is the obvious fix for the
+// built-in set flashing up for a frame, but it makes the page server-rendered
+// on every request - and thirty Chromebooks opening a tool at once should be
+// hitting the CDN, not a cold function.
 export default function DivisionHousePage() {
   return (
     <>
