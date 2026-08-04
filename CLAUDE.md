@@ -1397,9 +1397,17 @@ the invariants they protect are easy to break again.
   what build the iPad is actually running before re-debugging the fix.
 - **PEN FEEL: THE GEOMETRY FIXES, AND WHY "JAGGED" WAS FOUR SEPARATE THINGS** (2026-08-03, from
   Steele: "too jagged and doesnt respond well to writing. especially back to back strokes", then
-  "a few weeks ago it was running fantastic"). `npm run test:ink-geometry` (34 checks) pins all of
-  it; the contract measures the polygon with point-in-polygon rather than eyeballing a screenshot,
-  and it FAILS on the pre-fix code.
+  "a few weeks ago it was running fantastic"). `npm run test:ink-geometry` (35 checks) pins all of
+  it; the contract measures the polygon with point-in-polygon rather than eyeballing a screenshot.
+  EVERY CASE WAS VERIFIED BY REVERTING ITS FIX AND CONFIRMING THE SUITE GOES RED - do that when
+  adding one, because the first version of this contract was GREEN with four of the fixes reverted
+  (the "A CONTRACT CAN PASS ON THE WRONG ELEMENT" trap below, arrived at from a new direction).
+  Three ways a case looked decisive and was not, all worth stealing: a CLEAN synthetic corner is
+  rescued by the resampler alone, so only densely sampled input with tremor on it separates
+  miter from no-miter; an EXACTLY retraced stroke takes the degenerate `mlen < 1e-6` branch and so
+  cannot test the miter clamp, while a retrace a hair off zero drives it; and a long GENTLE stroke
+  resamples about 1:1 and never reaches the argument-count cliff, while a long FAST one expands
+  (sparse samples subdivide) and does.
   (1) **THE ROUND CAPS SWEPT THE WRONG WAY AND NEVER ONCE CAPPED A STROKE.** A cap joins one edge
   to the other across the tip and there are two ways round; the fan swept the way that folds back
   THROUGH the stroke body, so instead of a nib it cut a notch into the last few px. Every stroke
