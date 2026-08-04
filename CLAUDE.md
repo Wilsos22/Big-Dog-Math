@@ -1733,9 +1733,11 @@ the invariants they protect are easy to break again.
   "empty renders as nothing, wrong renders on a classroom screen".
 - One page per teaching day (locked convention) - never a Notion Date range. Ranges are only a
   fallback; single dates are what make `/api/today` and the day-to-day retention chain work.
-- THE LESSON DAY IS 50 MINUTES, not 55 (Steele, 2026-07-28). NOTHING IN CODE VALIDATES THE SUM -
-  verified: no check exists in `scripts/` or `src/lib/liveClassFlow.ts`, and `/control` will happily
-  run a 70-minute lineup into a 50-minute period. It is an AUTHORING contract, so the only thing
+- THE LESSON DAY IS 50 MINUTES, not 55 (Steele, 2026-07-28). NOTHING IN CODE ENFORCES THE SUM -
+  no check exists in `scripts/` or `src/lib/liveClassFlow.ts`, and `/control` will happily
+  run a 70-minute lineup into a 50-minute period. The ONE place it is even mentioned is
+  `/teacher/rehearse`, which WARNS (never blocks) when a lineup totals over 50, and does not warn at
+  all when a lineup comes in short - see the same claim at the `/teacher/rehearse` bullet above. It is an AUTHORING contract, so the only thing
   protecting it is whoever enters the steps: add the `Duration` values up before publishing. The
   `abbies-classroom` plugin skills (`classroom-os-context` "50-minute spine",
   `lesson-database-builder`, `lesson-deployment-builder`) carry the canonical breakdown - build days
