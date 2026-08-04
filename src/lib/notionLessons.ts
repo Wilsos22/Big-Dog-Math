@@ -68,6 +68,10 @@ export interface LessonStepData {
   // Mirror the slide onto the Pace + Support projector. Off by default - the support screen carries
   // directions, and duplicating the visual there costs the room its second channel.
   slideMirror: boolean;
+  // How the slide fills its frame. "contain" letterboxes and never crops, which is right for a
+  // 16:9 deck and for anything with words at the edges; "cover" fills and crops. Authored in the
+  // Lesson Screen Studio inspector.
+  slideFit: "contain" | "cover";
   workSpaceAvailable?: boolean;
   // The classroom state strip, authored per step. Raw select values - see
   // lib/classroomStateStrip for the vocabulary and the all-four-or-nothing rule.
@@ -393,24 +397,49 @@ async function resolveFirstLink(
   return "";
 }
 
-// Pull the slide frame's authored URL and mirror flag out of a step's saved screen layout. Reads
-// the MAIN screen only - a slide is a main-projector frame, and the pace copy is the mirror flag,
-// not a second block. Returns empties for a step with no layout or no slide block.
-function slideFrameFromLayout(encodedLayout: string): { url: string; mirror: boolean } {
-  if (!encodedLayout) return { url: "", mirror: false };
+// Pull the slide frame's authored URL, mirror flag and fit out of a step's saved screen layout.
+// Reads the MAIN screen only - a slide is a main-projector frame, and the pace copy is the mirror
+// flag, not a second block. Returns empties for a step with no layout or no slide block.
+//
+// MIRROR AND FIT ARE READ INDEPENDENTLY OF THE URL, and that is the fix for a silent failure: an
+// earlier version returned as soon as it found a block carrying a url, so a teacher who left the
+// inspector's url field blank (letting the Notion property supply it, which is the documented
+// readable-copy path) and flipped the mirror toggle got nothing at all. The toggle appeared to
+// work, saved correctly, and never reached a projector. A block with no url still carries the
+// teacher's decisions about the slide the property is going to supply.
+type SlideFrameLayout = { url: string; mirror: boolean; fit: "contain" | "cover" };
+
+function slideFrameOverrides(block: { ov?: Record<string, string> }): SlideFrameLayout {
+  return {
+    url: String(block.ov?.slideUrl ?? "").trim(),
+    mirror: String(block.ov?.slideMirror ?? "") === "1",
+    // Trimmed and lowercased because the inspector renders this as a free-text field: "Cover" or
+    // " cover" is a teacher answering the question correctly, and silently rendering contain
+    // would give them no way to tell they had.
+    fit: String(block.ov?.slideFit ?? "").trim().toLowerCase() === "cover" ? "cover" : "contain",
+  };
+}
+
+export function slideFrameFromLayout(encodedLayout: string): SlideFrameLayout {
+  const empty: SlideFrameLayout = { url: "", mirror: false, fit: "contain" };
+  if (!encodedLayout) return empty;
   try {
     const zones = decodeScreenLayout(encodedLayout).main;
+    let firstSlide: SlideFrameLayout | null = null;
     for (const zone of zones ?? []) {
       for (const block of zone) {
         if (block.type !== "slide") continue;
-        const url = String(block.ov?.slideUrl ?? "").trim();
-        if (url) return { url, mirror: String(block.ov?.slideMirror ?? "") === "1" };
+        const overrides = slideFrameOverrides(block);
+        // A block that names its own url is the authoritative one - its settings go with it.
+        if (overrides.url) return overrides;
+        if (!firstSlide) firstSlide = overrides;
       }
     }
+    if (firstSlide) return firstSlide;
   } catch {
     // A corrupt blob must never take the lesson down - fall through to the Notion property.
   }
-  return { url: "", mirror: false };
+  return empty;
 }
 
 function extractFirstText(properties: Record<string, NotionProperty>, names: string[]): string {
@@ -590,6 +619,7 @@ async function mapPage(
       slideOverlay: extractText(step["Slide Overlay"]),
       slideUrl: slideFrame.url || extractUrl(propByName(step, ["Slide URL", "Slide Image"])),
       slideMirror: slideFrame.mirror,
+      slideFit: slideFrame.fit,
       workSpaceAvailable: step["Work Space Available"]?.type === "checkbox"
         ? step["Work Space Available"].checkbox
         : undefined,

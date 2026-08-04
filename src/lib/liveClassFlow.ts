@@ -301,6 +301,9 @@ export interface LiveFlowSequenceStep {
   // carry them through the same way it carries slideOverlay.
   slideUrl?: string;
   slideMirror?: boolean;
+  // Only ever set to "cover". "contain" is the default on every surface, so publishing it would
+  // add a constant string to a snapshot Control full-replaces about once a second for no gain.
+  slideFit?: "contain" | "cover";
   // The authored classroom state strip. Raw select values, resolved by
   // lib/classroomStateStrip - all four or the step shows no strip at all.
   eyes?: string;

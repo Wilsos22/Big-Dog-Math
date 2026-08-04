@@ -87,6 +87,7 @@ export function stepsFromLesson(lesson: LessonData): LiveFlowSequenceStep[] {
       slideOverlay: step.slideOverlay || undefined,
       slideUrl: step.slideUrl || undefined,
       slideMirror: step.slideMirror || undefined,
+      slideFit: step.slideFit === "cover" ? "cover" : undefined,
       publicSurfaceMode: step.publicSurfaceMode,
       routineConfig: step.routineConfig,
       eyes: step.eyes || "",

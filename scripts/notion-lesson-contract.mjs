@@ -187,4 +187,57 @@ assert.equal(lessons.extractUrl({ type: "url", url: "https://a.example" }), "htt
 assert.equal(lessons.extractUrl(undefined), "");
 console.log("  ok  a files property resolves to a link, external before signed upload");
 
+// The slide frame's layout overrides. This exists because the mirror flag failed SILENTLY once: an
+// earlier version returned as soon as it found a slide block carrying a url, so a teacher who left
+// the studio's url field blank - letting the Notion `Slide Url` property supply it, which is the
+// documented readable-copy path - and flipped the mirror toggle got a toggle that saved correctly
+// and never reached a projector.
+const layouts = require(path.join(root, ".tmp-mastery", "lessonScreenLayout.js"));
+const encodeMain = (blocks) =>
+  layouts.encodeScreenLayout({ main: [blocks.map((b, i) => ({ id: `b${i}`, ov: {}, ...b })), []] });
+
+assert.deepEqual(
+  lessons.slideFrameFromLayout(""),
+  { url: "", mirror: false, fit: "contain" },
+  "No layout falls through to the Notion property with the safe defaults.",
+);
+assert.deepEqual(
+  lessons.slideFrameFromLayout(encodeMain([{ type: "text", ov: { text: "hi" } }])),
+  { url: "", mirror: false, fit: "contain" },
+  "A layout with no slide block claims nothing.",
+);
+assert.deepEqual(
+  lessons.slideFrameFromLayout(
+    encodeMain([{ type: "slide", ov: { slideUrl: "/slides/a.webp", slideMirror: "1", slideFit: "cover" } }]),
+  ),
+  { url: "/slides/a.webp", mirror: true, fit: "cover" },
+  "A slide block carrying a url supplies all three settings.",
+);
+assert.deepEqual(
+  lessons.slideFrameFromLayout(encodeMain([{ type: "slide", ov: { slideMirror: "1" } }])),
+  { url: "", mirror: true, fit: "contain" },
+  "THE FIX: a block with no url still carries the teacher's mirror decision for the url the Notion property will supply.",
+);
+assert.deepEqual(
+  lessons.slideFrameFromLayout(
+    encodeMain([
+      { type: "slide", ov: { slideMirror: "1" } },
+      { type: "slide", ov: { slideUrl: "/slides/b.webp" } },
+    ]),
+  ),
+  { url: "/slides/b.webp", mirror: false, fit: "contain" },
+  "A block naming its own url is the slide, and its settings go with it - the bare block does not lend it a mirror.",
+);
+assert.deepEqual(
+  lessons.slideFrameFromLayout("not-base64-at-all!!"),
+  { url: "", mirror: false, fit: "contain" },
+  "A corrupt blob must never take the lesson down.",
+);
+assert.equal(
+  lessons.slideFrameFromLayout(encodeMain([{ type: "slide", ov: { slideUrl: "/a.webp", slideFit: " Cover " } }])).fit,
+  "cover",
+  "Fit is a free-text field, so it is trimmed and lowercased before it decides anything.",
+);
+console.log("  ok  slide frame overrides survive the layout blob, mirror independent of url");
+
 console.log("PASS - Notion lesson and step fields map into the four-surface contract.");

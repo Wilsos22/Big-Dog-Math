@@ -79,6 +79,17 @@ bars and live misconception grouping).
    `git branch -a --contains <sha>` finds it. On 2026-07-21 the live tool banner's cream-surface
    restyle was one such commit; wiring eleven more cream pages to the un-restyled banner would have
    shipped pale-on-pale text no student could read.
+   NEVER `--abort` A STUCK GIT OPERATION HERE - USE `--quit` (2026-08-03). `git am --abort`,
+   `git rebase --abort` and `git merge --abort` all HARD-RESET the working tree to the pre-operation
+   commit, and because concurrent sessions leave this repo's tree essentially never clean, that
+   discards THEIR uncommitted work along with yours. Found live: the repo sat mid-`git am` on a stale
+   patch, and git's own status message recommends `--abort` - taking it would have reset to `4371be7`,
+   dropping a commit already merged and pushed to `main` plus about 516 uncommitted lines of another
+   session's in-flight work (decimalSteps, divisionHouse, embedUrl, notionLessons, DecimalStepsBoard).
+   `git am --quit` removes `.git/rebase-apply` and leaves HEAD and the working tree exactly as they
+   are. Diagnose before clearing: `git apply --check .git/rebase-apply/0001` usually reports "patch
+   does not apply" because the patch's content ALREADY landed by another route - grep its symbols in
+   `src/` and the session is simply litter. A spurious `.git/index.lock` is often the first symptom.
 3. Verified work ships without waiting for Steele (his standing request, 2026-07-21 - routing
    merges through him twice stranded finished work). A push to `main` is what deploys - Vercel
    auto-builds it. Flow: push the feature branch first (a local-only branch is invisible to
@@ -415,9 +426,18 @@ Codex and cloud sessions need them too (rule 9).
   decimals" for all four has exactly the misconception this tool exists to catch, so the adding rule
   is deliberately OFFERED as a wrong choice on the multiply board. `npm run test:decimal-steps` pins
   all four, and a change making one answer serve every operation has broken the tool's reason to
-  exist. Same rule for counting places: the answer ADDS the two factors' decimal counts, and
-  "whichever number has more" is the offered trap - except when the two numbers agree (6.2 x 3),
-  where the trap would be a right answer marked wrong and drops out.
+  exist. COUNTING PLACES IS A TYPED INPUT, NOT A CHOICE (corrected 2026-08-03; this paragraph
+  described an offered "whichever number has more" trap and an equal-counts drop-out, and the v2
+  rewrite had already made `count` an input - `decimalSteps.ts` - so there are no choices there at
+  all). The student types the total; the HINT carries the rule ("6.2 has 1, and 3 has 0. Add them,
+  do not take the bigger one"), which is the only place the trap survives, and it reads oddly when
+  both readings give the same number.
+  THE DIRECTION STEP ARGUES FROM PLACE VALUE, NEVER FROM SIZE (fixed 2026-08-03). It used to
+  confirm a correct "Left" with "counting in from the right end makes the answer smaller, which is
+  what multiplying by a piece of a number does" - unconditionally, so `6.2 x 3 = 18.6` told a
+  student that three is a piece of a number and that 18.6 is smaller than 6.2, at the moment the
+  rule is forming. The size argument only holds when both factors are under one; the contract now
+  refuses any `why` on that step that mentions size.
   DIVISION MAKES THEM ACTUALLY MOVE THE DECIMAL. Naming the number of places is a separate step from
   doing it: after answering "how many places", the student hops the divisor's decimal that many
   times, then answers what happens to the dividend and hops it too (moving only the divisor is the
@@ -754,25 +774,53 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   room its second channel. The toggle is per step, in the studio inspector on a selected slide frame.
   THE URL REACHES THE RUNTIME FROM TWO PLACES AND THE BLOB WINS: `slideFrameFromLayout` in
   notionLessons.ts decodes the saved screen layout and reads the main screen's slide block
-  (`ov.slideUrl` / `ov.slideMirror`), falling back to the Notion `Slide URL` / `Slide Image`
-  property. So authoring in the studio needs no Notion property, and a property set in Notion is
-  the readable copy. `slideUrl` and `slideMirror` are server-authored fields on
-  `LiveFlowSequenceStep`, which puts them in the `interlude` / `transition` class - CONTROL'S
-  SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry them or a reconnect erases the
-  slide mid-lesson. Watch the indentation trap when adding the next such field: the 8-space and
-  10-space mapping lines are substrings of each other, so a naive replace double-applies.
+  (`ov.slideUrl` / `ov.slideMirror` / `ov.slideFit`), falling back to the Notion `Slide URL` /
+  `Slide Image` property for the URL. So authoring in the studio needs no Notion property, and a
+  property set in Notion is the readable copy. `slideUrl`, `slideMirror` and `slideFit` are
+  server-authored fields on `LiveFlowSequenceStep`, which puts them in the `interlude` /
+  `transition` class - CONTROL'S SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry
+  them or a reconnect erases the slide mid-lesson (`lessonFlowBuild.ts` is the fifth site;
+  `/api/control-remote` and `rehearsalFlow.ts` spread the step and inherit the field). Watch the
+  indentation trap when adding the next such field: the 8-space and 10-space mapping lines are
+  substrings of each other, so a naive replace double-applies - anchor on a leading newline.
+  MIRROR AND FIT ARE READ INDEPENDENTLY OF THE URL, and the reason is a silent failure fixed
+  2026-08-03: the function used to return as soon as it found a slide block carrying a url, so a
+  teacher who left the studio's url field blank (letting the Notion property supply it - the
+  documented readable-copy path) and flipped the mirror toggle got a toggle that saved correctly,
+  read back correctly, and never reached a projector. A block naming its own url is still the
+  authoritative one and its settings go with it; a bare block now lends its settings to the
+  property-supplied url. `slideFit` is a free-text inspector field, so it is trimmed and lowercased
+  before it decides anything - "Cover" is a teacher answering correctly. Pinned in
+  `npm run test:notion-lesson-contract`.
+  `slideFit` publishes ONLY when "cover" - every surface defaults to "contain", so publishing the
+  default would add a constant string to a snapshot Control full-replaces about once a second.
   THE NOTION PROPERTY IS `Slide Url`, NOT `Slide URL`, AND IT IS A FILE PROPERTY. Read it through
   `propByName` (notionLessons.ts), which normalizes case and punctuation - an exact-string property
   lookup fails SILENTLY, the site reads "" and the screen renders as though nothing was authored.
   That is the whole class of bug: verified live 2026-08-02, the property Steele created was `Slide
   Url` and the exact-match read would have found nothing with no error anywhere. Prefer `propByName`
   for any new property.
-  UNSOLVED, AND IT WILL BITE ON A REAL TEACHING DAY: a Notion-UPLOADED file resolves to a
+  THE NOTION-UPLOAD TRAP, AND THE ANSWER TO IT (2026-08-03). A Notion-UPLOADED file resolves to a
   short-lived SIGNED S3 url (about an hour), and Control builds its lineup ONCE at load and then
-  republishes that frozen url every second. A lesson opened at 7:30 has a dead image url by period
-  4, and the projector shows the four-second fallback card. An EXTERNAL link pasted into the
-  property has no expiry and is safe. The fix is a proxy route that re-resolves the step's file from
-  Notion per request so the snapshot carries a stable path; not built, needs Steele's word.
+  republishes that frozen url every second - so a lesson opened at 7:30 has a dead image url by
+  period 4 and the projector shows the four-second fallback card. NEVER put a classroom-critical
+  slide behind a Notion upload. An EXTERNAL link pasted into the property has no expiry and is safe.
+  THE PREFERRED SOURCE IS NOW A SAME-ORIGIN IMAGE: `resolveSlideSource` accepts a root-relative path
+  (`/slides/m1t1l1-d1-3.webp`) for an exported slide committed to `public/slides/`, served by the
+  same CDN that just delivered the page - if the page loaded, the slide loaded. No expiry, no third
+  party, nothing to re-fetch, and it is why the proxy-route idea this paragraph used to call for was
+  not built. Steele's standing ask when he chose it: most reliable and least likely to fail mid
+  lesson. `public/slides/README.md` carries the naming, format and FERPA rules; the folder is in a
+  PUBLIC repo, so no student name ever goes in it. Reserve a LIVE EMBED for a board being actively
+  edited during class (a Lucid or Figma canvas the room watches change) - that is the one case where
+  the live fetch is the point.
+  THE GUARD IS `/^\/[/\\]/`, NOT `startsWith("//")`. The URL spec treats `\` as `/` for http(s), so
+  `/\evil.com/x.png` resolves to https://evil.com/x.png and a `//`-only check let it through as
+  same-origin. `npm run test:embed-url` pins it along with the four product rewrites.
+  AN IMAGE GETS THE SAME WORDED FALLBACK AS AN EMBED (`SlideFrameScene`, `onError`). A bare `<img>`
+  answers a mistyped or never-committed filename with the browser's broken-image glyph, which at 25
+  feet is indistinguishable from a broken lesson - and "the file was never deployed" is the most
+  likely failure on the path this now recommends.
 - THREE DEMONSTRATION OBJECTS (`manipSplit` / `manipSnap` / `manipFree`) are a SEPARATE, EPHEMERAL
   palette (main projector only) the teacher drags live during class. Their type union is distinct from
   the 10 persisted component types, their live position lives in the studio's in-memory `manip` map
@@ -1270,7 +1318,22 @@ the invariants they protect are easy to break again.
   when to talk, when to listen, in whatever order that discussion needs. The current code is the
   opposite of that - `DISCUSSION_ROUNDS` hardcodes three 120-second rounds with fixed labels, so the
   sequence cannot vary and the durations cannot either.
-  THE AUTHORING FORMAT IS DECIDED AND TESTED; THE RUNTIME DOES NOT HONOUR IT YET.
+  **STALE AS OF 2026-08-03 - THE RUNTIME DOES HONOUR IT NOW, AND THIS LINE COST A REAL BUG.** The
+  paragraph below (and the "DO NOT ADD THE `Discussion Phases` NOTION PROPERTY" block after it) says
+  the wiring is outstanding. It landed: `notionLessons.ts:588` reads the property,
+  `lessonFlowBuild.ts:84` and `/api/control-remote:345` publish it onto `presentation`, and
+  `/teacher/present:466`, `/teacher/pace:257` and `/live-flow:596` all parse it into
+  `DiscussionTimeline`. Read the rest of this section as history, not as a plan.
+  WHAT IT COST: trusting this line, an agent wrote a contract asserting Control must NOT publish
+  `discussionPhases` - pinning a live bug in place. Control's full-replace republish was stripping
+  the field from `sequence.steps`, and `/api/control-remote` re-derives `presentation` FROM those
+  steps, so the first Remote-driven Next deleted the discussion timeline on both projectors and
+  every Chromebook, and the next rehydrate wrote the loss into Control's own lineup for good. Fixed
+  in `flowSnapshotForStep`; `npm run test:control-lineup` now asserts the field REACHES the room.
+  This is the second time a stale line here has produced a bug (see rule 9) - when a note says
+  "not wired yet", grep for the consumer before believing it.
+
+  THE AUTHORING FORMAT IS DECIDED AND TESTED. (Historic heading: "the runtime does not honour it yet".)
   `src/lib/discussionPhases.ts` + `npm run test:discussion-phases` (18 checks) own it. One beat per
   line, `<mode> <duration> | <direction>`, mode one of think / write / talk / listen, duration in
   seconds or `90s` or `2m`, and the direction after the pipe is REQUIRED because the mode word alone
@@ -1568,6 +1631,38 @@ the invariants they protect are easy to break again.
   or Settle about one second after it started, then auto-advanced past it. Same class of bug wiped
   `remoteActions` and `slideOverlay` on any reconnect. When adding a server-authored `live_flow`
   field, add it to the `liveFlowSignature` snapshot in the same commit.
+  **THE STEP MAPPING NOW LIVES IN `src/lib/controlLineup.ts`, NOT IN `/control`** (extracted
+  2026-08-03). It was four hand-kept object literals in `page.tsx` at three different indents - two
+  rehydrate, one publish, one Notion-import - and the substring overlap between the 8-space and
+  10-space copies is exactly why a naive edit double-applied. They had ALREADY drifted, silently:
+  the remote-command rehydrate carried no `eyes`/`voice`/`supplies`/`body`, so a Control reconnect
+  or any remote-driven rehydrate mid-lesson KILLED THE CLASSROOM STATE STRIP on both projectors for
+  the rest of the period, and the server-hydration rehydrate dropped `advance`. Neither failed
+  loudly; a lesson with no strip reads as a lesson that never authored one. `flowSnapshotForStep`
+  (lineup -> published step) and `lineupItemFromStep` / `lineupFromSteps` (back again) are now the
+  only mapping, and `npm run test:control-lineup` fails if the round trip stops being lossless.
+  Adding a `LiveFlowSequenceStep` field means editing ONE literal per direction in that file.
+  TWO THINGS ABOUT THAT MODULE ARE LOAD-BEARING. Its imports are TYPE-ONLY and every runtime helper
+  arrives through the injected `FlowStepDeps`; that is what lets the contract compile it in
+  isolation, and a single runtime import breaks the build with a "Cannot find module" that looks
+  nothing like its cause (`liveClassFlow.ts` reaches for `@/lib/...`, which does not resolve under
+  the contract's tsconfig). And `matchLabel` is deliberately NOT `label`: the published label falls
+  back to "Lesson state", but `inferClassroomStage` and `usesDiscussionProtocol` were always handed
+  `""` when nothing was authored, and they pattern-match the label text - passing them the fallback
+  would let the words "Lesson state" steer the inferred stage.
+  The Notion-import mapper (`newLineup`) is deliberately still inline: its input is a Notion lesson
+  step, not a published step, so it is a different function with a different source shape, and it
+  cannot drop a field on reconnect - only on lesson load. Its one real risk is the inverse: a new
+  `LineupItem` field added to both shared mappers passes the contract while the importer forgets it,
+  and since Notion import is the PRIMARY path the field would be absent on first load and never
+  appear. Add to all three.
+  ONE KNOWN, DELIBERATE DIVERGENCE FROM `stepsFromLesson` (Steele's call, 2026-08-03: leave it and
+  document it). `lessonFlowBuild.ts:72-83` has a THIRD arm for stems and vocabulary - a step
+  carrying discussion phases keeps its AUTHORED stems even when it is not a `discussion` state.
+  Control has no such arm, so on that kind of step the server publishes the stems and Control's next
+  republish replaces them with `[]`. The contract pins Control's current behaviour, so closing the
+  gap means changing that assertion too. It is a real divergence and it changes what students read
+  on screen, which is why a refactor did not get to decide it.
 - **THE DISCUSSION OVERLAY COVERS `/control` AT z-index 50.** Any control the teacher needs mid-
   discussion must be reachable from inside `DiscussionProtocol`; Control's own Back is invisible.
 - **`resolveLessonVisual` TAKES TWO ID NAMESPACES.** `stateId` is the `ClassroomStageId` (warmup maps
@@ -2055,6 +2150,23 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   suites), and every read. So a Cowork session should verify with typecheck + the contract suites,
   and hand the `npm run build`, the commit and the push to Steele rather than half-finishing them.
   Claude Code in a normal terminal is unaffected - this is the mount, not the repo.
+  **NEVER RUN `git worktree add` FROM THE SANDBOX** (learned 2026-08-03). The worktree is created
+  successfully and then is unusable from macOS: its `.git` file records the gitdir as the SANDBOX
+  path (`/sessions/<id>/mnt/Big Dog Math Site/.git/worktrees/<name>`), so every git command run
+  against it from a real terminal or from Desktop Commander answers `fatal: not a git repository`.
+  Worse, `git worktree add` and `git worktree prune` both take and then fail to release locks,
+  which is how `.git/index.lock` appears in the MAIN repo and blocks Steele's next commit while
+  looking exactly like repo corruption.
+  THE ESCAPE HATCH IS DESKTOP COMMANDER, which runs a real macOS shell outside the mount and has
+  full unlink permission. Create worktrees, commit, merge and push through it; use the sandbox for
+  reads, `npm run typecheck` and `npm test`. Read-only sandbox git is still worth guarding with
+  `git --no-optional-locks`, because a plain `git status` can refresh and relock the index.
+  TWO RECOVERY NOTES. Remove a stale lock only after `ps aux | grep "[g]it "` shows no live git
+  process - concurrent sessions are normal in this repo and deleting a live lock is worse than
+  leaving it. And an EMPTY (zero-byte) ref file under `.git/refs/heads/` breaks `git fetch`
+  REPO-WIDE with `fatal: bad object refs/heads/<name>` plus a misleading "did not send all
+  necessary objects" that reads as a remote problem; `git update-ref -d` cannot remove it either
+  ("reference broken"), so delete the file directly. `find .git/refs -size 0` finds them.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like

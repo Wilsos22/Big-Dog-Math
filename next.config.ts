@@ -9,6 +9,7 @@ const imageHosts = [
   "images.unsplash.com",
   "drive.google.com",
   "lh3.googleusercontent.com",
+  "bigdogmath.com",
 ];
 
 // Boards and pages the projector may load in an iframe. The named hosts are the ones embedUrl.ts

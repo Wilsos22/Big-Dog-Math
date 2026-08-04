@@ -235,6 +235,7 @@ export default function PaceSupportPage() {
   const mirroredSlideUrl = mirroredSlideStep?.slideMirror
     ? String(mirroredSlideStep.slideUrl || "").trim()
     : "";
+  const mirroredSlideFit = mirroredSlideStep?.slideFit === "cover" ? "cover" : "contain";
   const spinnerSyncScope = `${flow?.sequence?.currentIndex ?? -1}:${flow?.presentation?.notionStepId || state?.id || "spinner"}`;
   const routineConfig = flow?.presentation?.routineConfig || null;
   // The classroom state strip. The authored values come with the step; the
@@ -565,7 +566,7 @@ export default function PaceSupportPage() {
             </div>
           </div>
         ) : mirroredSlideUrl ? (
-          <SlideFrameScene url={mirroredSlideUrl} className="pw-slide" />
+          <SlideFrameScene url={mirroredSlideUrl} fit={mirroredSlideFit} className="pw-slide" />
         ) : warmupAgenda ? (
           <div className="pw-agenda" aria-label="Today's agenda">
             <p className="pw-agenda-kicker">Today&apos;s plan</p>
