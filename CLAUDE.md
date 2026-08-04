@@ -1263,7 +1263,22 @@ the invariants they protect are easy to break again.
   when to talk, when to listen, in whatever order that discussion needs. The current code is the
   opposite of that - `DISCUSSION_ROUNDS` hardcodes three 120-second rounds with fixed labels, so the
   sequence cannot vary and the durations cannot either.
-  THE AUTHORING FORMAT IS DECIDED AND TESTED; THE RUNTIME DOES NOT HONOUR IT YET.
+  **STALE AS OF 2026-08-03 - THE RUNTIME DOES HONOUR IT NOW, AND THIS LINE COST A REAL BUG.** The
+  paragraph below (and the "DO NOT ADD THE `Discussion Phases` NOTION PROPERTY" block after it) says
+  the wiring is outstanding. It landed: `notionLessons.ts:588` reads the property,
+  `lessonFlowBuild.ts:84` and `/api/control-remote:345` publish it onto `presentation`, and
+  `/teacher/present:466`, `/teacher/pace:257` and `/live-flow:596` all parse it into
+  `DiscussionTimeline`. Read the rest of this section as history, not as a plan.
+  WHAT IT COST: trusting this line, an agent wrote a contract asserting Control must NOT publish
+  `discussionPhases` - pinning a live bug in place. Control's full-replace republish was stripping
+  the field from `sequence.steps`, and `/api/control-remote` re-derives `presentation` FROM those
+  steps, so the first Remote-driven Next deleted the discussion timeline on both projectors and
+  every Chromebook, and the next rehydrate wrote the loss into Control's own lineup for good. Fixed
+  in `flowSnapshotForStep`; `npm run test:control-lineup` now asserts the field REACHES the room.
+  This is the second time a stale line here has produced a bug (see rule 9) - when a note says
+  "not wired yet", grep for the consumer before believing it.
+
+  THE AUTHORING FORMAT IS DECIDED AND TESTED. (Historic heading: "the runtime does not honour it yet".)
   `src/lib/discussionPhases.ts` + `npm run test:discussion-phases` (18 checks) own it. One beat per
   line, `<mode> <duration> | <direction>`, mode one of think / write / talk / listen, duration in
   seconds or `90s` or `2m`, and the direction after the pipe is REQUIRED because the mode word alone
@@ -1480,6 +1495,38 @@ the invariants they protect are easy to break again.
   or Settle about one second after it started, then auto-advanced past it. Same class of bug wiped
   `remoteActions` and `slideOverlay` on any reconnect. When adding a server-authored `live_flow`
   field, add it to the `liveFlowSignature` snapshot in the same commit.
+  **THE STEP MAPPING NOW LIVES IN `src/lib/controlLineup.ts`, NOT IN `/control`** (extracted
+  2026-08-03). It was four hand-kept object literals in `page.tsx` at three different indents - two
+  rehydrate, one publish, one Notion-import - and the substring overlap between the 8-space and
+  10-space copies is exactly why a naive edit double-applied. They had ALREADY drifted, silently:
+  the remote-command rehydrate carried no `eyes`/`voice`/`supplies`/`body`, so a Control reconnect
+  or any remote-driven rehydrate mid-lesson KILLED THE CLASSROOM STATE STRIP on both projectors for
+  the rest of the period, and the server-hydration rehydrate dropped `advance`. Neither failed
+  loudly; a lesson with no strip reads as a lesson that never authored one. `flowSnapshotForStep`
+  (lineup -> published step) and `lineupItemFromStep` / `lineupFromSteps` (back again) are now the
+  only mapping, and `npm run test:control-lineup` fails if the round trip stops being lossless.
+  Adding a `LiveFlowSequenceStep` field means editing ONE literal per direction in that file.
+  TWO THINGS ABOUT THAT MODULE ARE LOAD-BEARING. Its imports are TYPE-ONLY and every runtime helper
+  arrives through the injected `FlowStepDeps`; that is what lets the contract compile it in
+  isolation, and a single runtime import breaks the build with a "Cannot find module" that looks
+  nothing like its cause (`liveClassFlow.ts` reaches for `@/lib/...`, which does not resolve under
+  the contract's tsconfig). And `matchLabel` is deliberately NOT `label`: the published label falls
+  back to "Lesson state", but `inferClassroomStage` and `usesDiscussionProtocol` were always handed
+  `""` when nothing was authored, and they pattern-match the label text - passing them the fallback
+  would let the words "Lesson state" steer the inferred stage.
+  The Notion-import mapper (`newLineup`) is deliberately still inline: its input is a Notion lesson
+  step, not a published step, so it is a different function with a different source shape, and it
+  cannot drop a field on reconnect - only on lesson load. Its one real risk is the inverse: a new
+  `LineupItem` field added to both shared mappers passes the contract while the importer forgets it,
+  and since Notion import is the PRIMARY path the field would be absent on first load and never
+  appear. Add to all three.
+  ONE KNOWN, DELIBERATE DIVERGENCE FROM `stepsFromLesson` (Steele's call, 2026-08-03: leave it and
+  document it). `lessonFlowBuild.ts:72-83` has a THIRD arm for stems and vocabulary - a step
+  carrying discussion phases keeps its AUTHORED stems even when it is not a `discussion` state.
+  Control has no such arm, so on that kind of step the server publishes the stems and Control's next
+  republish replaces them with `[]`. The contract pins Control's current behaviour, so closing the
+  gap means changing that assertion too. It is a real divergence and it changes what students read
+  on screen, which is why a refactor did not get to decide it.
 - **THE DISCUSSION OVERLAY COVERS `/control` AT z-index 50.** Any control the teacher needs mid-
   discussion must be reachable from inside `DiscussionProtocol`; Control's own Back is invisible.
 - **`resolveLessonVisual` TAKES TWO ID NAMESPACES.** `stateId` is the `ClassroomStageId` (warmup maps
