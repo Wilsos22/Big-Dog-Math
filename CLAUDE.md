@@ -408,9 +408,18 @@ Codex and cloud sessions need them too (rule 9).
   decimals" for all four has exactly the misconception this tool exists to catch, so the adding rule
   is deliberately OFFERED as a wrong choice on the multiply board. `npm run test:decimal-steps` pins
   all four, and a change making one answer serve every operation has broken the tool's reason to
-  exist. Same rule for counting places: the answer ADDS the two factors' decimal counts, and
-  "whichever number has more" is the offered trap - except when the two numbers agree (6.2 x 3),
-  where the trap would be a right answer marked wrong and drops out.
+  exist. COUNTING PLACES IS A TYPED INPUT, NOT A CHOICE (corrected 2026-08-03; this paragraph
+  described an offered "whichever number has more" trap and an equal-counts drop-out, and the v2
+  rewrite had already made `count` an input - `decimalSteps.ts` - so there are no choices there at
+  all). The student types the total; the HINT carries the rule ("6.2 has 1, and 3 has 0. Add them,
+  do not take the bigger one"), which is the only place the trap survives, and it reads oddly when
+  both readings give the same number.
+  THE DIRECTION STEP ARGUES FROM PLACE VALUE, NEVER FROM SIZE (fixed 2026-08-03). It used to
+  confirm a correct "Left" with "counting in from the right end makes the answer smaller, which is
+  what multiplying by a piece of a number does" - unconditionally, so `6.2 x 3 = 18.6` told a
+  student that three is a piece of a number and that 18.6 is smaller than 6.2, at the moment the
+  rule is forming. The size argument only holds when both factors are under one; the contract now
+  refuses any `why` on that step that mentions size.
   DIVISION MAKES THEM ACTUALLY MOVE THE DECIMAL. Naming the number of places is a separate step from
   doing it: after answering "how many places", the student hops the divisor's decimal that many
   times, then answers what happens to the dividend and hops it too (moving only the divisor is the
@@ -747,13 +756,26 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   room its second channel. The toggle is per step, in the studio inspector on a selected slide frame.
   THE URL REACHES THE RUNTIME FROM TWO PLACES AND THE BLOB WINS: `slideFrameFromLayout` in
   notionLessons.ts decodes the saved screen layout and reads the main screen's slide block
-  (`ov.slideUrl` / `ov.slideMirror`), falling back to the Notion `Slide URL` / `Slide Image`
-  property. So authoring in the studio needs no Notion property, and a property set in Notion is
-  the readable copy. `slideUrl` and `slideMirror` are server-authored fields on
-  `LiveFlowSequenceStep`, which puts them in the `interlude` / `transition` class - CONTROL'S
-  SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry them or a reconnect erases the
-  slide mid-lesson. Watch the indentation trap when adding the next such field: the 8-space and
-  10-space mapping lines are substrings of each other, so a naive replace double-applies.
+  (`ov.slideUrl` / `ov.slideMirror` / `ov.slideFit`), falling back to the Notion `Slide URL` /
+  `Slide Image` property for the URL. So authoring in the studio needs no Notion property, and a
+  property set in Notion is the readable copy. `slideUrl`, `slideMirror` and `slideFit` are
+  server-authored fields on `LiveFlowSequenceStep`, which puts them in the `interlude` /
+  `transition` class - CONTROL'S SNAPSHOT IS A FULL REPLACE, so all four of its mapping sites carry
+  them or a reconnect erases the slide mid-lesson (`lessonFlowBuild.ts` is the fifth site;
+  `/api/control-remote` and `rehearsalFlow.ts` spread the step and inherit the field). Watch the
+  indentation trap when adding the next such field: the 8-space and 10-space mapping lines are
+  substrings of each other, so a naive replace double-applies - anchor on a leading newline.
+  MIRROR AND FIT ARE READ INDEPENDENTLY OF THE URL, and the reason is a silent failure fixed
+  2026-08-03: the function used to return as soon as it found a slide block carrying a url, so a
+  teacher who left the studio's url field blank (letting the Notion property supply it - the
+  documented readable-copy path) and flipped the mirror toggle got a toggle that saved correctly,
+  read back correctly, and never reached a projector. A block naming its own url is still the
+  authoritative one and its settings go with it; a bare block now lends its settings to the
+  property-supplied url. `slideFit` is a free-text inspector field, so it is trimmed and lowercased
+  before it decides anything - "Cover" is a teacher answering correctly. Pinned in
+  `npm run test:notion-lesson-contract`.
+  `slideFit` publishes ONLY when "cover" - every surface defaults to "contain", so publishing the
+  default would add a constant string to a snapshot Control full-replaces about once a second.
   THE NOTION PROPERTY IS `Slide Url`, NOT `Slide URL`, AND IT IS A FILE PROPERTY. Read it through
   `propByName` (notionLessons.ts), which normalizes case and punctuation - an exact-string property
   lookup fails SILENTLY, the site reads "" and the screen renders as though nothing was authored.
