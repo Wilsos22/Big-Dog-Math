@@ -22,7 +22,22 @@ bars and live misconception grouping).
   longer unlimited (private repos get a monthly free allowance, and CI runs typecheck plus the whole
   contract suite on every push, so watch it if pushes get frequent), and the repo is no longer a
   thing Steele can hand someone to look at - `/demo` on the live site is the portfolio front door
-  instead, and it is unaffected. Vercel builds from a private repo unchanged.
+  instead, and it is unaffected.
+  **DO NOT TRUST "Vercel builds from a private repo unchanged" - IT IS IN DOUBT AS OF 2026-08-04.**
+  That is what this line used to say flatly. Observed instead: four commits pushed to `main` at
+  06:38Z (confirmed on GitHub, `gh api repos/Wilsos22/Big-Dog-Math/commits/main` returned the new
+  sha) produced NO Vercel deployment at all - not queued, not building, not failed, simply absent -
+  and `list_deployments` showed zero deployments created in the preceding two hours. The last
+  successful production deploy still records `githubRepoVisibility: "public"` in its metadata while
+  the repo is now private, which points at the GitHub App losing repo access at the visibility flip.
+  NOT PROVEN, and Steele can settle it in one click by redeploying from the Vercel dashboard.
+  WHY THIS MATTERS MORE THAN IT LOOKS: rule 3 says a push to `main` is what deploys, so an agent that
+  pushes and reports "shipped" is now reporting something it has not checked. **VERIFY THE LIVE
+  `/api/build-id` ACTUALLY CHANGES** before calling anything deployed - the id is the deployed commit
+  sha, so it is a direct check - and if it does not move within a few minutes, say so plainly rather
+  than assuming Vercel is slow. Classroom displays make this worse: `DeployRefresh` reloads them when
+  the build id changes, so a build that never ships leaves every projector on the old code with
+  nothing anywhere saying why.
 - Local working folder: `/Users/steelewilson/Big Dog Math Site` (renamed by Steele 2026-07-27
   from "Website prototype"; an EMPTY decoy folder may exist at the old path - some agent
   sessions are anchored there and keep a launcher shim in its .claude/launch.json. Renaming
