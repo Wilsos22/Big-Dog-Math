@@ -181,6 +181,40 @@ bars and live misconception grouping).
    (`.claude/commands/sync.md`) is the manual pass: read the diff, sort each finding into this file,
    `ROADMAP.md`, auto-memory, or nothing, then land the `CLAUDE.md` edit on its own path to `main`.
 
+## How to work with Steele (standing, 2026-08-03)
+
+Four working rules he gave directly. They are here rather than in a Claude-only memory note because
+Codex and cloud sessions need them too (rule 9).
+
+1. **DELEGATE MULTI-FILE READING TO A SUBAGENT.** Any task that means reading and reviewing several
+   files goes to a subagent (Explore for read-only sweeps), not into the main conversation. File dumps
+   clog context and degrade the session, and his sessions are long and span code, Notion and lesson
+   design in one thread. Give the agent a precise brief and ask for file:line references plus quoted
+   conditions; keep the conclusion, not the files. Read directly only when you already know the exact
+   file and need one spot. This is not just hygiene - the lesson-picker sweep on 2026-08-03 replaced
+   about a dozen reads AND found that "browse all lessons and run one on demand" already existed, which
+   a file-by-file crawl would have taken far longer to notice.
+2. **INTERVIEW BEFORE BUILDING any design, UX, or backend change.** Cover every aspect of the feature
+   first; do not infer a spec from a one-line request. His asks carry unstated classroom context and
+   the cost of guessing is a rebuild. "2 balls bouncing across a row of squares" contained four real
+   forks (where it lives, pacing control, behaviour after the first match, the colour scheme), and
+   asking is what surfaced that shared landings needed their own third colour. Ask about the axes that
+   change the build: where it lives, who operates it and on what device, what it WRITES (evidence,
+   Notion, session state), the edges, and how it fails. Research the repo first - asking him something
+   the code already answers wastes his time.
+3. **A SECOND AGENT CHECKS EVERY FINISHED FEATURE, TOOL, OR LESSON PLAN.** The builder does not grade
+   its own work; it knows what it meant and reads intent into the code. Run the review after
+   verification passes and BEFORE reporting done. Hand the reviewer the real quality bar, not "look it
+   over" - for a tool that is the design rules in this file (reference in a left rail, never reveal an
+   answer the student has not earned, tactile drag over clicking, fill the screen, no emoji, AA
+   contrast); for a lesson it is the CRA spine, the 50-minute sum, student talk, and whether every
+   field the surfaces read is actually authored. Rank findings by whether they would hurt in a live
+   class, fix what is clearly right, and bring judgment calls to him.
+4. **TELL HIM WHEN TO CLEAR CONTEXT.** He will not track it and does not want to find out through
+   degraded output. Say so at a seam - a verified deploy, a finished task list, a topic change - and
+   name what should carry over. Anything durable belongs in this file or in memory, never in the
+   transcript.
+
 ## Repo layout
 
 - `src/app/**` - App Router pages and API routes (one folder per route, direct `page.tsx`/`route.ts`;
