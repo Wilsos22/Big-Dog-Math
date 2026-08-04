@@ -573,7 +573,47 @@ bars and live misconception grouping).
   semantics, and present's 1s poll-answer fetcher is preview-gated - it used to overwrite
   posted answers with its catch-to-empty every tick.
 - Teacher (gated): `/teacher` and `/teacher/*` (analytics, assignments, challenges, checkpoint-upload,
-  checkpoints, exit-tickets, mastery, rightnow), `/control`, `/session`, `/roster`, `/start-question`.
+  checkpoints, exit-tickets, mastery, rehearse, rightnow), `/control`, `/session`, `/roster`, `/start-question`.
+- **`/teacher/rehearse` RUNS ANY PUBLISHED LESSON WITH NO SESSION** (added 2026-08-03, Steele: "I want
+  to be able to view a lesson in action without changing the date"). Pick any lesson from the archive,
+  step it with Restart / Back / Play / Next and a live clock, and watch it on the REAL
+  `/teacher/present`, `/teacher/pace` and `/live-flow` in `?studioPreview=1` iframes. THE DATE PROPERTY
+  IS UNTOUCHED and still governs the automatic pick; this only removes the need to edit a date to look
+  at a lesson.
+  IT OPENS NO SESSION, WRITES NO POLL ROW, RECORDS NO EVIDENCE AND PUBLISHES TO NOTHING - safe to open
+  mid-period while another class runs. That is the whole reason it is a separate route rather than a
+  mode on `/control`: Control's snapshot is a full-replace publish, so a "preview" living there would
+  be one bug away from overwriting a running lesson (see the second-Control-tab hazard above).
+  THREE PIECES, and the split is the point. (1) `src/lib/lessonFlowBuild.ts` holds `stepsFromLesson` +
+  `lessonSnapshotFromNotion`, EXTRACTED VERBATIM from `/api/control-remote` so the rehearsal builds its
+  sequence with the same code the real start uses - a preview built by a parallel implementation drifts
+  and then lies about what the room will see, which is worse than no preview. (2) `src/lib/rehearsalFlow.ts`
+  is the DB-free twin of `navigateFlow`: same mode selection, same body fallback chain, same resource
+  label, same state strip, but it synthesizes the poll (`rehearsal-poll-<n>`) instead of inserting one.
+  It does NOT reuse `buildStudioPreviewSnapshot`, which pads `sequence.steps` with `placeholder-<n>`
+  clones because Screen Studio only ever shows one step - a run-through needs the real sequence or the
+  step counter and progress strip lie. (3) `GET /api/teacher/rehearse?id=|code=` returns the built
+  sequence; one Notion read, no writes.
+  Unlike the live start it REPORTS rather than throws on a structured-numeric spec that will not parse,
+  a part-filled state strip, and a poll step with no authored Question - a rehearsal is exactly where
+  those should surface, and it also flags a lineup summing past 50 minutes.
+- BROWSING ALL PUBLISHED LESSONS (same change). `/api/teacher/lessons` always returned every published
+  lesson with no date filter; the UIs were what hid them. `/teacher`'s finder showed only
+  yesterday/today/tomorrow until you typed a query and then capped at SIX with a "refine the search"
+  line that assumed you already knew what you wanted - it now has a "Show every published lesson"
+  button and a 200-row cap that exists only to bound the DOM. `/control`'s Lesson Library could load a
+  lesson only by a code you remembered; it now carries a searchable Notion list beside the code box,
+  fetched lazily the first time the overlay opens (Control must stay responsive all period, and most
+  sessions never open it). Every row offers Edit screens / Rehearse / Begin.
+- **`getPublishedLessonArchive` NOW HONOURS `Skip`** (fixed same day). It ignored the property while
+  `getPublishedLessonById` rejects on it, so a skipped lesson listed in EVERY picker and then failed to
+  load when clicked - the worst shape of bug, because the teacher sees the lesson is "there" and
+  concludes the site is broken. `/teacher` papered over it with a keyword regex over the title, which
+  never caught a lesson whose title says nothing about being skipped.
+  THE PREDICATE IS DELIBERATELY DUPLICATED, not imported. `scripts/notion-lesson-archive-contract.mjs`
+  compiles `notionLessonArchive.ts` with `tsc --ignoreConfig`, which DROPS the `@/` path aliases - so
+  any local import in that file fails CI with "Cannot find module", and the failure looks nothing like
+  its cause. Same constraint `soundBank.ts` lives under. Keep that file import-free.
   `/teacher/growth` redirects to `/teacher/rightnow`. Note: `/builder` is teacher-ish but NOT gated
   (`/abbie` was the other one; that route is DELETED - see the Abbie section below).
   The lesson flow does NOT require `/control` to run: `/api/control-remote` executes
