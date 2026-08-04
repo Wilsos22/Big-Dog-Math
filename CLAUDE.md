@@ -2312,6 +2312,24 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   vanish seconds afterward because your earlier `rm` only now synced - if a freshly checked-out
   file is missing, `git checkout -- <path>` again and re-verify before concluding anything.
 - A PANE SCREENSHOT CAN DISAGREE WITH THE LAYOUT. Against a REMOTE origin the capture is composited independently of the live tree: /weekly-display screenshotted as a board filling only the top-left ~60% of the frame while `getBoundingClientRect()` said it filled the viewport exactly. Do not chase a scaling bug off a screenshot - settle it with geometry (`elementFromPoint` at all four viewport corners is decisive, and cheap). The same capture was correct against localhost minutes earlier, so distrust it specifically on remote origins.
+- **`/demo` IS THE PROJECTOR TEST HARNESS, NOT JUST THE PORTFOLIO FRONT DOOR** (2026-08-03, how four
+  of the six live surface bugs were reproduced without a teacher cookie, a session, Supabase or
+  Notion). It is PUBLIC, and its `/demo/present` + `/demo/pace` wrappers re-export the REAL gated page
+  components, with `/live-flow?studioPreview=1` as the student pane - so `npm run dev` plus one
+  navigation puts all three classroom surfaces on screen, driven step by step, in a same-origin page
+  whose iframes you can read straight out of `contentDocument`. Pause its auto-advance and use the dot
+  buttons to pin one state (note the dots are NOT 1:1 with steps - a poll contributes a second dot for
+  its results beat).
+  FOR A STATE THE DEMO LESSON DOES NOT CONTAIN, POST YOUR OWN SNAPSHOT. Open
+  `/demo/present?studioPreview=1&embed=1` directly and `window.postMessage({type:"bdm-studio-preview",
+  snapshot}, "*")` from the page itself - a window posts to its own listeners, so no parent frame is
+  needed - and the surface renders it through the ordinary path. That is how the blank You Do was
+  reproduced and both its branches (empty vs authored work fields) checked in about a minute.
+  TWO LIMITS. `?studioPreview=1` cannot show a `slide` frame (`studioPreviewFlow.ts` never carries
+  `slideUrl`), so verify those on `/teacher/rehearse`. And the FIRST navigation to a route the dev
+  server has not compiled can Fast-Refresh the PARENT page and silently reset its React state
+  mid-verification - curl each route once to pre-compile before driving it, and re-establish any
+  helper you defined on `window`.
 - Verifying in the in-app Browser pane: the preview throttles rendering, so CSS animations sit at
   their first frame and screenshots wait for motion to settle - prove motion with
   `el.getAnimations()` or keyed-remount node identity instead of watching. TRANSITIONS freeze the
