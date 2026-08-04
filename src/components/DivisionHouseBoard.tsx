@@ -50,12 +50,22 @@ const SIGN_GAP = 30;
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
+/**
+ * A layout effect on the client, a plain one on the server.
+ *
+ * It runs BEFORE the browser paints, which is what keeps `?set=` from showing
+ * the built-in problems for a frame and then swapping. Reading the query on the
+ * server instead would work too, and would make this page server-rendered on
+ * every request - the wrong trade for a tool thirty Chromebooks open at once.
+ */
+const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 export default function DivisionHouseBoard({ set }: { set?: string | null }) {
   const liveTool = useLiveToolConfig("/division-house");
   const [published, setPublished] = useState<string | null>(null);
   const [linked, setLinked] = useState<string | null>(null);
 
-  useEffect(() => {
+  useBeforePaint(() => {
     const raw = new URLSearchParams(window.location.search).get("set");
     if (raw && parseHouseSet(raw).problems.length) setLinked(raw);
   }, []);
@@ -108,7 +118,7 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
   // Measure the space the board has been given. NEVER window.innerWidth - it
   // reports the frame rather than the stage inside an iframe or a preview pane,
   // and a zero rect has to heal itself rather than freeze the board at 1x.
-  useLayoutEffect(() => {
+  useBeforePaint(() => {
     const el = stageRef.current;
     if (!el) return;
     let alive = true;

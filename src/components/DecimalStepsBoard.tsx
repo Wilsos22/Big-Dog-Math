@@ -18,7 +18,7 @@
 // The engine (lib/decimalSteps) owns the arithmetic, the questions and the
 // choice order; this file is the board, the rail, and the interactions.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   DECIMAL_OPS,
   DEFAULT_DECIMAL_SET,
@@ -56,6 +56,14 @@ function opSign(op: string): string {
   return "÷";
 }
 
+/**
+ * A layout effect on the client, a plain one on the server - it runs before the
+ * browser paints, so `?set=` never flashes the built-in problems first. Reading
+ * the query server-side would do it too, at the cost of making this page
+ * server-rendered on every request.
+ */
+const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 function resumeIndex(sig: string, count: number): number {
   try {
     const saved = JSON.parse(window.localStorage.getItem(PROGRESS_KEY) || "null");
@@ -76,7 +84,7 @@ export default function DecimalStepsBoard({ set }: { set?: string | null }) {
   const [published, setPublished] = useState<string | null>(null);
   const [linked, setLinked] = useState<string | null>(null);
 
-  useEffect(() => {
+  useBeforePaint(() => {
     const raw = new URLSearchParams(window.location.search).get("set");
     if (raw && parseDecimalSet(raw).problems.length) setLinked(raw);
   }, []);
