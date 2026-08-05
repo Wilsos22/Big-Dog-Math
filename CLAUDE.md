@@ -2548,8 +2548,31 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   interactions live flat on the cream ground, only the flat amber stop-note and the deep Yes button
   keep a fill); the ACTIVE step PULSES (movement reads as "you are here" better than a static
   highlight); and the content FILLS THE SCREEN height and width (`max-width:min(1500px,96vw)`, rows
-  `flex:1 1 0` to a `min-height:calc(100vh-210px)`, compacting once the run is done so a closing stage
+  filling a `min-height:calc(100vh-210px)`, compacting once the run is done so a closing stage
   gets the room). Do not "restore" the 3-column /divisibility.
+  **THE ROWS ARE `flex:1 1 auto`, NOT `flex:1 1 0` - THE ZERO BASIS WAS A BUG** (fixed 2026-08-05;
+  this line SAID `flex:1 1 0` until then, so a future agent "restoring" it would put the bug back).
+  A zero basis hands every row an identical share of the table height REGARDLESS OF CONTENT, and the
+  ACTIVE row is the only one carrying three stacked things - the evidence card, the question, and the
+  Yes/No buttons - against rows showing one line of rule text. Measured on Steele's own 1470x803: the
+  row was 95px, its `.dv-c-res` was 109px, and the buttons hung 25px PAST the row's bottom edge into
+  the next row's band. His report was "the factor column doesnt line up and cuts a row in half, the
+  rest of the row isnt centered".
+  THE SECOND HALF OF THAT REPORT LOOKED LIKE A SEPARATE COMPLAINT AND WAS THE SAME BUG, which is the
+  transferable part. The three columns were ALWAYS centred on one line - rule, number and factor all
+  sit at mid 217, before and after. What had escaped was the SHADED BAND: it was 95px drawn around
+  109px of content, so the rule and the number read as off-centre against a band their own answer had
+  broken out of. Do not go hunting for an alignment bug in a row whose content is overflowing it -
+  fix the overflow and the alignment complaint goes with it.
+  An auto basis measures content first and shares out only the remainder, so the tall row asks for
+  what it needs. `.dv-table.done .dv-trow` overrides the flex outright, so the closing compaction is
+  untouched. Verified by driving a full run at 1470x803, 1366x768 and 1280x720.
+  SEPARATE AND STILL OPEN: the page ALREADY scrolled below the table before this (53px at 1470x803,
+  117px at 1280x720), because `min-height:calc(100vh - 210px)` under-counts the chrome above and
+  below the table - the table's top is at y=153 and there is content beneath it, so 210 is short by
+  about 70px. Letting the active row grow adds ~19px to that. This was deliberately NOT folded into
+  the bug fix; the tool's stated rule is that it fills the screen, so the subtrahend is the thing to
+  revisit, not the row flex.
 - TACTILE DRAG BEATS CLICKING on any manipulative where a piece goes into a slot (Steele, 2026-07-31:
   "students need to see the process of pulling the part, just like they would in person. just clicking
   it doesnt create the same sense of movement and engagement"). `FractionBarsBoard` has the reusable
