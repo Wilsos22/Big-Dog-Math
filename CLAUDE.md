@@ -333,6 +333,14 @@ Codex and cloud sessions need them too (rule 9).
 - `public/` - assets. Inline square mark: `big-dog-mark.png`; wordmark/banner: `big-dog-logo.svg` /
   `big-dog-logo.png`.
 - `ROADMAP.md` - mirror of the Notion "Big Dog Math - Feature Tracker"; update BOTH when a feature ships.
+  **THE TRACKER'S DONE-NESS IS A CHECKBOX, NOT THE `Status` SELECT** (found 2026-08-04, data
+  source `56ee55bb-c067-4613-8f3b-6d5810a82ced`). `Status` runs Live / Planned / Parked / Needs
+  revision / In progress and HAS NO `Done` VALUE, so the natural-looking filter "Status is not
+  Done" matches EVERY row. Done-ness lives in a separate `Done` checkbox (`__YES__` / `__NO__`).
+  Measured that day: `Priority = Now` returns 18 rows and NINE of them are already complete, so
+  the wrong filter reports shipped features as outstanding work - the exact failure a status
+  read exists to prevent. Correct filter is `Priority = "Now"` AND `Done = "__NO__"`.
+  `.claude/commands/class-audit.md` (curriculum scope) still carries the wrong wording.
 
 ## Routes (as of this writing)
 
@@ -2328,8 +2336,13 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 31 golden/contract suites, run with typecheck by
-  GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
+  2026-07-27 `npm test` - the aggregate of every golden/contract suite, run with typecheck by
+  GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. DO NOT WRITE THE COUNT
+  DOWN (corrected 2026-08-04: this line said 31 while package.json chained 38, and a new
+  `/status` command written the same day picked up a third number). It is
+  `&&`-CHAINED AND ABORTS ON FIRST FAILURE, so there is no n-of-n tally to report either - a
+  green run means every suite passed and a red one means "failed at test:<name>, the rest never
+  ran". Anything claiming "38/38 green" is inferring from an exit code. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.
   A CONTRACT CAN PASS ON THE WRONG ELEMENT (found 2026-07-29). `classroom-surface-contract.mjs`
