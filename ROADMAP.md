@@ -8,6 +8,95 @@ should update BOTH that database and this mirror when a feature ships.
 Snapshot (2026-07-16):
 
 ## Live
+
+### Shipped tools and bridges (moved out of In progress, 2026-08-05)
+
+- **Ladder Method — rule rail redesign + Factor Trees mode** (7/21, commit
+  c9206cc) — /ladder-method now follows the three-column manipulative
+  convention: the divisibility rules sit in the LARGE LEFT RAIL (same wording
+  as /divisibility, rules 2-6 plus 7's honest non-rule), the ladder or trees
+  in the center, results on the right. The rail is live guidance — a rule
+  lights green when it works on BOTH bottom numbers (Ladder) or on the node
+  being split (Trees), and tapping a lit rule loads that divisor. When the
+  ladder closes, the pulled-out divisors line up UNDER it and the student
+  multiplies them out one step at a time for the GCF, then extends the chain
+  with the two bottom leftovers for the LCM; wrong products get the real
+  arithmetic named. Factor Trees mode (rebuilt same day to Steele's spec,
+  commit 4de7f5c): the rules own the left third and the tree owns the rest.
+  No number options on screen — the teacher sets the sequence ahead of time
+  (Factor Trees field on the /control ladder state, or ?set=24,36,60; shared
+  parser src/lib/factorTreeSet.ts; /ladder-method gained a { set }
+  LiveToolConfig arm) and students get one number at a time with progress
+  dots and localStorage resume. The student types BOTH factors of a split; a
+  wrong pair names its real product, pulses the lit rules, and points at one
+  ("Not sure? Try 2 — the last digit is even"). New prime branches FLASH
+  until tapped; the tap draws a circle and check mark that settles. When
+  every prime is confirmed, the primes lift out of the tree and fly down to
+  a line at the bottom (staggered, capped under 2s, hard fallback so a
+  backgrounded tab can never strand a student; reduced motion lands them
+  instantly), then the line collapses two at a time through an anchored
+  pop-out — 2 x 2 becomes 4, 4 x 2 becomes 8 — until the original number
+  stands alone, rebuilt from its primes. The earlier two-tree side-by-side
+  compare was superseded by this spec and removed. No evidence emitters
+  (unchanged). Verified end to end in-browser both modes; typecheck and
+  build clean. Merged to main and live 7/21.
+  MOVED TO LIVE by /status sync 2026-08-05 - verified BUILT against the code
+  (`src/components/LadderMethodTool.tsx:312` parses `?set=`, `src/lib/factorTreeSet.ts`
+  exists). No dedicated contract suite; shipped 7/21 and verified in-browser in both modes.
+
+- **Divisibility D1 — rules 1-6, closes with clickable factor arches** (7/21,
+  commit 8c7a79a, same branch as the Distributive Area work) — /divisibility now
+  matches its D1 lesson scope. The rule rail is ÷1 through ÷6 only (7-10 removed
+  outright); the numbers are 24, 35, 36, 40, 42, 48, chosen so every crossing
+  point sits at or below 6 — the six rules always finish the factor list, and a
+  factor of 7 arrives as a partner (35 = 5 x 7, 42 = 6 x 7) instead of needing a
+  rule. The stop is still the computed crossing d*d > N (24 stops after testing
+  4, 35 after 5), never "the board ran out". The least-to-greatest ordering step
+  is replaced by pair-picking on the ascending factor line: the student clicks
+  the TWO factors that multiply to N; a right pick draws a real curved SVG arch
+  between them (endpoints pulse once, the product pops green at the apex,
+  settles, fades), a wrong pick names the product they actually made ("Not this
+  pair - 3 x 12 = 36, not 24"). 36 closes its square with a single 6 under a
+  small 6 x 6 self-loop — no duplicated factor. Arches nest by span with the
+  outermost tallest; the arch panel is full-width so 48's ten factors fit a
+  Chromebook with no horizontal scroll. Completion line: "The arches are closed.
+  Every factor has a partner, so the list is complete." prefers-reduced-motion
+  shows the closed arches instantly. No evidence emitters (unchanged — this stays
+  an optional-support tool). Verified in-browser across all six numbers plus the
+  wrong Yes/No and wrong-pair paths; typecheck and build clean. Merged to main
+  7/21.
+  MOVED TO LIVE by /status sync 2026-08-05 - verified BUILT against the code (shipped 7/21; wired end to end into LiveToolRoute 2026-08-02).
+
+- **Distributive Area Method — one-screen redesign + teacher problem series** (7/20)
+  — the tool now works on a single screen: "Keep it whole" is gone (splitting is
+  the point), and the equation chain sits directly under the area model, where
+  students plug the parts into `a(__ + __) = a(__) + a(__)` and solve it one step
+  at a time, each solved product dropping into its own region on the rectangle.
+  Interactions cut from ~13 to 6 — one click to split, then five checks; no detour
+  payoff screen, no product typed twice. Wrong answers get feedback aimed at the
+  specific mistake (outside factor used as a part, added instead of multiplied,
+  answered with the whole rectangle, product added to a part); two of those tag
+  the existing "distributes to first term only" misconception. Area model ~3x
+  bigger, sized off the measured container with a viewport-aware height budget, so
+  the flow fits without scrolling on a laptop and an iPad. A teacher-set problem
+  series can start three ways, all one format (`24x7, 16x8`, first number is the
+  one they split): the Problem series field on the Distributive Area Method state
+  in `/control` (rides the existing `live_flow` snapshot via a new `LiveToolConfig`
+  variant — no new table or endpoint), a `?set=` link for a Notion step or handout,
+  or the builder on the tool itself. Blank = students pick their own numbers, i.e.
+  today's behaviour. Shared format/parser in `src/lib/distributiveProblems.ts`.
+  Code done and typecheck/build clean; merged to main 7/21. Still owed: Steele's
+  one-time spot-check of the control-panel publish with a student tab joined (that
+  handoff could not be exercised locally — `/control` needs `TEACHER_PASSWORD`).
+  The post-merge cleanup once queued here — swap the tool's local task banner for
+  the shared `LiveToolBanner` — is DEAD, not pending (pruned 2026-08-05). The code
+  deliberately rejected it and says why at
+  `src/components/DistributiveAreaMethod.tsx:686`. Do not re-queue it.
+  MOVED TO LIVE by /status sync 2026-08-05 - verified BUILT against the code (shipped 7/21; pinned by npm run test:distributive-walkthrough).
+
+- Warm-up → spine bridge — live and verified (Evidence post 200, 7/4)
+  MOVED TO LIVE by /status sync 2026-08-05 - verified BUILT against the code (pinned by npm run test:warmup and npm run test:warmup-apps-script).
+
 **A lesson finally moves a mastery bar** (8/4). Every learning check, readiness
 question and exit ticket wrote to `poll_answers`, and nothing read it into
 `responses` - the only table `recompute` reads besides i-Ready and checkpoints -
@@ -625,31 +714,9 @@ to complaining-teen, less Red Bull, shorter replies)
 
 ## Known broken — 2026-08-04
 Found by the first `/status` sweep. Nothing here was reported by a student or a
-class; all four came out of reading the live site against the repo.
+class; it came out of reading the live site against the repo. Two of the
+original four are resolved and were pruned by `/status sync` on 2026-08-05.
 
-- **Vercel is not building from `main`, and it is the one that matters.** The
-  live `/api/build-id` returns `265ea95` (built Aug 4, 04:39 UTC) while
-  `origin/main` had moved 26 commits and about 20 hours past it. Stranded in
-  that gap: `88a0a84` (the slide overlay covering `/teacher/pace`, and a lesson
-  with no End), `84208c7` (the Division House six-move rebuild), `49332c9` (the
-  50-minute period budget), `a866066` (iPad double-tap undo and hold-to-
-  straighten), `e145490` (the sound bank AudioContext fix). So the projector
-  bugs found running a real lesson are fixed in the repo and still on the wall,
-  and because `DeployRefresh` reloads displays on a build-id CHANGE, a build
-  that never ships leaves every projector on the old code with nothing anywhere
-  saying why. CLAUDE.md documents the suspected cause (the GitHub App losing
-  repo access when the repo went private on 8/3 - the last successful deploy
-  still records `githubRepoVisibility: "public"`). ONLY STEELE CAN TEST IT: one
-  redeploy from the Vercel dashboard settles whether the connection recovers.
-  **RESOLVED THE SAME EVENING.** Steele pushed two "Trigger deploy" commits
-  (`40da109`, `c3e0a92`); both built READY to production, and every push since
-  has deployed automatically. Live `/api/build-id` now tracks `origin/main`
-  within a couple of minutes, so all 26 stranded commits - including every
-  projector fix from the 8/3 run - are finally in the room. The ROOT CAUSE was
-  never established: a manual trigger restored it, which is consistent with the
-  GitHub App theory but does not prove it. If pushes ever stop deploying again,
-  the check is `/api/build-id` against `origin/main`, and the fix to try first
-  is a manual redeploy.
 - **`.claude/commands/class-audit.md` asks Notion the wrong question.** Its
   curriculum scope says "Feature Tracker rows at Priority 'Now' not Done". The
   tracker's `Status` select has no `Done` value, so that filter matches every
@@ -657,15 +724,28 @@ class; all four came out of reading the live site against the repo.
   returns 18 rows of which NINE are complete, so a curriculum audit reports
   shipped features as outstanding work. Correct filter is `Priority = "Now"`
   AND `Done = "__NO__"` (recorded in CLAUDE.md, commit `ea485b9`).
-- **Setup item 3 below tells you to break teacher auth.** It calls
-  `NEXT_PUBLIC_TEACHER_PIN` unused; it is read at `src/lib/teacherAuth.ts:12`.
-  Corrected in place below.
-- **Five branches never merged into `origin/main`:**
-  `codex/integrated-security`, `codex/warmup-identity-preview`,
-  `claude/big-dog-website-roadmap-yp65vy`, `claude/quizzical-mcnulty-effb35`,
-  `backup-before-rebuild-80e3da5`. The two `codex/` ones sound load-bearing and
-  nobody has said whether they are finished work or abandoned. Needs a read,
-  then a merge or a delete.
+  **STILL WRONG, re-confirmed 2026-08-05 at `.claude/commands/class-audit.md:43`.**
+  Same file, same line, unchanged since it was first written down - so this is a
+  one-line edit nobody has made, not a hard problem.
+- **Seven branches never merged into `origin/main`** (re-measured 2026-08-05;
+  the entry said five). Unmerged locals: `backup-before-rebuild-80e3da5`,
+  `claude/big-dog-website-roadmap-yp65vy`, `claude/ipad-writing-interface-7bb70b`,
+  `claude/quizzical-mcnulty-effb35`, `codex/integrated-security`,
+  `codex/warmup-identity-preview`; plus `origin/codex/two-panel-classroom` on the
+  remote only. The two `codex/` ones sound load-bearing and nobody has said
+  whether they are finished work or abandoned. **The one that is newly urgent is
+  `claude/ipad-writing-interface-7bb70b`** - 2 commits from 8/4 on
+  `src/lib/inkGeometry.ts` and `scripts/ink-geometry-contract.mjs` ("bevel the
+  corner past the miter limit instead of shortening the spike"). That is pen-feel
+  work on the surface CLAUDE.md calls the priority after data collection, and it
+  is sitting unmerged. Needs a read, then a merge or a delete.
+
+RESOLVED AND PRUNED 2026-08-05: "Vercel is not building from `main`" (Steele's
+manual redeploy restored it; live `/api/build-id` has tracked `origin/main`
+within minutes on every push since, re-verified today - the diagnostic and the
+fix-to-try-first live in CLAUDE.md), and "Setup item 3 tells you to break
+teacher auth" (it was a doc bug, corrected in place below; `NEXT_PUBLIC_TEACHER_PIN`
+is read at `src/lib/teacherAuth.ts:12`).
 
 ## Known broken — reported live 2026-08-03
 Steele found these while running a real lesson through the surfaces. Four are
@@ -683,6 +763,14 @@ FIXED:
   OWN scene branches in its exclusion list, so the auto-composed slide came up on
   states the main projector does not show it for. Reproduced and confirmed fixed
   in a browser.
+  **SUPERSEDED 2026-08-05: this fix no longer exists, and neither does the thing
+  it fixed.** Steele ran the result and cut the whole `LessonSlideStage` overlay
+  (`cf17aa9` / `63ba9eb`); `src/components/screen/LessonSlideStage.tsx` is
+  deleted and `src/app/teacher/pace/page.tsx:355` is a tombstone comment. Do not
+  read this bullet as describing live code - the exclusion-list approach is
+  exactly what the reversal rejected. The standing rule is in CLAUDE.md: never
+  gate a projector design by a per-surface exclusion list; give it a positive
+  test both surfaces read from one place.
 - **The final step now knows it is the final step.** Next reads "Last state" and
   is disabled, an End lesson key appears in its own row, the notes card stops
   advertising a step that does not exist, and a `commandError` flag replaces the
@@ -719,8 +807,11 @@ NOT bugs, confirmed against the live database the same day: the stuck chip
 saying "wait for the teacher to let you in", and Fist-to-5 taps never reaching
 the board. Both are the verified-student gate working as designed — 0 of 167
 students have an `auth_user_id` and the open session has 0 joins. Nothing
-student-writing can pass until the Workspace half of the FERPA cutover lands
-(`supabase/FERPA-CUTOVER.md` steps 1, 2, 5, 6, 8 — Steele's hands only).
+student-writing can pass until the Workspace half of the FERPA cutover lands.
+NARROWED 2026-08-05: steps 1, 5 and 8 are done, so what is left is
+`supabase/FERPA-CUTOVER.md` **step 2** (the warm-up project's HMAC key) and
+**step 6** (one real warm-up on a district account, the only thing that writes
+`auth_user_id`) — Steele's hands only.
 
 ## In progress
 - **iPad ink engine + the glass sheet** (7/21, commit c68da00) — Phase 1 of the
@@ -845,80 +936,6 @@ student-writing can pass until the Workspace half of the FERPA cutover lands
   geometry fixes (round caps that swept the wrong way and never once capped a
   stroke, a mitered joint so a corner stops pinching, and a React re-render on
   every pen lift), not the dials this entry lists. Read the rest as history.
-- **Ladder Method — rule rail redesign + Factor Trees mode** (7/21, commit
-  c9206cc) — /ladder-method now follows the three-column manipulative
-  convention: the divisibility rules sit in the LARGE LEFT RAIL (same wording
-  as /divisibility, rules 2-6 plus 7's honest non-rule), the ladder or trees
-  in the center, results on the right. The rail is live guidance — a rule
-  lights green when it works on BOTH bottom numbers (Ladder) or on the node
-  being split (Trees), and tapping a lit rule loads that divisor. When the
-  ladder closes, the pulled-out divisors line up UNDER it and the student
-  multiplies them out one step at a time for the GCF, then extends the chain
-  with the two bottom leftovers for the LCM; wrong products get the real
-  arithmetic named. Factor Trees mode (rebuilt same day to Steele's spec,
-  commit 4de7f5c): the rules own the left third and the tree owns the rest.
-  No number options on screen — the teacher sets the sequence ahead of time
-  (Factor Trees field on the /control ladder state, or ?set=24,36,60; shared
-  parser src/lib/factorTreeSet.ts; /ladder-method gained a { set }
-  LiveToolConfig arm) and students get one number at a time with progress
-  dots and localStorage resume. The student types BOTH factors of a split; a
-  wrong pair names its real product, pulses the lit rules, and points at one
-  ("Not sure? Try 2 — the last digit is even"). New prime branches FLASH
-  until tapped; the tap draws a circle and check mark that settles. When
-  every prime is confirmed, the primes lift out of the tree and fly down to
-  a line at the bottom (staggered, capped under 2s, hard fallback so a
-  backgrounded tab can never strand a student; reduced motion lands them
-  instantly), then the line collapses two at a time through an anchored
-  pop-out — 2 x 2 becomes 4, 4 x 2 becomes 8 — until the original number
-  stands alone, rebuilt from its primes. The earlier two-tree side-by-side
-  compare was superseded by this spec and removed. No evidence emitters
-  (unchanged). Verified end to end in-browser both modes; typecheck and
-  build clean. Merged to main and live 7/21.
-- **Divisibility D1 — rules 1-6, closes with clickable factor arches** (7/21,
-  commit 8c7a79a, same branch as the Distributive Area work) — /divisibility now
-  matches its D1 lesson scope. The rule rail is ÷1 through ÷6 only (7-10 removed
-  outright); the numbers are 24, 35, 36, 40, 42, 48, chosen so every crossing
-  point sits at or below 6 — the six rules always finish the factor list, and a
-  factor of 7 arrives as a partner (35 = 5 x 7, 42 = 6 x 7) instead of needing a
-  rule. The stop is still the computed crossing d*d > N (24 stops after testing
-  4, 35 after 5), never "the board ran out". The least-to-greatest ordering step
-  is replaced by pair-picking on the ascending factor line: the student clicks
-  the TWO factors that multiply to N; a right pick draws a real curved SVG arch
-  between them (endpoints pulse once, the product pops green at the apex,
-  settles, fades), a wrong pick names the product they actually made ("Not this
-  pair - 3 x 12 = 36, not 24"). 36 closes its square with a single 6 under a
-  small 6 x 6 self-loop — no duplicated factor. Arches nest by span with the
-  outermost tallest; the arch panel is full-width so 48's ten factors fit a
-  Chromebook with no horizontal scroll. Completion line: "The arches are closed.
-  Every factor has a partner, so the list is complete." prefers-reduced-motion
-  shows the closed arches instantly. No evidence emitters (unchanged — this stays
-  an optional-support tool). Verified in-browser across all six numbers plus the
-  wrong Yes/No and wrong-pair paths; typecheck and build clean. Merged to main
-  7/21.
-- **Distributive Area Method — one-screen redesign + teacher problem series** (7/20)
-  — the tool now works on a single screen: "Keep it whole" is gone (splitting is
-  the point), and the equation chain sits directly under the area model, where
-  students plug the parts into `a(__ + __) = a(__) + a(__)` and solve it one step
-  at a time, each solved product dropping into its own region on the rectangle.
-  Interactions cut from ~13 to 6 — one click to split, then five checks; no detour
-  payoff screen, no product typed twice. Wrong answers get feedback aimed at the
-  specific mistake (outside factor used as a part, added instead of multiplied,
-  answered with the whole rectangle, product added to a part); two of those tag
-  the existing "distributes to first term only" misconception. Area model ~3x
-  bigger, sized off the measured container with a viewport-aware height budget, so
-  the flow fits without scrolling on a laptop and an iPad. A teacher-set problem
-  series can start three ways, all one format (`24x7, 16x8`, first number is the
-  one they split): the Problem series field on the Distributive Area Method state
-  in `/control` (rides the existing `live_flow` snapshot via a new `LiveToolConfig`
-  variant — no new table or endpoint), a `?set=` link for a Notion step or handout,
-  or the builder on the tool itself. Blank = students pick their own numbers, i.e.
-  today's behaviour. Shared format/parser in `src/lib/distributiveProblems.ts`.
-  Code done and typecheck/build clean; merged to main 7/21. Still owed: Steele's
-  one-time spot-check of the control-panel publish with a student tab joined (that
-  handoff could not be exercised locally — `/control` needs `TEACHER_PASSWORD`).
-  Post-merge cleanup queued: swap the tool's local task banner for the shared
-  `LiveToolBanner`, which main restyled for cream pages while this branch was in
-  flight.
 - **Grudge Ball** — second live team review game, forked from BRUH's engine (shares
   the question loop, grading, and `bruh_sets` banks; separate `grudge_*` tables so
   BRUH cannot regress). Same answer/reveal/explain, then the reward beat becomes
@@ -929,11 +946,16 @@ student-writing can pass until the Workspace half of the FERPA cutover lands
   wins, taking 3 from the nemesis. `/teacher/grudge` (+`/board`,`/scoreboard`,
   `/remote`), `/grudge` student. Code + migration done; waiting on Steele to run
   `supabase/grudge.sql` and a live run. Deliberately not on the proficiency spine.
-- **Week builder** — code shipped (warmup-pools-data.gs + warmup-week-builder.gs +
-  sidebar button); waiting on Steele's Apps Script paste-in. Builds the week from
-  published Notion lessons: pool-backed Q4/Q5 (verified tags), AI openers only.
-- Warm-up → spine bridge — live and verified (Evidence post 200, 7/4)
-
+- **Week builder** — code shipped (`warmup-pools-data.gs` + `warmup-week-builder.gs`,
+  `buildWeekFromNotionLessons` at warmup-week-builder.gs:31); waiting on Steele's
+  Apps Script paste-in. Builds the week from published Notion lessons: pool-backed
+  Q4/Q5 (verified tags), AI openers only.
+  **CORRECTED 2026-08-05: there is no sidebar button.** This entry claimed one.
+  `warmup-sidebar-functions.gs:10-21` exposes only Warm-Up Builder, trigger repair
+  and backfill, and `generateWeekAuto` routes to `generateWeekFormsFromEngine_`
+  (warmup-engine.gs) — it never calls `buildWeekFromNotionLessons`. So after the
+  paste-in there is still nothing to press: wiring the menu entry is real
+  remaining work, not a done thing waiting on Steele.
 ## Planned
 - **The laptop as the participation and edge-case view** (Steele, 2026-07-29,
   refining "the laptop shows student data"): a general state of participation that
