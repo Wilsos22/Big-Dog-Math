@@ -8,6 +8,28 @@ should update BOTH that database and this mirror when a feature ships.
 Snapshot (2026-07-16):
 
 ## Live
+**A lesson finally moves a mastery bar** (8/4). Every learning check, readiness
+question and exit ticket wrote to `poll_answers`, and nothing read it into
+`responses` - the only table `recompute` reads besides i-Ready and checkpoints -
+so the `mastery` table had been empty for the life of the project, and 5 of a
+48-minute lesson's minutes could reach mastery at all. `src/lib/pollEvidence.ts`
+re-grades from (poll, answer), because `poll_answers` stores no correctness and
+no standard; both live on the `polls` row. `POST /api/teacher/poll-evidence`
+writes the rows and then calls `recomputePeriod`, since nothing else in the
+codebase ever triggered it. `GET` is a dry run. Structured-numeric and
+multiple-choice only - short answer is bare string equality, and a fist-to-five
+is a confidence self-report that must never score a standard. Factor-pair builds
+get partial credit, capped below full marks when the build is wrong so the bar
+cannot rise 100% for a student the misconception tag just flagged. Notion's
+`Standard` values do not match the seeded ids (five of six were unseeded), so
+the normalizer inserts a cluster letter when exactly one seeded id qualifies and
+refuses on ambiguity; unresolvable is reported, never guessed. One bar row per
+student per LESSON, not per question, because the bars are an EWMA at alpha 0.30
+and per-question rows would take a bar 60 to 14 on four wrong answers in one
+period. 44 contract checks, each verified by reverting its fix and watching the
+suite go red. **Not yet proven end to end: `poll_answers` has zero rows lifetime
+until the FERPA Workspace half lands, and the vocabulary SQL is unrun.**
+
 **Decimals, step by step** (8/2, rebuilt 8/3 from twenty toolbar comments).
 `/decimal-steps` is a guided tool covering all four operations, one move at a
 time. Students TYPE the arithmetic and only choose on the decisions; a carry is
@@ -588,6 +610,50 @@ on the spinner has her call the pick; shared abbieBus, no new setup) ·
 cross-day memory note in the console woven into her context; personality tuned
 to complaining-teen, less Red Bull, shorter replies)
 
+## Known broken — 2026-08-04
+Found by the first `/status` sweep. Nothing here was reported by a student or a
+class; all four came out of reading the live site against the repo.
+
+- **Vercel is not building from `main`, and it is the one that matters.** The
+  live `/api/build-id` returns `265ea95` (built Aug 4, 04:39 UTC) while
+  `origin/main` had moved 26 commits and about 20 hours past it. Stranded in
+  that gap: `88a0a84` (the slide overlay covering `/teacher/pace`, and a lesson
+  with no End), `84208c7` (the Division House six-move rebuild), `49332c9` (the
+  50-minute period budget), `a866066` (iPad double-tap undo and hold-to-
+  straighten), `e145490` (the sound bank AudioContext fix). So the projector
+  bugs found running a real lesson are fixed in the repo and still on the wall,
+  and because `DeployRefresh` reloads displays on a build-id CHANGE, a build
+  that never ships leaves every projector on the old code with nothing anywhere
+  saying why. CLAUDE.md documents the suspected cause (the GitHub App losing
+  repo access when the repo went private on 8/3 - the last successful deploy
+  still records `githubRepoVisibility: "public"`). ONLY STEELE CAN TEST IT: one
+  redeploy from the Vercel dashboard settles whether the connection recovers.
+  **RESOLVED THE SAME EVENING.** Steele pushed two "Trigger deploy" commits
+  (`40da109`, `c3e0a92`); both built READY to production, and every push since
+  has deployed automatically. Live `/api/build-id` now tracks `origin/main`
+  within a couple of minutes, so all 26 stranded commits - including every
+  projector fix from the 8/3 run - are finally in the room. The ROOT CAUSE was
+  never established: a manual trigger restored it, which is consistent with the
+  GitHub App theory but does not prove it. If pushes ever stop deploying again,
+  the check is `/api/build-id` against `origin/main`, and the fix to try first
+  is a manual redeploy.
+- **`.claude/commands/class-audit.md` asks Notion the wrong question.** Its
+  curriculum scope says "Feature Tracker rows at Priority 'Now' not Done". The
+  tracker's `Status` select has no `Done` value, so that filter matches every
+  row; done-ness is a separate `Done` checkbox. Measured 8/4: `Priority = Now`
+  returns 18 rows of which NINE are complete, so a curriculum audit reports
+  shipped features as outstanding work. Correct filter is `Priority = "Now"`
+  AND `Done = "__NO__"` (recorded in CLAUDE.md, commit `ea485b9`).
+- **Setup item 3 below tells you to break teacher auth.** It calls
+  `NEXT_PUBLIC_TEACHER_PIN` unused; it is read at `src/lib/teacherAuth.ts:12`.
+  Corrected in place below.
+- **Five branches never merged into `origin/main`:**
+  `codex/integrated-security`, `codex/warmup-identity-preview`,
+  `claude/big-dog-website-roadmap-yp65vy`, `claude/quizzical-mcnulty-effb35`,
+  `backup-before-rebuild-80e3da5`. The two `codex/` ones sound load-bearing and
+  nobody has said whether they are finished work or abandoned. Needs a read,
+  then a merge or a delete.
+
 ## Known broken — reported live 2026-08-03
 Steele found these while running a real lesson through the surfaces. Four are
 FIXED (commit `88a0a84`); the rest is diagnosed below and needs his call.
@@ -757,6 +823,18 @@ student-writing can pass until the Workspace half of the FERPA cutover lands
   feel test -
   pressure curve, snap timing, eraser reach, laser fade, zoom ceiling, dot
   pitch are all one-number dials.
+  **STALE ABOVE, CORRECTED 2026-08-04.** Everything in this entry describing
+  PAGES (the 1-8 chips, `pageflip`, "Page N of M"), the `__scratch` overlay,
+  and the Board / Write-on-screen surface switch describes a design that was
+  TORN OUT on 2026-07-30 for one-surface-one-room - see `src/app/ipad/page.tsx`
+  and `src/app/board/page.tsx`. There is now ONE interactive board on
+  `<room>__over`, rendered unconditionally by every display; Paper is a
+  background toggle, not a surface, and the split whiteboard is a white panel
+  the same pen writes across. The pressure line is also superseded: the pen is
+  a CONSTANT-WIDTH marker by Steele's decision, and the 8/3 work was three
+  geometry fixes (round caps that swept the wrong way and never once capped a
+  stroke, a mitered joint so a corner stops pinching, and a React re-render on
+  every pen lift), not the dials this entry lists. Read the rest as history.
 - **Ladder Method — rule rail redesign + Factor Trees mode** (7/21, commit
   c9206cc) — /ladder-method now follows the three-column manipulative
   convention: the divisibility rules sit in the LARGE LEFT RAIL (same wording
@@ -831,25 +909,6 @@ student-writing can pass until the Workspace half of the FERPA cutover lands
   Post-merge cleanup queued: swap the tool's local task banner for the shared
   `LiveToolBanner`, which main restyled for cream pages while this branch was in
   flight.
-- **City Routes v1** (7/19) — the private differentiated release every M1.T1 lesson
-  references. After the two-question readiness check, students split into three
-  temporary support routes announced only as rotating park names (Yosemite,
-  Acadia, ... — a deliberately connotation-free ten-name bank in
-  `src/lib/cityRoutes.ts`), so no public screen ever shows a score, tier, or
-  ability label. Pure engine (deterministic name+meaning rotation per lesson code
-  + shuffle salt; 2/2 = independent, 1/2 = partner, 0/2 = teacher-guided;
-  correct-but-low-Fist-to-Five flags a teacher check, never demotes; no answers =
-  needs assignment). Server-only tables (`supabase/city-routes.sql`, mastery-style
-  lockdown), teacher API `/api/live/city-routes` (gated), student card API
-  `/api/student/city-route` (dual-mode like session-state: verified identity
-  under the secure rollout, claimed id in transitional mode; returns
-  city/destination/materials/first action only), review/override/shuffle/release
-  panel on the iPad Remote, and the
-  student card on `/live-flow` during small-group and independent states.
-  Code + migration done; waiting on Steele to run `supabase/city-routes.sql`
-  and a live run. Deferred: projector city-to-location key, timed stagger
-  (encoded in first-action copy for now), per-lesson destination/materials
-  editing, arrival receipts.
 - **Grudge Ball** — second live team review game, forked from BRUH's engine (shares
   the question loop, grading, and `bruh_sets` banks; separate `grudge_*` tables so
   BRUH cannot regress). Same answer/reveal/explain, then the reward beat becomes
@@ -998,25 +1057,101 @@ student-writing can pass until the Workspace half of the FERPA cutover lands
   way to drive, where today Control is the fallback. `/session` already carries a
   minimal Start / Back / Pause / Next toolbar for exactly that - keep it, and know
   it is there.
-- **Abbie everywhere** — DONE (Area=Abbie): console + mic, student-screen
-  broadcast, Ask-Abbie queue, contextual reactions, and bits all shipped 7/7-8.
-  Later, optional: server-side cross-day memory (auto-summarized) instead of the
-  device-local note.
 - Claude enrichment: score short-answer reasoning (next-move sharpening now Live)
 - RLS tightening on legacy tables (required before real student data)
 - Reskin remaining tools; vertical draggable control sequence
-- Abbie lesson-sequence phases 2–5 (auto-built spinner/misconception/flashback/exit)
+
+(Removed 2026-08-04: two Abbie entries - "Abbie everywhere - DONE" and "Abbie
+lesson-sequence phases 2-5". The feature was unmounted 7/29 and its files
+deleted 7/30 on Steele's word; `supabase/abbie-teardown.sql` is what shipped.
+Re-enabling is a rebuild, not a remount, so there is nothing here to plan.)
 
 ## Parked
 Infinite Campus push · Scan/OCR checkpoint pipeline · Google student sign-in
 (CCSD OAuth question first)
 
 ## Steele's open setup items
-0. (done) supabase/bruh.sql has been applied - BRUH is live.
-1. Reseed mock fixtures (`seed2_part_1…4`, `iready_seed2`) → verify colored bars.
-2. Add `Misconception Plans` text property to the Lessons DB; author `tag :: move` lines.
-3. Vercel envs: `NOTION_ROSTER_DB_ID`, `CRON_SECRET`, later `EVIDENCE_INGEST_KEY`;
-   delete unused `NEXT_PUBLIC_TEACHER_PIN`.
-4. Share the roster Notion DB with the integration.
-5. Run `supabase/abbie-broadcast.sql` (done) and `supabase/abbie-questions.sql`
-   once each so Abbie's student bubble and the Ask-Abbie queue work in class.
+Pruned 2026-08-04 by the first `/status` sweep - four of the six items pointed at
+work that no longer exists, and one of them would have broken teacher auth.
+
+1. ~~**Redeploy from the Vercel dashboard**~~ **RESOLVED 2026-08-04 - the
+   pipeline is healthy.** Measured end to end this session: pushed
+   `a6fe76c..bc8d232` to `main` and the live `/api/build-id` moved to `bc8d232`
+   in **60 seconds**. Nothing is stranded behind the deploy gap any more. Keep
+   the CLAUDE.md habit of checking `/api/build-id` after a push anyway - the gap
+   was real for 22 commits and "pushed" is still a different claim from "live".
+2. ~~**Run `supabase/poll-evidence-vocabulary.sql`**~~ **RESOLVED 2026-08-04 -
+   Steele ran it, and both rows are confirmed in the live `misconceptions` table
+   carrying `standard_id = 6.NS.B.4`.** The tags now cluster with a domain
+   instead of into blanks. Original note follows. Four lines. The poll -> mastery
+   bridge shipped 2026-08-04 and writes two new misconception tags
+   (`lists a non-factor pair`, `stops before all pairs are found`). An unseeded
+   tag does NOT error: it silently loses its domain, so i-Ready corroboration in
+   `/api/live/groups` goes to zero and any teacher move authored against it
+   renders blank. Same rows are also in `proficiency.sql`; this file exists so
+   you can run four lines instead of the whole seed.
+3. **Set `WARMUP_ENGINE_KEY` in the WARM-UP Apps Script project** to the same
+   value as `CRON_SECRET` in Vercel. `/api/warmup` is now gated
+   (`SECURE_ROLLOUT_PREFIXES` + `NEXT_PUBLIC_SECURE_STUDENT_DATA=true`) and
+   `warmup-engine.gs:39` only sends an Authorization header when that property
+   is set - so building a warm-up fails with `Teacher login required.` from
+   `src/proxy.ts:104`. The script's own comment says to set it "once /api/warmup
+   is gated"; the condition came true and nobody re-read the comment.
+   **PARTLY DONE 2026-08-04 AND NOT YET PROVEN.** Steele set the property, but
+   Vercel does not let you read `CRON_SECRET` back, so whether the two values
+   MATCH is unverified - and a mismatch is invisible until a warm-up build
+   returns `Teacher login required.` The fix is not to recover the old value but
+   to ROTATE: generate one new string and paste the identical value into THREE
+   places - Vercel `CRON_SECRET` (then redeploy, or the change does not take),
+   the WARM-UP project's `WARMUP_ENGINE_KEY`, and the ROSTER project's Bearer
+   token for `warmup-roster-push.gs`. Miss the third and the roster push starts
+   401ing silently. The proof it worked is `testWarmupEngineFetch()` in the
+   warm-up project returning a set rather than an auth error.
+4. **Clean the roster Sheet.** The 2026-08-04 push reported 151 sheet rows
+   against 156 site students, so roughly **14 stale draft-roster students** sit
+   in the database and the push NEVER deletes - they will pad every roster count
+   and every "Joined N of M" denominator all year. Also: several rows skipped as
+   "duplicate row for one site student" (Golden Badger, Jolly Ocelot, Vivid
+   Ocelot, Sunny Walrus, Smart Toucan, Eager Salmon - usually a schedule change
+   leaving both rows), and rows 153-157 skipped for "no period".
+5. Run `supabase/table-captains-and-supply-checks.sql` - table captains and the
+   closeout supply check are DARK until it is applied, and `/api/roster/sync`
+   500s on the `table_number` select without it.
+6. Run `supabase/grudge.sql` - Grudge Ball's code and migration are done and
+   waiting on this plus a live run.
+7. The FERPA cutover's Workspace half - **NARROWED 2026-08-04, steps 1 and 5 are
+   DONE.** All 156 students in Periods 1-5 carry an `alias` AND an `email_hmac`,
+   created 2026-08-01; the site cannot compute an HMAC, so the key exists and
+   `pushRosterToSite()` has run. A re-run that day reported
+   `created:0 updated:0 unchanged:142`, proving the roster project's key still
+   matches the stored hashes.
+   WHAT IS ACTUALLY LEFT: **step 2** (confirm the WARM-UP project's
+   `BDM_ROSTER_HMAC_KEY` matches the roster project's - unproven, and invisible
+   until a real warm-up returns "not on roster"), **step 6** (one real warm-up on
+   a district account - this is what writes `auth_user_id`; the roster never
+   does), **step 8** (archive the Notion student databases by hand).
+   **Until step 6 lands, no student write can succeed at all** - fist-to-5, the
+   stuck chip, tool evidence and now the poll -> mastery bridge all fail the
+   verified-student gate and present as dead buttons. Re-measured 8/4:
+   `select count(*) from students where auth_user_id is not null` returns 0.
+   This is still the single biggest blocker in the file.
+8. Paste `warmup-week-builder.gs` + `warmup-pools-data.gs` into the WARM-UP
+   Apps Script project (code shipped, waiting on the paste-in).
+9. Add `Misconception Plans` text property to the Lessons DB; author
+   `tag :: move` lines. The code side reads it already
+   (`src/lib/notionLessons.ts:685`, consumed by `/teacher/rightnow`).
+
+Removed as stale on 2026-08-04, with what replaced them:
+- "Reseed mock fixtures (`seed2_part_1…4`, `iready_seed2`)" - no such identifier
+  exists anywhere in `supabase/`, `src/` or `scripts/`. The mock class is
+  `supabase/mock-classroom-seed.sql` plus `mock-live-session-seed.sql`.
+- "Vercel envs `NOTION_ROSTER_DB_ID` … delete unused `NEXT_PUBLIC_TEACHER_PIN`" -
+  `NOTION_ROSTER_DB_ID` has zero references since the FERPA cutover deleted the
+  Notion roster pull, `CRON_SECRET` and `EVIDENCE_INGEST_KEY` are both live and
+  in use, and `NEXT_PUBLIC_TEACHER_PIN` is NOT unused: it is read at
+  `src/lib/teacherAuth.ts:12`. Deleting it as instructed would break teacher auth.
+- "Share the roster Notion DB with the integration" - the Notion pull and its
+  Vercel cron are gone; the roster pushes from `warmup-roster-push.gs`.
+- "Run `supabase/abbie-broadcast.sql` and `supabase/abbie-questions.sql`" -
+  neither file exists. `supabase/abbie-teardown.sql` is what shipped.
+- "(done) supabase/bruh.sql has been applied" - kept as history, not an open item.

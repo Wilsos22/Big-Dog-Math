@@ -1,0 +1,271 @@
+{
+  "lesson": {
+    "code": "M2.T1.L1",
+    "title": "Understanding Ratios",
+    "module": "Module 2 · Topic 1 · Lesson 1",
+    "learningIntention": "Understand a ratio as a multiplicative relationship between two quantities.",
+    "period": "Period 3 · Rm 204",
+    "revision": "2026-07-15",
+    "totalMinutes": 55
+  },
+  "successCriteria": [
+    "I can build a ratio with objects.",
+    "I can write a ratio three ways.",
+    "I can explain what a ratio compares."
+  ],
+  "selectedSuccessCriterion": "I can write a ratio three ways.",
+  "reveal": {
+    "showLearningIntention": false,
+    "showSuccessCriterion": false,
+    "revealAtPhase": "lesson-targets",
+    "repeatAtPhase": "learning-check",
+    "rule": "Learning intention and exactly one selected 'I can' are hidden for warm-up and review. They are revealed together immediately after the launch hook, read aloud by two spinner-selected students, and shown again at the midlesson learning check before the Fist-to-Five. Students never see more than one success criterion."
+  },
+  "pacing": {
+    "state": "loaded",
+    "states": {
+      "loaded": "Lesson is a preview. Nothing is timing. Public screens show a calm Loaded card. Pressing Start lesson turns on automatic pacing and starts the current timer.",
+      "running": "Automatic pacing is on. The current timer counts down and the run advances on its own at zero.",
+      "paused": "Holds the current state and stops advancement. The timer freezes on its remaining time.",
+      "resumed": "Continues automatic pacing from the remaining time.",
+      "stopped": "Ends the pacing run. The current state stays on screen but nothing advances until Start lesson is pressed again.",
+      "timeUp": "At zero: show 'Time is up', chime once, hold a brief transition, then advance to the next scheduled state."
+    },
+    "manualNav": "Manual Back and Next preserve the current pacing state: running stays running, paused stays paused.",
+    "controls": [
+      "Start lesson",
+      "Pause",
+      "Resume",
+      "Stop",
+      "Back",
+      "Next",
+      "Open work space",
+      "Back to Remote",
+      "End session"
+    ],
+    "timedResponseCheck": {
+      "appliesTo": [
+        "learning-check",
+        "exit-ticket"
+      ],
+      "behavior": "Closes at zero, shows results briefly, then advances."
+    },
+    "endSession": {
+      "action": "End session",
+      "confirmation": "Requires confirmation on the private Remote and in the laptop control flow. On confirm, all synchronized surfaces show Session ended and disconnect cleanly."
+    },
+    "boardPanel": {
+      "openAction": "Open work space",
+      "closeAction": "Back to Remote",
+      "behavior": "Open work space adds a writing panel beside the current problem on the main projector so the problem stays visible. Back to Remote closes the panel and restores the same problem view."
+    }
+  },
+  "phases": [
+    {
+      "id": "warm-up",
+      "order": 1,
+      "name": "Warm-up",
+      "minutes": 5,
+      "token": "warm-up-review",
+      "main": "Complete today's warm-up · voices off",
+      "pace": "Timer + start-now directions",
+      "chromebook": "Assigned Google Form warm-up · 3 fluency + 2 prior-learning retrieval questions",
+      "ipad": "Timer, Nudge non-starters, Close form; submissions count",
+      "showsTarget": false
+    },
+    {
+      "id": "review",
+      "order": 2,
+      "name": "Review",
+      "minutes": 4,
+      "token": "warm-up-review",
+      "main": "Warm-up answers + the most-missed problem",
+      "pace": "Timer + look-and-check directions",
+      "chromebook": "Eyes on the board — brief look at answers",
+      "ipad": "Most-missed summary (private), reveal answer key",
+      "note": "Brief look at answers and frequently missed problems. No digital correction flow.",
+      "showsTarget": false
+    },
+    {
+      "id": "launch",
+      "order": 3,
+      "name": "Launch",
+      "minutes": 4,
+      "token": "launch",
+      "main": "Halftime scoreboard 20–30 + current math question",
+      "pace": "Timer + notice-and-wonder directions",
+      "chromebook": "I notice that… (open prompt, not the Google Form)",
+      "ipad": "Reveal final score, Buzzer, Deploy question",
+      "note": "Uses the beginning halftime score problem. This is not the Google Form.",
+      "showsTarget": false
+    },
+    {
+      "id": "lesson-targets",
+      "order": 4,
+      "name": "Learning intention and success criterion",
+      "minutes": 1,
+      "token": "learning-check",
+      "main": "Learning intention + one selected 'I can': I can write a ratio three ways.",
+      "pace": "Two readers - follow along, then keep today's target in view",
+      "chromebook": "Listen to today's two readers (no response control)",
+      "ipad": "Spin two readers, re-spin, keep target on both public screens",
+      "note": "First reveal, immediately after the hook. Read by two spinner-selected students. No confidence is collected here; the Fist-to-Five comes at the learning check.",
+      "showsTarget": true
+    },
+    {
+      "id": "concrete",
+      "order": 5,
+      "name": "Concrete",
+      "minutes": 5,
+      "token": "concrete",
+      "main": "Build it — 3 yellow for every 2 blue (physical counters)",
+      "pace": "Timer + build directions",
+      "chromebook": "Build with your counters (compact prompt)",
+      "ipad": "Timer, Ghost second group",
+      "showsTarget": false
+    },
+    {
+      "id": "representational",
+      "order": 6,
+      "name": "Representational",
+      "minutes": 5,
+      "token": "representational",
+      "main": "Draggable tiles — make 3 yellow for every 2 blue",
+      "pace": "Timer + build-then-write directions",
+      "chromebook": "Tiles + write-the-ratio box",
+      "ipad": "Send board model to students, Deploy question",
+      "showsTarget": false
+    },
+    {
+      "id": "abstract",
+      "order": 7,
+      "name": "Abstract",
+      "minutes": 5,
+      "token": "abstract",
+      "main": "Same relationship three ways — 3:2 · 3 to 2 · 3/2",
+      "pace": "Timer + write-three-ways directions",
+      "chromebook": "Write the ratio three ways (compact)",
+      "ipad": "Timer, Annotate, Clear ink",
+      "showsTarget": false
+    },
+    {
+      "id": "learning-check",
+      "order": 8,
+      "name": "Learning check + Fist-to-Five",
+      "minutes": 3,
+      "token": "learning-check",
+      "main": "Learning intention + one selected 'I can': I can write a ratio three ways.",
+      "pace": "Fist-to-Five anonymous bars (after Reveal)",
+      "chromebook": "0–5 Fist-to-Five buttons — only the teacher sees your number",
+      "ipad": "Deploy, Reveal anonymous bars, private per-student numbers, readers",
+      "note": "Second appearance of the learning intention and success criterion; the first is immediately after the hook. Timed response check: closes at zero, shows results briefly, advances.",
+      "showsTarget": true
+    },
+    {
+      "id": "discussion",
+      "order": 9,
+      "name": "Discussion",
+      "minutes": 6,
+      "token": "discussion",
+      "rounds": 3,
+      "roundMinutes": 2,
+      "main": "Current round prompt (trail-mix ratio)",
+      "pace": "Round number + timer + sentence stems + vocabulary",
+      "chromebook": "Round number, your role, sentence stem",
+      "ipad": "Round R1/R2/R3, Restart round, timer ±0:30",
+      "note": "Three rounds of 2 minutes. Must include the current prompt, round number, sentence stems, and vocabulary.",
+      "showsTarget": false
+    },
+    {
+      "id": "independent",
+      "order": 10,
+      "name": "Independent paper work",
+      "minutes": 13,
+      "token": "independent",
+      "main": "Practice Set 4 · p. 47 · #1–8 + due/turn-in + help path",
+      "pace": "Timer + solve-on-paper directions + support line",
+      "chromebook": "Directions + one optional assigned manipulative (fraction bars)",
+      "ipad": "Support tool selector (shows on student screens only when set), Open work space, Blank all screens",
+      "note": "Paper-first. Show required problem numbers, due and turn-in, help path, and one optional assigned manipulative without reproducing paper problems. Full crafted set required; one optional Big Dog Challenge on the back. One minute moved to the post-hook target reveal.",
+      "showsTarget": false
+    },
+    {
+      "id": "exit-ticket",
+      "order": 11,
+      "name": "Exit ticket",
+      "minutes": 3,
+      "token": "exit-ticket",
+      "main": "One question — goldfish : snails ratio",
+      "pace": "Timer + show-what-you-know directions",
+      "chromebook": "One-question form · Turn it in",
+      "ipad": "Close submissions, private per-student answers, Start closeout",
+      "note": "Timed response check: closes at zero, shows results briefly, advances to closeout.",
+      "showsTarget": false
+    },
+    {
+      "id": "closeout",
+      "order": 12,
+      "name": "Closeout",
+      "minutes": 1,
+      "token": "closeout",
+      "main": "Before tomorrow — assigned categories only",
+      "pace": "Timer + pack-up directions",
+      "chromebook": "Same summary lives on the student Today page afterward",
+      "ipad": "End session (with confirmation)",
+      "note": "Hides empty categories. Shows games or tools only when assigned.",
+      "showsTarget": false
+    }
+  ],
+  "tokens": {
+    "warm-up-review": {
+      "accent": "#6fbd91",
+      "base": "#0c1d17",
+      "panel": "#132a20"
+    },
+    "launch": {
+      "accent": "#d59a55",
+      "base": "#21150d",
+      "panel": "#302016"
+    },
+    "concrete": {
+      "accent": "#69b17f",
+      "base": "#0d1c13",
+      "panel": "#14271b"
+    },
+    "representational": {
+      "accent": "#58b8b4",
+      "base": "#0b1d1f",
+      "panel": "#10292b"
+    },
+    "abstract": {
+      "accent": "#8291e8",
+      "base": "#11152b",
+      "panel": "#191f3b"
+    },
+    "learning-check": {
+      "accent": "#d2a74f",
+      "base": "#241329",
+      "panel": "#321a38"
+    },
+    "discussion": {
+      "accent": "#cf6b42",
+      "base": "#27130d",
+      "panel": "#351b13"
+    },
+    "independent": {
+      "accent": "#6f91c6",
+      "base": "#0d1829",
+      "panel": "#14233a"
+    },
+    "exit-ticket": {
+      "accent": "#c9687c",
+      "base": "#281018",
+      "panel": "#371721"
+    },
+    "closeout": {
+      "accent": "#d1a64d",
+      "base": "#21190d",
+      "panel": "#2e2414"
+    }
+  }
+}

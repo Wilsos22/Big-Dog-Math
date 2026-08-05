@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/big-dog-board-design-system-901ffe04-7731-4cc5-9afa-a3dee8db0fed/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/big-dog-board-design-system-901ffe04-7731-4cc5-9afa-a3dee8db0fed/tokens/colors.css">
+<link rel="stylesheet" href="_ds/big-dog-board-design-system-901ffe04-7731-4cc5-9afa-a3dee8db0fed/tokens/typography.css">
+<link rel="stylesheet" href="_ds/big-dog-board-design-system-901ffe04-7731-4cc5-9afa-a3dee8db0fed/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/big-dog-board-design-system-901ffe04-7731-4cc5-9afa-a3dee8db0fed/tokens/base.css">
+<link rel="stylesheet" href="_ds/big-dog-board-design-system-901ffe04-7731-4cc5-9afa-a3dee8db0fed/styles.css">
+<script src="_ds/big-dog-board-design-system-901ffe04-7731-4cc5-9afa-a3dee8db0fed/_ds_bundle.js"></script>
+<style>
+  body { margin:0; background-color:#ECE8E0; background-image:radial-gradient(circle,#C9C1B0 1px,transparent 1.3px); background-size:18px 18px; font-family:'Albert Sans',system-ui,sans-serif; color:#201E1A; }
+  a { color:#3D8586; } a:hover { color:#2E4A54; }
+  input, button, textarea, select { font-family:inherit; }
+</style>
+</helmet>
+
+<div style="min-height:100vh;padding:18px 22px 30px;display:flex;flex-direction:column;gap:14px">
+
+  <x-import component-from-global-scope="DesignSystem_901ffe.Panel" border="hairline" padding="{{ p18 }}" hint-size="100%,96px">
+    <div style="display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end">
+      <div style="display:grid;gap:6px;min-width:0">
+        <span style="font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">Lesson step · from Notion relation</span>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <sc-for list="{{ stepOpts }}" as="o" hint-placeholder-count="12">
+            <x-import component-from-global-scope="DesignSystem_901ffe.Button" variant="{{ o.variant }}" size="sm" data-val="{{ o.val }}" onClick="{{ pickStep }}" hint-size="42px,36px">{{ o.label }}</x-import>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:grid;gap:6px">
+        <span style="font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">Screen</span>
+        <div style="display:flex;gap:7px">
+          <sc-for list="{{ screenOpts }}" as="o" hint-placeholder-count="3">
+            <x-import component-from-global-scope="DesignSystem_901ffe.Button" variant="{{ o.variant }}" size="sm" data-val="{{ o.val }}" onClick="{{ pickScreen }}" hint-size="130px,36px">{{ o.label }}</x-import>
+          </sc-for>
+        </div>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        <span style="max-width:36ch;font-size:12px;font-weight:750;line-height:1.4;color:var(--text-muted)">{{ statusNote }}</span>
+        <x-import component-from-global-scope="DesignSystem_901ffe.Button" variant="soft" size="sm" onClick="{{ resetLayout }}" hint-size="150px,36px">Reset this screen</x-import>
+      </div>
+    </div>
+  </x-import>
+
+  <div style="display:grid;grid-template-columns:232px minmax(0,1fr) 300px;gap:14px;align-items:start">
+
+    <x-import component-from-global-scope="DesignSystem_901ffe.Panel" border="hairline" padding="{{ p15 }}" hint-size="100%,520px">
+      <div style="display:grid;gap:9px">
+        <span style="font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">Frames</span>
+        <p style="margin:0;font-size:12px;font-weight:750;line-height:1.45;color:var(--text-muted)">Click to add. Each frame fills itself from the lesson field named under it.</p>
+        <div style="display:grid;gap:7px">
+          <sc-for list="{{ palette }}" as="p" hint-placeholder-count="8">
+            <x-import component-from-global-scope="DesignSystem_901ffe.Button" variant="soft" block="{{ true }}" data-type="{{ p.type }}" onClick="{{ addBlock }}" dc-props="{{ paletteProps }}" hint-size="100%,52px">
+              <span style="display:grid;gap:2px;text-align:left;justify-items:start;width:100%">
+                <span style="font-size:14px;font-weight:900;color:var(--text-heading)">{{ p.label }}</span>
+                <span style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)">{{ p.field }}</span>
+              </span>
+            </x-import>
+          </sc-for>
+        </div>
+      </div>
+    </x-import>
+
+    <div style="display:grid;gap:9px;min-width:0">
+      <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#8A8378">{{ frameCaption }}</span>
+        <span style="font-size:12px;font-weight:750;color:#A79E90">{{ frameDims }}</span>
+      </div>
+      <div ref="{{ frameHost }}" style="position:relative;width:100%;aspect-ratio:16 / 9;overflow:hidden;border-radius:16px;box-shadow:0 22px 54px -26px rgba(103,74,64,.62)">
+        <div style="position:absolute;top:0;left:0;width:1920px;height:1080px;transform-origin:top left;background-color:#F3F0E7;background-image:radial-gradient(circle,#BEB5A1 {{ dotR }},transparent {{ dotR2 }});background-size:{{ dotSize }} {{ dotSize }};display:grid;grid-template-columns:220px minmax(0,1fr);transform:{{ frameTransform }}">
+
+          <div style="display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;justify-items:center;gap:24px;padding:40px 0 32px;box-shadow:10px 0 30px -10px rgba(40,32,20,.3);background:{{ accent }}">
+            <span style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:60px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:#fff;line-height:1;align-self:start">{{ stateWord }}</span>
+            <div style="display:grid;gap:12px;align-content:center">
+              <sc-for list="{{ dots }}" as="d" hint-placeholder-count="12">
+                <span style="width:24px;height:9px;border-radius:999px;background:{{ d.bg }}"></span>
+              </sc-for>
+            </div>
+            <div style="display:grid;justify-items:center;gap:2px;color:#fff">
+              <span style="font-size:68px;font-weight:800;line-height:.9;letter-spacing:-.04em;font-variant-numeric:tabular-nums">{{ clock }}</span>
+              <span style="font-size:20px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.85)">Step {{ stepNum }} / 12</span>
+            </div>
+            <span style="font-size:19px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.82);text-align:center;line-height:1.3">{{ bandFoot }}</span>
+          </div>
+
+          <div style="display:grid;grid-template-rows:{{ contentRows }};min-width:0">
+            <sc-if value="{{ isStudent }}">
+              <div style="display:flex;align-items:center;gap:26px;padding:0 42px;background:rgba(255,255,255,.66);border-bottom:1px solid rgba(120,110,90,.16);font-size:25px;font-weight:800;color:#6F675C;letter-spacing:.03em">
+                <span>Step {{ stepNum }} of 12</span>
+                <span style="color:#A79E90">Next: {{ nextTitle }}</span>
+                <span style="margin-left:auto;color:#A79E90">Marisol R.</span>
+              </div>
+            </sc-if>
+            <div style="display:flex;gap:44px;padding:44px 48px;min-width:0;align-items:stretch">
+              <sc-for list="{{ zones }}" as="z" hint-placeholder-count="2">
+                <div data-zone="{{ z.idx }}" onClick="{{ selectZone }}" style="display:flex;flex-direction:column;gap:26px;min-width:0;flex:{{ z.flex }};outline:{{ z.outline }};outline-offset:10px;border-radius:26px">
+                  <sc-for list="{{ z.blocks }}" as="b" hint-placeholder-count="2">
+                    <div data-id="{{ b.id }}" onClick="{{ selectBlock }}" style="position:relative;flex:{{ b.flex }};min-height:0;border:{{ b.border }};border-radius:26px;background:#fff;box-shadow:0 14px 36px rgba(40,32,20,.1);padding:30px 34px;display:grid;gap:20px;align-content:{{ b.align }};cursor:pointer;outline:{{ b.outline }};outline-offset:7px">
+
+                      <sc-if value="{{ b.selected }}">
+                        <div style="position:absolute;top:-30px;right:0;display:flex;gap:7px;z-index:5">
+                          <button type="button" data-act="up" data-id="{{ b.id }}" onClick="{{ blockAct }}" style="width:46px;height:46px;border:3px solid #201E1A;border-radius:12px;background:#fff;color:#201E1A;font-size:20px;font-weight:900;cursor:pointer">↑</button>
+                          <button type="button" data-act="down" data-id="{{ b.id }}" onClick="{{ blockAct }}" style="width:46px;height:46px;border:3px solid #201E1A;border-radius:12px;background:#fff;color:#201E1A;font-size:20px;font-weight:900;cursor:pointer">↓</button>
+                          <button type="button" data-act="zone" data-id="{{ b.id }}" onClick="{{ blockAct }}" style="height:46px;padding:0 14px;border:3px solid #201E1A;border-radius:12px;background:#fff;color:#201E1A;font-size:19px;font-weight:900;cursor:pointer">{{ b.zoneLabel }}</button>
+                          <button type="button" data-act="del" data-id="{{ b.id }}" onClick="{{ blockAct }}" style="width:46px;height:46px;border:3px solid #F95335;border-radius:12px;background:#F95335;color:#fff;font-size:20px;font-weight:900;cursor:pointer">×</button>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isPrompt }}">
+                        <h2 style="margin:0;font-size:{{ b.promptSize }};font-weight:800;line-height:1.02;letter-spacing:-.03em;color:#2E4A54;text-wrap:balance">{{ b.text }}</h2>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isText }}">
+                        <p style="margin:0;font-size:32px;font-weight:750;line-height:1.32;color:#4A453E">{{ b.text }}</p>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isModel }}">
+                        <div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap">
+                          <span style="font-size:27px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#3D8586">{{ b.modelTitle }}</span>
+                          <span style="margin-left:auto;font-size:23px;font-weight:800;color:#A79E90">{{ b.modelHint }}</span>
+                        </div>
+                        <div style="display:grid;grid-template-columns:86px minmax(0,1fr);gap:20px;align-items:center">
+                          <div style="display:grid;justify-items:center;gap:6px;color:#3D8586">
+                            <span style="font-size:66px;font-weight:900;line-height:.9;letter-spacing:-.04em">{{ b.rows }}</span>
+                            <span style="font-size:21px;font-weight:850;letter-spacing:.06em;text-transform:uppercase">rows</span>
+                          </div>
+                          <div style="position:relative;min-height:210px;height:100%;border:4px solid #201E1A;border-radius:8px;background-color:#fff;background-image:linear-gradient(to right,rgba(32,30,26,.17) 1px,transparent 1px),linear-gradient(to bottom,rgba(32,30,26,.17) 1px,transparent 1px);background-size:{{ b.cellW }} {{ b.cellH }}">
+                            <div style="position:absolute;top:0;bottom:0;left:0;background:rgba(252,175,56,.44);display:grid;place-items:center;width:{{ b.leftPct }}"><span style="font-size:52px;font-weight:900;color:#9C6310;font-variant-numeric:tabular-nums">{{ b.leftLabel }}</span></div>
+                            <div style="position:absolute;top:0;bottom:0;right:0;background:rgba(132,91,201,.3);display:grid;place-items:center;width:{{ b.rightPct }}"><span style="font-size:52px;font-weight:900;color:#4D3079;font-variant-numeric:tabular-nums">{{ b.rightLabel }}</span></div>
+                            <div style="position:absolute;top:-14px;bottom:-14px;width:8px;margin-left:-4px;border-radius:999px;background:#201E1A;left:{{ b.leftPct }}"></div>
+                          </div>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isDoThis }}">
+                        <p style="margin:0;font-size:25px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:{{ b.accentInk }}">{{ b.doThisTitle }}</p>
+                        <div style="display:grid;gap:18px">
+                          <sc-for list="{{ b.items }}" as="it" hint-placeholder-count="3">
+                            <p style="margin:0;display:flex;gap:18px;align-items:baseline;font-size:36px;font-weight:800;color:#201E1A"><span style="min-width:54px;height:54px;display:grid;place-items:center;border-radius:14px;background:{{ b.chipBg }};color:{{ b.chipInk }};font-size:28px">{{ it.n }}</span>{{ it.text }}</p>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isTimer }}">
+                        <div style="display:grid;justify-items:center;gap:8px">
+                          <span style="font-size:132px;font-weight:800;line-height:.86;letter-spacing:-.05em;font-variant-numeric:tabular-nums;color:{{ b.accentInk }}">{{ b.time }}</span>
+                          <span style="font-size:25px;font-weight:850;letter-spacing:.1em;text-transform:uppercase;color:#8A8378">{{ b.timerLabel }}</span>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isSupport }}">
+                        <span style="font-size:23px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:{{ b.accentInk }}">{{ b.supportTitle }}</span>
+                        <div style="display:grid;gap:12px">
+                          <sc-for list="{{ b.lines }}" as="l" hint-placeholder-count="2">
+                            <p style="margin:0;font-size:31px;font-weight:850;color:#201E1A">{{ l.text }}</p>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isEquation }}">
+                        <div style="display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;font-size:66px;font-weight:900;color:#201E1A;font-variant-numeric:tabular-nums;letter-spacing:-.02em">
+                          <span style="color:#3D8586">{{ b.front }}</span><span>× (</span><span style="color:#9C6310">{{ b.partA }}</span><span>+</span><span style="color:#4D3079">{{ b.partB }}</span><span>) =</span>
+                          <span style="width:104px;height:96px;border:6px solid #FCAF38;border-radius:18px;background:#fff"></span>
+                          <span>+</span>
+                          <span style="width:104px;height:96px;border:6px solid #845BC9;border-radius:18px;background:#fff"></span>
+                          <span>=</span>
+                          <span style="width:124px;height:96px;border:6px solid #201E1A;border-radius:18px;background:#fff"></span>
+                        </div>
+                        <p style="margin:0;text-align:center;font-size:26px;font-weight:800;color:#8A8378">{{ b.equationNote }}</p>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isLegend }}">
+                        <span style="font-size:23px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#3D8586">{{ b.legendTitle }}</span>
+                        <div style="display:grid;gap:14px">
+                          <sc-for list="{{ b.swatches }}" as="s" hint-placeholder-count="3">
+                            <span style="display:flex;align-items:center;gap:14px;font-size:28px;font-weight:800;color:#4A453E"><span style="width:26px;height:26px;border-radius:7px;background:{{ s.color }}"></span>{{ s.label }}</span>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isCallout }}">
+                        <p style="margin:0;font-size:30px;font-weight:850;color:#201E1A">{{ b.text }}</p>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isManipSplit }}">
+                        <div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap">
+                          <span style="font-size:27px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#3D8586">{{ b.modelTitle }}</span>
+                          <span style="margin-left:auto;font-size:23px;font-weight:800;color:#A79E90">Drag the line</span>
+                        </div>
+                        <div data-id="{{ b.id }}" onPointerDown="{{ manipSplitDrag }}" style="position:relative;min-height:230px;height:100%;border:4px solid #201E1A;border-radius:8px;background-color:#fff;background-image:linear-gradient(to right,rgba(32,30,26,.17) 1px,transparent 1px),linear-gradient(to bottom,rgba(32,30,26,.17) 1px,transparent 1px);background-size:{{ b.cellW }} {{ b.cellH }};cursor:ew-resize;touch-action:none">
+                          <div style="position:absolute;top:0;bottom:0;left:0;background:rgba(252,175,56,.44);display:grid;place-items:end center;padding-bottom:16px;width:{{ b.splitPct }}">
+                            <span style="border:3px solid #D88A1C;border-radius:999px;background:#fff;padding:6px 20px;font-size:34px;font-weight:900;color:#9C6310;font-variant-numeric:tabular-nums">{{ b.splitLeftN }}</span>
+                          </div>
+                          <div style="position:absolute;top:0;bottom:0;right:0;background:rgba(132,91,201,.3);display:grid;place-items:end center;padding-bottom:16px;width:{{ b.splitRestPct }}">
+                            <span style="border:3px solid #67429E;border-radius:999px;background:#fff;padding:6px 20px;font-size:34px;font-weight:900;color:#4D3079;font-variant-numeric:tabular-nums">{{ b.splitRightN }}</span>
+                          </div>
+                          <div style="position:absolute;top:-18px;bottom:-18px;width:8px;margin-left:-4px;border-radius:999px;background:#201E1A;left:{{ b.splitPct }}">
+                            <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:52px;height:52px;border-radius:999px;border:6px solid #201E1A;background:#fff;display:grid;place-items:center;font-size:24px;font-weight:900;color:#201E1A">↔</span>
+                          </div>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isManipSnap }}">
+                        <div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap">
+                          <span style="font-size:27px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#3D8586">{{ b.modelTitle }}</span>
+                          <span style="margin-left:auto;font-size:23px;font-weight:800;color:#A79E90">{{ b.snapHint }}</span>
+                        </div>
+                        <div style="display:grid;justify-items:center;gap:22px">
+                          <div style="display:flex;align-items:flex-start;transition:gap 700ms cubic-bezier(.2,.7,.2,1);gap:{{ b.snapGap }}">
+                            <div style="display:grid;gap:12px;justify-items:center">
+                              <div style="width:210px;height:320px;border:4px solid #201E1A;border-radius:8px;background-color:rgba(252,175,56,.44);background-image:linear-gradient(to right,rgba(32,30,26,.2) 1px,transparent 1px),linear-gradient(to bottom,rgba(32,30,26,.2) 1px,transparent 1px);background-size:{{ b.snapCellAW }} {{ b.snapCellH }}"></div>
+                              <span style="font-size:30px;font-weight:900;color:#9C6310">{{ b.snapLabelA }}</span>
+                            </div>
+                            <div style="display:grid;gap:12px;justify-items:center">
+                              <div style="width:168px;height:320px;border:4px solid #201E1A;border-radius:8px;background-color:rgba(132,91,201,.3);background-image:linear-gradient(to right,rgba(32,30,26,.2) 1px,transparent 1px),linear-gradient(to bottom,rgba(32,30,26,.2) 1px,transparent 1px);background-size:{{ b.snapCellBW }} {{ b.snapCellH }}"></div>
+                              <span style="font-size:30px;font-weight:900;color:#4D3079">{{ b.snapLabelB }}</span>
+                            </div>
+                          </div>
+                          <button type="button" data-id="{{ b.id }}" onClick="{{ manipSnapToggle }}" style="border:3px solid #201E1A;border-radius:999px;background:#201E1A;color:#fff;padding:16px 40px;font:inherit;font-size:30px;font-weight:900;cursor:pointer">{{ b.snapButton }}</button>
+                        </div>
+                      </sc-if>
+
+                      <sc-if value="{{ b.isManipFree }}">
+                        <div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap">
+                          <span style="font-size:27px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#3D8586">{{ b.modelTitle }}</span>
+                          <span style="margin-left:auto;font-size:23px;font-weight:800;color:#A79E90">Drag to move · corner to resize</span>
+                        </div>
+                        <div data-id="{{ b.id }}" style="position:relative;min-height:250px;height:100%;border-radius:10px;background-color:#fff;background-image:linear-gradient(to right,rgba(32,30,26,.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(32,30,26,.12) 1px,transparent 1px);background-size:{{ b.freeGrid }} {{ b.freeGrid }};overflow:hidden;touch-action:none">
+                          <div data-id="{{ b.id }}" onPointerDown="{{ manipFreeMove }}" style="position:absolute;border:5px solid #201E1A;border-radius:6px;background:rgba(80,163,164,.34);cursor:move;display:grid;place-items:center;left:{{ b.freeLeft }};top:{{ b.freeTop }};width:{{ b.freeW }};height:{{ b.freeH }}">
+                            <span style="font-size:34px;font-weight:900;color:#2E4A54;font-variant-numeric:tabular-nums">{{ b.freeDims }}</span>
+                            <span data-id="{{ b.id }}" onPointerDown="{{ manipFreeResize }}" style="position:absolute;right:-14px;bottom:-14px;width:44px;height:44px;border:5px solid #201E1A;border-radius:10px;background:#fff;cursor:nwse-resize"></span>
+                          </div>
+                        </div>
+                      </sc-if>
+
+                    </div>
+                  </sc-for>
+
+                  <sc-if value="{{ z.empty }}">
+                    <div style="flex:1;border:3px dashed rgba(120,110,90,.42);border-radius:26px;background:transparent;display:grid;place-items:center;align-content:center;gap:10px">
+                      <span style="font-size:30px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#A79E90">{{ z.emptyLabel }}</span>
+                      <span style="font-size:23px;font-weight:800;color:#BDB4A6">Add a frame from the left</span>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <x-import component-from-global-scope="DesignSystem_901ffe.Panel" accent="blue" border="hairline" padding="{{ p16 }}" hint-size="100%,420px">
+      <div style="display:grid;gap:12px">
+        <div style="display:grid;gap:3px">
+          <span style="font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--action)">{{ inspectorTitle }}</span>
+          <span style="font-size:12px;font-weight:750;line-height:1.45;color:var(--text-muted)">{{ inspectorNote }}</span>
+        </div>
+        <div style="display:grid;gap:11px">
+          <sc-for list="{{ inspectorFields }}" as="f" hint-placeholder-count="3">
+            <x-import component-from-global-scope="DesignSystem_901ffe.Field" label="{{ f.label }}" accent="blue" value="{{ f.value }}" placeholder="{{ f.auto }}" data-key="{{ f.key }}" onInput="{{ editField }}" hint-size="100%,58px"></x-import>
+          </sc-for>
+        </div>
+        <sc-if value="{{ hasSelection }}">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:11px">
+            <x-import component-from-global-scope="DesignSystem_901ffe.Button" variant="soft" size="sm" onClick="{{ revertBlock }}" hint-size="140px,36px">Revert to Notion</x-import>
+            <x-import component-from-global-scope="DesignSystem_901ffe.Button" variant="danger" size="sm" onClick="{{ deleteSelected }}" hint-size="120px,36px">Delete frame</x-import>
+          </div>
+        </sc-if>
+        <div style="border-top:1px solid var(--line);padding-top:11px;display:grid;gap:6px">
+          <span style="font-size:10px;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:var(--text-muted)">Locked to the lesson</span>
+          <span style="font-size:12px;font-weight:750;line-height:1.45;color:var(--text-muted)">State name, color band, step position and clock come from the Notion row. Rearranging frames never changes them.</span>
+        </div>
+      </div>
+    </x-import>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1560,&quot;height&quot;:1000}}">
+const STATE_STYLE = {
+  warmup:        { word: 'Warm-up',    accent: '#F2820C', ink: '#C4660A', chipBg: '#FCE6CC', chipInk: '#8F4A07' },
+  hook:          { word: 'Hook',       accent: '#F2820C', ink: '#C4660A', chipBg: '#FCE6CC', chipInk: '#8F4A07' },
+  target:        { word: 'Target',     accent: '#50A3A4', ink: '#2E4A54', chipBg: '#DCEBEB', chipInk: '#2E4A54' },
+  concrete:      { word: 'Build it',   accent: '#2E9E5A', ink: '#1F7A45', chipBg: '#DAEEDF', chipInk: '#155A33' },
+  tool_demo:     { word: 'Watch',      accent: '#2E9E5A', ink: '#1F7A45', chipBg: '#DAEEDF', chipInk: '#155A33' },
+  six_steps:     { word: 'Six steps',  accent: '#2E9E5A', ink: '#1F7A45', chipBg: '#DAEEDF', chipInk: '#155A33' },
+  target_review: { word: 'Check in',   accent: '#50A3A4', ink: '#2E4A54', chipBg: '#DCEBEB', chipInk: '#2E4A54' },
+  readiness1:    { word: 'Show me',    accent: '#674A40', ink: '#674A40', chipBg: '#ECE7DD', chipInk: '#4A453E' },
+  readiness2:    { word: 'Show me',    accent: '#674A40', ink: '#674A40', chipBg: '#ECE7DD', chipInk: '#4A453E' },
+  independent:   { word: 'Work time',  accent: '#F2820C', ink: '#C4660A', chipBg: '#FCE6CC', chipInk: '#8F4A07' },
+  exit:          { word: 'Exit',       accent: '#674A40', ink: '#674A40', chipBg: '#ECE7DD', chipInk: '#4A453E' },
+  cleanup:       { word: 'Close',      accent: '#50A3A4', ink: '#2E4A54', chipBg: '#DCEBEB', chipInk: '#2E4A54' }
+};
+
+// Rows from the "Math 6 Lesson Steps" relation on M1.T1.L1-D1.
+const STEPS = [
+  { order: 1, stateId: 'warmup', step: '1. Warm-Up', duration: 5,
+    mainDisplay: '6 rows by 28 squares. The concert floor has to be split into a seated section and a standing section. Find the EASIEST way to split the floor into 2 sections.',
+    screenNotes: 'How can you prove the 2 sections are equal to the space as a whole? What are your thoughts? What would you try?',
+    paceDirections: 'Complete your warm-up.\nThen read and think about the floor problem.',
+    studentDirections: 'Work independently and submit when finished.',
+    responseMode: 'Google Form',
+    model: { rows: 6, cols: 28, split: 20, leftLabel: '', rightLabel: '', title: 'The concert floor', hint: '6 rows by 28 squares' } },
+
+  { order: 2, stateId: 'hook', step: '2. Hook Discussion', duration: 3,
+    mainDisplay: 'Where is the easiest place to split the concert floor and why there?',
+    screenNotes: 'Screens low. Think for 15 seconds, then tell your partner where you would cut it — and why that spot is the easy one.',
+    paceDirections: 'Think for 15 seconds. No talking.\nTell your partner where you would cut it.\nSay why that spot is the easiest.',
+    studentDirections: 'Nothing to type. Look up at the floor problem.',
+    model: { rows: 6, cols: 28, split: 20, leftLabel: '', rightLabel: '', title: 'The concert floor', hint: 'Drag the line' } },
+
+  { order: 3, stateId: 'target', step: '3. Learning Intention', duration: 1,
+    mainDisplay: 'We are learning that splitting a rectangle into two pieces does not change its area, and that this lets us write the same area two different ways.',
+    screenNotes: 'I can split a rectangle into two parts and write its area two ways without changing the total.',
+    paceDirections: 'Two students read the target out loud.\nCopy the success criterion at the top of your page.',
+    studentDirections: 'Read along. Nothing to submit yet.' },
+
+  { order: 4, stateId: 'concrete', step: '4. Two Pieces Into One Rectangle', duration: 7,
+    mainDisplay: 'Piece A is 8 by 5 and piece B is 8 by 4. Push them together. What are the new dimensions and the new area?',
+    screenNotes: 'Boards flat. Give me Piece A, then Piece B, then the new rectangle.',
+    paceDirections: 'Piece A: dimensions and area\nPiece B: dimensions and area\nPush them together\nNew dimensions? New area?',
+    studentDirections: 'Build it with your partner. Write on paper, not the screen.',
+    vocabulary: 'factor — a number being multiplied\naddend — a number being added\narea — how many unit squares fit',
+    model: { rows: 8, cols: 9, split: 5, leftLabel: '5', rightLabel: '4', title: 'Two pieces', hint: 'Shared side stays 8' } },
+
+  { order: 5, stateId: 'tool_demo', step: '5. Area Tool Demo and Reps', duration: 6,
+    mainDisplay: 'Predict where 3 x 16 should split before you touch the tool.',
+    screenNotes: 'Trackpads parked until I say build.',
+    paceDirections: 'Trackpads parked\nPredict\nBuild\nFreeze\nExplain',
+    studentDirections: 'Watch the demo, then run two reps of your own.',
+    model: { rows: 3, cols: 16, split: 10, leftLabel: '10', rightLabel: '6', title: '3 × 16', hint: 'Predict before you split' } },
+
+  { order: 6, stateId: 'six_steps', step: '6. The Six Steps', duration: 7,
+    mainDisplay: 'In 8 x 12 which factor is easier to work with and which one gets split?',
+    screenNotes: 'The easier factor goes out front. Split the other one.',
+    paceDirections: 'Rewrite the problem.\nDraw the template.\nWhich factor is easier? That one goes out front.\nTwo numbers that add to the factor you are splitting.\nMultiply spot 1 by spot 2.\nMultiply spot 1 by spot 3, then add.',
+    studentDirections: 'Work problem 5 on the actual assignment paper.',
+    vocabulary: 'partial product — what you get when the front factor multiplies one part\nequivalent expressions — two expressions with the same value',
+    model: { rows: 8, cols: 12, split: 10, leftLabel: '10', rightLabel: '2', title: '8 × 12', hint: 'Which factor gets split?' } },
+
+  { order: 7, stateId: 'target_review', step: '7. Target Review and Fist-to-Five', duration: 1,
+    mainDisplay: 'How well do you understand this right now?',
+    screenNotes: 'Your rating is private. Nobody else sees it.',
+    paceDirections: 'Read the target again.\nLook at your own step 5 and 6 as evidence.\nSubmit your private 0-5.',
+    studentDirections: 'Submit your private Fist-to-Five.' },
+
+  { order: 8, stateId: 'readiness1', step: '8. Readiness Check 1', duration: 1,
+    mainDisplay: '5 x 27 = 5 x (20 + 7)',
+    screenNotes: 'Type the three missing numbers on your Chromebook.',
+    paceDirections: 'Type the three missing numbers.\nOn your own. No partner talk.\nSend it, then eyes up.',
+    studentDirections: 'The amber box is the amber part of the floor. The violet box is the violet part.',
+    question: '5 x 27 = 5 x (20 + 7) = [ ] + [ ] = [ ]',
+    responseMode: 'Numeric entry',
+    equation: { front: '5', partA: '20', partB: '7', note: 'Three boxes. Any split whose parts rebuild 27 is correct.' },
+    model: { rows: 5, cols: 27, split: 20, leftLabel: '20', rightLabel: '7', title: '5 × 27', hint: 'With a model' } },
+
+  { order: 9, stateId: 'readiness2', step: '9. Readiness Check 2', duration: 2,
+    mainDisplay: '8 x 15 = 8 x ( [ ] + [ ] ) = [ ] + [ ] = [ ]',
+    screenNotes: 'No model this time. Five boxes.',
+    paceDirections: 'Choose your own split.\nFill every box.\nSend it, then eyes up.',
+    studentDirections: 'No model this time. You choose the split.',
+    question: '8 x 15 = 8 x ( [ ] + [ ] ) = [ ] + [ ] = [ ]',
+    responseMode: 'Numeric entry',
+    equation: { front: '8', partA: '[ ]', partB: '[ ]', note: 'Five boxes. Grade the parts, not the choice of split.' } },
+
+  { order: 10, stateId: 'independent', step: '10. Independent Work', duration: 13,
+    mainDisplay: 'Complete Practice 1 through 8 on the Skills Practice sheet.',
+    screenNotes: 'Show every split, both partial products, and the check against the original problem.',
+    paceDirections: 'Attempt the paper problem first.\nIf stuck, raise the Chromebook and use the Area Tool.\nLower the screen and record it on paper.\nTell me the exact step where your thinking stops.',
+    studentDirections: 'Paper is the primary work surface. The Area Tool stays available.',
+    vocabulary: 'The Big Dog Challenge is optional — Two Ways, One Answer.' },
+
+  { order: 11, stateId: 'exit', step: '11. Exit Ticket', duration: 3,
+    mainDisplay: 'The concert floor is 6 rows by 28 squares. Put your dividing line anywhere. Show that both sections still add up to the whole floor.',
+    screenNotes: 'Five boxes. Independent — this is the last academic state.',
+    paceDirections: 'Return to your assigned seat.\nPark the paper.\nComplete the exit ticket on your own.',
+    studentDirections: 'Five boxes: 6 x 28 = 6 x ( [ ] + [ ] ) = [ ] + [ ] = [ ]',
+    question: '6 x 28 = 6 x ( [ ] + [ ] ) = [ ] + [ ] = [ ]',
+    responseMode: 'Numeric entry',
+    equation: { front: '6', partA: '[ ]', partB: '[ ]', note: 'Any split whose parts rebuild 28 is correct.' },
+    model: { rows: 6, cols: 28, split: 20, leftLabel: '', rightLabel: '', title: 'The concert floor', hint: 'Put your line anywhere' } },
+
+  { order: 12, stateId: 'cleanup', step: '12. Cleanup', duration: 1,
+    mainDisplay: 'Paper in the class tray. Reset your Chromebook. Pencils away.',
+    screenNotes: 'Clean your area before the bell.',
+    paceDirections: 'Paper in the tray.\nChromebook reset and closed.\nClean your area.',
+    studentDirections: 'Close everything down.' }
+];
+
+const PALETTE = [
+  { type: 'prompt',   label: 'Prompt',        field: 'Main Display' },
+  { type: 'text',     label: 'Screen note',   field: 'Screen Notes' },
+  { type: 'model',    label: 'Area model',    field: 'Anchor Problem' },
+  { type: 'doThis',   label: 'Do this list',  field: 'Pace Directions' },
+  { type: 'timer',    label: 'Timer',         field: 'Duration' },
+  { type: 'support',  label: 'Support words', field: 'Vocabulary' },
+  { type: 'equation', label: 'Answer boxes',  field: 'Question' },
+  { type: 'legend',   label: 'Color legend',  field: 'Slide Overlay' },
+  { type: 'callout',  label: 'Callout',       field: 'Student Directions' },
+  { type: 'manipSplit', label: 'Demo · slide the split', field: 'Main screen only' },
+  { type: 'manipSnap',  label: 'Demo · snap two pieces', field: 'Main screen only' },
+  { type: 'manipFree',  label: 'Demo · move + resize',   field: 'Main screen only' }
+];
+
+const SCREENS = [
+  { val: 'main',    label: 'Main projector' },
+  { val: 'pace',    label: 'Pace + Support' },
+  { val: 'student', label: 'Student' }
+];
+
+const ZONE_FLEX = {
+  main:    ['1.38 1 0', '0.62 1 0'],
+  pace:    ['1.3 1 0', '0.7 1 0'],
+  student: ['1 1 0', '0.62 1 0']
+};
+
+const ZONE_EMPTY = {
+  main:    ['Model zone', 'Prompt zone'],
+  pace:    ['Direction zone', 'Timer + support zone'],
+  student: ['Task zone', 'Model zone']
+};
+
+const BLOCK_FLEX = {
+  prompt: '0 0 auto', text: '0 0 auto', model: '1 1 0', doThis: '1 1 auto',
+  timer: '0 0 auto', support: '1 1 auto', equation: '1 1 0', legend: '0 0 auto', callout: '0 0 auto',
+  manipSplit: '1 1 0', manipSnap: '1 1 0', manipFree: '1 1 0'
+};
+
+const FIELDS = {
+  prompt:   [{ key: 'mainDisplay', label: 'Main Display' }],
+  text:     [{ key: 'screenNotes', label: 'Screen Notes' }],
+  model:    [{ key: 'modelTitle', label: 'Model title' }, { key: 'modelHint', label: 'Model hint' },
+             { key: 'rows', label: 'Rows' }, { key: 'cols', label: 'Columns' }, { key: 'split', label: 'Split at' }],
+  doThis:   [{ key: 'doThisTitle', label: 'List heading' }, { key: 'paceDirections', label: 'Pace Directions · one per line' }],
+  timer:    [{ key: 'time', label: 'Clock' }, { key: 'timerLabel', label: 'Timer label' }],
+  support:  [{ key: 'supportTitle', label: 'Panel heading' }, { key: 'vocabulary', label: 'Vocabulary · one per line' }],
+  equation: [{ key: 'front', label: 'Front factor' }, { key: 'partA', label: 'First part' },
+             { key: 'partB', label: 'Second part' }, { key: 'equationNote', label: 'Note under boxes' }],
+  legend:   [{ key: 'legendTitle', label: 'Legend heading' }],
+  callout:  [{ key: 'studentDirections', label: 'Student Directions' }],
+  manipSplit: [{ key: 'modelTitle', label: 'Label' }, { key: 'rows', label: 'Rows' }, { key: 'cols', label: 'Columns' }],
+  manipSnap:  [{ key: 'modelTitle', label: 'Label' }, { key: 'snapRows', label: 'Shared side' },
+               { key: 'snapA', label: 'Piece A width' }, { key: 'snapB', label: 'Piece B width' }],
+  manipFree:  [{ key: 'modelTitle', label: 'Label' }]
+};
+
+const MANIP_TYPES = { manipSplit: 1, manipSnap: 1, manipFree: 1 };
+
+function mmss(min) {
+  const m = Math.floor(min), s = Math.round((min - m) * 60);
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+class Component extends DCLogic {
+  state = { stepIdx: 1, screen: 'main', layouts: {}, selected: null, scale: 1, seq: 1, manip: {} };
+
+  setManip(id, patch) {
+    const manip = Object.assign({}, this.state.manip);
+    manip[id] = Object.assign({}, manip[id], patch);
+    this.setState({ manip });
+  }
+
+  freeState(id) {
+    const m = this.state.manip[id] || {};
+    return {
+      fx: m.fx === undefined ? 16 : m.fx, fy: m.fy === undefined ? 14 : m.fy,
+      fw: m.fw === undefined ? 46 : m.fw, fh: m.fh === undefined ? 54 : m.fh
+    };
+  }
+
+  drag(onMove) {
+    const up = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', up);
+  }
+
+  manipSplitDrag = e => {
+    e.stopPropagation();
+    const id = e.currentTarget.dataset.id;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const move = ev => {
+      const p = (ev.clientX - rect.left) / rect.width;
+      this.setManip(id, { split: Math.min(1, Math.max(0, p)) });
+    };
+    move(e);
+    this.drag(move);
+  };
+
+  manipSnapToggle = e => {
+    e.stopPropagation();
+    const id = e.currentTarget.dataset.id;
+    const cur = this.state.manip[id] || {};
+    this.setManip(id, { snapped: !cur.snapped });
+  };
+
+  manipFreeMove = e => {
+    e.stopPropagation();
+    const id = e.currentTarget.dataset.id;
+    const host = e.currentTarget.parentElement;
+    if (!host) return;
+    const rect = host.getBoundingClientRect();
+    const st = this.freeState(id);
+    const x0 = e.clientX, y0 = e.clientY;
+    const move = ev => {
+      const dx = (ev.clientX - x0) / rect.width * 100;
+      const dy = (ev.clientY - y0) / rect.height * 100;
+      this.setManip(id, {
+        fx: Math.min(100 - st.fw, Math.max(0, st.fx + dx)),
+        fy: Math.min(100 - st.fh, Math.max(0, st.fy + dy))
+      });
+    };
+    this.drag(move);
+  };
+
+  manipFreeResize = e => {
+    e.stopPropagation();
+    const id = e.currentTarget.dataset.id;
+    const box = e.currentTarget.parentElement;
+    const host = box && box.parentElement;
+    if (!host) return;
+    const rect = host.getBoundingClientRect();
+    const st = this.freeState(id);
+    const x0 = e.clientX, y0 = e.clientY;
+    const move = ev => {
+      const dx = (ev.clientX - x0) / rect.width * 100;
+      const dy = (ev.clientY - y0) / rect.height * 100;
+      this.setManip(id, {
+        fw: Math.min(100 - st.fx, Math.max(8, st.fw + dx)),
+        fh: Math.min(100 - st.fy, Math.max(8, st.fh + dy))
+      });
+    };
+    this.drag(move);
+  };
+
+  componentDidMount() {
+    if (!this.host) return;
+    const measure = () => {
+      const w = this.host.clientWidth;
+      if (w) this.setState({ scale: w / 1920 });
+    };
+    measure();
+    this.ro = new ResizeObserver(measure);
+    this.ro.observe(this.host);
+  }
+  componentWillUnmount() { if (this.ro) this.ro.disconnect(); }
+
+  key() { return this.state.stepIdx + ':' + this.state.screen; }
+
+  defaultZones(step, screen) {
+    const has = k => !!step[k];
+    if (screen === 'main') {
+      if (has('model')) return [['model'], has('equation') ? ['prompt', 'equation'] : ['prompt', 'text']];
+      if (has('equation')) return [['prompt', 'equation'], []];
+      return [['prompt', 'text'], []];
+    }
+    if (screen === 'pace') {
+      return [['doThis'], has('vocabulary') ? ['timer', 'support'] : ['timer']];
+    }
+    const left = ['prompt'];
+    if (has('equation')) left.push('equation'); else left.push('callout');
+    return [left, has('model') ? ['model'] : []];
+  }
+
+  zonesFor() {
+    const k = this.key();
+    let L = this.state.layouts[k];
+    if (!L) {
+      const step = STEPS[this.state.stepIdx];
+      let n = this.state.seq;
+      L = this.defaultZones(step, this.state.screen).map(types =>
+        types.map(t => ({ id: 'b' + (n++), type: t, ov: {} })));
+      this.state.layouts[k] = L;
+      this.state.seq = n;
+    }
+    return L;
+  }
+
+  commit(L) {
+    const layouts = Object.assign({}, this.state.layouts);
+    layouts[this.key()] = L;
+    this.setState({ layouts });
+  }
+
+  find(id) {
+    const L = this.zonesFor();
+    for (let z = 0; z < L.length; z++) {
+      const i = L[z].findIndex(b => b.id === id);
+      if (i !== -1) return { z, i, block: L[z][i] };
+    }
+    return null;
+  }
+
+  pickStep = e => this.setState({ stepIdx: +e.currentTarget.dataset.val, selected: null });
+  pickScreen = e => this.setState({ screen: e.currentTarget.dataset.val, selected: null });
+
+  addBlock = e => {
+    const type = e.currentTarget.dataset.type;
+    const L = this.zonesFor().map(z => z.slice());
+    const zi = (type === 'timer' || type === 'support' || type === 'legend') ? 1 : 0;
+    const id = 'b' + this.state.seq;
+    L[zi] = L[zi].concat([{ id, type, ov: {} }]);
+    const layouts = Object.assign({}, this.state.layouts);
+    layouts[this.key()] = L;
+    this.setState({ layouts, seq: this.state.seq + 1, selected: id });
+  };
+
+  selectBlock = e => { e.stopPropagation(); this.setState({ selected: e.currentTarget.dataset.id }); };
+  selectZone = () => this.setState({ selected: null });
+
+  blockAct = e => {
+    e.stopPropagation();
+    const { act, id } = e.currentTarget.dataset;
+    const hit = this.find(id);
+    if (!hit) return;
+    const L = this.zonesFor().map(z => z.slice());
+    if (act === 'del') {
+      L[hit.z].splice(hit.i, 1);
+      this.commit(L);
+      this.setState({ selected: null });
+      return;
+    }
+    if (act === 'zone') {
+      L[hit.z].splice(hit.i, 1);
+      const to = hit.z === 0 ? 1 : 0;
+      L[to] = L[to].concat([hit.block]);
+      this.commit(L);
+      return;
+    }
+    const j = act === 'up' ? hit.i - 1 : hit.i + 1;
+    if (j < 0 || j >= L[hit.z].length) return;
+    const arr = L[hit.z];
+    const tmp = arr[j]; arr[j] = arr[hit.i]; arr[hit.i] = tmp;
+    this.commit(L);
+  };
+
+  deleteSelected = () => {
+    const hit = this.find(this.state.selected);
+    if (!hit) return;
+    const L = this.zonesFor().map(z => z.slice());
+    L[hit.z].splice(hit.i, 1);
+    this.commit(L);
+    this.setState({ selected: null });
+  };
+
+  revertBlock = () => {
+    const hit = this.find(this.state.selected);
+    if (!hit) return;
+    const L = this.zonesFor().map(z => z.map(b => b.id === hit.block.id ? { id: b.id, type: b.type, ov: {} } : b));
+    this.commit(L);
+  };
+
+  editField = e => {
+    const key = e.currentTarget.dataset.key, val = e.currentTarget.value;
+    const hit = this.find(this.state.selected);
+    if (!hit) return;
+    const L = this.zonesFor().map(z => z.map(b => {
+      if (b.id !== hit.block.id) return b;
+      const ov = Object.assign({}, b.ov);
+      if (val === '') delete ov[key]; else ov[key] = val;
+      return { id: b.id, type: b.type, ov };
+    }));
+    this.commit(L);
+  };
+
+  resetLayout = () => {
+    const layouts = Object.assign({}, this.state.layouts);
+    delete layouts[this.key()];
+    this.setState({ layouts, selected: null });
+  };
+
+  auto(step, type, key) {
+    const m = step.model || {}, q = step.equation || {};
+    const map = {
+      mainDisplay: step.mainDisplay, screenNotes: step.screenNotes,
+      paceDirections: step.paceDirections, studentDirections: step.studentDirections,
+      vocabulary: step.vocabulary, time: mmss(step.duration),
+      timerLabel: step.responseMode || 'On task',
+      doThisTitle: 'Do this', supportTitle: step.vocabulary ? 'Words we are using' : 'Support',
+      legendTitle: 'Color coding',
+      modelTitle: m.title, modelHint: m.hint,
+      rows: m.rows === undefined ? 6 : m.rows,
+      cols: m.cols === undefined ? 28 : m.cols,
+      split: m.split,
+      snapRows: m.rows === undefined ? 8 : m.rows, snapA: 5, snapB: 4,
+      front: q.front, partA: q.partA, partB: q.partB, equationNote: q.note
+    };
+    const v = map[key];
+    return v === undefined || v === null ? '' : String(v);
+  }
+
+  val(step, b, key) { return b.ov[key] !== undefined ? b.ov[key] : this.auto(step, b.type, key); }
+
+  renderVals() {
+    const stepIdx = this.state.stepIdx;
+    const step = STEPS[stepIdx];
+    const st = STATE_STYLE[step.stateId] || STATE_STYLE.warmup;
+    const screen = this.state.screen;
+    const isStudent = screen === 'student';
+    const L = this.zonesFor();
+    const sel = this.state.selected;
+    const scale = this.state.scale;
+
+    const lines = s => String(s || '').split('\n').map(t => t.trim()).filter(Boolean);
+
+    const zones = L.map((blocks, zi) => ({
+      idx: String(zi),
+      flex: ZONE_FLEX[screen][zi],
+      outline: 'none',
+      empty: blocks.length === 0,
+      emptyLabel: ZONE_EMPTY[screen][zi],
+      blocks: blocks.map(b => {
+        const V = k => this.val(step, b, k);
+        const selected = b.id === sel;
+        const view = {
+          id: b.id,
+          flex: BLOCK_FLEX[b.type] || '0 0 auto',
+          border: selected ? '3px solid #50A3A4' : '1px solid #DBD5C9',
+          outline: selected ? '3px solid rgba(80,163,164,.4)' : 'none',
+          align: b.type === 'model' || b.type === 'equation' ? 'center' : 'start',
+          selected,
+          zoneLabel: zi === 0 ? 'move right' : 'move left',
+          accentInk: st.ink, chipBg: st.chipBg, chipInk: st.chipInk,
+          isPrompt: false, isText: false, isModel: false, isDoThis: false,
+          isTimer: false, isSupport: false, isEquation: false, isLegend: false, isCallout: false,
+          isManipSplit: false, isManipSnap: false, isManipFree: false
+        };
+        if (b.type === 'prompt') {
+          view.isPrompt = true;
+          view.text = V('mainDisplay');
+          view.promptSize = isStudent ? '52px' : (screen === 'pace' ? '80px' : '64px');
+        } else if (b.type === 'text') {
+          view.isText = true; view.text = V('screenNotes');
+        } else if (b.type === 'model') {
+          view.isModel = true;
+          const cols = Math.max(1, +V('cols') || 1);
+          const rows = Math.max(1, +V('rows') || 1);
+          const split = Math.min(cols, Math.max(0, +V('split') || 0));
+          const pct = (split / cols * 100).toFixed(2) + '%';
+          view.modelTitle = V('modelTitle'); view.modelHint = V('modelHint');
+          view.rows = String(rows);
+          view.cellW = 'calc(100%/' + cols + ')';
+          view.cellH = 'calc(100%/' + rows + ')';
+          view.leftPct = pct;
+          view.rightPct = (100 - split / cols * 100).toFixed(2) + '%';
+          view.leftLabel = b.ov.leftLabel !== undefined ? b.ov.leftLabel : (step.model && step.model.leftLabel) || '';
+          view.rightLabel = b.ov.rightLabel !== undefined ? b.ov.rightLabel : (step.model && step.model.rightLabel) || '';
+        } else if (b.type === 'doThis') {
+          view.isDoThis = true;
+          view.doThisTitle = V('doThisTitle');
+          view.items = lines(V('paceDirections')).map((t, i) => ({ n: String(i + 1), text: t }));
+        } else if (b.type === 'timer') {
+          view.isTimer = true; view.time = V('time'); view.timerLabel = V('timerLabel');
+        } else if (b.type === 'support') {
+          view.isSupport = true;
+          view.supportTitle = V('supportTitle');
+          view.lines = lines(V('vocabulary')).map(t => ({ text: t }));
+        } else if (b.type === 'equation') {
+          view.isEquation = true;
+          view.front = V('front'); view.partA = V('partA'); view.partB = V('partB');
+          view.equationNote = V('equationNote');
+        } else if (b.type === 'legend') {
+          view.isLegend = true;
+          view.legendTitle = V('legendTitle');
+          view.swatches = [
+            { color: '#50A3A4', label: 'front factor' },
+            { color: '#FCAF38', label: 'first addend' },
+            { color: '#845BC9', label: 'second addend' }
+          ];
+        } else if (b.type === 'callout') {
+          view.isCallout = true; view.text = V('studentDirections');
+        } else if (b.type === 'manipSplit') {
+          view.isManipSplit = true;
+          const cols = Math.max(1, +V('cols') || 28);
+          const rows = Math.max(1, +V('rows') || 6);
+          const live = this.state.manip[b.id] || {};
+          const base = step.model && step.model.cols ? step.model.split / step.model.cols : 0.7;
+          const at = Math.min(cols - 1, Math.max(1, Math.round((live.split === undefined ? base : live.split) * cols)));
+          view.modelTitle = V('modelTitle') || 'Slide the split';
+          view.cellW = 'calc(100%/' + cols + ')';
+          view.cellH = 'calc(100%/' + rows + ')';
+          view.splitPct = (at / cols * 100).toFixed(3) + '%';
+          view.splitRestPct = (100 - at / cols * 100).toFixed(3) + '%';
+          view.splitLeftN = at + ' wide';
+          view.splitRightN = (cols - at) + ' wide';
+        } else if (b.type === 'manipSnap') {
+          view.isManipSnap = true;
+          const rowsN = Math.max(1, +V('snapRows') || 8);
+          const a = Math.max(1, +V('snapA') || 5);
+          const c = Math.max(1, +V('snapB') || 4);
+          const snapped = !!(this.state.manip[b.id] || {}).snapped;
+          view.modelTitle = V('modelTitle') || 'Snap two pieces';
+          view.snapGap = snapped ? '0px' : '46px';
+          view.snapCellAW = 'calc(100%/' + a + ')';
+          view.snapCellBW = 'calc(100%/' + c + ')';
+          view.snapCellH = 'calc(100%/' + rowsN + ')';
+          view.snapLabelA = rowsN + ' by ' + a;
+          view.snapLabelB = rowsN + ' by ' + c;
+          view.snapButton = snapped ? 'Pull apart' : 'Push together';
+          view.snapHint = snapped
+            ? rowsN + ' by ' + (a + c) + ' · area ' + rowsN * (a + c)
+            : rowsN + ' × ' + a + ' = ' + rowsN * a + '   ·   ' + rowsN + ' × ' + c + ' = ' + rowsN * c;
+        } else if (b.type === 'manipFree') {
+          view.isManipFree = true;
+          const f = this.freeState(b.id);
+          view.modelTitle = V('modelTitle') || 'Move + resize';
+          view.freeGrid = '48px';
+          view.freeLeft = f.fx.toFixed(2) + '%';
+          view.freeTop = f.fy.toFixed(2) + '%';
+          view.freeW = f.fw.toFixed(2) + '%';
+          view.freeH = f.fh.toFixed(2) + '%';
+          view.freeDims = '';
+        }
+        return view;
+      })
+    }));
+
+    const chip = on => ({ variant: on ? 'primary' : 'soft' });
+
+    const hit = sel ? this.find(sel) : null;
+    let inspectorFields = [], inspectorTitle = 'Nothing selected', inspectorNote = 'Click a frame on the screen to edit it. The band, state name, step position and clock are locked to the Notion row.';
+    if (hit) {
+      const b = hit.block;
+      const pal = PALETTE.find(p => p.type === b.type);
+      inspectorTitle = (pal ? pal.label : b.type) + ' · editable';
+      inspectorNote = 'Bound to ' + (pal ? pal.field : '—') + '. Leave a field blank to keep the Notion value.';
+      inspectorFields = (FIELDS[b.type] || []).map(f => ({
+        key: f.key, label: f.label,
+        value: b.ov[f.key] !== undefined ? String(b.ov[f.key]) : '',
+        auto: this.auto(step, b.type, f.key) || '—',
+        single: true, multi: false
+      }));
+    }
+
+    const overridden = Object.keys(this.state.layouts).length > 0;
+
+    return {
+      stepOpts: STEPS.map((s, i) => Object.assign({ val: String(i), label: String(s.order) }, chip(i === stepIdx))),
+      screenOpts: SCREENS.map(s => Object.assign({ val: s.val, label: s.label }, chip(s.val === screen))),
+      palette: PALETTE,
+      pickStep: this.pickStep, pickScreen: this.pickScreen, addBlock: this.addBlock,
+      selectBlock: this.selectBlock, selectZone: this.selectZone, blockAct: this.blockAct,
+      manipSplitDrag: this.manipSplitDrag, manipSnapToggle: this.manipSnapToggle,
+      manipFreeMove: this.manipFreeMove, manipFreeResize: this.manipFreeResize,
+      editField: this.editField, revertBlock: this.revertBlock,
+      deleteSelected: this.deleteSelected, resetLayout: this.resetLayout,
+      hasSelection: !!hit,
+      p15: 15, p16: 16, p18: 18,
+      paletteProps: { style: { justifyContent: 'flex-start', textAlign: 'left', height: 'auto', paddingTop: 10, paddingBottom: 10 } },
+      inspectorTitle, inspectorNote, inspectorFields,
+      statusNote: step.step + ' · ' + (step.responseMode || 'no digital response') + ' · ' + step.duration + ' min from Duration',
+      frameCaption: (SCREENS.find(s => s.val === screen) || {}).label + ' · ' + step.step,
+      frameDims: isStudent ? '1366 × 768 on device · authored at 1920 × 1080' : '1920 × 1080',
+      frameHost: el => { this.host = el; },
+      frameTransform: 'scale(' + scale + ')',
+      dotSize: (11 / Math.max(scale, .05)).toFixed(1) + 'px',
+      dotR: (0.45 / Math.max(scale, .05)).toFixed(2) + 'px',
+      dotR2: (0.7 / Math.max(scale, .05)).toFixed(2) + 'px',
+      accent: st.accent, stateWord: st.word,
+      clock: mmss(step.duration), stepNum: String(step.order),
+      bandFoot: (SCREENS.find(s => s.val === screen) || {}).label,
+      dots: STEPS.map((s, i) => ({ bg: i < step.order ? '#fff' : 'rgba(255,255,255,.38)' })),
+      contentRows: isStudent ? '60px minmax(0,1fr)' : 'minmax(0,1fr)',
+      isStudent,
+      nextTitle: STEPS[stepIdx + 1] ? STEPS[stepIdx + 1].step.replace(/^\d+\.\s*/, '') : 'end of lesson',
+      zones
+    };
+  }
+}
+</script>
+</body>
+</html>

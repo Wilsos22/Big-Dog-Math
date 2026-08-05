@@ -1,0 +1,22 @@
+[
+  {"query": "ok /control is cream now, i pushed it, vercel built it and i loaded the page and it looks right. what else should we hit today", "should_trigger": true},
+  {"query": "that's everything on the list. the lcm bouncer is deployed, the divisibility table is deployed, and i ran the table captains migration in the sql editor. good stopping point?", "should_trigger": true},
+  {"query": "alright im done with the site for now, i want to switch over and build out M1.T2 lessons in notion for the rest of the week", "should_trigger": true},
+  {"query": "wrap this up so i can start fresh", "should_trigger": true},
+  {"query": "/clear", "should_trigger": true},
+  {"query": "should i clear? feels like weve been going a while", "should_trigger": true},
+  {"query": "before we move on to the weekly display stuff, is there anything from this session that needs to get written down somewhere", "should_trigger": true},
+  {"query": "this thread is getting long. whats worth carrying over into a new one", "should_trigger": true},
+  {"query": "im gonna close my laptop, whats the state of things", "should_trigger": true},
+  {"query": "the decimal steps fix is merged to main and i checked /decimal-steps on bigdogmath.com, the multiply board asks the right set up question now. moving on", "should_trigger": true},
+  {"query": "the pen isnt drawing on the projector again. i already checked the build id on the ipad and its current, and /board shows the strokes fine so its just present thats blank", "should_trigger": false},
+  {"query": "npm run build is failing with ENOTEMPTY on .next, is that the drive sync thing again or did i actually break something", "should_trigger": false},
+  {"query": "can you clear out the old algebra tiles component, the one nothing imports, i think its dead code", "should_trigger": false},
+  {"query": "i want to clear the misconception tags that dont match the seed and start that vocabulary over", "should_trigger": false},
+  {"query": "whats the fastest way to wipe the mock class rows out of supabase before school starts", "should_trigger": false},
+  {"query": "give me a summary of what the visit list does, i forgot how the tiers work", "should_trigger": false},
+  {"query": "add the slide url proxy route so the signed s3 link doesnt die by period 4", "should_trigger": false},
+  {"query": "we just went through like fifteen files finding where the state strip renders. can you write up what you found before we do anything with it", "should_trigger": false},
+  {"query": "period 1 had no class code and i just set it to DOG1. does that fix the random join code thing or is there more to it", "should_trigger": false},
+  {"query": "put a note in claude.md that the notion property is Slide Url not Slide URL and propByName is what reads it", "should_trigger": false}
+]

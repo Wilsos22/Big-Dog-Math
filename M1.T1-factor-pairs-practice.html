@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Factor Pairs &mdash; Skills Practice &middot; M1.T1</title>
+<style>
+  :root{
+    --paper:#ffffff; --ink:#1e1e1c; --gray:#5a5c60; --faint:#8b8d92;
+    --teal:#0e7c86; --teal-dk:#0a5b64; --teal-tint:#eaf2f2; --teal-line:#bcd2d3;
+    --amber-tint:#faf1de; --amber-line:#e6cfa0;
+    --line:#d3d8d9;
+    --font:"Karbon","Albert Sans", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body,.screen{background:#dfe4e3;}
+  .screen{padding:24px 12px; display:flex; flex-direction:column; align-items:center; gap:22px; font-family:var(--font); color:var(--ink);}
+  .note{max-width:8.5in; width:100%; font-size:13px; color:#33453f; background:#f4f9f8; border:1px solid var(--teal-line); border-left:4px solid var(--teal); border-radius:4px; padding:12px 16px; line-height:1.5;}
+  .note b{color:var(--ink);}
+
+  .sheet{width:8.5in; min-height:11in; background:var(--paper); color:var(--ink); font-family:var(--font);
+    padding:0.55in 0.6in 0.45in; box-shadow:0 6px 26px rgba(30,50,50,.16); display:flex; flex-direction:column;}
+
+  .runhead{display:flex; justify-content:space-between; align-items:baseline; font-size:10.5px; color:var(--gray); letter-spacing:.02em; margin-bottom:3px;}
+  .runhead .l{font-weight:700; color:var(--teal); text-transform:uppercase; letter-spacing:.1em;}
+  .lesson-band{border-top:3px solid var(--teal); padding-top:9px; margin-bottom:2px;}
+  .lesson-band .kicker{font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--teal);}
+  .titlerow{display:flex; justify-content:space-between; align-items:flex-end; gap:20px;}
+  .titlerow h1{font-size:22px; font-weight:800; margin:2px 0 0; letter-spacing:-.01em; line-height:1.08;}
+  .titlerow .std{font-size:11px; color:var(--gray); font-weight:600; white-space:nowrap;}
+  .subtitle{font-size:12px; color:var(--gray); font-weight:600; margin:3px 0 0;}
+  .namerow{display:flex; gap:26px; margin:11px 0 4px; font-size:11.5px; color:var(--gray);}
+  .namerow .f{flex:1; border-bottom:1.5px solid var(--ink); }
+  .namerow .d{width:1.7in; border-bottom:1.5px solid var(--ink);}
+  .namerow label{font-weight:600; margin-right:7px;}
+
+  .rules{background:var(--teal-tint); border:1px solid var(--teal-line); border-radius:5px; padding:11px 16px 12px; margin:8px 0 6px;}
+  .rules .tag{display:block; font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--teal-dk); margin-bottom:9px;}
+  .rulegrid{display:grid; grid-template-columns:repeat(3,1fr); gap:9px 20px;}
+  .rule{display:flex; gap:9px; align-items:baseline;}
+  .rule .rn{flex:none; width:20px; height:20px; border-radius:50%; background:var(--teal); color:#fff; font-size:12px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums; align-self:flex-start;}
+  .rule .rt{font-size:11.5px; line-height:1.4; color:#2b3a3a;}
+  .rule .rt b{color:var(--ink); font-weight:800;}
+  .rule .rt .ex{color:var(--teal-dk); font-weight:700; font-variant-numeric:tabular-nums;}
+
+  .section{display:flex; align-items:center; gap:12px; margin:6px 0 2px;}
+  .section .name{font-size:12.5px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--teal);}
+  .section .bar{height:2px; background:var(--teal-line); flex:1;}
+
+  /* Three problems stacked down the whole page. 240 carries ten pairs, so it
+     is handed the extra room (larger flex-grow) instead of being squeezed to
+     match the two smaller numbers. The extra space is FUNCTIONAL - it is not
+     a signal that problem 3 is special, and no wording may make it one. */
+  .set{flex:1; display:flex; flex-direction:column;}
+  .prob{padding:14px 0 8px; display:flex; flex-direction:column; min-height:0; border-top:1px solid var(--line);}
+  .prob.r1{border-top:none; padding-top:6px;}
+  .prob.a{flex:1 1 0;} .prob.b{flex:1 1 0;} .prob.big{flex:1.5 1 0;}
+  .p-head{display:flex; gap:11px; align-items:baseline; margin-bottom:4px;}
+  .p-num{flex:none; font-size:17px; font-weight:800; color:var(--teal); min-width:20px; font-variant-numeric:tabular-nums;}
+  .p-head .q{font-size:13px; line-height:1.4; margin:0;}
+  .p-head .q b{font-weight:800;}
+  .p-head .q .big-n{color:var(--teal-dk); font-weight:800;}
+
+  /* Body distributes: work box takes the slack, the ordered lists anchor low
+     with a real writing band above each rule. */
+  .p-body{margin-left:31px; display:flex; flex-direction:column; flex:1 1 auto; min-height:0; justify-content:space-between; gap:10px;}
+  .findspace{flex:1 1 auto; min-height:0.85in;}
+  .findspace .wtag{font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--faint);}
+  .orderline{display:flex; flex-direction:column;}
+  .orderline .ol-lab{font-size:11.5px; font-weight:700; color:var(--ink); margin-bottom:30px;}
+  .orderline .ol-lab .sub{color:var(--faint); font-weight:600; font-size:10.5px; letter-spacing:.01em;}
+  .orderline .ol-rule{border-bottom:1.6px solid var(--ink); height:0;}
+  .orderline .ol-rule+.ol-rule{margin-top:30px;}
+
+  .foot{margin-top:9px; display:flex; justify-content:space-between; font-size:9.5px; color:var(--faint); letter-spacing:.03em; border-top:1px solid var(--line); padding-top:6px;}
+
+  /* key */
+  .key-sub{font-size:11.5px; color:var(--gray); margin:4px 0 8px; line-height:1.45;}
+  .key-item{display:grid; grid-template-columns:22px 1fr; gap:12px; padding:9px 0; border-top:1px solid var(--line); break-inside:avoid;}
+  .key-item.first{border-top:none;}
+  .key-item .kn{font-size:16px; font-weight:800; color:var(--teal); font-variant-numeric:tabular-nums;}
+  .key-item .kt{font-size:12.5px; font-weight:800; margin:1px 0 5px;}
+  .key-item .kt .std{font-size:9.5px; font-weight:700; color:var(--faint); letter-spacing:.03em; margin-left:6px;}
+  .krow{font-size:11.5px; line-height:1.5; margin:2px 0;}
+  .krow .lab2{display:inline-block; min-width:96px; font-weight:700; color:var(--teal); letter-spacing:.02em; vertical-align:top;}
+  .krow.mis .lab2{color:var(--teal-dk);}
+  .krow .ans{font-variant-numeric:tabular-nums;}
+  .krow.mis b{color:var(--ink);}
+  .pairstrip{font-variant-numeric:tabular-nums; font-weight:700; color:var(--teal-dk); line-height:1.7;}
+
+  @media print{
+    body,.screen{background:#fff; padding:0; gap:0; display:block;}
+    .note{display:none;}
+    .sheet{box-shadow:none; width:auto; min-height:auto; height:10.9in; padding:0.55in 0.6in; page-break-after:always;}
+    .sheet.keyhead{height:auto;}
+    .sheet:last-child{page-break-after:auto;}
+    @page{size:letter; margin:0;}
+  }
+  @media (max-width:8.7in){ .sheet{width:100%;} }
+</style>
+</head>
+<body>
+<div class="screen">
+
+  <div class="note"><b>Print setup:</b> one student page, then the teacher key. Three numbers &mdash; find every factor pair, then list the pairs in order. The page is spread out on purpose so there is room to build each factor rainbow. Standard 6.NS.B.4.</div>
+
+  <!-- ================= STUDENT PAGE ================= -->
+  <section class="sheet">
+    <div class="runhead"><span class="l">Math 6 &middot; Topic 1 &middot; Factors and Multiples</span><span>Course 1 &middot; Skills Practice</span></div>
+    <div class="lesson-band">
+      <div class="kicker">Factor Pairs &middot; Skills Practice</div>
+      <div class="titlerow">
+        <h1>Every Factor Pair, In Order</h1>
+        <div class="std">6.NS.B.4</div>
+      </div>
+      <div class="subtitle">Find all the factor pairs, then line them up smallest to largest</div>
+    </div>
+    <div class="namerow"><span class="f"><label>Name</label></span><span class="d"><label>Date</label></span></div>
+
+    <div class="rules">
+      <div class="tag">Divisibility rules &mdash; test 1 through 6</div>
+      <div class="rulegrid">
+        <div class="rule"><span class="rn">1</span><span class="rt"><b>Always.</b> Every whole number is divisible by 1.</span></div>
+        <div class="rule"><span class="rn">2</span><span class="rt"><b>Even.</b> It ends in <span class="ex">0, 2, 4, 6, or 8</span>.</span></div>
+        <div class="rule"><span class="rn">3</span><span class="rt"><b>Digit sum.</b> Add the digits &mdash; if that total is a multiple of 3, so is the number.</span></div>
+        <div class="rule"><span class="rn">4</span><span class="rt"><b>Cut it in half.</b> If the half is still even, the number is divisible by 4.</span></div>
+        <div class="rule"><span class="rn">5</span><span class="rt"><b>Ends in 0 or 5.</b></span></div>
+        <div class="rule"><span class="rn">6</span><span class="rt"><b>Both 2 and 3.</b> It has to pass each of those rules.</span></div>
+      </div>
+    </div>
+    <div class="section"><span class="name">Find every factor pair &middot; then list them in order</span><span class="bar"></span></div>
+
+    <div class="set">
+      <!-- 1 · 30 -->
+      <div class="prob r1 a">
+        <div class="p-head"><span class="p-num">1</span><p class="q">Find <b>every factor pair</b> of <b class="big-n">30</b>. Then write the pairs <b>in order</b>, starting from <b>1 &times; 30</b>.</p></div>
+        <div class="p-body">
+          <div class="findspace"><span class="wtag">Factor pairs</span></div>
+          <div class="orderline"><span class="ol-lab">In order <span class="sub">( smaller &times; larger )</span></span><div class="ol-rule"></div></div>
+        </div>
+      </div>
+
+      <!-- 2 · 45 -->
+      <div class="prob b">
+        <div class="p-head"><span class="p-num">2</span><p class="q">Find <b>every factor pair</b> of <b class="big-n">45</b>. Then write the pairs <b>in order</b>, starting from <b>1 &times; 45</b>.</p></div>
+        <div class="p-body">
+          <div class="findspace"><span class="wtag">Factor pairs</span></div>
+          <div class="orderline"><span class="ol-lab">In order <span class="sub">( smaller &times; larger )</span></span><div class="ol-rule"></div></div>
+        </div>
+      </div>
+
+      <!-- 3 · 240 -->
+      <div class="prob big">
+        <div class="p-head"><span class="p-num">3</span><p class="q">Find <b>every factor pair</b> of <b class="big-n">240</b>. Then write the pairs <b>in order</b>, starting from <b>1 &times; 240</b>.</p></div>
+        <div class="p-body">
+          <div class="findspace"><span class="wtag">Factor pairs</span></div>
+          <div class="orderline"><span class="ol-lab">In order <span class="sub">( smaller &times; larger )</span></span><div class="ol-rule"></div><div class="ol-rule"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="foot"><span>Factor Pairs &middot; Skills Practice &middot; 6.NS.B.4</span><span>1</span></div>
+  </section>
+
+  <!-- ================= TEACHER KEY ================= -->
+  <section class="sheet keyhead">
+    <div class="runhead"><span class="l">Teacher Key &middot; do not copy for students</span><span>Course 1 &middot; Skills Practice</span></div>
+    <div class="lesson-band">
+      <div class="kicker">Factor Pairs &middot; Answer Key</div>
+      <div class="titlerow"><h1>Every pair, and the ordered list</h1><div class="std">6.NS.B.4</div></div>
+    </div>
+    <div class="key-sub">Success criterion: <b>I can list all the factors of a number in sequential order.</b> The list is complete when the two sides of the rainbow meet in the middle &mdash; the last pair is the one whose two factors are closest together.<br><br><b>Problems 1 and 2 are the graded target.</b> Problem 3 is deliberately unmarked and is not required; it is worded and formatted exactly like the others so nobody decides in advance whether it is for them. Who reaches it tells you about persistence rather than ability, so use it to seed the next share-out and not to group anyone.</div>
+
+    <div class="key-item first">
+      <div class="kn">1</div>
+      <div>
+        <div class="kt">30 &mdash; 4 pairs <span class="std">meets at 5 &times; 6</span></div>
+        <div class="krow"><span class="lab2">Factor pairs</span> <span class="pairstrip">1&times;30 &middot; 2&times;15 &middot; 3&times;10 &middot; 5&times;6</span></div>
+        <div class="krow"><span class="lab2">In order</span> <span class="ans">1, 2, 3, 5, 6, 10, 15, 30 &mdash; 8 factors.</span></div>
+        <div class="krow mis"><span class="lab2">Watch for</span> skipping <b>5&times;6</b> after 3&times;10, or writing 4&times; something (4 is not a factor &mdash; 30 &div; 4 is not whole).</div>
+      </div>
+    </div>
+    <div class="key-item">
+      <div class="kn">2</div>
+      <div>
+        <div class="kt">45 &mdash; 3 pairs <span class="std">meets between 5 and 9</span></div>
+        <div class="krow"><span class="lab2">Factor pairs</span> <span class="pairstrip">1&times;45 &middot; 3&times;15 &middot; 5&times;9</span></div>
+        <div class="krow"><span class="lab2">In order</span> <span class="ans">1, 3, 5, 9, 15, 45 &mdash; 6 factors.</span></div>
+        <div class="krow mis"><span class="lab2">Watch for</span> hunting for a <b>2</b> out of habit. 45 is odd, so the rules for 2 and 4 die on the first move &mdash; and that is the point of this number, so it is NOT hinted on the student page. A student running the method clears it in seconds; a student guessing stalls or invents <b>2&times;22.5</b>. Missing <b>5&times;9</b> is the common slip.</div>
+      </div>
+    </div>
+    <div class="key-item">
+      <div class="kn">3</div>
+      <div>
+        <div class="kt">240 &mdash; 10 pairs <span class="std">meets at 15 &times; 16</span></div>
+        <div class="krow"><span class="lab2">Factor pairs</span> <span class="pairstrip">1&times;240 &middot; 2&times;120 &middot; 3&times;80 &middot; 4&times;60 &middot; 5&times;48 &middot; 6&times;40 &middot; 8&times;30 &middot; 10&times;24 &middot; 12&times;20 &middot; 15&times;16</span></div>
+        <div class="krow"><span class="lab2">In order</span> <span class="ans">1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 16, 20, 24, 30, 40, 48, 60, 80, 120, 240 &mdash; 20 factors.</span></div>
+        <div class="krow mis"><span class="lab2">Watch for</span> stopping early, or writing <b>7, 9, 11, 13, 14</b> &mdash; none divide 240. The last pair, <b>15&times;16</b>, is the one students most often miss.</div>
+        <div class="krow mis"><span class="lab2">Look for</span> a margin note. The rules for 1 through 6 deliver six of the ten pairs and then run out, because 240 does not close until 15. The rest needs structure: 240 is 24 with a zero on it, so 24's whole factor list is inside it. Anyone who writes <b>same as 24</b>, an arrow, or <b>x10</b> found that DURING the work, which is the thing worth seeing. Expect two or three a period, not a third of the class.</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

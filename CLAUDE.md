@@ -295,14 +295,64 @@ Codex and cloud sessions need them too (rule 9).
   Editor). `supabase/SETUP.md` documents env setup.
 - `warmup-*.gs` (repo root) - Google Apps Script warm-up pipeline (generator, Notion sync, evidence
   poster, week builder, pools). Steele pastes these into the Apps Script editor.
-  TWO SEPARATE APPS SCRIPT PROJECTS, and pasting a file into the wrong one breaks things:
-  the WARM-UP response spreadsheet holds `warmup-evidence.gs`, `warmup-notion-sync.gs`,
-  `warmup-sidebar-functions.gs`, the generators and the engine; the ROSTER spreadsheet
-  ("26-27 Rosters") holds `warmup-roster-push.gs` and `warmup-student-profile.gs`. Both projects
-  need `BDM_ROSTER_HMAC_KEY` set to the IDENTICAL value - a mismatch is invisible until a real
-  warm-up returns "not on roster". Note both `warmup-sidebar-functions.gs` and
-  `warmup-student-profile.gs` define `onOpen()`, which is only safe because they live in
+  THREE APPS SCRIPT PROJECTS, NOT TWO, and pasting a file - or a Script Property - into the wrong
+  one breaks things silently. This line said TWO until 2026-08-04, and the missing third one cost
+  Steele an entire evening.
+  (1) The LIVE WARM-UP project, bound to the warm-up response spreadsheet, id
+  `1YQAN1GU8JL6skLkCv4zFH_UDKzolwQRRSBOg0HONyGfZO9kRhG0kZrpB`. Holds `warmup-evidence.gs`,
+  `warmup-notion-sync.gs`, `warmup-sidebar-functions.gs`, `notion-warmup-requests.gs`,
+  `warmup-engine.gs`, the generators and the week builder. THIS is the project the Notion
+  Create Warm-up button's work actually runs in.
+  (2) A STALE SECOND PROJECT BOUND TO THE SAME SPREADSHEET - one spreadsheet can carry more than
+  one Apps Script project, and this one shows in the editor as "Untitled project". Tell it apart by
+  what is in it: the OLD OpenAI path (`warmup-ai-generator.gs`, an `OPENAI_API_KEY` property). The
+  live project builds through the parametric engine and needs no AI key at all, so AI CALLS IN THE
+  FILE LIST MEANS YOU ARE IN THE WRONG PROJECT. Observed open at
+  `1NVBcSo_H2xAl_MsndDpxqEHLwsaGnC1LFJANNSNsPQeP3a677uQuxHvX` during the 8/4 failure; do not treat
+  that id as authoritative, treat the file list as the test.
+  (3) The ROSTER spreadsheet ("26-27 Rosters"), holding `warmup-roster-push.gs` and
+  `warmup-student-profile.gs`.
+  Projects (1) and (3) both need `BDM_ROSTER_HMAC_KEY` set to the IDENTICAL value - a mismatch is
+  invisible until a real warm-up returns "not on roster". Note both `warmup-sidebar-functions.gs`
+  and `warmup-student-profile.gs` define `onOpen()`, which is only safe because they live in
   different projects.
+  **THE CRON SECRET LIVES IN THREE PLACES AND ALL THREE MUST MATCH EXACTLY** (2026-08-04): Vercel
+  env `CRON_SECRET`, warm-up project (1) Script Property `WARMUP_ENGINE_KEY`, and roster project (3)
+  Script Property `BDM_CRON_SECRET`. `warmup-engine.gs` sends it as `Authorization: Bearer <value>`
+  to `https://bigdogmath.com/api/warmup`, which the proxy gates because that endpoint returns the
+  ANSWER KEY (`/api/warmup` is in `SECURE_ROLLOUT_PREFIXES`, live because production has
+  `NEXT_PUBLIC_SECURE_STUDENT_DATA=true`). Do NOT "fix" a 401 by ungating the route.
+  FOUR THINGS THAT MAKE THIS FAIL QUIETLY, all four hit in one evening. **Vercel never re-reveals an
+  existing secret**, so you cannot copy `CRON_SECRET` to match it - ROTATE to a value you choose and
+  write it into all three places, rather than trying to retype what is already there. **An env change
+  does not reach the running deployment until you REDEPLOY.** **A value pasted from a `.env` line
+  arrives as `CRON_SECRET=<value>`** and the whole string is compared, so the `=` and everything left
+  of it must be stripped. And **the roster push is the one that fails silently if you miss it** -
+  rotating the other two leaves it 401ing with no error surfaced anywhere, students simply stop
+  syncing.
+  THE SYMPTOM IS ROOM-FACING AND NAMES THE WRONG CAUSE: the Notion `Warm-Up Build Note` reads
+  `Warm-up engine 401: {"error":"Teacher login required."}`, which reads as a login problem with the
+  site and is actually a secret mismatch. Diagnose from INSIDE project (1), not by editing and
+  re-pressing - a scratch function that logs `key.length`, whether it starts with `CRON_`, whether it
+  contains `=`, whether it differs from its own `trim()`, and then the response code of a real
+  `UrlFetchApp.fetch` to the endpoint, settles it in one run without printing the secret. A
+  well-formed value is 43 chars (base64url of 32 bytes, no padding); 43 chars AND a 401 means the
+  mismatch is on the Vercel side or you are in the wrong project.
+  **THE WEEKDAY CHECK IS ON THE LESSON'S `Date`, NOT ON THE DAY YOU PRESS THE BUTTON.**
+  `getWarmupRequestDateInfo_` refuses Sat/Sun because `dayIndex` indexes a five-day week, so
+  weekend-BUILDING has always worked and only a weekend-DATED lesson is refused. Steele read
+  "Warm-ups can only be created for Monday through Friday" as a lock on his own Saturday prep and
+  asked for it to be removed; it was left in place 2026-08-04 once that was clear. Note the
+  `Warm-Up Build Note` PERSISTS until the next attempt, so a stale weekend error can sit on a lesson
+  whose date has since moved to a weekday - re-press before believing it.
+  NOTHING ABOUT THE QUESTIONS REACHES NOTION. A successful build writes only POINTERS to the
+  `Warm up Links` data source (`collection://3142eba1-de37-8024-b6cc-000b38db5d17`): Name, Key (form
+  id), Lesson Code, Topic, Week, Day, Date, Synced At, Source, Form Link, Edit Link, Response Sheet,
+  Response Tab, plus the relation back to the lesson. That schema has NO question fields, and
+  `upsertWarmupLinkPage_` writes none - the six questions exist only in the Google Form and its
+  response tab, so reviewing a warm-up means opening `Edit Link`. The one direction that DOES flow
+  through Notion is the lesson's `Retention Q4` / `Retention Q5`, which are authored in Notion and
+  feed INTO the build.
   `warmup-student-profile.gs` is the WORKSPACE-SIDE student profile workbook (2026-08-01): a
   Profile tab with a student dropdown joining Contacts / Testing / Behavior / ContactLog (all keyed
   on EMAIL) plus `SiteData` pulled from the site's gated `/api/teacher/roster` + `/api/mastery` and
@@ -333,6 +383,14 @@ Codex and cloud sessions need them too (rule 9).
 - `public/` - assets. Inline square mark: `big-dog-mark.png`; wordmark/banner: `big-dog-logo.svg` /
   `big-dog-logo.png`.
 - `ROADMAP.md` - mirror of the Notion "Big Dog Math - Feature Tracker"; update BOTH when a feature ships.
+  **THE TRACKER'S DONE-NESS IS A CHECKBOX, NOT THE `Status` SELECT** (found 2026-08-04, data
+  source `56ee55bb-c067-4613-8f3b-6d5810a82ced`). `Status` runs Live / Planned / Parked / Needs
+  revision / In progress and HAS NO `Done` VALUE, so the natural-looking filter "Status is not
+  Done" matches EVERY row. Done-ness lives in a separate `Done` checkbox (`__YES__` / `__NO__`).
+  Measured that day: `Priority = Now` returns 18 rows and NINE of them are already complete, so
+  the wrong filter reports shipped features as outstanding work - the exact failure a status
+  read exists to prevent. Correct filter is `Priority = "Now"` AND `Done = "__NO__"`.
+  `.claude/commands/class-audit.md` (curriculum scope) still carries the wrong wording.
 
 ## Routes (as of this writing)
 
@@ -417,21 +475,113 @@ Codex and cloud sessions need them too (rule 9).
   goes -> bring down -> which digit -> where it goes, and then it resets. `npm run
   test:division-house` pins that order; collapsing two of those into one step removes a decision.
   IT IS REPS, NOT A TEST (Steele: "its not testing as much as just getting reps following the
-  numbers" / "I just want them to start to remember what the sequence is"). That is WHY the target
-  spot PULSES, why a placed number STAYS GREEN, and why the divide/multiply/subtract/bring-down strip
-  fills in as they name each one - none of those are giveaways to be tightened up later, they are the
-  design. What the strip must NOT do is light the step BEFORE it is named, or the question answers
-  itself.
+  numbers" / "I just want them to start to remember what the sequence is"). That is why a placed
+  number STAYS GREEN and why the D-M-S-B-R rail fills in as they name each step. What the rail must
+  NOT do is light a step BEFORE it is named, or the question answers itself.
   Four layout rules that were notes first. Only the inside of the house is clickable - there is no
   such thing as a number above or below the divisor, so those cells are not drawn ("this isnt
   needed"). A multi-digit number is ONE number: the leftover plus the digit brought down highlight
   together and clicking either counts, which is why a prompt carries `slots: string[]` and not a
-  single id. There is a CLEAR GUTTER COLUMN between the divisor and the bracket, and it is not
-  decoration - the divide and multiply signs and their arrows live in it. And each sign is placed
-  the way it is written by hand: `÷`/`x` BETWEEN the two numbers with the arrow split in two
-  segments so it never runs through the sign, `−` to the LEFT of the number being taken away with a
-  rule under it and the difference below, and a bring-down draws the arrow ALONE (the glyph would be
-  redundant).
+  single id. There is a CLEAR GUTTER COLUMN between the divisor and the bracket. And the rule under
+  a subtraction spans the number being taken away FROM as well as the product, with the difference
+  below it, the way it is written by hand.
+  **REBUILT TWICE IN TWO DAYS, AND THE SECOND REBUILD DELETED MOST OF THE FIRST. READ THIS BEFORE
+  BUILDING ANYTHING BACK.** On 2026-08-03 nine toolbar comments produced a board that traced six
+  arched connectors per round and kept every round on screen in its own colour. Steele ran that
+  board on 2026-08-04 and said, in three messages: "maybe no arrows. Just use the higlighting pulse
+  to show what is happening", then "no arrows or lines", then "the animation is clunky". So:
+  (1) **THERE ARE NO CONNECTORS ON THE BOARD. NONE.** The arched line that drew itself over 520ms,
+  the arrowhead that faded in behind it, the sign glyph that burst in at 1.5x and rotated, and the
+  plaque's two arrows down to the divisor and in through the door are ALL GONE. What is happening is
+  said by the two NUMBERS the move runs between, ringed in the round's colour - a RING so it
+  composes with the green of a placed digit instead of fighting it - plus the arithmetic written out
+  in the right rail. The engine still traces the same six moves per round; they are READ rather than
+  DRAWN. `npm run test:division-house-arcs` pins the absence.
+  TWO THINGS ABOUT THAT HIGHLIGHT ARE LOAD-BEARING AND BOTH WERE WRONG FIRST. It lights WHOLE
+  NUMBERS - `visual.fromSlots` / `visual.toSlots`, not the single `from`/`to` anchors, which lit the
+  "1" of 14 and the "1" of 12 on 144/12 and left the other halves dark, the exact thing
+  `slots: string[]` exists to stop one prompt earlier. And THE TWO ENDS ARE WEIGHTED DIFFERENTLY -
+  a 2px hairline on the source, a 4px solid ring on the destination - because two identically-lit
+  cells say WHICH PAIR and nothing about which way or in what order, and "the 2 came from the 9 and
+  the 4 and goes UP" is the content of the move for a student two years behind. Do not equalise them
+  and do not merge the two sets.
+  (2) **THE PULSE IS WHAT A MISS BUYS, NOT WHAT THE QUESTION OPENS WITH** ("get rid of the circle.
+  have it say to select the number closest to the door inside the house and if they get it wrong
+  then have it pulse"). The drawn ring is gone and `.dh-slot.target` is applied only once `missed`
+  is set. This REVERSES the 2026-08-03 note that the always-on pulse was "the design, not a giveaway
+  to be tightened up later" - he tightened it.
+  (3) **THE MNEMONIC RAIL IS D-M-S-B-R, ON THE LEFT, BUILT LIKE GEMS'** ("just like we did on the
+  other tools like gems"). Five tiles, one colour each on `--c`, four states. R is NOT a fifth
+  operation - `HOUSE_OPS` stays four, because nothing is pressed for R - and its word changes:
+  "Repeat" while digits are still waiting, "Remainder" on the last round, which is where "No
+  remainder. All done. Nice!" gets said. B shows as SKIPPED on the last round; that grey tile is not
+  a gap, it is the reason the problem is ending. DO NOT put a strikethrough through the letters: a
+  struck-through capital D is a different letter, on a rail whose entire job is those five.
+  (3b) **THE RIGHT COLUMN CARRIES THE COUNT AND THE CONTROLS, AND NO TRAIL OF PAST SENTENCES.**
+  Both from the same review. The "Problem 1 of 4 / Start over / Next problem" row used to be a
+  full-width band above the board; height is the binding constraint here (`cellPx` is
+  `min(byWidth, byHeight)`), so on a 1366x768 Chromebook a four-round problem sat at the `CELL_MIN`
+  floor with the board 84px below the fold while that column had room to spare - moving it plus
+  cutting `PLAQUE_GAP` from 46 to 30 (it was sized for the plaque arrows, which are gone) got that
+  to 10px. And the four past `say` sentences that used to stack under the question repeated in prose
+  exactly what the work lines say in numbers, in the same green left-bar as the live confirmation:
+  ten blocks of text made the RIGHT RAIL the centre of attention on a board whose centre is the
+  house. The board is the record - that is what a placed spot staying green is for.
+  (4) **THE NUMBERS RIDE ALONGSIDE THE WORDS** ("show the math happening in numbers next to the step
+  so show the 9 divide sign 4"). Each prompt carries `work: {key, text}` - the line as it reads AFTER
+  that prompt is answered - and a line only ever GROWS by one piece. That growth is the whole safety
+  property: "9 ÷ 4 = 2" cannot appear while "where does that answer go?" is still on screen. The
+  contract asserts each piece is a prefix of the next and that only the last one contains an `=`.
+  The bring-down deliberately has NO work line; it is not a fact with an answer.
+  (5) **EVERY PROBLEM OPENS WITH THE STUDENT SETTING UP THE HOUSE** ("have students drag the divisor
+  to the outside and dividend inside... they click the spot and it slowly moves to it... or they
+  have to actually click and drag it"). The board starts BLANK - neither given digit is printed
+  until it is put there - and the two numbers sit as chips in the plaque equation. Drag, or tap to
+  pick up and tap a zone to place; a sub-`TAP_SLOP` press is a TAP, tested BEFORE the zone, which is
+  the trap Fraction Bars found. The travel is a straight transform between two MEASURED viewport
+  points over `FLY_MS`, not a path being traced - the arrows it used to follow are gone. This
+  REPLACED the "Get started" pop-out.
+  **NEVER PUT A BACKTICK INSIDE A PER-PAGE `<style>` BLOCK, AND NEVER LEAVE A COMMENT UNBALANCED IN
+  ONE.** Both cost real time on 2026-08-04 and the second one SHIPPED. Every page in this repo styles
+  itself with an inline `<style>{\`...\`}</style>` template literal, so a backtick in a CSS comment
+  ends the literal and TypeScript reports a JSX brace error dozens of lines away from the cause -
+  three times in one session. Worse: a stray `*/` makes the CSS parser read the prose after it plus
+  the selector under it as one invalid selector and DROP THAT RULE, silently. That is how
+  `.dh-slot.act` - the entire replacement for the arcs - shipped rendering nothing, past typecheck,
+  past 39 contract suites, and past a browser check that confirmed the CLASS was applied without ever
+  asking whether the RULE resolved. `npm run test:division-house` now strips balanced comments from
+  the block and fails on any leftover `/*` or `*/`, plus unbalanced braces, plus a list of rules the
+  board cannot do without. Copy that check when a new tool's styling carries something load-bearing.
+  THE GENERAL LESSON, and it is the third time this file has had to write a version of it: asserting
+  that a class is in `className` is not asserting that anything is on screen. Read the computed
+  value - and in the preview pane finish the transition first (`el.getAnimations().forEach(a =>
+  a.finish())`), because a frozen 180ms transition reports the OLD value and reads as a bug that is
+  not there.
+  **THE RAIL MAY NOT LIGHT A LETTER IT IS ASKING FOR.** `houseRailState` lives in
+  `src/lib/divisionHouse.ts`, not in the component, because the inline version got this wrong and
+  nothing could see it: a tile lit as soon as the current prompt belonged to it, so on "What
+  operation are we doing here?" the D tile was the most saturated thing on the page and a student
+  could clear every operation step by pressing the button whose word was glowing. That is exactly the
+  shortcut `seatOps` exists to close, arriving by another road. A letter lights when it has been
+  NAMED. R is never active - it is where the cycle goes next, not a step you stand in - and giving it
+  one put two solid tiles on the rail on the last round of every problem.
+  THE GRID IS NOT UNIFORM. The gutter is HALF a cell (`GUTTER_RATIO`), so NOTHING may compute an x
+  from a column by hand - `houseLayout()` in `src/lib/divisionHouseArcs.ts` owns
+  `colX`/`colW`/`colMid`/`centre`, and a stray `col * cellPx` is right on the divisor side and half
+  a cell wrong on the house side, which is the hardest kind of wrong to see in a screenshot.
+  `buildArc` IS PARKED, NOT DELETED, and its half of the arcs contract guards a capability nothing
+  calls. It is kept because this decision has now flipped twice and the collision routing took a
+  review cycle to get right; if the arcs stay gone, it and those checks go together.
+  THREE THINGS THAT BIT AND WILL BIT AGAIN. **The set-up act is gated on `presentation`/`embed`**,
+  read through the derived `setupPhase` and NEVER off `phase` directly - `/teacher/present` embeds
+  this tool in an iframe nobody touches, so a phase waiting to be dragged through would park an
+  empty house and two hovering numbers on the wall for the whole state. That skip cannot live in
+  `reset`: the layout effect that discovers `?embed=1` lands AFTER the first render's `reset`, so a
+  reset consulting `presentation` reads false and puts the projector back into setup. The plaque is
+  INSIDE the measured stage, so its height comes off the board's height budget - spending all of it
+  on the board put the last round below the fold on a 1366x768 Chromebook. And the plaque equation
+  is `white-space:nowrap`: with the two numbers as chips it wrapped the divisor onto its own line on
+  a two-column house, which is the one arrangement that makes a division problem unreadable.
 - `/decimal-steps` IS ITS OWN TOOL, NOT PART OF `/long-division` (Steele, 2026-08-02, unprompted:
   "this is its own tool from long division"). `/long-division` (`LongDivisionHouse`) is a
   WHOLE-NUMBER choreographed demo with no scoring, built for M1.T3.L4; `/decimal-steps`
@@ -1200,7 +1350,70 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   works from home with no live session. `assignments` / `assignment_problems` / `problems` have full RLS
   policies in `student-data-security.sql` but ZERO application code - schema without a UI, so assigning
   a manipulative is not a capability yet.
-  THE BIG ONE (found 2026-07-29): **`poll_answers` NEVER REACHES `responses`, SO THE EXIT TICKET MOVES
+  **BRIDGED 2026-08-04 - READ THIS BEFORE THE PARAGRAPH BELOW, WHICH IS NOW HISTORY.**
+  `src/lib/pollEvidence.ts` + `POST /api/teacher/poll-evidence` turn graded poll answers into
+  `responses` rows and then call `recomputePeriod`, so the learning checks and the exit ticket do
+  now move a bar. What it grades is DELIBERATELY NARROW (Steele, 2026-08-04): `structured-numeric`
+  and `multiple-choice` only. NOT `short-answer` (bare string equality marks a right answer wrong
+  over a stray space - and note M1.T1.L5-D1's exit ticket is that kind, so that lesson's exit still
+  contributes nothing), NOT `multiple-choice-explain` (readinessEvidence cannot see the kind at
+  all, so bridging it would make the bars and the visit list disagree about one student - fix the
+  reader first), and NOT `fist-to-five` (a confidence self-report must never score a standard).
+  FOUR THINGS THAT WILL BITE WHOEVER TOUCHES IT. (1) **The bar row carries `standard_id: null` and
+  that is not a mistake** - `recompute.ts:133` filters bar events to `!standardId`, so attaching
+  the resolved standard is exactly the edit that stops the bar moving. There are two row shapes: a
+  per-question STANDARD row for the stage gate, and one aggregate BAR row. (2) **The bar row is one
+  per student per lesson per domain, not one per question.** The bars are an EWMA at alpha 0.30 per
+  event, so a row per question would take a domain bar 60 -> 42 -> 29 -> 21 -> 14 on four wrong
+  answers in one period, where a whole warm-up day is a single step. Every other writer aggregates
+  first; this matches them. (3) **Notion's `Standard` property does not match the seeded
+  `standards` ids** - measured on the live `polls` table, five of the six distinct authored values
+  were unseeded (`6.NS.4` omits the cluster letter, and some carry two codes as `6.EE.2b; 6.EE.3`).
+  `normalizeStandardId` inserts the cluster letter when exactly one seeded id qualifies and takes
+  the first RESOLVABLE code of a list; anything left over is REPORTED, never guessed, and a poll
+  with no resolvable standard writes nothing at all (a domainless row is dropped by recompute with
+  a bare `continue`). (4) **A multiple-choice key that is in none of the choices makes the poll
+  ungradable, not the class wrong** - see the `splitList` trap below. `npm run test:poll-evidence`
+  pins all four, and each was verified by reverting the fix and watching the suite go red.
+  STILL TRUE and still the gap: `practice_assignment_attempts` and 16 of 23 tools reach nothing,
+  and nothing calls the bridge automatically yet - it is a route you POST, and `GET` on it is a dry
+  run. Also NOT verified end to end, because `poll_answers` has zero rows lifetime until the FERPA
+  Workspace half lands.
+  **A MULTIPLE-CHOICE ANSWER KEY CAN BE UNTAPPABLE** (found 2026-08-04, PARSER FIXED THE SAME DAY -
+  this paragraph used to end "the AUTHORING bug is unfixed", which is no longer true). `splitList`
+  splits on `[\n,]`, and `Choices` used to be read through it while `Correct Answer` is read whole,
+  so an authored choice containing a comma was shattered and the key matched none of the fragments.
+  `Choices` now goes through `splitChoices` (newline only); `splitList` KEEPS its commas for
+  `Supplies` and `Tools`, which really are authored inline. `npm run test:notion-lesson-contract`
+  pins BOTH directions, so the tempting unification - make `splitList` newline-only and delete
+  `splitChoices` - goes red on the supplies assertion.
+  THE CAUSE WAS NOT MAINLY PROSE, WHICH IS WHY IT SURVIVED SO LONG. Measured on the live Lesson
+  Steps data source: 121 steps carry authored choices, 14 have a comma INSIDE a choice, and ZERO
+  author their choices comma-separated on one line - comma splitting never once did anything useful
+  on that property. The commonest shape is a THOUSANDS SEPARATOR: `2 / 20 / 200 / 2,000` became
+  `2, 20, 200, 2, 000`, inventing a fifth choice and putting "2" in twice (two identical entries
+  also collide as a React key - `key={c}` at `lesson/page.tsx`, and six other surfaces share it).
+  A factor-pair list, `1, 2, 3, 6` against `1, 2, 3, 4, 6`, became 17 fragments and was then
+  silently TRUNCATED by the 12-choice cap in `/api/teacher/poll`. The worst cases were the ones
+  whose key happened to match a surviving fragment: those passed `answerKeyIsTappable` and GRADED
+  NORMALLY off a choice list the room could see was wrong. Four steps go from untappable to
+  gradable with this fix.
+  `answerKeyIsTappable` STAYS, and its reason is unchanged - a teacher can still type a key that
+  matches no choice for ordinary reasons, and three live steps do exactly that (two with a prose
+  sentence as the key, one with an EMPTY `Correct Answer` on a 4-choice step). Nothing names them at
+  lesson load, so they contribute no evidence until someone edits them. That is AUTHORING.
+  TWO "CHOICES" INPUTS EXIST AND THEY HAVE OPPOSITE RULES. `/control`'s own exit-ticket field is
+  labelled "Choices (comma-separated)" with the placeholder "Yes, No, Not sure" and still splits on
+  `[\n,]` - correct for a field a teacher types into directly. The Notion property is one per line.
+  Nothing in Notion says so, so the habit can cross over, and the failure is silent and room-facing:
+  one button reading "Yes, No, Not sure" on thirty Chromebooks. Do not "unify" these two.
+  THE 3 SHATTERED `polls` ROWS IN THE DATABASE ARE NOT REPAIRED, and the reason is narrower than it
+  looks. `/api/student/session-state` DOES read a stored open poll's `choices` and `/lesson` renders
+  them verbatim, so a reader-side fix is invisible on a poll left open - this is safe ONLY because
+  `poll_answers` is 0 rows lifetime and ZERO polls sit on an open session (all 80 rows are dead
+  rehearsal artifacts). If a shattered poll is ever found open, fix the ROW, not the parser.
+  THE ORIGINAL NOTE (found 2026-07-29), kept because its reasoning is still the reason the bridge
+  looks the way it does: **`poll_answers` NEVER REACHES `responses`, SO THE EXIT TICKET MOVES
   NO MASTERY BAR.** Steele moved the exit ticket on-site specifically for data retention and mid-lesson
   deployment - no Google Form to click into - and the rows do persist. But every exit step in the
   deployable lessons carries a `Response Mode` + `Question`, so `navigateFlow` creates a POLL and the
@@ -2302,8 +2515,13 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 ## Build, deploy, test
 
 - `npm run dev` (webpack), `npm run build`, `npm run typecheck` (`tsc --noEmit`), and since
-  2026-07-27 `npm test` - the aggregate of all 31 golden/contract suites, run with typecheck by
-  GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. The suites rotted for
+  2026-07-27 `npm test` - the aggregate of every golden/contract suite, run with typecheck by
+  GitHub Actions CI (`.github/workflows/ci.yml`) on every push and PR. DO NOT WRITE THE COUNT
+  DOWN (corrected 2026-08-04: this line said 31 while package.json chained 38, and a new
+  `/status` command written the same day picked up a third number). It is
+  `&&`-CHAINED AND ABORTS ON FIRST FAILURE, so there is no n-of-n tally to report either - a
+  green run means every suite passed and a red one means "failed at test:<name>, the rest never
+  ran". Anything claiming "38/38 green" is inferring from an exit code. The suites rotted for
   weeks when nothing ran them (four had stale assertions by 7/27); if a contract fails after a
   deliberate design change, update the CONTRACT to the new approved truth in the same commit.
   A CONTRACT CAN PASS ON THE WRONG ELEMENT (found 2026-07-29). `classroom-surface-contract.mjs`
@@ -2400,6 +2618,37 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   same warning this file already gives about scratch worktrees. This is how the audit fixes were
   build-verified on the exact shipping commit while the main tree was mid-merge and `.next` was
   EPERM-locked.
+- **TWO WAYS A VERIFICATION RUN LIES IN THIS SETUP, AND BOTH PRESENT AS THE OPPOSITE OF THE TRUTH**
+  (found 2026-08-04, one after the other, while verifying the Choices parser fix).
+  (1) A BACKGROUND PROCESS DOES NOT SURVIVE THE END OF A SANDBOX `bash` CALL. `npm test` launched
+  with `nohup ... &` was KILLED at suite 37 of 39 when the call returned - but the wrapper had
+  already written a nonzero status line, and the log's last line was a suite PASSING. So the exit
+  code said failure, the log said success, and neither was the answer: two suites simply never ran.
+  Run a long chain in slices that finish inside one call, and confirm the LAST entry of
+  `package.json`'s `test` chain actually appears in the log rather than trusting a status file.
+  (2) DESKTOP COMMANDER'S SHELL IS ZSH, NOT BASH. `${PIPESTATUS[0]}` is a bash-ism and expands to
+  EMPTY there (`$pipestatus[1]` is the zsh spelling), so `npm run build | tail; echo
+  "EXIT=${PIPESTATUS[0]}"` prints a bare `EXIT=` while the process still reports exit 0, because the
+  final `echo` succeeded. Verify a Next build by `.next/BUILD_ID` EXISTING after `rm -rf .next` -
+  that is an artifact, not an inference. Both of these are the same failure this file already warns
+  about under `npm test`: an exit code is not evidence.
+- **`mcp__workspace__web_fetch` CACHES BY URL, SO A PLAIN FETCH OF `/api/build-id` CAN REPORT A
+  STALLED PIPELINE THAT IS NOT STALLED** (found 2026-08-04, during a `/status` pass, and it very
+  nearly shipped as a tier 1 finding). The route is CORRECT - `src/app/api/build-id/route.ts` sets
+  `export const dynamic = "force-dynamic"` and returns `cache-control: no-store`, and
+  `DeployRefresh.tsx:35` fetches it with `cache: "no-store"` - so classroom displays are unaffected
+  and there is nothing to fix in the product. The stale value is the AGENT'S OWN fetch tool
+  replaying a response cached under that exact URL, which the previous day's status pass had
+  populated with the genuinely-stranded `265ea95`. Measured back to back: the plain URL returned
+  `265ea95` (42 commits and a day behind) while `?cachebust=<anything>` returned `bbf45a0`, which
+  was `origin/main` HEAD and had deployed 3.7 seconds after the push.
+  ALWAYS FETCH IT WITH A CACHE-BUSTING QUERY PARAM. This trap is nastier than it looks because the
+  false reading is INDISTINGUISHABLE from the real 2026-08-03 stall - same route, same symptom, same
+  sha - and this file already instructs an agent to treat exactly that reading as the leading tier 1
+  finding. Corroborate with Vercel `list_deployments` before calling a pipeline stalled: a genuine
+  stall shows NO deployment created for the newest commits, whereas here the newest commit had a
+  READY production deployment all along. Same family as the two lies above - a value you did not
+  observe this run is not evidence.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like

@@ -16,6 +16,34 @@
 //
 // Pure, no React. The board geometry is a single grid so the component can draw
 // the animated ÷ / x / − / arrow between any two slots by their row and column.
+//
+// EVERY ROUND TRACES THE SAME SIX MOVES, and Steele named them by direction:
+// "to the left, up, diagonal left, diagonal right, down, down".
+//
+//   1  ÷   the number we are dividing  ->  the divisor      (left)
+//   2  =   the divisor                 ->  the quotient     (up)
+//   3  x   the quotient                ->  the divisor      (diagonal left)
+//   4  =   the divisor                 ->  the product      (diagonal right)
+//   5  −   the number we are dividing  ->  the product      (down)
+//   6      the product                 ->  the difference   (down, arrow alone)
+//
+// plus a bring-down arrow on every round but the last. Dropping a `visual` from
+// any of the six breaks a shape the student is being taught to expect.
+//
+// ONLY ONE OF THEM IS ON THE BOARD AT A TIME (Steele, 2026-08-04, after running
+// it: "maybe no arrows. Just use the higlighting pulse to show what is
+// happening"). The previous build kept every round in its own colour, and on a
+// live board that read as a scribble rather than a pathway - so the component
+// now draws the CURRENT move only and lets it clear when the next one starts.
+// The six are unchanged and still traced in order; what changed is how many are
+// on screen at once.
+//
+// TWO THINGS RIDE ALONGSIDE EACH PROMPT so the surfaces do not have to infer
+// them from the id: `cycle` says which letter of D-M-S-B-R this step belongs to
+// (the rail), and `work` is the arithmetic line it completes (the numbers beside
+// the words - "show the math happening in numbers next to the step"). A work
+// line only ever GROWS, one piece at a time, which is what keeps it from
+// printing an answer the student has not placed yet.
 
 export const HOUSE_MAX_DIVIDEND = 9999;
 export const HOUSE_MAX_PROBLEMS = 12;
@@ -30,6 +58,79 @@ export const HOUSE_OPS: { op: HouseOp; label: string; sign: string }[] = [
   { op: "subtract", label: "Subtract", sign: "−" },
   { op: "bringdown", label: "Bring down", sign: "↓" },
 ];
+
+export type HouseCycleKey = HouseOp | "repeat";
+
+/**
+ * The mnemonic rail. Steele: "make the mnemonic device rail on the left side. A
+ * Big D, M, S, B, R just like we did on the other tools like gems".
+ *
+ * FIVE tiles, not the four pressable operations - `HOUSE_OPS` is what a student
+ * chooses between and stays four, because R is not something you press. R is
+ * where the cycle goes next, and its word depends on whether there is anything
+ * left to bring down: "Repeat" while more digits are waiting, "Remainder" on the
+ * last round, which is also where "no remainder = all done" gets said.
+ */
+export const HOUSE_CYCLE: { key: HouseCycleKey; letter: string; label: string }[] = [
+  { key: "divide", letter: "D", label: "Divide" },
+  { key: "multiply", letter: "M", label: "Multiply" },
+  { key: "subtract", letter: "S", label: "Subtract" },
+  { key: "bringdown", letter: "B", label: "Bring down" },
+  { key: "repeat", letter: "R", label: "Repeat" },
+];
+
+/** What the R tile reads once the problem is finished and the leftover is down. */
+export const HOUSE_REPEAT_END_LABEL = "Remainder";
+
+export type HouseTileState = "upcoming" | "active" | "done" | "skipped";
+
+/**
+ * What the D-M-S-B-R rail shows, for the round the student is standing in.
+ *
+ * IN THE LIB BECAUSE THE COMPONENT GOT IT WRONG AND NOTHING COULD SEE IT. The
+ * first version lit a tile as soon as the current prompt belonged to it - which
+ * meant that on "What operation are we doing here?" the D tile was already the
+ * most saturated thing on the page, and a student could answer every operation
+ * question in the drill by pressing the button whose word was glowing. That is
+ * the exact failure `seatOps` exists to prevent, arriving by another road, and
+ * it defeats the one step where the sequence has to be recalled rather than
+ * read. The rule is: A LETTER LIGHTS WHEN IT HAS BEEN NAMED, NEVER WHILE IT IS
+ * BEING ASKED FOR.
+ *
+ * R is never `active`. It is not a step you stand in - it is where the cycle
+ * goes next - so it fills once the problem has actually repeated, and it reads
+ * "Repeat" until the very end, where the leftover makes it the remainder.
+ * Giving it an active state put TWO solid tiles on the rail at once on the last
+ * round of every problem, which says the student is in two places.
+ */
+export function houseRailState(
+  trace: HouseTrace,
+  step: number,
+): { key: HouseCycleKey; letter: string; label: string; state: HouseTileState }[] {
+  const done = step >= trace.prompts.length;
+  const lastRound = trace.prompts[trace.prompts.length - 1]?.round ?? 0;
+  const round = done ? lastRound : trace.prompts[step]?.round ?? 0;
+
+  return HOUSE_CYCLE.map((c) => {
+    if (c.key === "repeat") {
+      return {
+        ...c,
+        label: done ? HOUSE_REPEAT_END_LABEL : c.label,
+        state: (done || round > 0 ? "done" : "upcoming") as HouseTileState,
+      };
+    }
+    const mine = trace.prompts.filter((p) => p.round === round && p.cycle === c.key);
+    // No steps of this letter this round at all - which is B on the last round,
+    // where there is nothing left to bring down.
+    if (!mine.length) return { ...c, state: "skipped" as HouseTileState };
+    const left = trace.prompts.some((p, i) => i >= step && p.round === round && p.cycle === c.key);
+    if (!left) return { ...c, state: "done" as HouseTileState };
+    const named = trace.prompts.some(
+      (p, i) => i < step && p.round === round && p.kind === "operation" && p.op === c.key,
+    );
+    return { ...c, state: (named ? "active" : "upcoming") as HouseTileState };
+  });
+}
 
 export interface HouseSlot {
   id: string;
@@ -67,14 +168,50 @@ export interface HousePrompt {
   options?: HouseOp[];
   /** Slots that get written in once this prompt is answered. */
   fill: string[];
-  /** The sign to animate between two slots, and where it goes. */
-  visual?: { sign: string; from: string; to: string };
+  /**
+   * The move: which number it runs FROM and which it runs TO.
+   *
+   * `from`/`to` are single anchor cells, kept for geometry. `fromSlots`/
+   * `toSlots` are the WHOLE numbers at each end, and they are what the board
+   * lights - because a number is one number. Anchors alone lit the "1" of 14 and
+   * the "1" of 12 on 144/12 and left the other half dark, which is the exact
+   * thing `slots: string[]` exists to prevent one prompt earlier.
+   *
+   * The two ends are kept apart rather than merged into one set so the board can
+   * say WHICH WAY the move goes - a thin ring on the source, a solid one on the
+   * destination. Two identically-lit cells say which pair without saying that
+   * the 2 came from the 9 and the 4 and travels UP, and for a student two years
+   * behind that direction is the whole content of the move.
+   */
+  visual?: { sign: string; from: string; to: string; fromSlots: string[]; toSlots: string[] };
   /** Said after the prompt is answered. */
   say: string;
   /** Said when they click or choose the wrong thing - a nudge, never the spot. */
   hint: string;
   /** Which round of divide/multiply/subtract/bring down this belongs to. */
   round: number;
+  /**
+   * Which letter of the D-M-S-B-R rail this step lives under.
+   *
+   * Carried rather than parsed out of the id, because the rail is the reference
+   * a student reads to work out where they are - a regex over prompt ids would
+   * put the wrong tile under the pulse the first time an id is renamed.
+   * "repeat" is never a prompt's cycle: nothing is asked for it.
+   */
+  cycle: HouseOp;
+  /**
+   * The arithmetic line this step completes, once it is answered.
+   *
+   * Steele: "show the math happening in numbers next to the step so show the 9
+   * divide sign 4". The words say Divide; this says 9 ÷ 4.
+   *
+   * `key` groups the pieces of one fact so a later piece REPLACES an earlier one
+   * rather than stacking, and the text is what the line reads AFTER this prompt
+   * is answered - never before. That ordering is the whole safety property: a
+   * line only ever grows by one piece, so "9 ÷ 4 = 2" cannot appear while "where
+   * does that answer go?" is still the question on screen.
+   */
+  work?: { key: string; text: string };
 }
 
 export interface HouseTrace {
@@ -262,6 +399,11 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
         `bd${i - 1}`,
       ];
     const partialSlot = partialSlots[0];
+    // One line per fact of this round, each growing a piece at a time. The
+    // three of them ARE the round: divide, multiply, subtract.
+    const dLine = `d${i}`;
+    const mLine = `m${i}`;
+    const sLine = `s${i}`;
 
     // ROUND ZERO WHEN THE DIVISOR DOES NOT FIT THE FIRST DIGIT is the single
     // most important case in the whole drill, and it used to be the one nothing
@@ -275,20 +417,30 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       ask: takesExtraDigits
         ? `${divisor} does not fit into the first digit. Click the smallest number at the front of the house that it does fit into.`
         : i === 0
-          ? "Start with the first number inside the house. Click it."
+          // "the one closest to the door" is the pop-out's wording too, so the
+          // card that opens the problem and the rail that carries it agree. The
+          // qualifier only holds in THIS branch - when the divisor does not fit
+          // the first digit the answer is two cells wide and the nearest one is
+          // the wrong click, which is why the other ask says something else.
+          ? "Start with the first number inside the house - the one closest to the door. Click it."
           : "Which number are we dividing now? Click it.",
       slots: partialSlots,
       fill: [],
       // NOT "We are dividing 13" - the very next prompt asks what operation we
       // are doing, and the rail keeps the previous sentence on screen while it
       // asks. The question was answering itself, every round of every problem.
-      say: `${c.partial} is the number under the bracket now.`,
+      // NOT "the number under the bracket" - on 96/4 round zero that is 96, and
+      // the number we are working on is 9. It still must not name the operation,
+      // because the very next prompt asks for it.
+      say: `${c.partial} is the part we are working on.`,
       hint: takesExtraDigits
         ? `${divisor} is bigger than ${digits[0]}, so one digit is not enough. Take the next one with it and click any part of that number.`
         : i === 0
           ? "It is the first digit under the bracket, on the left."
           : "It is what was left over, with the digit you brought down beside it.",
       round: i,
+      cycle: "divide",
+      work: { key: dLine, text: `${c.partial}` },
     });
     prompts.push({
       id: `op-divide-${i}`,
@@ -297,33 +449,54 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       op: "divide",
       options: seatOps(`op-divide-${i}@${signature}`),
       fill: [],
-      visual: { sign: "÷", from: partialSlot, to: firstDivisorSlot },
+      visual: { sign: "÷", from: partialSlot, to: firstDivisorSlot, fromSlots: partialSlots, toSlots: divisorSlots },
       say: "Divide.",
       hint: "We are asking how many times one number fits inside the other.",
       round: i,
+      cycle: "divide",
+      work: { key: dLine, text: `${c.partial} ÷` },
     });
     prompts.push({
       id: `pick-divisor-${i}`,
       kind: "slot",
-      ask: "Where is the number we are dividing WITH? Click it.",
+      // "dividing by not with" (Steele, 2026-08-03). You divide BY a number.
+      // "Dividing with" is not how the operation is said, and this ask is a
+      // sentence sixth graders repeat back - the `say` under it already said
+      // "Dividing by 4", so the tool was teaching both at once.
+      ask: "Where is the number we are dividing BY? Click it.",
       slots: divisorSlots,
       fill: [],
       say: `Dividing by ${divisor}.`,
       hint: "It sits outside the house, on the left.",
       round: i,
+      cycle: "divide",
+      work: { key: dLine, text: `${c.partial} ÷ ${divisor}` },
     });
     prompts.push({
       id: `place-quotient-${i}`,
       kind: "slot",
-      ask: "Where does that answer go? Click the spot.",
+      // THE ASK NAMES THE ROW, THE HINT NAMES THE COLUMN, and that split matters
+      // more than it used to. Three different destinations - above the bracket,
+      // under the dividend, under the rule - all shared the byte-identical
+      // sentence "Where does that answer go? Click the spot.", which was
+      // survivable while the spot pulsed. It does not pulse until a miss now, so
+      // the words are the ONLY instruction and they carried no place at all.
+      ask: "That answer goes above the bracket. Click the spot.",
       slots: [qSlot],
       fill: [qSlot],
+      // Move 2 of the six. The divisor is where the answer CAME FROM, so the
+      // equals runs from it up to the quotient - "4 goes into 9 twice, and the
+      // 2 lives up here". Without it the board drew the question (9 ÷ 4) and
+      // never drew the answer arriving.
+      visual: { sign: "=", from: firstDivisorSlot, to: qSlot, fromSlots: divisorSlots, toSlots: [qSlot] },
       // Two numerals with only a space between them read as one: "4 goes into
       // 9 2 times", and on a zero quotient "3 goes into 1 0 times", which a
       // sixth grader reads as "3 goes into 10 times".
       say: `${c.partial} ÷ ${divisor} = ${c.q}, and the ${c.q} goes up top.`,
       hint: "The answer to a division step goes above the bracket, over the digit you just used.",
       round: i,
+      cycle: "divide",
+      work: { key: dLine, text: `${c.partial} ÷ ${divisor} = ${c.q}` },
     });
 
     prompts.push({
@@ -336,6 +509,8 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       say: "Multiply.",
       hint: "Next we find out how much of the number we just used up.",
       round: i,
+      cycle: "multiply",
+      work: { key: mLine, text: `${c.q} x` },
     });
     prompts.push({
       id: `pick-mult-${i}`,
@@ -343,20 +518,28 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       ask: "Multiply that answer by which spot? Click it.",
       slots: divisorSlots,
       fill: [],
-      visual: { sign: "x", from: qSlot, to: firstDivisorSlot },
+      visual: { sign: "x", from: qSlot, to: firstDivisorSlot, fromSlots: [qSlot], toSlots: divisorSlots },
       say: `${c.q} x ${divisor} = ${c.product}.`,
       hint: "You multiply the digit you just wrote by the number outside the house.",
       round: i,
+      cycle: "multiply",
+      work: { key: mLine, text: `${c.q} x ${divisor}` },
     });
     prompts.push({
       id: `place-product-${i}`,
       kind: "slot",
-      ask: "Where does that answer go? Click the spot.",
+      ask: "Write that underneath the number you just divided. Click the spot.",
       slots: productIds,
       fill: productIds,
+      // Move 4. Steele: "there should be an = and arrow between 4 and 8" - the
+      // multiply arrow already ran quotient -> divisor, and this is the other
+      // half of the same sentence, the product landing under the house.
+      visual: { sign: "=", from: firstDivisorSlot, to: productIds[0], fromSlots: divisorSlots, toSlots: productIds },
       say: `${c.product} goes under the number we divided.`,
       hint: "A product is written under the number it came out of, ready to be taken away.",
       round: i,
+      cycle: "multiply",
+      work: { key: mLine, text: `${c.q} x ${divisor} = ${c.product}` },
     });
 
     prompts.push({
@@ -366,20 +549,32 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       op: "subtract",
       options: seatOps(`op-subtract-${i}@${signature}`),
       fill: [],
-      visual: { sign: "−", from: partialSlot, to: productIds[0] },
+      visual: { sign: "−", from: partialSlot, to: productIds[0], fromSlots: partialSlots, toSlots: productIds },
       say: "Subtract.",
       hint: "We take away the part we have already divided up.",
       round: i,
+      cycle: "subtract",
+      work: { key: sLine, text: `${c.partial} − ${c.product}` },
     });
     prompts.push({
       id: `place-rest-${i}`,
       kind: "slot",
-      ask: "Where does that answer go? Click the spot.",
+      ask: "The difference goes under the line. Click the spot.",
       slots: restIds,
       fill: restIds,
+      // Move 6, the second "down". ANCHORED ON THE LAST DIGIT OF EACH, not the
+      // first: the product and the difference are both right-aligned under the
+      // number being divided, so last-to-last is a true vertical drop while
+      // first-to-first slants whenever they are different widths.
+      // EMPTY SIGN MEANS THE ARROW ALONE - the minus sign and its rule are
+      // already sitting beside these two numbers, so a glyph here would be the
+      // third mark saying the same thing. Same call the bring-down arrow makes.
+      visual: { sign: "", from: productIds[productIds.length - 1], to: restIds[restIds.length - 1], fromSlots: productIds, toSlots: restIds },
       say: `${c.partial} − ${c.product} = ${c.rest}.`,
       hint: "A difference is written underneath the numbers you subtracted.",
       round: i,
+      cycle: "subtract",
+      work: { key: sLine, text: `${c.partial} − ${c.product} = ${c.rest}` },
     });
 
     if (i < cycles.length - 1) {
@@ -394,6 +589,12 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
         say: "Bring down.",
         hint: "There are still digits under the bracket that have not been divided.",
         round: i,
+        // NO `work` on any of the three bring-down steps. A bring-down is not a
+        // fact with an answer - it moves a digit - and inventing a line for it
+        // ("1 and 6 make 16") would put a fourth equation beside the three that
+        // are the round. The subtraction line stays up, which is the right thing
+        // to be looking at while the next digit comes down to join it.
+        cycle: "bringdown",
       });
       prompts.push({
         id: `pick-bring-${i}`,
@@ -404,17 +605,19 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
         say: `Bring down the ${digits[next.pos]}.`,
         hint: "The next digit under the bracket that has not been used yet.",
         round: i,
+        cycle: "bringdown",
       });
       prompts.push({
         id: `place-bring-${i}`,
         kind: "slot",
-        ask: "Where does it go? Click the spot.",
+        ask: "It comes straight down. Click where it lands.",
         slots: [`bd${i}`],
         fill: [`bd${i}`],
-        visual: { sign: "↓", from: `dv-${next.pos}`, to: `bd${i}` },
+        visual: { sign: "↓", from: `dv-${next.pos}`, to: `bd${i}`, fromSlots: [`dv-${next.pos}`], toSlots: [`bd${i}`] },
         say: `It lands beside the ${c.rest}, and now we start again.`,
         hint: "It comes straight down and sits next to what was left over.",
         round: i,
+        cycle: "bringdown",
       });
     }
   });
