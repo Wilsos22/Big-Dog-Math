@@ -222,7 +222,7 @@ bars and live misconception grouping).
    identity posts carry a raw email and the site REFUSES them by design - do them before the first
    class day. The old hold on new student-data plumbing is LIFTED; build against the pseudonymous
    model.
-   **THE NOTION HALF (step 8) RAN 2026-08-05 AND IT WAS TWICE THE SIZE OF THE LIST.** Nine live
+   **THE NOTION HALF (step 8) RAN 2026-08-05 AND IT WAS TWICE THE SIZE OF THE LIST.** Ten live
    databases went to the trash, including the `Rosters` / All Contact Information source of truth
    (174 rows, 157 real `@nv.ccsd.net` emails, 168 student numbers, guardian emails and phones in
    the page bodies), a SECOND `Warm Up Submissions`, `Parent INfo` (guardian names + phone

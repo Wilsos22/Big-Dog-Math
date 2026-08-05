@@ -1135,7 +1135,7 @@ work that no longer exists, and one of them would have broken teacher auth.
    `pushRosterToSite()` has run. A re-run that day reported
    `created:0 updated:0 unchanged:142`, proving the roster project's key still
    matches the stored hashes.
-   **STEP 8 RAN 2026-08-05** - nine live Notion databases archived, including the
+   **STEP 8 RAN 2026-08-05** - ten live Notion databases archived, including the
    `Rosters` source of truth (174 rows / 157 real district emails / 168 student
    numbers), `Parent INfo` (guardian names + phone numbers) and four MAP/SBAC
    tables carrying student names. Six were already archived, which is why the

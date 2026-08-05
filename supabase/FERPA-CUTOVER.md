@@ -74,7 +74,10 @@ for 30 days, then empty the trash to make it permanent):**
 | `Period 4` (MAP) | 15 | student names + MAP scores |
 | `Period 2 Map Data` | many | StudentFirstName / StudentLastName + MAP |
 | `Period 5 Winter Map` | many | StudentFirstName / StudentLastName + MAP |
+| `Map Fall-Winter Growth` | many | student names + growth data |
 | `SBAC Data Source` | 80 | state test scores |
+
+That is TEN databases archived on 2026-08-05.
 
 Already archived before tonight: `Warm up Submissions` (1,388), `student
 emails.csv` (103), `Curriculum Test Scores` (554, via an archived ancestor),
@@ -204,7 +207,7 @@ it costs you a confusing error. Only the steps marked **[TODO]** remain.
    alias, scrubbed emails out of old dedupe keys, and dropped the
    `abbie_questions` table plus the dormant `sessions.abbie` column.
 8. **[DONE 2026-08-05 - archived, trash not yet emptied]** Clean up Notion.
-   Nine live databases went to the trash; see the 2026-08-05 status block at
+   Ten live databases went to the trash; see the 2026-08-05 status block at
    the top for the table, the two verification traps, and the API call used.
    Lesson content is untouched. **Remaining human steps: empty the Notion
    trash, and hand-delete the 1-row `Student Submissions` database the API
