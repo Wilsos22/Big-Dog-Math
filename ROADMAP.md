@@ -712,7 +712,32 @@ on the spinner has her call the pick; shared abbieBus, no new setup) ·
 cross-day memory note in the console woven into her context; personality tuned
 to complaining-teen, less Red Bull, shorter replies)
 
-## Known broken — 2026-08-04
+## Known broken — 2026-08-05 (first two weeks, verified against Notion)
+Two authoring gaps in the lessons that actually run, found by reading the live
+Notion database five days before school starts. Both are Steele's to fix and both
+are about two minutes.
+
+- **8/18 and 8/20 are still `Ready for Review`, not `Published`.**
+  `M1.T1.L2-D3` (Least Common Multiple and the Ladder) and `M1.T1.L5-LAUNCH`
+  (What Division Asks). `/api/today` serves ONLY `Published`, so as it stands
+  those two days serve nothing to any surface — the projector, the student
+  homepage and the lesson page all come up empty on a day school is in session.
+  The other eight teaching days 8/10–8/21 are Published, so this is the whole
+  gap, not a sample.
+- **8/21's `Tools` field separates with a semicolon: `Fraction Bars; Whiteboard`.**
+  `splitList` splits on `[\n,]` only (`src/lib/notionLessons.ts:455`), so that is
+  ONE tool name, and `TOOL_ROUTES[name.toLowerCase()]`
+  (`src/app/lesson/page.tsx:105`) misses it — the student page renders one dead
+  pill instead of two working ones. 8/20 had the identical fault on 7/27 and has
+  since been fixed to newlines; 8/21 was missed in that pass. Use a newline or a
+  comma.
+
+NOT VERIFIED this pass, and still open from the 7/27 punch list: the exit-step
+`Response Mode` on the culture days, and the unknown State IDs on 8/19. The
+Notion workspace hit its Query Data Source usage limit mid-sweep, so those two
+could not be read. They are unconfirmed either way — not clear.
+
+## Known broken — 2026-08-04 (RESOLVED except where noted, verified 2026-08-05)
 Found by the first `/status` sweep. Nothing here was reported by a student or a
 class; it came out of reading the live site against the repo. Two of the
 original four are resolved and were pruned by `/status sync` on 2026-08-05.
@@ -750,6 +775,17 @@ is read at `src/lib/teacherAuth.ts:12`).
 ## Known broken — reported live 2026-08-03
 Steele found these while running a real lesson through the surfaces. Four are
 FIXED (commit `88a0a84`); the rest is diagnosed below and needs his call.
+
+READ THIS FIRST (added 2026-08-05): two entries below explain their fix in terms
+of `showLessonSlide` and the auto-composed slide overlay. **That gate and the
+whole `LessonSlideStage` overlay were DELETED on 2026-08-04** — Steele saw the
+room getting two visual languages in one lesson and asked to go back to the one
+frame. Only tombstone comments remain (`teacher/present/page.tsx:721-722`,
+`teacher/pace/page.tsx:355-356`) and the component file is gone. So the fixes
+below are real and still hold, but anyone reading them will go looking for a
+gate that no longer exists. The general lesson outlived the code: a design that
+lands on some states and not others must not be gated by a per-surface list of
+exclusions — give it a positive test both surfaces read from one place.
 
 FIXED:
 - **"You Do" was broken on BOTH projectors, for two different reasons.** On
@@ -1133,7 +1169,16 @@ work that no longer exists, and one of them would have broken teacher auth.
    renders blank. Same rows are also in `proficiency.sql`; this file exists so
    you can run four lines instead of the whole seed.
 3. **Set `WARMUP_ENGINE_KEY` in the WARM-UP Apps Script project** to the same
-   value as `CRON_SECRET` in Vercel. `/api/warmup` is now gated
+   value as `CRON_SECRET` in Vercel.
+   ESCAPE HATCH THIS ITEM DOES NOT MENTION (noted 2026-08-05):
+   `warmup-engine.gs:38-45` now falls back to HTTP Basic with `TEACHER_PASSWORD`,
+   added precisely because the two secrets cannot be compared. So a warm-up build
+   can succeed with the key still mismatched, which makes the "invisible until a
+   build returns `Teacher login required.`" framing below out of date — the
+   failure may never surface at all. The ONE check that settles it: run
+   `testWarmupEngineFetch()` inside the WARM-UP project and look for a returned
+   question set rather than that error string.
+   `/api/warmup` is now gated
    (`SECURE_ROLLOUT_PREFIXES` + `NEXT_PUBLIC_SECURE_STUDENT_DATA=true`) and
    `warmup-engine.gs:39` only sends an Authorization header when that property
    is set - so building a warm-up fails with `Teacher login required.` from
@@ -1201,7 +1246,10 @@ work that no longer exists, and one of them would have broken teacher auth.
    `onOpen()` re-runs and the menu redraws.
 9. Add `Misconception Plans` text property to the Lessons DB; author
    `tag :: move` lines. The code side reads it already
-   (`src/lib/notionLessons.ts:685`, consumed by `/teacher/rightnow`).
+   (`src/lib/notionLessons.ts:724`, consumed by `/teacher/rightnow` at
+   `page.tsx:48,58-59`). Citation corrected 2026-08-05: it said `:685`, which has
+   since drifted about 40 lines and is now `moduleTopic`. Prefer a grep for
+   `misconceptionPlans` over a line number.
 
 Removed as stale on 2026-08-04, with what replaced them:
 - "Reseed mock fixtures (`seed2_part_1…4`, `iready_seed2`)" - no such identifier
