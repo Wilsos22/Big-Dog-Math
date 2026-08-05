@@ -1082,50 +1082,47 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   purpose - as the frame+imported-slide model lands, those surfaces should mirror the main slide and
   keep only the timer + a one-line "do this now" as an overlay. When you add a pace/student scene, ask
   first "is this a real second purpose, or should it just mirror main?"
-- PARTLY DONE (2026-08-03): present AND pace now render the studio's `LessonScreen` for a PLAIN
-  worded/info state, at a literal 1920x1080 scaled to the viewport, so what the Lesson Screen Studio
-  composes finally reaches the wall. The renderer is `src/components/screen/LessonSlideStage.tsx` - an
-  ADDITIVE overlay both surfaces mount via a `showLessonSlide` gate (build `ScreenStepData` from the
-  live snapshot + `defaultZones`), so it covers present/pace's own frame ONLY for slide states and
-  leaves every other scene untouched. pace passes `screen="main"` too, so it MIRRORS the main projector
-  for these states. Three things this deliberately did NOT do, and the traps that go with them:
-  (1) STILL FLUID everywhere else - interactive scenes (tool/poll/discussion/spinner/board/ink) and the
-  bespoke info states (anchor/warm-up/independent/exit) keep the surfaces' own `position:fixed` /
-  `clamp()` / `zoom` rendering. This is NOT the full fluid->fixed rewrite; do not assume a state renders
-  LessonScreen unless it falls through to the plain branch.
-  (2) AUTO-DEFAULT ONLY - it renders `defaultZones` derived from the Notion step; the studio's SAVED
-  drag-drop layout blob (`BDM_SCREEN_LAYOUT`) is still not threaded through the live flow, so a
-  hand-composed layout does not show on the wall yet. That threading is the next piece.
-  (3) LessonScreen's EDITOR-ONLY affordances are now gated on `editing` (the empty-zone dashed
-  placeholder and the screen-name label) and empty zones COLLAPSE to full width on the live wall - do
-  not reintroduce either unguarded, or an editor artifact lands on a projector. The classroom state
-  strip is drawn by the overlay (top-right, filling the collapsed zone) and each surface's OWN strip is
-  suppressed while the overlay is up (`!showLessonSlide`), so they never double.
-  NOTE the DIRECTION above still holds: the eventual full rewrite should target the FRAME wrapping an
-  imported slide, not a native 9-component grid - this step just put the auto-composed native slide on
-  the wall first.
-  **THE TWO `showLessonSlide` GATES ARE ONE LIST IN TWO FILES, AND THEY SHIPPED DIFFERENT** (fixed
-  2026-08-03, one day after the overlay landed; it was two of Steele's six live bugs). The overlay is
-  `position:fixed; inset:0; z-index:12` - it does not sit BESIDE the host surface's scenes, it COVERS
-  them completely, and pace passes `screen="main"`, so wherever the gate is wrong pace stops showing
-  its own frame and draws the MAIN screen's zones instead. On a tool state that is a green band, a step
-  counter and one empty text column, which is exactly what "a your own partial screen" was. present's
-  gate was written from present's scene list and pace's from pace's, and pace has NO tool, resource,
-  board, transition, exit or independent scene to exclude - so every one of those states fell through
-  and got the slide. The rule is that the gate is not "does pace have another scene", it is **does MAIN
-  show the slide here** - anywhere present keeps a bespoke scene, pace showing the auto-composed slide
-  is not mirroring the room, it is showing the room something the main projector is not. Keep the two
-  clause lists together and edit them in the same commit.
-  A PAYLOAD CHECK IS NOT A STATE CHECK. `flow.tool` is only set once the teacher presses Send tool
-  setup on `/control`, and `flow.resource` only when Response Mode is literally `Assigned Tool` AND the
-  `Tool` name resolves - so a step authored with State ID `tool-divisibility` and neither of those is
-  still a tool state and still got the slide. Test the `tool-` PREFIX (the canonical test, see
-  `classStates.ts` `isAssignedTool`) as well as the payload. Nothing about that bug was
-  Divisibility-specific; it fired for every `tool-*` state, and Divisibility is just the one he ran.
-  DIAGNOSE THIS CLASS OF BUG BY LOOKING FOR THE OVERLAY, NOT BY READING THE SCENES: in the surface's
-  document, find every element with `position:fixed` and `z-index >= 10`. One unnamed full-viewport div
-  means the overlay is up; none means the surface is rendering its own frame. That check is what
-  separated "pace is broken" from "pace is covered" in about a minute.
+- **REVERSED 2026-08-04. THERE IS ONE PROJECTOR DESIGN AND IT IS THE SURFACES' OWN WARM NOTEBOOK
+  FRAME.** From 2026-08-03 to 2026-08-04 present and pace ALSO carried a `LessonSlideStage` overlay
+  that drew the studio's `LessonScreen` (left colour band, state word set vertically in it, clock at
+  the band's foot) over their own frame for "plain worded" states. Steele ran it and asked for it
+  gone: "the design consistency is still not there for the slides. Some of them have the old view
+  with the dots and some have the new view with the color bar. Its easier to just go back to the old
+  system. with a colored pill in the top left, the timer top right with the icons for what students
+  should be doing currently." So the ONE language, on both projectors, on every state, is: warm
+  dotted paper, the accent state pill TOP LEFT, the clock TOP RIGHT, the classroom state strip under
+  the clock. `src/components/screen/LessonSlideStage.tsx` is DELETED (restore from `8d805eb` if this
+  ever flips back); both `showLessonSlide` gates and pace's four exclusion-only predicates
+  (`isTransition`, `isExitState`, `hasLiveTool`, `hasAssignedResource`) went with them, and each
+  surface's `<ClassroomStateStrip>` is now mounted unconditionally because nothing can double it.
+  `LessonScreen.tsx` and `lessonScreenModel.ts` STAY - `/teacher/studio` and `/direction-preview`
+  render them, and this removed a consumer, not the component.
+  **WHY IT FAILED IS THE PART TO KEEP: A GATE MADE OF EXCLUSIONS DRIFTS, AND ON A PROJECTOR THAT
+  DRIFT IS TWO DESIGNS IN ONE LESSON.** `showLessonSlide` was a pile of `!this && !that` written
+  per-surface from that surface's own scene list, so which language the room got depended on which
+  clause happened to match. It was reported as flipping between states; measured on `/demo`
+  2026-08-04 it was worse than that - on `launch` PRESENT showed dotted paper (it has a
+  `lessonVisual` clause) while PACE showed the colour band (it has no such clause), so the two
+  projectors were in different design languages at the same instant. The 2026-08-03 fix had already
+  been one round of hand-syncing those two lists, with a comment telling the next person to keep
+  them together. If a future design lands on some states and not others, do not gate it by
+  exclusion; give it a positive test both surfaces read from ONE place.
+  THE OVERLAY WAS PURELY ADDITIVE, WHICH IS WHY REMOVING IT COULD NOT BLANK A ROOM: it was
+  `position:fixed; inset:0; z-index:12` painted OVER a frame each surface had already rendered in
+  full. Verified 2026-08-04 across 15 states per surface on `/demo` - zero full-viewport overlays,
+  present's pill fixed at 31,89 and its clock 32px off the right edge on every one; pace's chip at
+  54,20 and its clock 30px off the right edge on every one.
+  STILL TRUE, AND NOW THE OPEN LOOP: the studio's SAVED layout blob (`BDM_SCREEN_LAYOUT`) was never
+  threaded through the live flow, so the overlay only ever showed `defaultZones` derived from the
+  Notion step. With it gone, **`/teacher/studio` composes screens that reach no projector at all** -
+  it is an editor with no output path. That is a known consequence of this reversal, not a bug to
+  "fix" by remounting the overlay. The DIRECTION above is unchanged and is the answer: the frame
+  wraps an IMPORTED slide, so the route to the wall is the `slide` frame, not a native zone grid.
+  THE DIAGNOSTIC SURVIVES, WITH ITS EXPECTED ANSWER FLIPPED: in a surface's document, find every
+  element with `position:fixed` and `z-index >= 10` filling the viewport. The correct count is now
+  **zero on both projectors, on every state**. One unnamed full-viewport div means something is
+  covering the frame again. That check separated "pace is broken" from "pace is covered" in about a
+  minute on 2026-08-03, and it is what proved the removal on 2026-08-04.
 
 The lesson-content editor's previews are the REAL surfaces, not copies: `/teacher/studio/edit` embeds
 `/teacher/present?studioPreview=1` and `/teacher/pace?studioPreview=1` in scaled iframes and posts
