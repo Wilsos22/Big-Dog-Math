@@ -430,10 +430,12 @@ check("the answer's own timestamp is preserved, not the run time", () => {
 });
 
 check("AN UNTAPPABLE ANSWER KEY MAKES THE POLL UNGRADABLE, NOT THE CLASS WRONG", () => {
-  // Measured live 2026-08-04: 3 of 29 multiple-choice polls have a
-  // correct_answer that is in none of the choices, because splitList shatters
-  // a choice on its commas while Correct Answer is read whole. Bare equality
-  // would mark every student wrong and write that as permanent evidence.
+  // Measured live 2026-08-04: 3 of 29 multiple-choice poll ROWS have a
+  // correct_answer in none of the choices. The parser that caused it is FIXED
+  // (splitChoices in notionLessons.ts, newline only), so this now pins the case
+  // that remains - a teacher can still author a key matching no choice, and
+  // three live steps do. Bare equality would mark every student wrong and write
+  // that as permanent evidence.
   const shattered = {
     id: "sh", kind: "multiple-choice", sessionId: "s", standardId: "6.NS.B.4",
     correctAnswer: "6 x 6 = 36, so every later pair would repeat one she already recorded",

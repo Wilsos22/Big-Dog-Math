@@ -457,6 +457,45 @@ function splitList(text: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Answer choices split on NEWLINES ONLY - never on commas.
+ *
+ * `splitList` splits on `[\n,]`, which is correct for Supplies and Tools (a
+ * teacher really does write "Pencil, Notebook, Ruler" on one line) and
+ * destructive for Choices. Measured against the live Lesson Steps data source
+ * on 2026-08-04: of the 121 steps carrying authored choices, 14 have a comma
+ * INSIDE a choice and ZERO author their choices comma-separated on one line.
+ * So comma splitting has never once done something useful on this property,
+ * and has been shredding those 14 since the day it was written.
+ *
+ * What it shreds is not only prose. `2 / 20 / 200 / 2,000` becomes
+ * `2, 20, 200, 2, 000`: the thousands separator invents a fifth choice, "2"
+ * now appears twice (and two identical entries collide as a React key on
+ * /lesson), and the poll still GRADES, because the key "200" happens to match
+ * a surviving fragment - so the class is scored off a choice list that is
+ * visibly wrong on their screens. A factor-pair question offering `1, 2, 3, 6`
+ * against `1, 2, 3, 4, 6` becomes 17 fragments and blows past the 12-choice cap
+ * in /api/teacher/poll, so it truncates as well. Those are ordinary 6th grade
+ * answer choices, not edge cases.
+ *
+ * This also makes the round trip agree with itself: `notionLessonStepWrites.ts`
+ * already READS choices on `\r?\n` and WRITES them back with `join("\n")`. The
+ * Studio half and the runtime half had silently disagreed about the delimiter.
+ *
+ * Deliberately does NOT strip a leading bullet the way `splitLiveFlowLines` and
+ * `parseHelpPath` do. Their leading dash-or-asterisk strip would rewrite the
+ * answer choice "-5" as "5", and negative numbers are an entire 6th grade unit.
+ * (Do not paste that regex in here to be helpful - it ends in a star followed
+ * by a slash, which closes this comment and makes the rest of the file parse as
+ * code. That is how the first version of this function failed.)
+ */
+function splitChoices(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((choice) => choice.trim())
+    .filter(Boolean);
+}
+
 function uniq(items: string[]): string[] {
   return [...new Set(items)];
 }
@@ -597,7 +636,7 @@ async function mapPage(
       tool: extractText(step["Tool"]),
       question: extractText(step["Question"]),
       pollKind,
-      choices: splitList(extractText(step["Choices"])),
+      choices: splitChoices(extractText(step["Choices"])),
       correctAnswer: extractText(step["Correct Answer"]),
       standard: extractText(step["Standard"]),
       aiContext: parseLessonStepAiContext(stripLessonRoutineConfig(rawAiContext)).userText,

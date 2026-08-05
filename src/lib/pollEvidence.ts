@@ -107,12 +107,17 @@ export interface PollEvidencePoll {
 /**
  * Can a student actually submit the answer key?
  *
- * FOUND ON LIVE DATA, 2026-08-04: 3 of the 29 multiple-choice polls have a
- * `correct_answer` that appears in no choice, because `splitList`
- * (notionLessons.ts:453) splits the Notion `Choices` property on commas while
- * `Correct Answer` is read whole. One authored choice was
- * "6 x 6 = 36, so every later pair would repeat one she already recorded" -
- * the comma shattered it into two choices, and the key matches neither.
+ * FOUND ON LIVE DATA, 2026-08-04: 3 of the 29 multiple-choice poll ROWS have a
+ * `correct_answer` that appears in no choice. The cause was `splitList`
+ * splitting the Notion `Choices` property on commas while `Correct Answer` is
+ * read whole - one authored choice was "6 x 6 = 36, so every later pair would
+ * repeat one she already recorded", and the comma shattered it.
+ *
+ * THAT PARSER IS FIXED (`splitChoices` in notionLessons.ts, newline only), so
+ * no NEW poll can arrive shattered. Those 3 stored rows predate the fix and are
+ * deliberately untouched - see CLAUDE.md. This check is still NOT redundant: a
+ * teacher can author a key matching no choice for ordinary reasons, and three
+ * live steps currently do.
  *
  * Bare equality against an untappable key marks EVERY student wrong, and this
  * bridge would then write that as durable evidence and replay it into the bars
