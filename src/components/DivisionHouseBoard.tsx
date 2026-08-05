@@ -19,13 +19,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_HOUSE_SET,
-  HOUSE_CYCLE,
   HOUSE_OPS,
-  HOUSE_REPEAT_END_LABEL,
   buildHouseTrace,
+  houseRailState,
   parseHouseSet,
   serializeHouseSet,
-  type HouseCycleKey,
   type HouseOp,
   type HousePrompt,
   type HouseSlot,
@@ -643,30 +641,10 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
    * THE D-M-S-B-R RAIL. Steele: "make the mnemonic device rail on the left side.
    * A Big D, M, S, B, R just like we did on the other tools like gems."
    *
-   * Read off the prompts rather than counted: a letter is done when this round
-   * has no steps of it left, active when the student is standing in one, and
-   * SKIPPED when the round has none at all - which is what B is on the last
-   * round, where there is nothing left to bring down. That grey B is not a gap
-   * in the picture, it is the reason the problem is about to end.
+   * The state machine lives in the lib, under contract - it was inlined here and
+   * it was wrong in two ways nothing could see. See `houseRailState`.
    */
-  const lastRound = trace.prompts[trace.prompts.length - 1]?.round ?? 0;
-  const railRound = done ? lastRound : prompt?.round ?? 0;
-  const onLastRound = railRound === lastRound;
-  const cycleState = (key: HouseCycleKey): "done" | "active" | "skipped" | "upcoming" => {
-    if (key === "repeat") {
-      // R is where the cycle goes NEXT, so it is never a step you stand in. It
-      // lights once the round has actually repeated, and on the last round it
-      // becomes the remainder, which is the one thing left to say.
-      if (done) return "done";
-      if (onLastRound && prompt?.cycle === "subtract") return "active";
-      return railRound > 0 ? "done" : "upcoming";
-    }
-    const mine = trace.prompts.filter((p) => p.round === railRound && p.cycle === key);
-    if (!mine.length) return "skipped";
-    const left = trace.prompts.some((p, i) => i >= step && p.round === railRound && p.cycle === key);
-    if (!left) return "done";
-    return prompt?.cycle === key ? "active" : "upcoming";
-  };
+  const railTiles = houseRailState(trace, step);
 
   return (
     <div className="dh-root" style={{ ["--dh-k" as string]: k }}>
@@ -694,10 +672,7 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
           .dh-grid { grid-template-columns:auto minmax(0,1fr); }
           .dh-ask { grid-column:1 / -1; }
         }
-        @media (max-width:760px) {
-          .dh-grid { grid-template-columns:1fr; }
-          .dh-rail { flex-direction:row; flex-wrap:wrap; justify-content:center; }
-        }
+        @media (max-width:760px) { .dh-grid { grid-template-columns:1fr; } }
 
         .dh-stage { display:grid; justify-items:center; padding:10px 0 20px; min-width:0; }
         .dh-board { position:relative; }
@@ -736,8 +711,13 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
            to their places. A chip is a real button so a keyboard or a switch can
            pick it up, and touch-action:none is what stops a Chromebook or an
            iPad scrolling the page instead of dragging the number. */
+        /* A ONE-DIGIT DIVISOR IS THE SMALLEST DRAG HANDLE ON THE TOOL, and it is
+           the first thing a finger touches. At 1px/7px padding the "4" of 96/4
+           measured 37x40 - under the 44px floor every other target on this board
+           clears. min-width does the work, so a four-digit dividend is unchanged. */
         .dh-chip { font:inherit; font-size:inherit; font-weight:inherit; color:inherit;
-          font-variant-numeric:tabular-nums; padding:1px 7px; margin:0 1px; border-radius:9px;
+          font-variant-numeric:tabular-nums; padding:3px 10px; margin:0 2px; border-radius:10px;
+          min-width:44px; min-height:44px; box-sizing:border-box;
           border:2px dashed var(--bdb-brown); background:color-mix(in srgb, var(--bdb-amber) 20%, transparent);
           cursor:grab; touch-action:none; transition:transform 120ms ease, opacity 200ms ease; }
         .dh-chip:hover { transform:translateY(-2px); }
@@ -816,13 +796,27 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
            has actually got it wrong - the target class is only applied once a
            miss has been recorded. The drawn ring that used to sit on top of
            this went with the same comment ("get rid of the circle"). */
-        .dh-slot.target { border-style:solid; border-color:var(--bdb-amber);
+        /* THE BORDER IS ORANGE-600, NOT AMBER, AND THAT IS NOT A STYLE CHOICE.
+           The amber token measures 1.72:1 on cream and its 30% wash 1.18:1 - which
+           was survivable while a drawn ring sat on top of it and the pulse was
+           only a second voice. It is not survivable now: this is the ONLY thing
+           that ever marks the spot, it appears only after a student has already
+           got it wrong, and under prefers-reduced-motion the motion carrying it
+           is gone too. #c4660a is the design system's orange-600 at 3.71:1,
+           clearing the 3:1 floor for a non-text mark - the same colour, for the
+           same reason, as the ring that used to do this job. */
+        .dh-slot.target { border-style:solid; border-color:#c4660a;
           animation:dh-target 1.15s ease-in-out infinite; }
         @keyframes dh-target {
-          0%,100% { background:color-mix(in srgb, var(--bdb-amber) 12%, transparent); box-shadow:0 0 0 0 color-mix(in srgb, var(--bdb-amber) 60%, transparent); }
-          50% { background:color-mix(in srgb, var(--bdb-amber) 32%, transparent); box-shadow:0 0 0 8px color-mix(in srgb, var(--bdb-amber) 0%, transparent); }
+          0%,100% { background:color-mix(in srgb, var(--bdb-amber) 16%, transparent); box-shadow:0 0 0 0 color-mix(in srgb, #c4660a 55%, transparent); }
+          50% { background:color-mix(in srgb, var(--bdb-amber) 42%, transparent); box-shadow:0 0 0 8px color-mix(in srgb, #c4660a 0%, transparent); }
         }
-        @media (prefers-reduced-motion: reduce) { .dh-slot.target { animation:none; background:color-mix(in srgb, var(--bdb-amber) 30%, transparent); } }
+        /* Reduced motion loses the pulse, so it must not also lose the mark: the
+           border stays and the wash sits at its brightest, not its dimmest. */
+        @media (prefers-reduced-motion: reduce) {
+          .dh-slot.target { animation:none; background:color-mix(in srgb, var(--bdb-amber) 42%, transparent);
+            box-shadow:0 0 0 3px color-mix(in srgb, #c4660a 45%, transparent); }
+        }
         .dh-slot.wrong { border-color:var(--bdb-coral-deep);
           background:color-mix(in srgb, var(--bdb-coral) 16%, transparent); }
         .dh-slot.wrong-a { animation:dh-shake 320ms ease; }
@@ -863,7 +857,7 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
            thing as one who watched it change.
            It is deliberately NOT the amber the target class uses, which now
            means something else entirely - that one only appears after a miss
-           and says "here is the spot you were looking for". */
+           and says "here is the spot you were looking for".
            IT IS A RING, NOT A FILL, so that it composes with every other thing
            a cell can be. Painted as a background it fought the green of a spot
            the student had just placed - a coral box with a green numeral in it -
@@ -892,14 +886,28 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
            token. Ink labels on the bright fills - white fails AA on teal, coral
            and green - with brown the one exception, where it is the fill that is
            dark and white is what passes. */
+        /* THE RAIL SIZES ITSELF, NOT OFF THE BOARD SCALE. That scale is derived from the
+           CELL size, which is height-bound, so it pins at 1 exactly when the
+           problem has the most rounds - which put the captions at 8px on a
+           1366x768 Chromebook AND on a 1920x1080 projector. A mnemonic whose
+           expansion cannot be read is five letters. GEMS uses a 72-108px tile
+           with a 0.62rem caption and is legible on the same wall. */
         .dh-rail { display:flex; flex-direction:column; gap:9px; }
-        .dh-tile { width:calc(58px * var(--dh-k)); height:calc(58px * var(--dh-k)); border-radius:15px;
-          display:grid; place-items:center; position:relative; padding-bottom:12px; box-sizing:border-box;
+        /* THE STACKED OVERRIDE LIVES HERE, NOT UP WITH THE GRID BREAKPOINTS. It
+           did, and it never applied: same specificity as the base rule, earlier
+           in the source, so the column direction won and a stacked phone got a
+           tall vertical rail above the board instead of a row across the top. */
+        @media (max-width:760px) { .dh-rail { flex-direction:row; flex-wrap:wrap; justify-content:center; } }
+        .dh-tile { width:clamp(64px,5vw,104px); height:clamp(64px,5vw,104px); border-radius:16px;
+          display:grid; place-items:center; position:relative; padding-bottom:15px; box-sizing:border-box;
           background:var(--bdb-card); border:2px solid var(--bdb-line);
           transition:background 200ms ease, border-color 200ms ease, transform 200ms ease; }
-        .dh-tile .L { font-size:calc(1.7rem * var(--dh-k)); font-weight:900; color:var(--bdb-ink-faint); line-height:1; }
-        .dh-tile .S { position:absolute; bottom:4px; font-size:calc(0.5rem * var(--dh-k)); font-weight:800;
-          letter-spacing:0.02em; line-height:1.1; text-transform:uppercase; color:var(--bdb-ink-faint);
+        .dh-tile .L { font-size:clamp(1.6rem,2.6vw,2.7rem); font-weight:900; color:var(--bdb-ink-faint); line-height:1; }
+        /* The caption scales too. GEMS pins its own at 0.62rem, and matching
+           that fixed the 8px Chromebook case but left the word at 9.9px on a
+           1920 wall - which is the surface the rail most needs to be read from. */
+        .dh-tile .S { position:absolute; bottom:5px; font-size:clamp(0.62rem,0.72vw,0.95rem); font-weight:800;
+          letter-spacing:0.02em; line-height:1.12; text-transform:uppercase; color:var(--bdb-ink-faint);
           text-align:center; width:94%; }
         .dh-tile.active { background:var(--c); border-color:var(--c); transform:scale(1.05);
           box-shadow:0 10px 26px -10px var(--c); }
@@ -916,7 +924,13 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
         .dh-tile.cat-bringdown.active .L, .dh-tile.cat-bringdown.active .S { color:var(--bdb-card); }
         /* B on the last round: there is nothing left to bring down, and saying
            so is more use than leaving the tile looking merely unvisited. */
-        .dh-tile.skipped { background:var(--bdb-ground-2); border-color:var(--bdb-line); opacity:0.5; }
+        /* NOT an opacity fade. At 0.5 the caption measured 1.91:1 - the tile carrying
+           "there is nothing left to bring down, this problem is ending" was the
+           least readable thing on screen, and reads as a broken button rather
+           than a finished step. A flat quiet fill with real ink-soft text is
+           4.7:1 and still clearly the calmest tile on the rail. */
+        .dh-tile.skipped { background:var(--bdb-ground-2); border-color:var(--bdb-line); }
+        .dh-tile.skipped .L, .dh-tile.skipped .S { color:var(--bdb-ink-soft); }
         /* Not a strikethrough here either, for the same reason - and B does not
            need one: greyed out beside four coloured tiles already reads. */
         .dh-tile.skipped .S { text-decoration:line-through; }
@@ -977,20 +991,16 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
             reference the student glances at, so it holds no aria-live - the
             question column is what announces. */}
         <div className="dh-rail">
-          {HOUSE_CYCLE.map((c) => {
-            const state = cycleState(c.key);
-            const label = c.key === "repeat" && onLastRound ? HOUSE_REPEAT_END_LABEL : c.label;
-            return (
-              <div
-                key={c.key}
-                className={`dh-tile cat-${c.key} ${state}`}
-                style={{ ["--c" as string]: CYCLE_COLORS[c.key] }}
-              >
-                <span className="L">{c.letter}</span>
-                <span className="S">{label}</span>
-              </div>
-            );
-          })}
+          {railTiles.map((t) => (
+            <div
+              key={t.key}
+              className={`dh-tile cat-${t.key} ${t.state}`}
+              style={{ ["--c" as string]: CYCLE_COLORS[t.key] }}
+            >
+              <span className="L">{t.letter}</span>
+              <span className="S">{t.label}</span>
+            </div>
+          ))}
         </div>
 
         <div className="dh-stage" ref={stageRef}>

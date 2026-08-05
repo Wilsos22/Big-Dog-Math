@@ -14,11 +14,13 @@
 // Run: npm run test:division-house
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   DEFAULT_HOUSE_SET,
   HOUSE_CYCLE,
   HOUSE_OPS,
   buildHouseTrace,
+  houseRailState,
   normalizeHouseSet,
   parseHouseSet,
 } from "../.tmp-mastery/divisionHouse.js";
@@ -466,6 +468,116 @@ check("the set round-trips", () => {
   assert.equal(normalizeHouseSet(normalizeHouseSet("96/4")), "96/4");
   assert.equal(normalizeHouseSet(""), "");
   assert.equal(normalizeHouseSet(null), "");
+});
+
+check("each destination is asked for in its own words", () => {
+  // The three "where does the answer go" steps point at three different ROWS -
+  // above the bracket, under the dividend, under the rule - and used to share
+  // one byte-identical sentence. That was fine while the target pulsed. It does
+  // not pulse until a miss now, so a student who does not know is given nothing
+  // until they guess wrong, which is not "reps following the numbers".
+  const PLACERS = ["place-quotient", "place-product", "place-rest", "place-bring"];
+  for (const [dividend, divisor] of SHAPES) {
+    const t = buildHouseTrace(dividend, divisor);
+    const asks = PLACERS
+      .map((id) => t.prompts.find((p) => p.id === `${id}-0`))
+      .filter(Boolean)
+      .map((p) => p.ask);
+    assert.equal(new Set(asks).size, asks.length, `${dividend}/${divisor}: two destinations share an ask`);
+    // And each one says WHERE, not just "somewhere".
+    for (const a of asks) {
+      assert.match(a, /bracket|underneath|under the line|straight down/i, `"${a}" names no place`);
+    }
+  }
+});
+
+check("the rail never answers the question the room is being asked", () => {
+  // THE BUG THIS PINS, found by review after it shipped: a tile lit as soon as
+  // the current prompt belonged to it, so on "What operation are we doing
+  // here?" the D tile was the most saturated thing on the page. A student could
+  // clear every operation step in the drill by pressing the button whose word
+  // was glowing - which is the exact shortcut `seatOps` exists to close, and it
+  // deletes the one step where the sequence has to be recalled.
+  const OPS = ["divide", "multiply", "subtract", "bringdown"];
+  for (const [dividend, divisor] of [...SHAPES, [9876, 4], [1000, 8], [84, 9]]) {
+    const t = buildHouseTrace(dividend, divisor);
+    for (let step = 0; step <= t.prompts.length; step += 1) {
+      const rail = houseRailState(t, step);
+      const where = `${dividend}/${divisor} step ${step}`;
+      assert.equal(rail.length, 5, where);
+      const p = t.prompts[step];
+      if (p && p.kind === "operation") {
+        const tile = rail.find((x) => x.key === p.op);
+        assert.notEqual(tile.state, "active", `${where}: the rail lights ${p.op} while asking for it`);
+        assert.notEqual(tile.state, "done", `${where}: the rail says ${p.op} is finished before it is named`);
+      }
+      // A student stands in ONE place. Two solid tiles says otherwise, and the
+      // last round of every problem used to show subtract and repeat together.
+      assert.ok(
+        rail.filter((x) => x.state === "active").length <= 1,
+        `${where}: ${rail.filter((x) => x.state === "active").map((x) => x.key).join(" + ")} are both active`,
+      );
+      // R is where the cycle GOES, never a step you are standing in.
+      assert.notEqual(rail.find((x) => x.key === "repeat").state, "active", where);
+      // B greys out only where there is genuinely nothing left to bring down.
+      const round = p ? p.round : t.prompts[t.prompts.length - 1].round;
+      const hasBring = t.prompts.some((x) => x.round === round && x.cycle === "bringdown");
+      assert.equal(
+        rail.find((x) => x.key === "bringdown").state === "skipped",
+        !hasBring,
+        `${where}: B skipped=${!hasBring ? "expected" : "wrong"}`,
+      );
+      for (const k of OPS) assert.ok(["upcoming", "active", "done", "skipped"].includes(rail.find((x) => x.key === k).state));
+    }
+    // Named, and only then lit: the tile turns active on the step AFTER its
+    // operation is answered, which is what makes it a reward and not a cue.
+    const firstDivide = t.prompts.findIndex((p) => p.id === "op-divide-0");
+    assert.equal(houseRailState(t, firstDivide).find((x) => x.key === "divide").state, "upcoming");
+    assert.equal(houseRailState(t, firstDivide + 1).find((x) => x.key === "divide").state, "active");
+    // And the word only becomes Remainder once the leftover is actually down.
+    assert.equal(houseRailState(t, t.prompts.length - 1).find((x) => x.key === "repeat").label, "Repeat");
+    assert.equal(houseRailState(t, t.prompts.length).find((x) => x.key === "repeat").label, "Remainder");
+  }
+});
+
+check("the board's stylesheet parses - no rule swallowed by a comment", () => {
+  // THE BUG THIS PINS, and it is the worst kind: it shipped, typecheck passed,
+  // 39 contract suites passed, and I verified the class was APPLIED in a live
+  // browser without ever checking that the rule RENDERED anything.
+  //
+  // An edit left a stray `*/` in the middle of a comment block, so the prose
+  // after it plus the selector under it were read as one invalid selector and
+  // the whole `.dh-slot.act` rule was dropped. That rule is the entire
+  // replacement for the arcs - the board said nothing at all on a correct run.
+  //
+  // Nothing in this repo parses that stylesheet, because it is an inline
+  // template literal inside JSX. So: strip balanced comments, and anything
+  // comment-shaped left over means a rule is being eaten.
+  const src = readFileSync(new URL("../src/components/DivisionHouseBoard.tsx", import.meta.url), "utf8");
+  const open = src.indexOf("<style>{`");
+  const close = src.indexOf("`}</style>");
+  assert.ok(open > 0 && close > open, "the inline stylesheet moved - update this check");
+  const css = src.slice(open + "<style>{`".length, close);
+
+  const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.ok(!stripped.includes("*/"), "an orphan */ is left over - a comment closes twice and eats the rule under it");
+  assert.ok(!stripped.includes("/*"), "an unclosed /* swallows everything after it");
+  const braces = [...stripped].reduce((n, ch) => n + (ch === "{" ? 1 : ch === "}" ? -1 : 0), 0);
+  assert.equal(braces, 0, "unbalanced braces in the stylesheet");
+
+  // And the rules the board cannot do without are really declared. Checked
+  // against the COMMENT-STRIPPED text, so a rule that only exists inside a
+  // comment does not count as present.
+  const required = [
+    [/\.dh-slot\.act\s*\{[^}]*box-shadow/, "the current move must ring its two cells"],
+    [/\.dh-slot\.target\s*\{[^}]*border-color/, "the after-a-miss mark must have a border"],
+    [/\.dh-tile\.active\s*\{[^}]*background/, "the rail's live tile must fill"],
+    [/\.dh-tile\.done\s*\{[^}]*background/, "a named step must read as named"],
+    [/\.dh-fly\.go\s*\{[^}]*transform/, "the set-up number must travel"],
+    [/\.dh-zone\s*\{[^}]*position:absolute/, "the drop zones must be placed on the board"],
+    [/\.dh-chip\s*\{[^}]*touch-action:none/, "without this a drag scrolls the page instead"],
+  ];
+  for (const [re, why] of required) assert.match(stripped, re, why);
 });
 
 check("the built-in set climbs, and every problem runs", () => {
