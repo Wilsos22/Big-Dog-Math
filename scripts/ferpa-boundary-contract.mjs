@@ -188,4 +188,14 @@ ok(landing.includes('removeItem("bdm-student-name")'),
 ok(!landing.includes("Hey ${name}") && !lessonPage.includes("Hey {firstName}"),
   "student greetings must not render a name or alias");
 
+// The legacy /join typed-name flow is exempt from the rules above (pre-boundary
+// and superseded by live-flow polls), but it is exempt only because production
+// never serves it: JoinQuestion writes a student-typed real name into
+// session_joins.display_name, so the redirect IS the boundary here. Nothing
+// asserted that until 2026-08-05 - the one protection standing between a typed
+// name and the database was an unpinned env check.
+const joinPage = fs.readFileSync(path.join(root, "src/app/join/page.tsx"), "utf8");
+ok(/NEXT_PUBLIC_SECURE_STUDENT_DATA\s*===\s*"true"[\s\S]{0,40}redirect\(/.test(joinPage),
+  "/join must redirect away under NEXT_PUBLIC_SECURE_STUDENT_DATA (it writes a typed real name)");
+
 console.log(`PASS - ${checks} FERPA boundary checks: the site holds aliases and one-way hashes only, refuses identified payloads, and cannot compute or reverse the hashes.`);
