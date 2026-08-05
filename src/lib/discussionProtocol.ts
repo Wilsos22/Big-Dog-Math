@@ -23,6 +23,21 @@ export interface DiscussionPhaseSnapshot {
   secondsLeft: number | null;
   running: boolean;
   finished: boolean;
+  /**
+   * The absolute instant this round runs out, ISO-8601, or null when the round
+   * is paused or finished.
+   *
+   * The round used to be decrement-based - one subtracted from a ref inside a
+   * 1s interval - so every late or dropped tick was lost for good and the four
+   * surfaces watching a discussion could each drift a different amount. The
+   * deadline is the single instant they all derive from, exactly the way
+   * `liveTimerSeconds` derives the lesson clock from `timer.endsAt`.
+   *
+   * Null while paused is load-bearing: `liveTimerSeconds` falls back to the
+   * frozen `secondsLeft` when there is no deadline, so a paused round must not
+   * carry one or every screen would keep counting down through the pause.
+   */
+  endsAt?: string | null;
   media: {
     url: string;
     type: "image" | "video" | "embed";
@@ -130,6 +145,7 @@ export function createDiscussionRoundSnapshot(
     secondsLeft: round.defaultSeconds,
     running,
     finished: false,
+    endsAt: null,
     media: null,
     roundNumber: round.roundNumber,
     roundCount: DISCUSSION_ROUND_COUNT,
@@ -145,6 +161,13 @@ export function normalizeDiscussionPhaseSnapshot(
     ? Math.max(0, Math.min(round.defaultSeconds, snapshot.secondsLeft))
     : round.defaultSeconds;
   const finished = Boolean(snapshot.finished || secondsLeft <= 0);
+  const running = Boolean(snapshot.running && !finished);
+  // A deadline only means anything while the round is running. Carrying one
+  // through a pause would have every surface counting down through it, and
+  // carrying one past the end would push the clock negative.
+  const endsAt = running && typeof snapshot.endsAt === "string" && Number.isFinite(Date.parse(snapshot.endsAt))
+    ? snapshot.endsAt
+    : null;
   return {
     ...snapshot,
     id: round.id,
@@ -153,7 +176,8 @@ export function normalizeDiscussionPhaseSnapshot(
     timed: true,
     totalSeconds: round.defaultSeconds,
     secondsLeft,
-    running: Boolean(snapshot.running && !finished),
+    endsAt,
+    running,
     finished,
     selectedSharer: round.spinner ? snapshot.selectedSharer || null : null,
     roundNumber: round.roundNumber,
