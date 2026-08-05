@@ -44,8 +44,8 @@ const stepPage = {
     "Tool": rich(""),
     "Question": rich("What do you notice?"),
     "Poll Kind": select("short-answer"),
-    "Choices": rich(""),
-    "Correct Answer": rich(""),
+    "Choices": rich("2,000\r\n200\r\n  \nEach batch uses less than a cup, so more than 6 fit\nFlat, closed, seated, ready"),
+    "Correct Answer": rich("2,000"),
     "Standard": rich("6.NS.4"),
     "AI Context": rich(rawSmallGroupAiContext),
     "Advance": select("Automatic"),
@@ -80,6 +80,7 @@ const lessonPage = {
     "Big Dog Challenge": rich("Prove the result another way."),
     "Due and Turn In": rich("Turn in the paper before class ends."),
     "Help Path": rich("Factor, mark shared structure, then verify."),
+    "Supplies": rich("Pencil, Notebook, Ruler"),
   },
 };
 
@@ -127,6 +128,54 @@ for (const field of ["mainDisplay", "paceDirections", "studentAction", "remoteAc
   if (!step[field]) throw new Error(`Step field ${field} did not map.`);
 }
 if (!step.workSpaceAvailable) throw new Error("Work Space Available did not map.");
+
+// ANSWER CHOICES SPLIT ON NEWLINES ONLY. NEVER ON COMMAS.
+//
+// This fixture had `Choices: rich("")` for as long as the property existed, so
+// nothing here ever exercised the splitter and the bug below shipped unseen.
+// Measured on the live Lesson Steps data source 2026-08-04: 14 of the 121 steps
+// with authored choices carry a comma INSIDE a choice, and ZERO author their
+// choices comma-separated on one line - so comma splitting never once did
+// anything useful on this property.
+//
+// The cases below are the two real shapes it broke. "2,000" is a thousands
+// separator, which made a fifth choice out of "2" and "000" and put a duplicate
+// "2" in the list (two identical entries also collide as a React key on
+// /lesson). The sentences are the shape the audit found first. The blank line
+// is here because a teacher's trailing newline must not become an empty choice.
+// The CRLF is defensive, not observed - none of the 121 live steps carries one,
+// and note the per-line trim would absorb a stray \r even without the \r? in
+// the pattern, so this fixture cannot pin that half on its own.
+//
+// The two assertions after the deepEqual are DOCUMENTATION, not extra coverage:
+// both are implied by it and cannot fail independently. They are here to name
+// the two product invariants a future reader would otherwise have to infer.
+assert.deepEqual(
+  step.choices,
+  ["2,000", "200", "Each batch uses less than a cup, so more than 6 fit", "Flat, closed, seated, ready"],
+  "A comma inside a choice must not shatter it, and a blank line must not become a choice.",
+);
+assert.equal(
+  step.choices.includes(step.correctAnswer),
+  true,
+  "The authored answer key must be one of the choices - if it is not, no student can submit it and bare equality marks the whole class wrong.",
+);
+assert.equal(
+  new Set(step.choices).size,
+  step.choices.length,
+  "Splitting must not manufacture duplicate choices.",
+);
+
+// THE OTHER HALF: `splitList` must KEEP splitting on commas.
+//
+// Supplies and Tools are lesson-level and genuinely are authored inline, so the
+// tempting simplification - make splitList newline-only and delete splitChoices
+// - would quietly turn a supply list into one run-on line on every lesson page.
+assert.equal(
+  lesson.supplies,
+  "Pencil\nNotebook\nRuler",
+  "Supplies is authored inline and must still split on commas.",
+);
 
 assert.equal(step.aiContext, "Do not solve it.", "Internal routine metadata must not enter public AI Context.");
 assert.equal(step.publicSurfaceMode, "linked");

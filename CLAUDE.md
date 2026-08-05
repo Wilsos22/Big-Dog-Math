@@ -1283,7 +1283,70 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   works from home with no live session. `assignments` / `assignment_problems` / `problems` have full RLS
   policies in `student-data-security.sql` but ZERO application code - schema without a UI, so assigning
   a manipulative is not a capability yet.
-  THE BIG ONE (found 2026-07-29): **`poll_answers` NEVER REACHES `responses`, SO THE EXIT TICKET MOVES
+  **BRIDGED 2026-08-04 - READ THIS BEFORE THE PARAGRAPH BELOW, WHICH IS NOW HISTORY.**
+  `src/lib/pollEvidence.ts` + `POST /api/teacher/poll-evidence` turn graded poll answers into
+  `responses` rows and then call `recomputePeriod`, so the learning checks and the exit ticket do
+  now move a bar. What it grades is DELIBERATELY NARROW (Steele, 2026-08-04): `structured-numeric`
+  and `multiple-choice` only. NOT `short-answer` (bare string equality marks a right answer wrong
+  over a stray space - and note M1.T1.L5-D1's exit ticket is that kind, so that lesson's exit still
+  contributes nothing), NOT `multiple-choice-explain` (readinessEvidence cannot see the kind at
+  all, so bridging it would make the bars and the visit list disagree about one student - fix the
+  reader first), and NOT `fist-to-five` (a confidence self-report must never score a standard).
+  FOUR THINGS THAT WILL BITE WHOEVER TOUCHES IT. (1) **The bar row carries `standard_id: null` and
+  that is not a mistake** - `recompute.ts:133` filters bar events to `!standardId`, so attaching
+  the resolved standard is exactly the edit that stops the bar moving. There are two row shapes: a
+  per-question STANDARD row for the stage gate, and one aggregate BAR row. (2) **The bar row is one
+  per student per lesson per domain, not one per question.** The bars are an EWMA at alpha 0.30 per
+  event, so a row per question would take a domain bar 60 -> 42 -> 29 -> 21 -> 14 on four wrong
+  answers in one period, where a whole warm-up day is a single step. Every other writer aggregates
+  first; this matches them. (3) **Notion's `Standard` property does not match the seeded
+  `standards` ids** - measured on the live `polls` table, five of the six distinct authored values
+  were unseeded (`6.NS.4` omits the cluster letter, and some carry two codes as `6.EE.2b; 6.EE.3`).
+  `normalizeStandardId` inserts the cluster letter when exactly one seeded id qualifies and takes
+  the first RESOLVABLE code of a list; anything left over is REPORTED, never guessed, and a poll
+  with no resolvable standard writes nothing at all (a domainless row is dropped by recompute with
+  a bare `continue`). (4) **A multiple-choice key that is in none of the choices makes the poll
+  ungradable, not the class wrong** - see the `splitList` trap below. `npm run test:poll-evidence`
+  pins all four, and each was verified by reverting the fix and watching the suite go red.
+  STILL TRUE and still the gap: `practice_assignment_attempts` and 16 of 23 tools reach nothing,
+  and nothing calls the bridge automatically yet - it is a route you POST, and `GET` on it is a dry
+  run. Also NOT verified end to end, because `poll_answers` has zero rows lifetime until the FERPA
+  Workspace half lands.
+  **A MULTIPLE-CHOICE ANSWER KEY CAN BE UNTAPPABLE** (found 2026-08-04, PARSER FIXED THE SAME DAY -
+  this paragraph used to end "the AUTHORING bug is unfixed", which is no longer true). `splitList`
+  splits on `[\n,]`, and `Choices` used to be read through it while `Correct Answer` is read whole,
+  so an authored choice containing a comma was shattered and the key matched none of the fragments.
+  `Choices` now goes through `splitChoices` (newline only); `splitList` KEEPS its commas for
+  `Supplies` and `Tools`, which really are authored inline. `npm run test:notion-lesson-contract`
+  pins BOTH directions, so the tempting unification - make `splitList` newline-only and delete
+  `splitChoices` - goes red on the supplies assertion.
+  THE CAUSE WAS NOT MAINLY PROSE, WHICH IS WHY IT SURVIVED SO LONG. Measured on the live Lesson
+  Steps data source: 121 steps carry authored choices, 14 have a comma INSIDE a choice, and ZERO
+  author their choices comma-separated on one line - comma splitting never once did anything useful
+  on that property. The commonest shape is a THOUSANDS SEPARATOR: `2 / 20 / 200 / 2,000` became
+  `2, 20, 200, 2, 000`, inventing a fifth choice and putting "2" in twice (two identical entries
+  also collide as a React key - `key={c}` at `lesson/page.tsx`, and six other surfaces share it).
+  A factor-pair list, `1, 2, 3, 6` against `1, 2, 3, 4, 6`, became 17 fragments and was then
+  silently TRUNCATED by the 12-choice cap in `/api/teacher/poll`. The worst cases were the ones
+  whose key happened to match a surviving fragment: those passed `answerKeyIsTappable` and GRADED
+  NORMALLY off a choice list the room could see was wrong. Four steps go from untappable to
+  gradable with this fix.
+  `answerKeyIsTappable` STAYS, and its reason is unchanged - a teacher can still type a key that
+  matches no choice for ordinary reasons, and three live steps do exactly that (two with a prose
+  sentence as the key, one with an EMPTY `Correct Answer` on a 4-choice step). Nothing names them at
+  lesson load, so they contribute no evidence until someone edits them. That is AUTHORING.
+  TWO "CHOICES" INPUTS EXIST AND THEY HAVE OPPOSITE RULES. `/control`'s own exit-ticket field is
+  labelled "Choices (comma-separated)" with the placeholder "Yes, No, Not sure" and still splits on
+  `[\n,]` - correct for a field a teacher types into directly. The Notion property is one per line.
+  Nothing in Notion says so, so the habit can cross over, and the failure is silent and room-facing:
+  one button reading "Yes, No, Not sure" on thirty Chromebooks. Do not "unify" these two.
+  THE 3 SHATTERED `polls` ROWS IN THE DATABASE ARE NOT REPAIRED, and the reason is narrower than it
+  looks. `/api/student/session-state` DOES read a stored open poll's `choices` and `/lesson` renders
+  them verbatim, so a reader-side fix is invisible on a poll left open - this is safe ONLY because
+  `poll_answers` is 0 rows lifetime and ZERO polls sit on an open session (all 80 rows are dead
+  rehearsal artifacts). If a shattered poll is ever found open, fix the ROW, not the parser.
+  THE ORIGINAL NOTE (found 2026-07-29), kept because its reasoning is still the reason the bridge
+  looks the way it does: **`poll_answers` NEVER REACHES `responses`, SO THE EXIT TICKET MOVES
   NO MASTERY BAR.** Steele moved the exit ticket on-site specifically for data retention and mid-lesson
   deployment - no Google Form to click into - and the rows do persist. But every exit step in the
   deployable lessons carries a `Response Mode` + `Question`, so `navigateFlow` creates a POLL and the
@@ -2463,6 +2526,37 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   same warning this file already gives about scratch worktrees. This is how the audit fixes were
   build-verified on the exact shipping commit while the main tree was mid-merge and `.next` was
   EPERM-locked.
+- **TWO WAYS A VERIFICATION RUN LIES IN THIS SETUP, AND BOTH PRESENT AS THE OPPOSITE OF THE TRUTH**
+  (found 2026-08-04, one after the other, while verifying the Choices parser fix).
+  (1) A BACKGROUND PROCESS DOES NOT SURVIVE THE END OF A SANDBOX `bash` CALL. `npm test` launched
+  with `nohup ... &` was KILLED at suite 37 of 39 when the call returned - but the wrapper had
+  already written a nonzero status line, and the log's last line was a suite PASSING. So the exit
+  code said failure, the log said success, and neither was the answer: two suites simply never ran.
+  Run a long chain in slices that finish inside one call, and confirm the LAST entry of
+  `package.json`'s `test` chain actually appears in the log rather than trusting a status file.
+  (2) DESKTOP COMMANDER'S SHELL IS ZSH, NOT BASH. `${PIPESTATUS[0]}` is a bash-ism and expands to
+  EMPTY there (`$pipestatus[1]` is the zsh spelling), so `npm run build | tail; echo
+  "EXIT=${PIPESTATUS[0]}"` prints a bare `EXIT=` while the process still reports exit 0, because the
+  final `echo` succeeded. Verify a Next build by `.next/BUILD_ID` EXISTING after `rm -rf .next` -
+  that is an artifact, not an inference. Both of these are the same failure this file already warns
+  about under `npm test`: an exit code is not evidence.
+- **`mcp__workspace__web_fetch` CACHES BY URL, SO A PLAIN FETCH OF `/api/build-id` CAN REPORT A
+  STALLED PIPELINE THAT IS NOT STALLED** (found 2026-08-04, during a `/status` pass, and it very
+  nearly shipped as a tier 1 finding). The route is CORRECT - `src/app/api/build-id/route.ts` sets
+  `export const dynamic = "force-dynamic"` and returns `cache-control: no-store`, and
+  `DeployRefresh.tsx:35` fetches it with `cache: "no-store"` - so classroom displays are unaffected
+  and there is nothing to fix in the product. The stale value is the AGENT'S OWN fetch tool
+  replaying a response cached under that exact URL, which the previous day's status pass had
+  populated with the genuinely-stranded `265ea95`. Measured back to back: the plain URL returned
+  `265ea95` (42 commits and a day behind) while `?cachebust=<anything>` returned `bbf45a0`, which
+  was `origin/main` HEAD and had deployed 3.7 seconds after the push.
+  ALWAYS FETCH IT WITH A CACHE-BUSTING QUERY PARAM. This trap is nastier than it looks because the
+  false reading is INDISTINGUISHABLE from the real 2026-08-03 stall - same route, same symptom, same
+  sha - and this file already instructs an agent to treat exactly that reading as the leading tier 1
+  finding. Corroborate with Vercel `list_deployments` before calling a pipeline stalled: a genuine
+  stall shows NO deployment created for the newest commits, whereas here the newest commit had a
+  READY production deployment all along. Same family as the two lies above - a value you did not
+  observe this run is not evidence.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like

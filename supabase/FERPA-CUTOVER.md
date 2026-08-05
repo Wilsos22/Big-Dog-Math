@@ -23,7 +23,51 @@ Done, in order, and verified against the live database and site:
   deliberately not run - run `mock-live-session-seed.sql` when you want a
   visit-list practice session.
 
-REMAINING - the Workspace side (steps 1, 2, 5, 6, 8 below): the roster Sheet
+## STATUS UPDATE 2026-08-04 - STEPS 1 AND 5 ARE DONE. THE MARKERS BELOW ARE STALE.
+
+Read this before believing any `[TODO]` in the list below. Measured against the
+live database on 2026-08-04:
+
+- **156 students across Periods 1-5 all carry BOTH an `alias` and an
+  `email_hmac`**, created 2026-08-01. The site cannot compute an HMAC - only
+  Apps Script can, with `BDM_ROSTER_HMAC_KEY` - so that key EXISTS and
+  `pushRosterToSite()` has RUN. Step 1 and step 5 are complete.
+- Steele re-ran `pushRosterToSite()` the same day as a key-drift check:
+  `created:0, updated:0, unchanged:142`. All-unchanged proves the roster
+  project's key still produces the same hashes that are in the database. It
+  does NOT prove the WARM-UP project's key matches - that is still step 2 and
+  is invisible until a real warm-up returns "not on roster".
+- Three data issues that push surfaced, all in the Sheet, none in the code:
+  **151 sheet rows against 156 site students**, so roughly 14 students in the
+  database are not in the current sheet - the push is an UPSERT that NEVER
+  deletes, so those are stale draft-roster rows that will sit in every roster
+  count and every "Joined N of M" denominator forever. Several rows skipped as
+  "duplicate row for one site student" (two sheet rows hashing to one student -
+  usually a schedule change leaving both). And rows 153-157 skipped for
+  "no period".
+- **`auth_user_id` is still 0 for every student**, which is the real remaining
+  blocker: it is written by a completed warm-up verification (step 6), NOT by
+  the roster. No amount of roster importing produces it, and until one lands,
+  every student write path - poll answers, signals, tool evidence - returns 428
+  by design.
+
+STILL REMAINING: step 2 (confirm the warm-up project's `BDM_ROSTER_HMAC_KEY`
+matches), step 6 (one real warm-up on a district account), step 8 (archive the
+Notion student databases by hand).
+
+RELATED, AND IT BLOCKS WARM-UP CREATION TODAY: `/api/warmup` is now GATED (it
+is in `SECURE_ROLLOUT_PREFIXES` and production has
+`NEXT_PUBLIC_SECURE_STUDENT_DATA=true`), and `warmup-engine.gs:39` only sends
+an Authorization header when the Script Property `WARMUP_ENGINE_KEY` is set.
+Its own comment at line 14 says to set it "once /api/warmup is gated" - the
+condition came true and the property was never set, so building a warm-up
+fails with `Teacher login required.` from `src/proxy.ts:104`. Fix: set
+`WARMUP_ENGINE_KEY` in the WARM-UP Apps Script project to the same value as
+`CRON_SECRET` in Vercel. This is the exact shape of the structural audit's
+"assumption that was true when built and stopped getting examined".
+
+ORIGINAL REMAINING NOTE (2026-08-01), now partly stale - the Workspace side
+(steps 1, 2, 5, 6, 8 below): the roster Sheet
 + `BDM_ROSTER_HMAC_KEY` + `BDM_CRON_SECRET`, the `.gs` paste-ins, the roster
 push, a real warm-up verification, and hand-archiving the Notion student
 databases. Until step 2 lands, a warm-up submission posts a raw email and the

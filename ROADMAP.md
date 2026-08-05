@@ -8,6 +8,28 @@ should update BOTH that database and this mirror when a feature ships.
 Snapshot (2026-07-16):
 
 ## Live
+**A lesson finally moves a mastery bar** (8/4). Every learning check, readiness
+question and exit ticket wrote to `poll_answers`, and nothing read it into
+`responses` - the only table `recompute` reads besides i-Ready and checkpoints -
+so the `mastery` table had been empty for the life of the project, and 5 of a
+48-minute lesson's minutes could reach mastery at all. `src/lib/pollEvidence.ts`
+re-grades from (poll, answer), because `poll_answers` stores no correctness and
+no standard; both live on the `polls` row. `POST /api/teacher/poll-evidence`
+writes the rows and then calls `recomputePeriod`, since nothing else in the
+codebase ever triggered it. `GET` is a dry run. Structured-numeric and
+multiple-choice only - short answer is bare string equality, and a fist-to-five
+is a confidence self-report that must never score a standard. Factor-pair builds
+get partial credit, capped below full marks when the build is wrong so the bar
+cannot rise 100% for a student the misconception tag just flagged. Notion's
+`Standard` values do not match the seeded ids (five of six were unseeded), so
+the normalizer inserts a cluster letter when exactly one seeded id qualifies and
+refuses on ambiguity; unresolvable is reported, never guessed. One bar row per
+student per LESSON, not per question, because the bars are an EWMA at alpha 0.30
+and per-question rows would take a bar 60 to 14 on four wrong answers in one
+period. 44 contract checks, each verified by reverting its fix and watching the
+suite go red. **Not yet proven end to end: `poll_answers` has zero rows lifetime
+until the FERPA Workspace half lands, and the vocabulary SQL is unrun.**
+
 **Decimals, step by step** (8/2, rebuilt 8/3 from twenty toolbar comments).
 `/decimal-steps` is a guided tool covering all four operations, one move at a
 time. Students TYPE the arithmetic and only choose on the decisions; a carry is
@@ -1052,26 +1074,70 @@ Infinite Campus push · Scan/OCR checkpoint pipeline · Google student sign-in
 Pruned 2026-08-04 by the first `/status` sweep - four of the six items pointed at
 work that no longer exists, and one of them would have broken teacher auth.
 
-1. **Redeploy from the Vercel dashboard** and see whether the pipeline recovers.
-   26 commits are stranded behind it, including every projector fix from the
-   8/3 live run. If a manual redeploy builds fine, the GitHub App lost repo
-   access at the private flip and needs reauthorizing. Nobody else can click it.
-   (See the 2026-08-04 Known broken block.)
-2. Run `supabase/table-captains-and-supply-checks.sql` - table captains and the
+1. ~~**Redeploy from the Vercel dashboard**~~ **RESOLVED 2026-08-04 - the
+   pipeline is healthy.** Measured end to end this session: pushed
+   `a6fe76c..bc8d232` to `main` and the live `/api/build-id` moved to `bc8d232`
+   in **60 seconds**. Nothing is stranded behind the deploy gap any more. Keep
+   the CLAUDE.md habit of checking `/api/build-id` after a push anyway - the gap
+   was real for 22 commits and "pushed" is still a different claim from "live".
+2. ~~**Run `supabase/poll-evidence-vocabulary.sql`**~~ **RESOLVED 2026-08-04 -
+   Steele ran it, and both rows are confirmed in the live `misconceptions` table
+   carrying `standard_id = 6.NS.B.4`.** The tags now cluster with a domain
+   instead of into blanks. Original note follows. Four lines. The poll -> mastery
+   bridge shipped 2026-08-04 and writes two new misconception tags
+   (`lists a non-factor pair`, `stops before all pairs are found`). An unseeded
+   tag does NOT error: it silently loses its domain, so i-Ready corroboration in
+   `/api/live/groups` goes to zero and any teacher move authored against it
+   renders blank. Same rows are also in `proficiency.sql`; this file exists so
+   you can run four lines instead of the whole seed.
+3. **Set `WARMUP_ENGINE_KEY` in the WARM-UP Apps Script project** to the same
+   value as `CRON_SECRET` in Vercel. `/api/warmup` is now gated
+   (`SECURE_ROLLOUT_PREFIXES` + `NEXT_PUBLIC_SECURE_STUDENT_DATA=true`) and
+   `warmup-engine.gs:39` only sends an Authorization header when that property
+   is set - so building a warm-up fails with `Teacher login required.` from
+   `src/proxy.ts:104`. The script's own comment says to set it "once /api/warmup
+   is gated"; the condition came true and nobody re-read the comment.
+   **PARTLY DONE 2026-08-04 AND NOT YET PROVEN.** Steele set the property, but
+   Vercel does not let you read `CRON_SECRET` back, so whether the two values
+   MATCH is unverified - and a mismatch is invisible until a warm-up build
+   returns `Teacher login required.` The fix is not to recover the old value but
+   to ROTATE: generate one new string and paste the identical value into THREE
+   places - Vercel `CRON_SECRET` (then redeploy, or the change does not take),
+   the WARM-UP project's `WARMUP_ENGINE_KEY`, and the ROSTER project's Bearer
+   token for `warmup-roster-push.gs`. Miss the third and the roster push starts
+   401ing silently. The proof it worked is `testWarmupEngineFetch()` in the
+   warm-up project returning a set rather than an auth error.
+4. **Clean the roster Sheet.** The 2026-08-04 push reported 151 sheet rows
+   against 156 site students, so roughly **14 stale draft-roster students** sit
+   in the database and the push NEVER deletes - they will pad every roster count
+   and every "Joined N of M" denominator all year. Also: several rows skipped as
+   "duplicate row for one site student" (Golden Badger, Jolly Ocelot, Vivid
+   Ocelot, Sunny Walrus, Smart Toucan, Eager Salmon - usually a schedule change
+   leaving both rows), and rows 153-157 skipped for "no period".
+5. Run `supabase/table-captains-and-supply-checks.sql` - table captains and the
    closeout supply check are DARK until it is applied, and `/api/roster/sync`
    500s on the `table_number` select without it.
-3. Run `supabase/grudge.sql` - Grudge Ball's code and migration are done and
+6. Run `supabase/grudge.sql` - Grudge Ball's code and migration are done and
    waiting on this plus a live run.
-4. The FERPA cutover's Workspace half, per `supabase/FERPA-CUTOVER.md` steps 1,
-   2, 5, 6, 8: the roster Sheet, `BDM_ROSTER_HMAC_KEY` in BOTH Apps Script
-   projects, the paste-ins, the roster push, one real warm-up. **Until this
-   lands, no student write can succeed at all** - fist-to-5, the stuck chip and
-   tool evidence all fail the verified-student gate and present as dead buttons.
-   Measured 8/3: `select count(*) from students where auth_user_id is not null`
-   returns 0. This is the single biggest blocker in the file.
-5. Paste `warmup-week-builder.gs` + `warmup-pools-data.gs` into the WARM-UP
+7. The FERPA cutover's Workspace half - **NARROWED 2026-08-04, steps 1 and 5 are
+   DONE.** All 156 students in Periods 1-5 carry an `alias` AND an `email_hmac`,
+   created 2026-08-01; the site cannot compute an HMAC, so the key exists and
+   `pushRosterToSite()` has run. A re-run that day reported
+   `created:0 updated:0 unchanged:142`, proving the roster project's key still
+   matches the stored hashes.
+   WHAT IS ACTUALLY LEFT: **step 2** (confirm the WARM-UP project's
+   `BDM_ROSTER_HMAC_KEY` matches the roster project's - unproven, and invisible
+   until a real warm-up returns "not on roster"), **step 6** (one real warm-up on
+   a district account - this is what writes `auth_user_id`; the roster never
+   does), **step 8** (archive the Notion student databases by hand).
+   **Until step 6 lands, no student write can succeed at all** - fist-to-5, the
+   stuck chip, tool evidence and now the poll -> mastery bridge all fail the
+   verified-student gate and present as dead buttons. Re-measured 8/4:
+   `select count(*) from students where auth_user_id is not null` returns 0.
+   This is still the single biggest blocker in the file.
+8. Paste `warmup-week-builder.gs` + `warmup-pools-data.gs` into the WARM-UP
    Apps Script project (code shipped, waiting on the paste-in).
-6. Add `Misconception Plans` text property to the Lessons DB; author
+9. Add `Misconception Plans` text property to the Lessons DB; author
    `tag :: move` lines. The code side reads it already
    (`src/lib/notionLessons.ts:685`, consumed by `/teacher/rightnow`).
 
