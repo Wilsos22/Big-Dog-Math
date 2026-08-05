@@ -295,14 +295,64 @@ Codex and cloud sessions need them too (rule 9).
   Editor). `supabase/SETUP.md` documents env setup.
 - `warmup-*.gs` (repo root) - Google Apps Script warm-up pipeline (generator, Notion sync, evidence
   poster, week builder, pools). Steele pastes these into the Apps Script editor.
-  TWO SEPARATE APPS SCRIPT PROJECTS, and pasting a file into the wrong one breaks things:
-  the WARM-UP response spreadsheet holds `warmup-evidence.gs`, `warmup-notion-sync.gs`,
-  `warmup-sidebar-functions.gs`, the generators and the engine; the ROSTER spreadsheet
-  ("26-27 Rosters") holds `warmup-roster-push.gs` and `warmup-student-profile.gs`. Both projects
-  need `BDM_ROSTER_HMAC_KEY` set to the IDENTICAL value - a mismatch is invisible until a real
-  warm-up returns "not on roster". Note both `warmup-sidebar-functions.gs` and
-  `warmup-student-profile.gs` define `onOpen()`, which is only safe because they live in
+  THREE APPS SCRIPT PROJECTS, NOT TWO, and pasting a file - or a Script Property - into the wrong
+  one breaks things silently. This line said TWO until 2026-08-04, and the missing third one cost
+  Steele an entire evening.
+  (1) The LIVE WARM-UP project, bound to the warm-up response spreadsheet, id
+  `1YQAN1GU8JL6skLkCv4zFH_UDKzolwQRRSBOg0HONyGfZO9kRhG0kZrpB`. Holds `warmup-evidence.gs`,
+  `warmup-notion-sync.gs`, `warmup-sidebar-functions.gs`, `notion-warmup-requests.gs`,
+  `warmup-engine.gs`, the generators and the week builder. THIS is the project the Notion
+  Create Warm-up button's work actually runs in.
+  (2) A STALE SECOND PROJECT BOUND TO THE SAME SPREADSHEET - one spreadsheet can carry more than
+  one Apps Script project, and this one shows in the editor as "Untitled project". Tell it apart by
+  what is in it: the OLD OpenAI path (`warmup-ai-generator.gs`, an `OPENAI_API_KEY` property). The
+  live project builds through the parametric engine and needs no AI key at all, so AI CALLS IN THE
+  FILE LIST MEANS YOU ARE IN THE WRONG PROJECT. Observed open at
+  `1NVBcSo_H2xAl_MsndDpxqEHLwsaGnC1LFJANNSNsPQeP3a677uQuxHvX` during the 8/4 failure; do not treat
+  that id as authoritative, treat the file list as the test.
+  (3) The ROSTER spreadsheet ("26-27 Rosters"), holding `warmup-roster-push.gs` and
+  `warmup-student-profile.gs`.
+  Projects (1) and (3) both need `BDM_ROSTER_HMAC_KEY` set to the IDENTICAL value - a mismatch is
+  invisible until a real warm-up returns "not on roster". Note both `warmup-sidebar-functions.gs`
+  and `warmup-student-profile.gs` define `onOpen()`, which is only safe because they live in
   different projects.
+  **THE CRON SECRET LIVES IN THREE PLACES AND ALL THREE MUST MATCH EXACTLY** (2026-08-04): Vercel
+  env `CRON_SECRET`, warm-up project (1) Script Property `WARMUP_ENGINE_KEY`, and roster project (3)
+  Script Property `BDM_CRON_SECRET`. `warmup-engine.gs` sends it as `Authorization: Bearer <value>`
+  to `https://bigdogmath.com/api/warmup`, which the proxy gates because that endpoint returns the
+  ANSWER KEY (`/api/warmup` is in `SECURE_ROLLOUT_PREFIXES`, live because production has
+  `NEXT_PUBLIC_SECURE_STUDENT_DATA=true`). Do NOT "fix" a 401 by ungating the route.
+  FOUR THINGS THAT MAKE THIS FAIL QUIETLY, all four hit in one evening. **Vercel never re-reveals an
+  existing secret**, so you cannot copy `CRON_SECRET` to match it - ROTATE to a value you choose and
+  write it into all three places, rather than trying to retype what is already there. **An env change
+  does not reach the running deployment until you REDEPLOY.** **A value pasted from a `.env` line
+  arrives as `CRON_SECRET=<value>`** and the whole string is compared, so the `=` and everything left
+  of it must be stripped. And **the roster push is the one that fails silently if you miss it** -
+  rotating the other two leaves it 401ing with no error surfaced anywhere, students simply stop
+  syncing.
+  THE SYMPTOM IS ROOM-FACING AND NAMES THE WRONG CAUSE: the Notion `Warm-Up Build Note` reads
+  `Warm-up engine 401: {"error":"Teacher login required."}`, which reads as a login problem with the
+  site and is actually a secret mismatch. Diagnose from INSIDE project (1), not by editing and
+  re-pressing - a scratch function that logs `key.length`, whether it starts with `CRON_`, whether it
+  contains `=`, whether it differs from its own `trim()`, and then the response code of a real
+  `UrlFetchApp.fetch` to the endpoint, settles it in one run without printing the secret. A
+  well-formed value is 43 chars (base64url of 32 bytes, no padding); 43 chars AND a 401 means the
+  mismatch is on the Vercel side or you are in the wrong project.
+  **THE WEEKDAY CHECK IS ON THE LESSON'S `Date`, NOT ON THE DAY YOU PRESS THE BUTTON.**
+  `getWarmupRequestDateInfo_` refuses Sat/Sun because `dayIndex` indexes a five-day week, so
+  weekend-BUILDING has always worked and only a weekend-DATED lesson is refused. Steele read
+  "Warm-ups can only be created for Monday through Friday" as a lock on his own Saturday prep and
+  asked for it to be removed; it was left in place 2026-08-04 once that was clear. Note the
+  `Warm-Up Build Note` PERSISTS until the next attempt, so a stale weekend error can sit on a lesson
+  whose date has since moved to a weekday - re-press before believing it.
+  NOTHING ABOUT THE QUESTIONS REACHES NOTION. A successful build writes only POINTERS to the
+  `Warm up Links` data source (`collection://3142eba1-de37-8024-b6cc-000b38db5d17`): Name, Key (form
+  id), Lesson Code, Topic, Week, Day, Date, Synced At, Source, Form Link, Edit Link, Response Sheet,
+  Response Tab, plus the relation back to the lesson. That schema has NO question fields, and
+  `upsertWarmupLinkPage_` writes none - the six questions exist only in the Google Form and its
+  response tab, so reviewing a warm-up means opening `Edit Link`. The one direction that DOES flow
+  through Notion is the lesson's `Retention Q4` / `Retention Q5`, which are authored in Notion and
+  feed INTO the build.
   `warmup-student-profile.gs` is the WORKSPACE-SIDE student profile workbook (2026-08-01): a
   Profile tab with a student dropdown joining Contacts / Testing / Behavior / ContactLog (all keyed
   on EMAIL) plus `SiteData` pulled from the site's gated `/api/teacher/roster` + `/api/mastery` and
