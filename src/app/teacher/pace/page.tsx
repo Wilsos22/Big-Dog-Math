@@ -627,12 +627,58 @@ export default function PaceSupportPage() {
               successCriterion={publicSuccessCriterion(flow.lesson?.selectedSuccessCriterion)}
             />
           </div>
-        ) : poll && poll.kind === "fist-to-five" ? (
-          // Gate on the poll's ACTUAL kind, not the state: readiness questions
-          // share the learning-check theme, and this block was rendering a
-          // fist-to-five histogram for multiple-choice polls that never ran one.
+        ) : poll ? (
+          // Gate on the PRESENCE of a poll, never on its kind. The kind-only
+          // gate that used to live here ("poll.kind === 'fist-to-five'") was
+          // half right: it correctly stopped a fist-to-five histogram being
+          // drawn for a multiple-choice poll that never ran one, but it did it
+          // by dropping the whole scene - so a multiple-choice, short-answer or
+          // structured-numeric check fell through to the plain directions
+          // column, and the support screen said nothing at the one moment the
+          // room was answering. Reported live 2026-08-03 as "the first ready
+          // check shows the previous state's directions": those directions were
+          // the fallback, still on screen because nothing replaced them.
+          // THE TWIN ON present IS NOT IDENTICAL, AND DO NOT ASSUME IT IS.
+          // present's showPollPanel is presence AND a three-way condition
+          // (learning-check theme, or results stage, or no Main Display), so a
+          // still-responding short-answer step that HAS a Main Display shows
+          // that display on the main projector while this screen shows the
+          // check. That is the mirror rule working - main carries the content,
+          // the support screen carries the question and the count - so the two
+          // gates are deliberately different and neither is a copy of the
+          // other. What IS shared: both branch on kind INSIDE the panel rather
+          // than gating on it, and that part must stay in step.
           <div className="pw-center">
             <div className="pw-check">
+              {poll.kind !== "fist-to-five" ? (
+                // Per the pace/student mirror rule: a student-interactive step
+                // is a real second purpose, and what this screen owes the room
+                // is the question plus how many have answered. It cannot leak
+                // an answer - the published poll carries no answer key at all
+                // (LiveFlowPoll has no correctAnswer field) and choices are
+                // never read here.
+                // THE QUESTION STAYS UP IN BOTH STAGES. An earlier draft swapped
+                // it for "Class results" at results stage, which put a heading
+                // promising results above no results - this screen draws no
+                // tally for these kinds - and removed the question the class is
+                // right then discussing. present keeps the question up through
+                // results for the same reason.
+                <>
+                  <p className="pw-check-title">Check open</p>
+                  <h2 className="pw-check-prompt">{poll.question}</h2>
+                  {poll.kind === "structured-numeric" ? null : (
+                    // structured-numeric is PROMPT ONLY in every stage - no
+                    // reveal and no response count. That is a deliberate
+                    // decision on present, not an oversight there, and the two
+                    // surfaces must agree on it.
+                    <p className="pw-check-count">
+                      {pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"}
+                      {poll.stage === "results" ? " in." : " received. Names stay private."}
+                    </p>
+                  )}
+                </>
+              ) : (
+              <>
               <p className="pw-check-title">Fist to five</p>
               {poll.stage === "results" ? (
                 <>
@@ -656,6 +702,8 @@ export default function PaceSupportPage() {
                   <h2 className="pw-check-prompt">Answer on your Chromebook</h2>
                   <p className="pw-check-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received. Names stay private.</p>
                 </>
+              )}
+              </>
               )}
             </div>
           </div>
