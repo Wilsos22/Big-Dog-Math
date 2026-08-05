@@ -79,8 +79,58 @@ export const HOUSE_CYCLE: { key: HouseCycleKey; letter: string; label: string }[
   { key: "repeat", letter: "R", label: "Repeat" },
 ];
 
-/** What the R tile reads on the last round, where nothing is left to bring down. */
+/** What the R tile reads once the problem is finished and the leftover is down. */
 export const HOUSE_REPEAT_END_LABEL = "Remainder";
+
+export type HouseTileState = "upcoming" | "active" | "done" | "skipped";
+
+/**
+ * What the D-M-S-B-R rail shows, for the round the student is standing in.
+ *
+ * IN THE LIB BECAUSE THE COMPONENT GOT IT WRONG AND NOTHING COULD SEE IT. The
+ * first version lit a tile as soon as the current prompt belonged to it - which
+ * meant that on "What operation are we doing here?" the D tile was already the
+ * most saturated thing on the page, and a student could answer every operation
+ * question in the drill by pressing the button whose word was glowing. That is
+ * the exact failure `seatOps` exists to prevent, arriving by another road, and
+ * it defeats the one step where the sequence has to be recalled rather than
+ * read. The rule is: A LETTER LIGHTS WHEN IT HAS BEEN NAMED, NEVER WHILE IT IS
+ * BEING ASKED FOR.
+ *
+ * R is never `active`. It is not a step you stand in - it is where the cycle
+ * goes next - so it fills once the problem has actually repeated, and it reads
+ * "Repeat" until the very end, where the leftover makes it the remainder.
+ * Giving it an active state put TWO solid tiles on the rail at once on the last
+ * round of every problem, which says the student is in two places.
+ */
+export function houseRailState(
+  trace: HouseTrace,
+  step: number,
+): { key: HouseCycleKey; letter: string; label: string; state: HouseTileState }[] {
+  const done = step >= trace.prompts.length;
+  const lastRound = trace.prompts[trace.prompts.length - 1]?.round ?? 0;
+  const round = done ? lastRound : trace.prompts[step]?.round ?? 0;
+
+  return HOUSE_CYCLE.map((c) => {
+    if (c.key === "repeat") {
+      return {
+        ...c,
+        label: done ? HOUSE_REPEAT_END_LABEL : c.label,
+        state: (done || round > 0 ? "done" : "upcoming") as HouseTileState,
+      };
+    }
+    const mine = trace.prompts.filter((p) => p.round === round && p.cycle === c.key);
+    // No steps of this letter this round at all - which is B on the last round,
+    // where there is nothing left to bring down.
+    if (!mine.length) return { ...c, state: "skipped" as HouseTileState };
+    const left = trace.prompts.some((p, i) => i >= step && p.round === round && p.cycle === c.key);
+    if (!left) return { ...c, state: "done" as HouseTileState };
+    const named = trace.prompts.some(
+      (p, i) => i < step && p.round === round && p.kind === "operation" && p.op === c.key,
+    );
+    return { ...c, state: (named ? "active" : "upcoming") as HouseTileState };
+  });
+}
 
 export interface HouseSlot {
   id: string;
@@ -365,7 +415,10 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       // NOT "We are dividing 13" - the very next prompt asks what operation we
       // are doing, and the rail keeps the previous sentence on screen while it
       // asks. The question was answering itself, every round of every problem.
-      say: `${c.partial} is the number under the bracket now.`,
+      // NOT "the number under the bracket" - on 96/4 round zero that is 96, and
+      // the number we are working on is 9. It still must not name the operation,
+      // because the very next prompt asks for it.
+      say: `${c.partial} is the part we are working on.`,
       hint: takesExtraDigits
         ? `${divisor} is bigger than ${digits[0]}, so one digit is not enough. Take the next one with it and click any part of that number.`
         : i === 0
@@ -408,7 +461,13 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
     prompts.push({
       id: `place-quotient-${i}`,
       kind: "slot",
-      ask: "Where does that answer go? Click the spot.",
+      // THE ASK NAMES THE ROW, THE HINT NAMES THE COLUMN, and that split matters
+      // more than it used to. Three different destinations - above the bracket,
+      // under the dividend, under the rule - all shared the byte-identical
+      // sentence "Where does that answer go? Click the spot.", which was
+      // survivable while the spot pulsed. It does not pulse until a miss now, so
+      // the words are the ONLY instruction and they carried no place at all.
+      ask: "That answer goes above the bracket. Click the spot.",
       slots: [qSlot],
       fill: [qSlot],
       // Move 2 of the six. The divisor is where the answer CAME FROM, so the
@@ -455,7 +514,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
     prompts.push({
       id: `place-product-${i}`,
       kind: "slot",
-      ask: "Where does that answer go? Click the spot.",
+      ask: "Write that underneath the number you just divided. Click the spot.",
       slots: productIds,
       fill: productIds,
       // Move 4. Steele: "there should be an = and arrow between 4 and 8" - the
@@ -486,7 +545,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
     prompts.push({
       id: `place-rest-${i}`,
       kind: "slot",
-      ask: "Where does that answer go? Click the spot.",
+      ask: "The difference goes under the line. Click the spot.",
       slots: restIds,
       fill: restIds,
       // Move 6, the second "down". ANCHORED ON THE LAST DIGIT OF EACH, not the
@@ -537,7 +596,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       prompts.push({
         id: `place-bring-${i}`,
         kind: "slot",
-        ask: "Where does it go? Click the spot.",
+        ask: "It comes straight down. Click where it lands.",
         slots: [`bd${i}`],
         fill: [`bd${i}`],
         visual: { sign: "↓", from: `dv-${next.pos}`, to: `bd${i}` },

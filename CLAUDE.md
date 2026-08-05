@@ -474,6 +474,30 @@ Codex and cloud sessions need them too (rule 9).
   the trap Fraction Bars found. The travel is a straight transform between two MEASURED viewport
   points over `FLY_MS`, not a path being traced - the arrows it used to follow are gone. This
   REPLACED the "Get started" pop-out.
+  **NEVER PUT A BACKTICK INSIDE A PER-PAGE `<style>` BLOCK, AND NEVER LEAVE A COMMENT UNBALANCED IN
+  ONE.** Both cost real time on 2026-08-04 and the second one SHIPPED. Every page in this repo styles
+  itself with an inline `<style>{\`...\`}</style>` template literal, so a backtick in a CSS comment
+  ends the literal and TypeScript reports a JSX brace error dozens of lines away from the cause -
+  three times in one session. Worse: a stray `*/` makes the CSS parser read the prose after it plus
+  the selector under it as one invalid selector and DROP THAT RULE, silently. That is how
+  `.dh-slot.act` - the entire replacement for the arcs - shipped rendering nothing, past typecheck,
+  past 39 contract suites, and past a browser check that confirmed the CLASS was applied without ever
+  asking whether the RULE resolved. `npm run test:division-house` now strips balanced comments from
+  the block and fails on any leftover `/*` or `*/`, plus unbalanced braces, plus a list of rules the
+  board cannot do without. Copy that check when a new tool's styling carries something load-bearing.
+  THE GENERAL LESSON, and it is the third time this file has had to write a version of it: asserting
+  that a class is in `className` is not asserting that anything is on screen. Read the computed
+  value - and in the preview pane finish the transition first (`el.getAnimations().forEach(a =>
+  a.finish())`), because a frozen 180ms transition reports the OLD value and reads as a bug that is
+  not there.
+  **THE RAIL MAY NOT LIGHT A LETTER IT IS ASKING FOR.** `houseRailState` lives in
+  `src/lib/divisionHouse.ts`, not in the component, because the inline version got this wrong and
+  nothing could see it: a tile lit as soon as the current prompt belonged to it, so on "What
+  operation are we doing here?" the D tile was the most saturated thing on the page and a student
+  could clear every operation step by pressing the button whose word was glowing. That is exactly the
+  shortcut `seatOps` exists to close, arriving by another road. A letter lights when it has been
+  NAMED. R is never active - it is where the cycle goes next, not a step you stand in - and giving it
+  one put two solid tiles on the rail on the last round of every problem.
   THE GRID IS NOT UNIFORM. The gutter is HALF a cell (`GUTTER_RATIO`), so NOTHING may compute an x
   from a column by hand - `houseLayout()` in `src/lib/divisionHouseArcs.ts` owns
   `colX`/`colW`/`colMid`/`centre`, and a stray `col * cellPx` is right on the divisor side and half
