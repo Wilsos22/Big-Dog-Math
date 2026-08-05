@@ -693,24 +693,21 @@ FIXED:
   position now. The chips are gated on `flow.state`, so the same gap also took
   the stuck chip off screen — one fault, not two.
 
+FIXED, CONFIRMED IN A REAL RUN BY STEELE 2026-08-04:
+- **The ready check.** Half was never a bug: "renders an anonymous bar first" is
+  `resolveRemoteNextBehavior` deliberately turning Next into "Reveal anonymous
+  bars" on a responding learning check. The real fault was that `/control` keyed
+  the live poll to the STATE ID, and Steele's shape is always a fist-to-five poll
+  followed by TWO ready checks — and his lessons author consecutive checks with
+  one shared state id ("Readiness Question 1" and "Readiness Question 2" are both
+  `question`, verified against the live Notion Lesson Steps source, in lesson
+  after lesson). So the first poll never closed, its question and revealed bars
+  republished as the second step's, and the second never opened its own. Keyed to
+  `sequence.currentIndex` now. Same pass fixed the remote-command rehydrate
+  dropping `boxes`/`pairs`, which blanked the inputs on a Structured Numeric step
+  the moment the Remote advanced into it. Both pinned in `test:control-lineup`.
+
 STILL OPEN:
-- **The first ready check shows the PREVIOUS state's directions.** Half of this
-  is NOT a bug: "renders an anonymous bar first" is `resolveRemoteNextBehavior`
-  deliberately turning Next into "Reveal anonymous bars" on a responding learning
-  check, and the bars read empty because no student write can land yet (see
-  below). The stale-directions half has three candidate causes, none proven, and
-  the strongest one is a `/control` change Steele should weigh: `controlPoll` is
-  cleared on a change of **state id**, not step (`control/page.tsx:1479`, `:1769`),
-  so advancing between two steps that share a state id republishes the previous
-  step's poll — question, id and revealed bars — under the new step, and the
-  auto-open guard then refuses to open the new check. Every other lifecycle
-  marker in that file keys on `activeItem.uid`; these two are the outliers.
-  Second candidate: the Remote indexes the Notion step list with the runtime
-  lineup's cursor when `presentation.notionStepId` is empty
-  (`teacher/remote/page.tsx:773-782`), which is exactly a step added from
-  /control's bank. Third: pace's ready-check scene is gated on `fist-to-five`
-  only (`pace/page.tsx:624`), so any other response kind falls through to plain
-  directions with no sign a check is open.
 - **The Student preview rendering the homepage was NOT reproducible.** The
   ClassSync suspicion is wrong for a preview: `isTeacherPreview()` returns true
   inside an iframe, so ClassSync is inert there. Driven on `/demo`, the student

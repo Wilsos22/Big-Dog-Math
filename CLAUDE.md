@@ -2042,7 +2042,9 @@ the invariants they protect are easy to break again.
   Remote-driven Next updates `currentIndex`, which is what makes the stale poll fall away). Every
   other lifecycle marker in that file was already per-step (`autoOpenedStepRef`, `openingStepRef`,
   `autoOpenedDiscussionStepRef` all key on `activeItem.uid`); these two were the outliers.
-  `npm run test:control-lineup` pins it, mutation-tested both ways.
+  `npm run test:control-lineup` pins it, mutation-tested both ways. CONFIRMED WORKING IN A REAL
+  RUN by Steele 2026-08-04 - it could not be browser-verified (a live session with students is the
+  only way to drive it), so his run is the verification, not the contract.
   MAKE THE FIELD REQUIRED, NOT OPTIONAL. Typing `stepIndex` as required is what surfaced the THIRD
   construction site - the remote-command rehydrate at the bottom of the file, which is the path the
   iPad actually drives and the one no reading of the top of the file would have found.
