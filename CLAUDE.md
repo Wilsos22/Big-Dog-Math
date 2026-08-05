@@ -2502,6 +2502,20 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   same warning this file already gives about scratch worktrees. This is how the audit fixes were
   build-verified on the exact shipping commit while the main tree was mid-merge and `.next` was
   EPERM-locked.
+- **TWO WAYS A VERIFICATION RUN LIES IN THIS SETUP, AND BOTH PRESENT AS THE OPPOSITE OF THE TRUTH**
+  (found 2026-08-04, one after the other, while verifying the Choices parser fix).
+  (1) A BACKGROUND PROCESS DOES NOT SURVIVE THE END OF A SANDBOX `bash` CALL. `npm test` launched
+  with `nohup ... &` was KILLED at suite 37 of 39 when the call returned - but the wrapper had
+  already written a nonzero status line, and the log's last line was a suite PASSING. So the exit
+  code said failure, the log said success, and neither was the answer: two suites simply never ran.
+  Run a long chain in slices that finish inside one call, and confirm the LAST entry of
+  `package.json`'s `test` chain actually appears in the log rather than trusting a status file.
+  (2) DESKTOP COMMANDER'S SHELL IS ZSH, NOT BASH. `${PIPESTATUS[0]}` is a bash-ism and expands to
+  EMPTY there (`$pipestatus[1]` is the zsh spelling), so `npm run build | tail; echo
+  "EXIT=${PIPESTATUS[0]}"` prints a bare `EXIT=` while the process still reports exit 0, because the
+  final `echo` succeeded. Verify a Next build by `.next/BUILD_ID` EXISTING after `rm -rf .next` -
+  that is an artifact, not an inference. Both of these are the same failure this file already warns
+  about under `npm test`: an exit code is not evidence.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like
