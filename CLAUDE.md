@@ -443,11 +443,18 @@ Codex and cloud sessions need them too (rule 9).
   (1) **THERE ARE NO CONNECTORS ON THE BOARD. NONE.** The arched line that drew itself over 520ms,
   the arrowhead that faded in behind it, the sign glyph that burst in at 1.5x and rotated, and the
   plaque's two arrows down to the divisor and in through the door are ALL GONE. What is happening is
-  said by the two cells the move runs between lighting up together (`.dh-slot.act`, a RING so it
-  composes with the green of a placed digit instead of fighting it), in the round's colour, plus the
-  arithmetic written out in numbers in the right rail. The engine still traces the same six moves
-  per round and `visual.from`/`visual.to` are still the two numbers being operated on - they are now
-  READ rather than DRAWN. `npm run test:division-house-arcs` pins the absence.
+  said by the two NUMBERS the move runs between, ringed in the round's colour - a RING so it
+  composes with the green of a placed digit instead of fighting it - plus the arithmetic written out
+  in the right rail. The engine still traces the same six moves per round; they are READ rather than
+  DRAWN. `npm run test:division-house-arcs` pins the absence.
+  TWO THINGS ABOUT THAT HIGHLIGHT ARE LOAD-BEARING AND BOTH WERE WRONG FIRST. It lights WHOLE
+  NUMBERS - `visual.fromSlots` / `visual.toSlots`, not the single `from`/`to` anchors, which lit the
+  "1" of 14 and the "1" of 12 on 144/12 and left the other halves dark, the exact thing
+  `slots: string[]` exists to stop one prompt earlier. And THE TWO ENDS ARE WEIGHTED DIFFERENTLY -
+  a 2px hairline on the source, a 4px solid ring on the destination - because two identically-lit
+  cells say WHICH PAIR and nothing about which way or in what order, and "the 2 came from the 9 and
+  the 4 and goes UP" is the content of the move for a student two years behind. Do not equalise them
+  and do not merge the two sets.
   (2) **THE PULSE IS WHAT A MISS BUYS, NOT WHAT THE QUESTION OPENS WITH** ("get rid of the circle.
   have it say to select the number closest to the door inside the house and if they get it wrong
   then have it pulse"). The drawn ring is gone and `.dh-slot.target` is applied only once `missed`
@@ -460,6 +467,16 @@ Codex and cloud sessions need them too (rule 9).
   remainder. All done. Nice!" gets said. B shows as SKIPPED on the last round; that grey tile is not
   a gap, it is the reason the problem is ending. DO NOT put a strikethrough through the letters: a
   struck-through capital D is a different letter, on a rail whose entire job is those five.
+  (3b) **THE RIGHT COLUMN CARRIES THE COUNT AND THE CONTROLS, AND NO TRAIL OF PAST SENTENCES.**
+  Both from the same review. The "Problem 1 of 4 / Start over / Next problem" row used to be a
+  full-width band above the board; height is the binding constraint here (`cellPx` is
+  `min(byWidth, byHeight)`), so on a 1366x768 Chromebook a four-round problem sat at the `CELL_MIN`
+  floor with the board 84px below the fold while that column had room to spare - moving it plus
+  cutting `PLAQUE_GAP` from 46 to 30 (it was sized for the plaque arrows, which are gone) got that
+  to 10px. And the four past `say` sentences that used to stack under the question repeated in prose
+  exactly what the work lines say in numbers, in the same green left-bar as the live confirmation:
+  ten blocks of text made the RIGHT RAIL the centre of attention on a board whose centre is the
+  house. The board is the record - that is what a placed spot staying green is for.
   (4) **THE NUMBERS RIDE ALONGSIDE THE WORDS** ("show the math happening in numbers next to the step
   so show the 9 divide sign 4"). Each prompt carries `work: {key, text}` - the line as it reads AFTER
   that prompt is answered - and a line only ever GROWS by one piece. That growth is the whole safety

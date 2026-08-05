@@ -213,11 +213,18 @@ check("THE BOARD DRAWS NO CONNECTORS, and marks no spot until a miss", () => {
       `${gone} is drawn again - Steele asked twice for no arrows or lines`,
     );
   }
-  // What says it instead.
-  assert.ok(/dh-slot\.act \{/.test(src), "the two cells in the move must light up");
+  // What says it instead: the two numbers the move runs between, weighted so
+  // the board says WHICH WAY - a hairline on the source, a solid ring on the
+  // destination. Identical rings say only "these two", which is not the move.
+  assert.ok(/\.dh-slot\.act-from \{[^}]*box-shadow/.test(src), "the source needs its hairline");
+  assert.ok(/\.dh-slot\.act-to \{[^}]*box-shadow/.test(src), "the destination needs its solid ring");
   assert.ok(
-    /actSlots\.has\(slot\.id\) \? "act"/.test(src),
-    "the highlight must come from the move's own two spots, not from a guess",
+    /actFrom\.has\(slot\.id\) \? "act act-from"/.test(src) && /actTo\.has\(slot\.id\) \? "act act-to"/.test(src),
+    "the highlight must come from the move's own two numbers, not from a guess",
+  );
+  assert.ok(
+    /fromSlots \?\? \[\]/.test(src) && /toSlots \?\? \[\]/.test(src),
+    "it must light WHOLE numbers - anchors alone lit the 1 of 14 and the 1 of 12 on 144/12",
   );
   assert.ok(
     /isTarget && revealTarget \? "target"/.test(src),

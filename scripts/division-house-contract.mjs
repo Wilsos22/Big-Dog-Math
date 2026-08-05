@@ -470,6 +470,48 @@ check("the set round-trips", () => {
   assert.equal(normalizeHouseSet(null), "");
 });
 
+check("a move lights WHOLE numbers, and says which way it runs", () => {
+  // The board shows the current move by ringing the two numbers it runs
+  // between - a hairline on the source, a solid ring on the destination, so it
+  // says direction and not just "these two". Both ends must therefore be the
+  // COMPLETE number: anchored on one cell each, it lit the "1" of 14 and the
+  // "1" of 12 on 144/12 and left the other halves dark, which is precisely what
+  // `slots: string[]` exists to stop one prompt earlier.
+  for (const [dividend, divisor] of [...SHAPES, [9876, 4], [1000, 8]]) {
+    const t = buildHouseTrace(dividend, divisor);
+    const ids = new Set(t.slots.map((s) => s.id));
+    const rowOf = (id) => t.slots.find((s) => s.id === id).rowIndex;
+    for (const p of t.prompts) {
+      if (!p.visual) continue;
+      const v = p.visual;
+      const where = `${dividend}/${divisor} ${p.id}`;
+      for (const [side, set, anchor] of [["from", v.fromSlots, v.from], ["to", v.toSlots, v.to]]) {
+        assert.ok(set?.length, `${where}: ${side} names no number`);
+        for (const id of set) assert.ok(ids.has(id), `${where}: ${side} -> ${id} is not on the board`);
+        assert.ok(set.includes(anchor), `${where}: the ${side} anchor is not part of its own number`);
+        // One number sits on one row, in adjacent columns.
+        const rows = new Set(set.map(rowOf));
+        assert.equal(rows.size, 1, `${where}: ${side} spans ${rows.size} rows, so it is not one number`);
+        const cols = set.map((id) => t.slots.find((s) => s.id === id).col).sort((a, b) => a - b);
+        for (let i = 1; i < cols.length; i += 1) {
+          assert.equal(cols[i], cols[i - 1] + 1, `${where}: ${side} has a gap, so it is not one number`);
+        }
+      }
+      // The two ends are different numbers, or there is no move to show.
+      assert.notDeepEqual(v.fromSlots, v.toSlots, `${where}: a move onto itself`);
+    }
+    // And the ends really are the numbers the prompts name.
+    const rounds = new Set(t.prompts.map((p) => p.round)).size;
+    for (let r = 0; r < rounds; r += 1) {
+      const partial = t.prompts.find((p) => p.id === `pick-partial-${r}`).slots;
+      const divisorSlots = t.prompts.find((p) => p.id === `pick-divisor-${r}`).slots;
+      assert.deepEqual(t.prompts.find((p) => p.id === `op-divide-${r}`).visual.fromSlots, partial, `${dividend}/${divisor} r${r}`);
+      assert.deepEqual(t.prompts.find((p) => p.id === `op-divide-${r}`).visual.toSlots, divisorSlots, `${dividend}/${divisor} r${r}`);
+      assert.deepEqual(t.prompts.find((p) => p.id === `op-subtract-${r}`).visual.fromSlots, partial, `${dividend}/${divisor} r${r}`);
+    }
+  }
+});
+
 check("each destination is asked for in its own words", () => {
   // The three "where does the answer go" steps point at three different ROWS -
   // above the bracket, under the dividend, under the rule - and used to share

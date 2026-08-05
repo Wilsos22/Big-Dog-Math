@@ -168,8 +168,22 @@ export interface HousePrompt {
   options?: HouseOp[];
   /** Slots that get written in once this prompt is answered. */
   fill: string[];
-  /** The sign to animate between two slots, and where it goes. */
-  visual?: { sign: string; from: string; to: string };
+  /**
+   * The move: which number it runs FROM and which it runs TO.
+   *
+   * `from`/`to` are single anchor cells, kept for geometry. `fromSlots`/
+   * `toSlots` are the WHOLE numbers at each end, and they are what the board
+   * lights - because a number is one number. Anchors alone lit the "1" of 14 and
+   * the "1" of 12 on 144/12 and left the other half dark, which is the exact
+   * thing `slots: string[]` exists to prevent one prompt earlier.
+   *
+   * The two ends are kept apart rather than merged into one set so the board can
+   * say WHICH WAY the move goes - a thin ring on the source, a solid one on the
+   * destination. Two identically-lit cells say which pair without saying that
+   * the 2 came from the 9 and the 4 and travels UP, and for a student two years
+   * behind that direction is the whole content of the move.
+   */
+  visual?: { sign: string; from: string; to: string; fromSlots: string[]; toSlots: string[] };
   /** Said after the prompt is answered. */
   say: string;
   /** Said when they click or choose the wrong thing - a nudge, never the spot. */
@@ -435,7 +449,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       op: "divide",
       options: seatOps(`op-divide-${i}@${signature}`),
       fill: [],
-      visual: { sign: "÷", from: partialSlot, to: firstDivisorSlot },
+      visual: { sign: "÷", from: partialSlot, to: firstDivisorSlot, fromSlots: partialSlots, toSlots: divisorSlots },
       say: "Divide.",
       hint: "We are asking how many times one number fits inside the other.",
       round: i,
@@ -474,7 +488,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       // equals runs from it up to the quotient - "4 goes into 9 twice, and the
       // 2 lives up here". Without it the board drew the question (9 ÷ 4) and
       // never drew the answer arriving.
-      visual: { sign: "=", from: firstDivisorSlot, to: qSlot },
+      visual: { sign: "=", from: firstDivisorSlot, to: qSlot, fromSlots: divisorSlots, toSlots: [qSlot] },
       // Two numerals with only a space between them read as one: "4 goes into
       // 9 2 times", and on a zero quotient "3 goes into 1 0 times", which a
       // sixth grader reads as "3 goes into 10 times".
@@ -504,7 +518,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       ask: "Multiply that answer by which spot? Click it.",
       slots: divisorSlots,
       fill: [],
-      visual: { sign: "x", from: qSlot, to: firstDivisorSlot },
+      visual: { sign: "x", from: qSlot, to: firstDivisorSlot, fromSlots: [qSlot], toSlots: divisorSlots },
       say: `${c.q} x ${divisor} = ${c.product}.`,
       hint: "You multiply the digit you just wrote by the number outside the house.",
       round: i,
@@ -520,7 +534,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       // Move 4. Steele: "there should be an = and arrow between 4 and 8" - the
       // multiply arrow already ran quotient -> divisor, and this is the other
       // half of the same sentence, the product landing under the house.
-      visual: { sign: "=", from: firstDivisorSlot, to: productIds[0] },
+      visual: { sign: "=", from: firstDivisorSlot, to: productIds[0], fromSlots: divisorSlots, toSlots: productIds },
       say: `${c.product} goes under the number we divided.`,
       hint: "A product is written under the number it came out of, ready to be taken away.",
       round: i,
@@ -535,7 +549,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       op: "subtract",
       options: seatOps(`op-subtract-${i}@${signature}`),
       fill: [],
-      visual: { sign: "−", from: partialSlot, to: productIds[0] },
+      visual: { sign: "−", from: partialSlot, to: productIds[0], fromSlots: partialSlots, toSlots: productIds },
       say: "Subtract.",
       hint: "We take away the part we have already divided up.",
       round: i,
@@ -555,7 +569,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       // EMPTY SIGN MEANS THE ARROW ALONE - the minus sign and its rule are
       // already sitting beside these two numbers, so a glyph here would be the
       // third mark saying the same thing. Same call the bring-down arrow makes.
-      visual: { sign: "", from: productIds[productIds.length - 1], to: restIds[restIds.length - 1] },
+      visual: { sign: "", from: productIds[productIds.length - 1], to: restIds[restIds.length - 1], fromSlots: productIds, toSlots: restIds },
       say: `${c.partial} − ${c.product} = ${c.rest}.`,
       hint: "A difference is written underneath the numbers you subtracted.",
       round: i,
@@ -599,7 +613,7 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
         ask: "It comes straight down. Click where it lands.",
         slots: [`bd${i}`],
         fill: [`bd${i}`],
-        visual: { sign: "↓", from: `dv-${next.pos}`, to: `bd${i}` },
+        visual: { sign: "↓", from: `dv-${next.pos}`, to: `bd${i}`, fromSlots: [`dv-${next.pos}`], toSlots: [`bd${i}`] },
         say: `It lands beside the ${c.rest}, and now we start again.`,
         hint: "It comes straight down and sits next to what was left over.",
         round: i,

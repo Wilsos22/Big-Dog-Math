@@ -49,8 +49,15 @@ const ROW = 96;
 // tall less 4px of margin top and bottom, and rowPx is cellPx * 96/104.
 const CELL_MIN = 58;
 const CELL_MAX = 168;
-/** Space between the plaque naming the parts and the top of the house. */
-const PLAQUE_GAP = 46;
+/**
+ * Space between the plaque naming the parts and the top of the house.
+ *
+ * It was 46, which was sized to hold the two arrows that used to descend from
+ * the plaque into the divisor and in through the door. Those are gone, so the
+ * gap is now only breathing room - and it comes straight off the board's height
+ * budget, which is the binding constraint on a Chromebook.
+ */
+const PLAQUE_GAP = 30;
 /**
  * One colour per round, cycling. "the new round should be a different color."
  *
@@ -396,7 +403,8 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
    * routing in there took a review cycle to get right.
    */
   const liveVisual = trace.prompts.slice(0, step).filter((p) => p.visual).slice(-1)[0];
-  const actSlots = new Set(liveVisual?.visual ? [liveVisual.visual.from, liveVisual.visual.to] : []);
+  const actFrom = new Set(liveVisual?.visual?.fromSlots ?? []);
+  const actTo = new Set(liveVisual?.visual?.toSlots ?? []);
   const actColor = ARC_COLORS[(liveVisual?.round ?? 0) % ARC_COLORS.length];
 
   const advance = (p: HousePrompt) => {
@@ -650,7 +658,8 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
     <div className="dh-root" style={{ ["--dh-k" as string]: k }}>
       <style>{`
         .dh-root { width:100%; display:grid; gap:18px; }
-        .dh-top { display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+        .dh-top { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+          padding-bottom:4px; border-bottom:1px solid var(--bdb-line); margin-bottom:4px; }
         .dh-count { font-size:0.78rem; font-weight:800; letter-spacing:0.14em; text-transform:uppercase; color:var(--bdb-ink-faint); margin:0 0 4px; }
         .dh-btn { font:inherit; font-weight:800; font-size:0.88rem; min-height:44px; padding:0 17px; border-radius:11px;
           border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink); cursor:pointer; }
@@ -862,8 +871,17 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
            a cell can be. Painted as a background it fought the green of a spot
            the student had just placed - a coral box with a green numeral in it -
            and the placed-stays-green rule is load-bearing on this board. A ring
-           sits outside all of that, in the 4px margin the cells already carry. */
-        .dh-slot.act { box-shadow:0 0 0 3px var(--act); transition:box-shadow 180ms ease; }
+           sits outside all of that, in the 4px margin the cells already carry.
+           THE TWO ENDS ARE WEIGHTED DIFFERENTLY, and that is the whole point.
+           Two cells lit identically say WHICH PAIR and nothing else - not which
+           way the number travels, and not in what order. For a student two years
+           behind, "the 2 came from the 9 and the 4, and it goes UP" is the
+           content of the move. A hairline on the source and a solid ring on the
+           destination encodes that statically: no line drawn between them, no
+           motion to be clunky, and it still reads at the back of the room. */
+        .dh-slot.act { transition:box-shadow 180ms ease; }
+        .dh-slot.act-from { box-shadow:0 0 0 2px color-mix(in srgb, var(--act) 45%, transparent); }
+        .dh-slot.act-to { box-shadow:0 0 0 4px var(--act); }
 
         /* The rule under the number being subtracted; the difference goes below it. */
         .dh-subrule { position:absolute; z-index:2; height:calc(4px * var(--dh-k)); border-radius:2px;
@@ -956,8 +974,6 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
           border-left:4px solid var(--bdb-coral-deep); color:var(--bdb-ink-soft); }
         .dh-say { font-size:calc(1rem * var(--dh-k)); font-weight:700; line-height:1.4; margin:0; padding:10px 14px;
           border-left:4px solid var(--bdb-green-deep); color:var(--bdb-ink); }
-        .dh-trail { display:grid; gap:5px; }
-        .dh-trail span { font-size:calc(0.9rem * var(--dh-k)); font-weight:700; color:var(--bdb-ink-soft); padding:5px 11px; border-left:3px solid var(--bdb-green-deep); }
         .dh-done { font-size:calc(1.35rem * var(--dh-k)); font-weight:900; color:var(--bdb-green-deep); margin:0; }
         .dh-yes { position:fixed; left:50%; top:20%; transform:translateX(-50%); z-index:90; pointer-events:none;
           font-size:clamp(2.6rem,7vw,5rem); font-weight:900; color:var(--bdb-green-deep);
@@ -975,16 +991,6 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
       `}</style>
 
       <LiveToolBanner tool={liveTool} />
-
-      <div className="dh-top">
-        {/* The headline moved onto the plaque over the house, where it can name
-            which number is which. This keeps the count and the controls. */}
-        <p className="dh-count">Problem {Math.min(idx, problems.length - 1) + 1} of {problems.length}</p>
-        <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
-          <button className="dh-btn" onClick={reset} type="button">Start over</button>
-          {problems.length > 1 && <button className="dh-btn" onClick={nextProblem} type="button">Next problem</button>}
-        </div>
-      </div>
 
       <div className="dh-grid">
         {/* The mnemonic, in a left rail, the way GEMS carries its own. It is a
@@ -1113,11 +1119,13 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
                   <button
                     key={i}
                     ref={slot && slot.id === firstTargetId ? targetRef : undefined}
-                    className={`dh-slot ${slot?.given ? "given" : ""} ${setupPhase && shown ? "arrive" : ""} ${shown && !slot?.given ? "filled land" : ""} ${mergeCls} ${slot && actSlots.has(slot.id) ? "act" : ""} ${isTarget && revealTarget ? "target" : ""} ${wrongCls}`.replace(/\s+/g, " ").trim()}
+                    className={`dh-slot ${slot?.given ? "given" : ""} ${setupPhase && shown ? "arrive" : ""} ${shown && !slot?.given ? "filled land" : ""} ${mergeCls} ${slot && actFrom.has(slot.id) ? "act act-from" : ""} ${slot && actTo.has(slot.id) ? "act act-to" : ""} ${isTarget && revealTarget ? "target" : ""} ${wrongCls}`.replace(/\s+/g, " ").trim()}
                     style={{
                       gridColumn: col + 1,
                       gridRow: row + 1,
-                      ...(slot && actSlots.has(slot.id) ? { ["--act" as string]: actColor } : null),
+                      ...(slot && (actFrom.has(slot.id) || actTo.has(slot.id))
+                        ? { ["--act" as string]: actColor }
+                        : null),
                     }}
                     onClick={() => clickSlot(id)}
                     disabled={done_ || setupPhase}
@@ -1183,6 +1191,20 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
             whole column would announce the step strip and the trail with them,
             which is a paragraph of speech on every tap. */}
         <div className="dh-ask" ref={askRef}>
+          {/* THE COUNT AND CONTROLS LIVE IN THIS COLUMN, not in a full-width row
+              above the board. That row cost 44px of height plus its gap, and
+              height is the binding constraint here: `cellPx` is min(byWidth,
+              byHeight), so on a 1366x768 Chromebook a four-round problem was
+              pinned at the CELL_MIN floor with the board using a quarter of the
+              screen and the last round below the fold - while this column had
+              room to spare. */}
+          <div className="dh-top">
+            <p className="dh-count">Problem {Math.min(idx, problems.length - 1) + 1} of {problems.length}</p>
+            <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+              <button className="dh-btn" onClick={reset} type="button">Start over</button>
+              {problems.length > 1 && <button className="dh-btn" onClick={nextProblem} type="button">Next problem</button>}
+            </div>
+          </div>
           {setupPhase ? (
             <>
               <p className="dh-q" aria-live="polite">Set up the house. Drag each number to its place.</p>
@@ -1259,13 +1281,14 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
                 </div>
               )}
               {missed && <p className="dh-hint" role="alert">{missed}</p>}
-              {/* The green line above IS prompt[step - 1], so the trail starts
-                  before it - otherwise the same sentence is stacked twice. */}
-              <div className="dh-trail">
-                {trace.prompts.slice(Math.max(0, step - 5), Math.max(0, step - 1)).map((p) => (
-                  <span key={p.id}>{p.say}</span>
-                ))}
-              </div>
+              {/* NO TRAIL OF PAST SENTENCES. Four of them used to stack here,
+                  carrying in prose exactly what the work lines now say in
+                  numbers, in the same green left-bar as the live confirmation -
+                  so the current sentence and four historical ones differed only
+                  by font size. Ten blocks of text in this column made the RIGHT
+                  RAIL the centre of attention on a board whose centre is the
+                  house. The board is the record; that is what a placed spot
+                  staying green is for. */}
             </>
           ) : null}
         </div>
