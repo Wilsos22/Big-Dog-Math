@@ -243,13 +243,27 @@ const furthestVertexFromPath = (raw, w) => {
   return maxReach;
 };
 
+// PAST THE MITER LIMIT THE JOINT BEVELS, so no vertex anywhere may sit further
+// off the centreline than the nib radius plus a little resampling slack. This
+// bound is the whole point of these three checks and it must stay TIGHT.
+//
+// It used to be `2.5 * W / 2` - the clamp ceiling itself - which asserted only
+// that a spike was BOUNDED, never that it was absent. A clamped miter still
+// pushes one vertex a full 2.5 nib radii along the bisector, so a 2.5x barb sat
+// on every hairpin and passed this suite for as long as it existed. Steele shot
+// the handwriting on 2026-08-04: the barbs are plainly visible on the top of
+// every l, b and th, which is exactly where cursive puts its near-reversals.
+// Measured on the near-retrace below: 7.50px clamped, 3.00px bevelled, on a
+// 3px nib. Loosening this constant back toward 7.5 un-tests the bevel.
+const BEVELLED_REACH = 1.25 * (W / 2);
+
 {
   // A near-hairpin: out and back with a small gap. Note this one does NOT bind
   // the limit - it is here as the ordinary case, and on its own it cannot tell
   // a clamped miter from an unclamped one.
   const raw = samplePath([pt(20, 60), pt(160, 60), pt(160, 63), pt(20, 63)]);
   const reach = furthestVertexFromPath(raw, W);
-  ok(`hairpin fold throws no spike (furthest vertex ${reach.toFixed(2)}px <= ${(2.5 * W) / 2}px)`, reach <= (2.5 * W) / 2 + 0.01);
+  ok(`hairpin fold throws no spike (furthest vertex ${reach.toFixed(2)}px <= ${BEVELLED_REACH}px)`, reach <= BEVELLED_REACH + 0.01);
 }
 
 {
@@ -262,22 +276,24 @@ const furthestVertexFromPath = (raw, w) => {
   // WITHOUT this case the clamp is untested.
   // THE GAP MATTERS. At gap EXACTLY zero the bisector vanishes and the
   // `mlen < 1e-6` branch takes over, which is bounded on its own - so that
-  // case, useful as it is, cannot test the clamp. A hair off zero is what
-  // drives 1/cos(theta/2) up: measured, the clamp binds at exactly 7.50px
-  // (2.5 nib radii) for every gap from 0.001px upward, and with the clamp
-  // removed the same vertex lands about 3000px off the stroke - a black wedge
-  // across the projector.
+  // case, useful as it is, cannot test the joint. A hair off zero is what
+  // drives 1/cos(theta/2) up, and THIS is the case that separates a bevel from
+  // a clamped spike: measured on a 3px nib, 7.50px clamped (a barb sticking
+  // 3.5px clear of the stroke edge) against 3.00px bevelled. Removing the
+  // limit altogether sends the same vertex about 3000px off the stroke - a
+  // black wedge across the projector - which is why the limit exists at all.
+  // This is the assertion to run first when the pen looks barbed again.
   const near = [];
   for (let i = 0; i <= 70; i += 1) near.push(pt(20 + i * 2, 60));
   for (let i = 70; i >= 0; i -= 1) near.push(pt(20 + i * 2, 60.01));
   const nearReach = furthestVertexFromPath(near, W);
-  ok(`a near-retrace is clamped to the miter limit (${nearReach.toFixed(2)}px <= ${(2.5 * W) / 2}px)`, nearReach <= (2.5 * W) / 2 + 0.01);
+  ok(`a near-retrace bevels rather than spiking (${nearReach.toFixed(2)}px <= ${BEVELLED_REACH}px)`, nearReach <= BEVELLED_REACH + 0.01);
 
   const out = [];
   for (let i = 0; i <= 70; i += 1) out.push(pt(20 + i * 2, 60));
   for (let i = 70; i >= 0; i -= 1) out.push(pt(20 + i * 2, 60));
   const reach = furthestVertexFromPath(out, W);
-  ok(`an exact retrace stays bounded too (${reach.toFixed(2)}px <= ${(2.5 * W) / 2}px)`, reach <= (2.5 * W) / 2 + 0.01);
+  ok(`an exact retrace stays bounded too (${reach.toFixed(2)}px <= ${BEVELLED_REACH}px)`, reach <= BEVELLED_REACH + 0.01);
   ok("an exact retrace stays finite", strokeOutline(out, W).every((v) => Number.isFinite(v)));
 }
 
