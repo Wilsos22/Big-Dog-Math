@@ -247,7 +247,23 @@ export default function DivisibilityRules() {
         .dv-thead { flex:0 0 auto; display:grid; grid-template-columns:var(--dv-cols); gap:clamp(12px,2vw,30px); padding:0 clamp(8px,2vw,20px) 8px; }
         .dv-thead span { font-size:0.68rem; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:var(--bdb-ink-faint); }
         .dv-thead span:nth-child(2) { text-align:center; }
-        .dv-trow { flex:1 1 0; min-height:92px; display:grid; grid-template-columns:var(--dv-cols); gap:clamp(12px,2vw,30px); align-items:center; padding:10px clamp(8px,2vw,20px); border-top:1px solid var(--bdb-line); opacity:0.4; transition:opacity .3s, background .3s; }
+        /* A ROW IS AT LEAST AS TALL AS WHAT IS IN IT. This was flex:1 1 0, and a
+           zero basis means every row takes an equal share of the table height no
+           matter what it holds - so the ACTIVE row, which is the only one
+           carrying three stacked things (the evidence card, the question, and
+           the Yes/No buttons), was handed the same 95px as a row showing one
+           line of rule text. Its content needed 129px, so the buttons hung 25px
+           past the row's own bottom edge and landed in the next row's band:
+           Steele, 2026-08-05, "the factor column doesnt line up and cuts a row
+           in half, the rest of the row isnt centered". The shaded band no longer
+           contained its own contents, which is what made the rule and the number
+           read as off-centre - they were centred, just against a band the answer
+           had escaped. An auto basis measures the content first and then shares
+           out only what is left over, so the tall row asks for what it needs and
+           nothing overflows. Do NOT put the zero basis back to make the rows
+           equal height again: equal rows and a row that fits its content are the
+           same thing here right up until one row has an open question in it. */
+        .dv-trow { flex:1 1 auto; min-height:92px; display:grid; grid-template-columns:var(--dv-cols); gap:clamp(12px,2vw,30px); align-items:center; padding:10px clamp(8px,2vw,20px); border-top:1px solid var(--bdb-line); opacity:0.4; transition:opacity .3s, background .3s; }
         .dv-table.done .dv-trow { flex:0 0 auto; min-height:0; }
         .dv-trow.waiting { opacity:0.5; }
         .dv-trow.factor, .dv-trow.no { opacity:1; }
