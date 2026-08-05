@@ -66,6 +66,13 @@ export const TEACHER_REMOTE_ACTIONS = [
   // spin-spinner, which is scoped to the readers / iPad-Kid slide). The projector
   // owns the fair rotation client-side; this command is just the trigger.
   "spin-speaker",
+  // Video on the main projector. The verb goes LAST, never `play-video`: `remoteCommandPing`
+  // lets any `play-` action fire straight off an unverified broadcast (fine for a sound cue,
+  // wrong for anything that moves what the room is watching), and the sound-bank contract
+  // asserts every `play-` action resolves to a real audio cue. See src/lib/slideVideo.ts.
+  "slide-video-play",
+  "slide-video-pause",
+  "slide-video-restart",
   ...DISCUSSION_REMOTE_ACTIONS,
   "reveal-results",
   "reveal-final-score",

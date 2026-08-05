@@ -54,6 +54,30 @@ export const SPEAKER_REMOTE_BUTTON: RemoteDeckButton = {
   tone: "teal",
 };
 
+// Video controls for the main projector. Shown ONLY on a step whose slide is a video, because on
+// every other step they would be three dead keys on a deck the teacher navigates by muscle memory.
+// The video never autoplays - it waits here - so Play is the one that has to be easy to hit.
+export const SLIDE_VIDEO_REMOTE_BUTTONS: RemoteDeckButton[] = [
+  {
+    action: "slide-video-play",
+    label: "Play video",
+    detail: "Starts on the main projector",
+    tone: "teal",
+  },
+  {
+    action: "slide-video-pause",
+    label: "Pause video",
+    detail: "Holds on the current frame",
+    tone: "slate",
+  },
+  {
+    action: "slide-video-restart",
+    label: "Restart video",
+    detail: "Back to the beginning and play",
+    tone: "slate",
+  },
+];
+
 /**
  * Arm a clock over an UNTIMED state - a slide deck you are talking through, a hook you want them
  * sitting with - without changing the step or its pacing. Shown only when the current state has no

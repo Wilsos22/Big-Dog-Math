@@ -33,6 +33,7 @@ import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { studioPreviewSession, useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { parseSlideOverlay } from "@/lib/slideOverlay";
 import SlideFrameScene from "@/components/SlideFrameScene";
+import { slideVideoCommandFrom } from "@/lib/slideVideo";
 import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 
 interface StageSession {
@@ -565,6 +566,9 @@ export default function ClassroomStagePage() {
   // "contain" letterboxes and never crops, which is what a 16:9 deck and anything with words near
   // the edges needs. Only an explicit "cover" from the studio inspector changes it.
   const slideFrameFit = activeSequenceStep?.slideFit === "cover" ? "cover" : "contain";
+  // Play/pause/restart taps ride the ordinary remote_command pass-through, so they arrive on the
+  // session row this page already polls - no new endpoint, and nothing published into live_flow.
+  const slideVideoCommand = slideVideoCommandFrom(session?.remote_command);
   const lessonVisual = flow ? resolveLessonVisual({
     lessonCode: lesson?.code || activeSequenceStep?.lessonCode,
     stateId: theme.id,
@@ -1265,7 +1269,7 @@ export default function ClassroomStagePage() {
           ) : liveToolUrl ? (
             <iframe className="stage-tool" src={liveToolUrl} title={flow.tool?.label || "Lesson tool"} />
           ) : slideFrameUrl ? (
-            <SlideFrameScene url={slideFrameUrl} fit={slideFrameFit} />
+            <SlideFrameScene url={slideFrameUrl} fit={slideFrameFit} videoCommand={slideVideoCommand} />
           ) : presentation?.mode === "board" ? (
             <div className="stage-board-scene">
               <div className="stage-board-wrap">
