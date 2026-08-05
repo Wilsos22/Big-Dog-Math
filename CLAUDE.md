@@ -2516,6 +2516,23 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   final `echo` succeeded. Verify a Next build by `.next/BUILD_ID` EXISTING after `rm -rf .next` -
   that is an artifact, not an inference. Both of these are the same failure this file already warns
   about under `npm test`: an exit code is not evidence.
+- **`mcp__workspace__web_fetch` CACHES BY URL, SO A PLAIN FETCH OF `/api/build-id` CAN REPORT A
+  STALLED PIPELINE THAT IS NOT STALLED** (found 2026-08-04, during a `/status` pass, and it very
+  nearly shipped as a tier 1 finding). The route is CORRECT - `src/app/api/build-id/route.ts` sets
+  `export const dynamic = "force-dynamic"` and returns `cache-control: no-store`, and
+  `DeployRefresh.tsx:35` fetches it with `cache: "no-store"` - so classroom displays are unaffected
+  and there is nothing to fix in the product. The stale value is the AGENT'S OWN fetch tool
+  replaying a response cached under that exact URL, which the previous day's status pass had
+  populated with the genuinely-stranded `265ea95`. Measured back to back: the plain URL returned
+  `265ea95` (42 commits and a day behind) while `?cachebust=<anything>` returned `bbf45a0`, which
+  was `origin/main` HEAD and had deployed 3.7 seconds after the push.
+  ALWAYS FETCH IT WITH A CACHE-BUSTING QUERY PARAM. This trap is nastier than it looks because the
+  false reading is INDISTINGUISHABLE from the real 2026-08-03 stall - same route, same symptom, same
+  sha - and this file already instructs an agent to treat exactly that reading as the leading tier 1
+  finding. Corroborate with Vercel `list_deployments` before calling a pipeline stalled: a genuine
+  stall shows NO deployment created for the newest commits, whereas here the newest commit had a
+  READY production deployment all along. Same family as the two lies above - a value you did not
+  observe this run is not evidence.
 - `.next` `ENOTEMPTY` build errors are a Google Drive cloud-sync artifact (`rm -rf .next` and rebuild),
   not a code bug. Ignore `aistudio_*` and ` 2`-suffixed sync duplicates; never stage them. The same
   sync artifact also lands INSIDE `.git` and `.next/types`: duplicated files like
