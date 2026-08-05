@@ -248,7 +248,6 @@ export default function PaceSupportPage() {
   const behaviorOverridden = overrideIsLive(flow?.behaviorOverride ?? null, flow?.sequence?.currentIndex);
   const poll = flow?.poll ?? null;
   const phase = normalizeDiscussionPhaseSnapshot(flow?.phase);
-  const isLearningCheck = theme.id === "learning-check";
   // A concrete-phase timeline step is a discussion too: it wants the support
   // screen's stems + vocabulary layout, so the room has the language for its
   // Talk beats. phase stays null, so the phase-specific bits fall back cleanly.
@@ -354,10 +353,11 @@ export default function PaceSupportPage() {
         : `${state.id}:${flow?.sequence?.currentIndex ?? -1}`;
 
   // A `lessonSlideData` / `showLessonSlide` block stood here and fed the
-  // LessonSlideStage overlay, along with the four predicates (isTransition,
-  // isExitState, hasLiveTool, hasAssignedResource) that existed only to exclude
-  // states from it. All gone 2026-08-04 with the overlay itself - see the note at
-  // its old mount point below. Pace draws its own frame on every state again.
+  // LessonSlideStage overlay, along with the FIVE predicates that existed only to
+  // exclude states from it (isTransition, isExitState, hasLiveTool,
+  // hasAssignedResource, isLearningCheck). All gone 2026-08-04 with the overlay
+  // itself - see the note at its old mount point below. Pace draws its own frame
+  // on every state again.
 
   return (
     <main className="pace-page" style={style}>
@@ -763,11 +763,15 @@ export default function PaceSupportPage() {
       </section>
       {/* The LessonSlideStage overlay used to sit here, passing screen="main" so
           the support projector drew the MAIN screen's zones. It is gone
-          (2026-08-04, Steele): two visual languages in one lesson, and this
-          surface's copy of the exclusion list never matched present's, so on a
-          tool or You Do state the two projectors showed different designs at the
-          same moment. Pace draws its own frame on every state now, which is also
-          the end of the "keep the two clause lists together" hazard. */}
+          (2026-08-04, Steele): two visual languages inside one lesson, because
+          the gate was a per-surface list of EXCLUSIONS and this surface's copy
+          never matched present's. `88a0a84` had already hand-synced the tool and
+          You Do clauses; the one still diverging when the overlay came out was
+          `launch`, where present has a `!lessonVisual` clause and pace has none -
+          measured on /demo, present kept its own frame while pace showed the
+          colour band, at the same instant. Pace draws its own frame on every
+          state now, which is also the end of the "keep the two clause lists
+          together" hazard. */}
       {/* Write-on-screen was mounted only on /teacher/present, so the support
           projector could never be annotated - the teacher circled something on
           the iPad and half the room's screen never changed. */}
