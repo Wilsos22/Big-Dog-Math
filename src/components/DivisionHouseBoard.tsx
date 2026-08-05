@@ -903,7 +903,10 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
           background:var(--bdb-card); border:2px solid var(--bdb-line);
           transition:background 200ms ease, border-color 200ms ease, transform 200ms ease; }
         .dh-tile .L { font-size:clamp(1.6rem,2.6vw,2.7rem); font-weight:900; color:var(--bdb-ink-faint); line-height:1; }
-        .dh-tile .S { position:absolute; bottom:5px; font-size:0.62rem; font-weight:800;
+        /* The caption scales too. GEMS pins its own at 0.62rem, and matching
+           that fixed the 8px Chromebook case but left the word at 9.9px on a
+           1920 wall - which is the surface the rail most needs to be read from. */
+        .dh-tile .S { position:absolute; bottom:5px; font-size:clamp(0.62rem,0.72vw,0.95rem); font-weight:800;
           letter-spacing:0.02em; line-height:1.12; text-transform:uppercase; color:var(--bdb-ink-faint);
           text-align:center; width:94%; }
         .dh-tile.active { background:var(--c); border-color:var(--c); transform:scale(1.05);
