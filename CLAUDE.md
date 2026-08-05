@@ -127,6 +127,16 @@ bars and live misconception grouping).
    when you find your own files already on `origin/main`, diff branch against remote per path
    (`git diff --quiet origin/main <branch> -- <file>`) to find exactly which ones went out stale,
    rather than assuming the whole change did or did not land.
+   AND `git commit` WITH NO PATHS TAKES THE WHOLE INDEX, WHICH IS HOW A `git rm` ENDS UP IN THE
+   WRONG COMMIT (2026-08-05). This rule says stage only the paths you changed, and every example of
+   it is `git add`. But `git rm <file>` ALSO stages - immediately - so a later
+   `git add <other-file> && git commit -m ...` sweeps the deletion in even though you never named
+   it. Landed live that day: a `git rm` of a component was meant for the feature commit and went
+   into the docs commit before it, leaving an intermediate commit that deletes a file whose imports
+   are only removed in the NEXT one - so it neither typechecks nor builds, and a bisect or a
+   cherry-pick lands on it. Pass the paths explicitly (`git commit -- <paths>`) or check
+   `git --no-optional-locks status --short` for a staged `D` before committing. Not worth rewriting
+   history over in a repo with concurrent sessions; worth not doing again.
 3. Verified work ships without waiting for Steele (his standing request, 2026-07-21 - routing
    merges through him twice stranded finished work). A push to `main` is what deploys - Vercel
    auto-builds it. Flow: push the feature branch first (a local-only branch is invisible to
@@ -1643,6 +1653,22 @@ the invariants they protect are easy to break again.
   justify cards, the latter unchanged from warm-up to closeout. `discussionSupportsForLesson` is now
   discussion-only on both `/teacher/present` and `/teacher/pace`. Empty renders as nothing; wrong
   renders on a classroom screen.
+  **ONLY THE `DEFAULT_DISCUSSION_SUPPORTS` HALF WAS EVER FIXED. THE `DEFAULT_STATES[].desc` HALF IS
+  STILL LIVE ON EVERY SURFACE** (found 2026-08-05; this paragraph read as though both were dealt
+  with, which is exactly the stale line rule 9 exists to stop). BOTH flow builders publish
+  `description: step.studentDirections || state?.desc || "Wait for the teacher's directions."`
+  (`lessonFlowBuild.ts:49`, `controlLineup.ts:168`), so a real `DEFAULT_STATES` entry ALWAYS has a
+  `desc` and the floor string is unreachable - a step with no authored Student Directions publishes
+  the catalog line, and five render sites then print it: `/teacher/pace` 297 and 302,
+  `/teacher/present` 524 and 1162, `/live-flow` 558 and 578. So a Concrete step nobody authored
+  directions for puts "Build the relationship with the assigned concrete model." on the support
+  projector, and an I Do step puts "Watch and take notes. I'll model each step." - the exact string
+  this rule quotes as the thing that must not happen. It is NOT new: the `LessonSlideStage` overlay
+  masked it on pace and present for one day (2026-08-03 to 2026-08-04) and removing the overlay
+  restored the older behaviour rather than causing it. Fixing it is an authoring-vs-code call for
+  Steele - the honest options are to blank the fallback (empty renders as nothing) or to floor it
+  with the neutral "Wait for the teacher's directions." instead of the catalog line - so do not
+  silently pick one.
   CORRECTED 2026-07-29: "discussion-only" was keyed on `theme.id`, which is NOT the same test.
   `inferClassroomStage` maps any step whose title contains "partner" or "group" to the `discussion`
   theme, so those steps still summoned the catalog cards locally even though `/control` deliberately
