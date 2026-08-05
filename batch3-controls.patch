@@ -1,0 +1,276 @@
+From b5cd2fa42aeeac2f6c91e01732d87b972c20991b Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 28 Jul 2026 21:27:54 +0000
+Subject: [PATCH] Add the missing off switches: close board, Start on /teacher,
+ exit-ticket drafts
+
+Site-code only. No Notion lesson content, states or structure touched.
+
+Work space could be opened but never closed
+- The iPad Remote rendered only "Open work space". hide-board was wired end to
+  end - action type, control-remote handler, /control listener - and nothing in
+  any UI ever sent it, so once the writing surface was up it covered the slide
+  for the rest of the lesson. The deck key is now a toggle driven by
+  presentation.boardOpen.
+
+Start was buried in /control
+- /teacher's live-session card gets a Start lesson button posting start-lesson
+  to /api/control-remote. That is the complete server-side start - it seeds the
+  sequence, flips broadcast to Live Class Flow and arms step zero - so no
+  /control tab has to be open. The old path through /control?run=1 hard-blocks
+  when no session is open and reports it only in a status line.
+
+Exit ticket answers could vanish
+- Drafts now back to localStorage per ticket id, restored when the ticket
+  reopens and cleared on submit. Answers lived in React state alone, so a
+  discarded tab lost a half-written exit ticket with no trace. That was the one
+  real data-loss path in the student flow, and it matters more now that the
+  exit ticket carries the hook problem rather than a procedure question.
+
+A multiple-choice step with no authored choices rendered an empty box
+- Indistinguishable from a frozen screen, with no way for a student to tell the
+  difference or report it. It now says so.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011kWBfBZsCJUxvFbSuRw4Ze
+---
+ CLAUDE.md                       | 13 +++++++++
+ src/app/exit-ticket/page.tsx    | 47 +++++++++++++++++++++++++++++++--
+ src/app/live-flow/page.tsx      |  7 +++--
+ src/app/teacher/page.tsx        | 42 ++++++++++++++++++++++++++---
+ src/app/teacher/remote/page.tsx | 11 ++++++--
+ 5 files changed, 111 insertions(+), 9 deletions(-)
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+index fec6a1c..2d1ae8e 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -434,6 +434,19 @@ the invariants they protect are easy to break again.
+ - **`resolveLessonVisual` TAKES TWO ID NAMESPACES.** `stateId` is the `ClassroomStageId` (warmup maps
+   to `evergreen`, launch to `scenario`); `rawStateId` is the class-state id. Skip lists written in
+   raw ids must be checked against `rawStateId` or they never fire.
++- **EVERY CLASSROOM TOGGLE NEEDS ITS OFF SWITCH IN THE UI.** `hide-board` was wired end to end -
++  action type, `/api/control-remote` handler, `/control` listener - but the iPad Remote only ever
++  rendered "Open work space". Once the writing surface was up there was no way to put it away, and
++  it covered the slide for the rest of the lesson. The deck key is now a toggle driven by
++  `flow.presentation.boardOpen`.
++- **`/teacher` CAN START THE LESSON.** The live-session card has a Start lesson button that POSTs
++  `start-lesson` to `/api/control-remote` - the complete server-side start (seeds the sequence,
++  flips broadcast, arms step zero) that needs no `/control` tab anywhere. `/control?...&run=1` is
++  still the other path, but it hard-blocks when no session is open and only says so in a status line.
++- **`/exit-ticket` BACKS DRAFTS TO `localStorage`**, keyed `bdm-exit-draft-<ticketId>` and cleared on
++  submit. Answers previously lived in React state alone, so a discarded tab lost a half-written exit
++  ticket silently. This matters more now that the exit ticket IS the day's evidence - it carries the
++  hook problem, not a procedure question (Steele's decision, 2026-07-28).
+ - **TIMER WARNINGS ARE SHARED** (`src/lib/timerUrgency.ts`, Steele 2026-07-28): amber at 30s, coral
+   and pulsing at 15s, faster at 5s, on the projector, the pace screen AND the student device - a
+   head-down student needs the same runway the room gets. Colour and opacity only, never layout, and
+diff --git a/src/app/exit-ticket/page.tsx b/src/app/exit-ticket/page.tsx
+index 0bc38dd..8e097a9 100644
+--- a/src/app/exit-ticket/page.tsx
++++ b/src/app/exit-ticket/page.tsx
+@@ -13,6 +13,35 @@ import { SECURE_STUDENT_DATA, studentApiRequest } from "@/lib/studentApi";
+ 
+ type View = "loading" | "needjoin" | "waiting" | "answering" | "submitted";
+ 
++// Per-ticket draft backup. Keyed by ticket id so a new exit ticket never
++// inherits yesterday's text, and cleared on successful submit.
++const EXIT_DRAFT_PREFIX = "bdm-exit-draft-";
++
++function exitDraftKey(ticketId: string) {
++  return `${EXIT_DRAFT_PREFIX}${ticketId}`;
++}
++
++function readExitDraft(ticketId: string): string {
++  try {
++    return localStorage.getItem(exitDraftKey(ticketId)) || "";
++  } catch {
++    return "";
++  }
++}
++
++function writeExitDraft(ticketId: string, value: string): void {
++  try {
++    if (value.trim()) localStorage.setItem(exitDraftKey(ticketId), value);
++    else localStorage.removeItem(exitDraftKey(ticketId));
++  } catch { /* private mode or full storage - the in-memory value still works */ }
++}
++
++function clearExitDraft(ticketId: string): void {
++  try {
++    localStorage.removeItem(exitDraftKey(ticketId));
++  } catch { /* ignore */ }
++}
++
+ export default function ExitTicketPage() {
+   const supabase = getSupabase();
+   const [session, setSession] = useState<StoredStudentSession | null>(null);
+@@ -46,7 +75,11 @@ export default function ExitTicketPage() {
+       }
+       if (t.id !== ticket?.id && t.id !== submittedIdRef.current) {
+         setTicket(t);
+-        setText("");
++        // Restore any draft for THIS ticket. Answers lived in React state only,
++        // so a closed or discarded tab lost a half-written exit ticket with no
++        // trace - the one real data-loss path in the student flow, and it
++        // matters more now that the exit ticket is the day's evidence.
++        setText(readExitDraft(t.id));
+         setView("answering");
+       }
+     };
+@@ -72,6 +105,7 @@ export default function ExitTicketPage() {
+         response: answer.trim(),
+       });
+     }
++    clearExitDraft(ticket.id);
+     setView("submitted");
+   }, [supabase, session, ticket]);
+ 
+@@ -106,7 +140,16 @@ export default function ExitTicketPage() {
+ 
+             {ticket.kind === "short-answer" && (
+               <>
+-                <textarea className="et-text" value={text} placeholder="Type your answer" onChange={(e) => setText(e.target.value)} autoFocus />
++                <textarea
++                  className="et-text"
++                  value={text}
++                  placeholder="Type your answer"
++                  onChange={(e) => {
++                    setText(e.target.value);
++                    if (ticket) writeExitDraft(ticket.id, e.target.value);
++                  }}
++                  autoFocus
++                />
+                 <button className="et-submit" onClick={() => submit(text)} disabled={!text.trim()}>Turn in</button>
+               </>
+             )}
+diff --git a/src/app/live-flow/page.tsx b/src/app/live-flow/page.tsx
+index 0aa04ab..ddfdd66 100644
+--- a/src/app/live-flow/page.tsx
++++ b/src/app/live-flow/page.tsx
+@@ -937,9 +937,12 @@ export default function LiveFlowPage() {
+                   </>
+                 ) : activePoll.kind === "multiple-choice" ? (
+                   <div className="lf-poll-choices">
+-                    {activePoll.choices?.map((choice) => (
++                    {/* A multiple-choice step with no authored choices rendered an
++                        empty box - indistinguishable from a frozen screen, and a
++                        student has no way to tell the difference or report it. */}
++                    {activePoll.choices?.length ? activePoll.choices.map((choice) => (
+                       <button className="lf-poll-choice" key={choice} disabled={pollSubmitted || pollSaveState === "saving"} onClick={() => submitPollAnswer(choice)}>{choice}</button>
+-                    ))}
++                    )) : <p className="lf-poll-help">This question has no answer choices yet. Tell your teacher.</p>}
+                     {pollSubmitted && <p className="lf-poll-sent">Answer submitted.</p>}
+                     {pollSubmitError && <p className="lf-poll-help">{pollSubmitError}</p>}
+                   </div>
+diff --git a/src/app/teacher/page.tsx b/src/app/teacher/page.tsx
+index b3ff4de..5792e28 100644
+--- a/src/app/teacher/page.tsx
++++ b/src/app/teacher/page.tsx
+@@ -8,7 +8,7 @@
+ 
+ import Link from "next/link";
+ import { useCallback, useEffect, useMemo, useState } from "react";
+-import { teacherApiRequest } from "@/lib/teacherApi";
++import { teacherApiRequest, teacherPost } from "@/lib/teacherApi";
+ import { listLessonPresets, type LessonPreset } from "@/lib/lessonPresets";
+ 
+ interface LinkItem { href: string; label: string; letter: string; color: string; desc: string; newWindow?: boolean }
+@@ -179,7 +179,12 @@ export default function TeacherHome() {
+   const [publishedLessonsLoading, setPublishedLessonsLoading] = useState(true);
+   const [publishedLessonsError, setPublishedLessonsError] = useState<string | null>(null);
+ 
+-  const [today, setToday] = useState<{ loading: boolean; lesson: { title?: string; module?: string; topic?: string } | null; error?: string }>({ loading: true, lesson: null });
++  const [today, setToday] = useState<{ loading: boolean; lesson: { id?: string; lessonCode?: string; title?: string; module?: string; topic?: string } | null; error?: string }>({ loading: true, lesson: null });
++  // Start the day's lesson from here. It used to require opening /control and
++  // finding Start in the panel - and if no session was open yet, /control just
++  // parked the lesson in preview and said nothing more.
++  const [startBusy, setStartBusy] = useState(false);
++  const [startNote, setStartNote] = useState<string | null>(null);
+   const [live, setLive] = useState<{ loading: boolean; connected: boolean; sessions: LiveSession[] }>({ loading: true, connected: true, sessions: [] });
+   const [roster, setRoster] = useState<{ periods: number; students: number } | null>(null);
+ 
+@@ -247,6 +252,29 @@ export default function TeacherHome() {
+     return () => clearInterval(t);
+   }, [loadLive]);
+ 
++  // start-lesson is the COMPLETE server-side start (api/control-remote): it
++  // seeds the sequence, flips broadcast to Live Class Flow and arms step zero.
++  // It needs no /control tab open anywhere.
++  const startTodaysLesson = useCallback(async (sessionId: string) => {
++    if (startBusy) return;
++    setStartBusy(true);
++    setStartNote(null);
++    try {
++      await teacherPost("/api/control-remote", {
++        action: "start-lesson",
++        sessionId,
++        notionLessonId: today.lesson?.id || "",
++        lessonCode: today.lesson?.lessonCode || "",
++      });
++      setStartNote("Lesson started. Screens are live.");
++      void loadLive();
++    } catch (startError) {
++      setStartNote(startError instanceof Error ? startError.message : "The lesson did not start.");
++    } finally {
++      setStartBusy(false);
++    }
++  }, [loadLive, startBusy, today.lesson?.id, today.lesson?.lessonCode]);
++
+   // Roster totals.
+   useEffect(() => {
+     (async () => {
+@@ -481,9 +509,17 @@ export default function TeacherHome() {
+                   <div className="bd-code">{live.sessions[0].code}</div>
+                   <p className="bd-stat-meta">{live.sessions[0].joined} joined{live.sessions.length > 1 ? ` - +${live.sessions.length - 1} more open` : ""}</p>
+                   <div className="bd-stat-actions">
+-                    <Link href={`/session?sessionId=${encodeURIComponent(live.sessions[0].id)}`} className="bd-btn p">Manage session</Link>
++                    <button
++                      type="button"
++                      className="bd-btn p"
++                      disabled={startBusy || !today.lesson?.id}
++                      onClick={() => { void startTodaysLesson(live.sessions[0].id); }}
++                    >{startBusy ? "Starting" : "Start lesson"}</button>
++                    <Link href={`/session?sessionId=${encodeURIComponent(live.sessions[0].id)}`} className="bd-btn">Manage session</Link>
+                     <Link href={`/session?sessionId=${encodeURIComponent(live.sessions[0].id)}#classroom-screens-title`} className="bd-btn">Set up screens</Link>
+                   </div>
++                  {startNote ? <p className="bd-stat-meta">{startNote}</p> : null}
++                  {!today.lesson?.id && !today.loading ? <p className="bd-stat-meta">No lesson is published for today.</p> : null}
+                 </>
+               ) : (
+                 <>
+diff --git a/src/app/teacher/remote/page.tsx b/src/app/teacher/remote/page.tsx
+index 2a8c8a6..9de0b5c 100644
+--- a/src/app/teacher/remote/page.tsx
++++ b/src/app/teacher/remote/page.tsx
+@@ -702,6 +702,7 @@ export default function TeacherRemotePage() {
+     ? privateLessonStepDetails.routineConfig.teacherPlan
+     : null;
+   const controlsDisabled = !session || Boolean(busy) || Boolean(pendingCommand);
++  const boardIsOpen = Boolean(flow?.presentation?.boardOpen);
+   const isDiscussionState = Boolean(
+     flow?.state
+     && (
+@@ -1194,11 +1195,17 @@ export default function TeacherRemotePage() {
+                     <div className="remote-control-block">
+                       <h3 className="deck-section-title">This slide</h3>
+                       <div className="deck-grid spinner-control">
++                        {/* A TOGGLE. This was open-only: hide-board was wired end
++                            to end but no control ever sent it, so once the work
++                            space was up there was no way to put it away and it
++                            sat over the slide for the rest of the lesson. */}
+                         <DeckKey
+-                          button={{ action: "show-board", label: "Open work space", detail: "Write beside the current problem", tone: "green" }}
++                          button={boardIsOpen
++                            ? { action: "hide-board", label: "Close work space", detail: "Put the writing surface away", tone: "orange" }
++                            : { action: "show-board", label: "Open work space", detail: "Write beside the current problem", tone: "green" }}
+                           busy={busy}
+                           disabled={controlsDisabled || !flow?.presentation}
+-                          onSend={() => { void setWritingMode(true); }}
++                          onSend={() => { void setWritingMode(!boardIsOpen); }}
+                         />
+                       </div>
+                     </div>
+-- 
+2.43.0
+

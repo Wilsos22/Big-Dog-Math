@@ -16,6 +16,21 @@
 //
 // Pure, no React. The board geometry is a single grid so the component can draw
 // the animated ÷ / x / − / arrow between any two slots by their row and column.
+//
+// EVERY ROUND TRACES THE SAME SIX MOVES, and Steele named them by direction:
+// "to the left, up, diagonal left, diagonal right, down, down".
+//
+//   1  ÷   the number we are dividing  ->  the divisor      (left)
+//   2  =   the divisor                 ->  the quotient     (up)
+//   3  x   the quotient                ->  the divisor      (diagonal left)
+//   4  =   the divisor                 ->  the product      (diagonal right)
+//   5  −   the number we are dividing  ->  the product      (down)
+//   6      the product                 ->  the difference   (down, arrow alone)
+//
+// plus a bring-down arrow on every round but the last. "I want students to see
+// the pathway the numbers take every time" - so the component keeps each round
+// on the board in its own colour rather than clearing it. Dropping a `visual`
+// from any of the six breaks a shape the student is being taught to expect.
 
 export const HOUSE_MAX_DIVIDEND = 9999;
 export const HOUSE_MAX_PROBLEMS = 12;
@@ -275,7 +290,12 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       ask: takesExtraDigits
         ? `${divisor} does not fit into the first digit. Click the smallest number at the front of the house that it does fit into.`
         : i === 0
-          ? "Start with the first number inside the house. Click it."
+          // "the one closest to the door" is the pop-out's wording too, so the
+          // card that opens the problem and the rail that carries it agree. The
+          // qualifier only holds in THIS branch - when the divisor does not fit
+          // the first digit the answer is two cells wide and the nearest one is
+          // the wrong click, which is why the other ask says something else.
+          ? "Start with the first number inside the house - the one closest to the door. Click it."
           : "Which number are we dividing now? Click it.",
       slots: partialSlots,
       fill: [],
@@ -305,7 +325,11 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
     prompts.push({
       id: `pick-divisor-${i}`,
       kind: "slot",
-      ask: "Where is the number we are dividing WITH? Click it.",
+      // "dividing by not with" (Steele, 2026-08-03). You divide BY a number.
+      // "Dividing with" is not how the operation is said, and this ask is a
+      // sentence sixth graders repeat back - the `say` under it already said
+      // "Dividing by 4", so the tool was teaching both at once.
+      ask: "Where is the number we are dividing BY? Click it.",
       slots: divisorSlots,
       fill: [],
       say: `Dividing by ${divisor}.`,
@@ -318,6 +342,11 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       ask: "Where does that answer go? Click the spot.",
       slots: [qSlot],
       fill: [qSlot],
+      // Move 2 of the six. The divisor is where the answer CAME FROM, so the
+      // equals runs from it up to the quotient - "4 goes into 9 twice, and the
+      // 2 lives up here". Without it the board drew the question (9 ÷ 4) and
+      // never drew the answer arriving.
+      visual: { sign: "=", from: firstDivisorSlot, to: qSlot },
       // Two numerals with only a space between them read as one: "4 goes into
       // 9 2 times", and on a zero quotient "3 goes into 1 0 times", which a
       // sixth grader reads as "3 goes into 10 times".
@@ -354,6 +383,10 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       ask: "Where does that answer go? Click the spot.",
       slots: productIds,
       fill: productIds,
+      // Move 4. Steele: "there should be an = and arrow between 4 and 8" - the
+      // multiply arrow already ran quotient -> divisor, and this is the other
+      // half of the same sentence, the product landing under the house.
+      visual: { sign: "=", from: firstDivisorSlot, to: productIds[0] },
       say: `${c.product} goes under the number we divided.`,
       hint: "A product is written under the number it came out of, ready to be taken away.",
       round: i,
@@ -377,6 +410,14 @@ export function buildHouseTrace(dividend: number, divisor: number): HouseTrace |
       ask: "Where does that answer go? Click the spot.",
       slots: restIds,
       fill: restIds,
+      // Move 6, the second "down". ANCHORED ON THE LAST DIGIT OF EACH, not the
+      // first: the product and the difference are both right-aligned under the
+      // number being divided, so last-to-last is a true vertical drop while
+      // first-to-first slants whenever they are different widths.
+      // EMPTY SIGN MEANS THE ARROW ALONE - the minus sign and its rule are
+      // already sitting beside these two numbers, so a glyph here would be the
+      // third mark saying the same thing. Same call the bring-down arrow makes.
+      visual: { sign: "", from: productIds[productIds.length - 1], to: restIds[restIds.length - 1] },
       say: `${c.partial} − ${c.product} = ${c.rest}.`,
       hint: "A difference is written underneath the numbers you subtracted.",
       round: i,

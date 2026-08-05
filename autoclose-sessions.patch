@@ -1,0 +1,292 @@
+From 21c4167329e81e6df3b886fa71a18df924a6d4ca Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 28 Jul 2026 19:15:17 +0000
+Subject: [PATCH] Auto-close stale sessions and enforce one open session at a
+ time
+
+A forgotten session from the morning was still open hours later sitting on
+closeout, holding its join code and answering as "the open one" - which is
+part of how the class got split across two rows.
+
+src/lib/sessionLifecycle.ts
+- closeOtherOpenSessions: starting or adopting a session closes every other
+  open row. One class at a time; moving from period 2 to period 3 ends
+  period 2 instead of racing it.
+- sweepStaleSessions: closes any session that outlived its planned length
+  plus a 15 minute grace window. The cutoff is DERIVED from that session's
+  own lineup (sequence.steps[].durationSeconds) with a 55 minute floor, not
+  a flat clock - a guardrail that can end a class still in progress is worse
+  than no guardrail, so the arithmetic only ever errs long. Throttled to one
+  real query per minute per instance so /control's 1.2s poll stays cheap.
+- Auto-closed sessions clear exactly the fields the teacher-initiated close
+  clears, so no projector or Chromebook is left pointing at a dead flow.
+
+Wired into the teacher session GET, session start (forced), and
+/api/student/warmup-start, so a stale session is retired by the next request
+either surface makes. No cron, nothing to schedule, idempotent.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011kWBfBZsCJUxvFbSuRw4Ze
+---
+ CLAUDE.md                                 |  10 ++
+ src/app/api/student/warmup-start/route.ts |   5 +
+ src/app/api/teacher/session/route.ts      |  25 ++++-
+ src/lib/sessionLifecycle.ts               | 127 ++++++++++++++++++++++
+ 4 files changed, 162 insertions(+), 5 deletions(-)
+ create mode 100644 src/lib/sessionLifecycle.ts
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 1bcdd81..105a7b3 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -411,6 +411,16 @@ the invariants they protect are easy to break again.
+   Notion page. Unknown ids now get a synthesized bank entry with an EMPTY `desc` and are named in the
+   load message. When adding a second consumer of `lesson.steps`, make it agree with `stepsFromLesson`.
+ - **`Anchor Problem` IS THE HOOK.** There is no `Hook` property in the lessons database.
++- **SESSIONS CLOSE THEMSELVES** (`src/lib/sessionLifecycle.ts`, Steele's ask 2026-07-28). One open
++  session at a time: starting or adopting a session closes every other open row, so moving from
++  period 2 to period 3 ends period 2 rather than racing it. A session also auto-closes once it
++  outlives its own planned length plus `STALE_GRACE_MINUTES` (15). The cutoff is DERIVED from that
++  session's lineup (`sequence.steps[].durationSeconds`) with a `MIN_SCHEDULED_MINUTES` floor of 55,
++  never a flat clock - a guardrail that can end a class still in progress is worse than none, so the
++  arithmetic only ever errs long. `sweepStaleSessions` is throttled to one real query per minute per
++  instance and is called from the teacher session GET, session start, and `/api/student/warmup-start`.
++  There is no cron: the sweep is lazy and idempotent, so it heals on the next request either surface
++  makes.
+ 
+ ## Notion + warm-up pipeline
+ 
+diff --git a/src/app/api/student/warmup-start/route.ts b/src/app/api/student/warmup-start/route.ts
+index 6caeea4..78d0101 100644
+--- a/src/app/api/student/warmup-start/route.ts
++++ b/src/app/api/student/warmup-start/route.ts
+@@ -7,6 +7,7 @@ import {
+ import type { LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
+ import { assignedWarmupLink, canonicalGoogleFormResource } from "@/lib/warmupResource";
+ import { sessionFromPeriodCode } from "@/lib/periodClassCodes";
++import { sweepStaleSessions } from "@/lib/sessionLifecycle";
+ 
+ export const runtime = "nodejs";
+ export const dynamic = "force-dynamic";
+@@ -30,6 +31,10 @@ export async function POST(request: Request) {
+       throw new StudentIdentityError("Live sessions are not configured.", 503, "sessions_not_configured");
+     }
+ 
++    // A student typing a code must never be handed yesterday's session, and
++    // must never be the reason a stale one stays alive. Throttled internally.
++    await sweepStaleSessions(db);
++
+     const { data: openSession, error: sessionError } = await db
+       .from("sessions")
+       .select("id,live_flow")
+diff --git a/src/app/api/teacher/session/route.ts b/src/app/api/teacher/session/route.ts
+index 6276787..cc335fd 100644
+--- a/src/app/api/teacher/session/route.ts
++++ b/src/app/api/teacher/session/route.ts
+@@ -1,4 +1,5 @@
+ import { recordSecurityEvent } from "@/lib/securityAudit";
++import { closeOtherOpenSessions, sweepStaleSessions } from "@/lib/sessionLifecycle";
+ import { getSupabaseAdmin } from "@/lib/supabaseServer";
+ 
+ export const dynamic = "force-dynamic";
+@@ -56,6 +57,11 @@ export async function GET(request: Request) {
+   const liveSessionId = searchParams.get("liveSessionId") || "";
+   const latestOpen = searchParams.get("latestOpen") === "1";
+ 
++  // Retire sessions that outlived their class before anything reads them, so a
++  // forgotten session cannot keep answering as "the open one". Throttled to one
++  // real query per minute per instance, which /control's 1.2s poll relies on.
++  await sweepStaleSessions(db);
++
+   // Projectors and the live host only need the current session row. Keep this
+   // path intentionally small because those classroom surfaces poll frequently.
+   if (liveSessionId || latestOpen) {
+@@ -428,6 +434,11 @@ export async function POST(request: Request) {
+     const permanentCode = text(period.class_code ?? "", 8).toUpperCase();
+     const joinCode = /^[A-Z0-9]{2,8}$/.test(permanentCode) ? permanentCode : requestedCode;
+ 
++    // Retire anything left over from an earlier class before looking for a
++    // session to adopt, so a forgotten morning session is never inherited as
++    // "today's". force=true: starting a class is exactly when this must run.
++    await sweepStaleSessions(db, true);
++
+     // One open session per period, always. A second row is what split the class
+     // in two: the teacher advanced states on one, the students polled the other.
+     const existing = await db
+@@ -439,17 +450,20 @@ export async function POST(request: Request) {
+       .limit(1)
+       .maybeSingle();
+     if (existing.data) {
++      const adoptedId = (existing.data as { id: string }).id;
++      // Moving from period 2 to period 3 ends period 2. One class at a time.
++      const alsoClosed = await closeOtherOpenSessions(db, adoptedId);
+       const adopted = existing.data as { join_code: string | null };
+       if (adopted.join_code !== joinCode) {
+         const recoded = await db
+           .from("sessions")
+           .update({ join_code: joinCode })
+-          .eq("id", (existing.data as { id: string }).id)
++          .eq("id", adoptedId)
+           .select("id,period_id,assignment_id,join_code,status,started_at,broadcast")
+           .maybeSingle();
+-        if (recoded.data) return Response.json({ session: recoded.data, adopted: true });
++        if (recoded.data) return Response.json({ session: recoded.data, adopted: true, closedStale: alsoClosed.length });
+       }
+-      return Response.json({ session: existing.data, adopted: true });
++      return Response.json({ session: existing.data, adopted: true, closedStale: alsoClosed.length });
+     }
+ 
+     const { data, error: insertError } = await db
+@@ -458,13 +472,14 @@ export async function POST(request: Request) {
+       .select("id,period_id,assignment_id,join_code,status,started_at,broadcast")
+       .single();
+     if (insertError) return Response.json({ error: insertError.message }, { status: 500 });
++    const alsoClosed = await closeOtherOpenSessions(db, data.id);
+     void recordSecurityEvent({
+       eventType: "teacher_session_change",
+       outcome: "allowed",
+       sessionId: data.id,
+-      details: { action: body.action },
++      details: { action: body.action, closedStale: alsoClosed.length },
+     });
+-    return Response.json({ session: data }, { status: 201 });
++    return Response.json({ session: data, closedStale: alsoClosed.length }, { status: 201 });
+   }
+ 
+   if (body.action === "update") {
+diff --git a/src/lib/sessionLifecycle.ts b/src/lib/sessionLifecycle.ts
+new file mode 100644
+index 0000000..047fe92
+--- /dev/null
++++ b/src/lib/sessionLifecycle.ts
+@@ -0,0 +1,127 @@
++// Session lifecycle guardrails.
++//
++// Two invariants, both learned from the 2026-07-28 live test where a forgotten
++// open session from the morning was still sitting on `closeout` hours later and
++// a second session split the class in two:
++//
++// 1. ONE OPEN SESSION AT A TIME. Steele teaches one period at a time, so a
++//    second open row is always a mistake - either a stale session nobody closed
++//    or a duplicate spawned by a code lookup. Starting a new period closes the
++//    previous one instead of racing it.
++// 2. A SESSION THAT OUTLIVED ITS CLASS CLOSES ITSELF. A session left open
++//    overnight keeps holding its join code, keeps answering student polls, and
++//    keeps `latestOpen` pointing at yesterday.
++//
++// The stale cutoff is deliberately derived, never a flat clock: it is the
++// session's OWN planned length (summed from its lineup) with a floor, plus a
++// grace window. A guardrail that can end a class still in progress is worse
++// than no guardrail, so the arithmetic only ever errs long.
++
++import type { LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
++import { getSupabaseAdmin } from "@/lib/supabaseServer";
++
++/** Floor for a session's planned length. The CRA spine is a 55-minute day. */
++export const MIN_SCHEDULED_MINUTES = 55;
++/** How far past the planned end a session may run before it closes itself. */
++export const STALE_GRACE_MINUTES = 15;
++/** Never trust a lineup that claims an implausible day. */
++const MAX_SCHEDULED_MINUTES = 180;
++/** Per-instance throttle so a 1.2s control poll cannot sweep every tick. */
++const SWEEP_INTERVAL_MS = 60_000;
++
++type Db = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
++
++type OpenSessionRow = {
++  id: string;
++  period_id: string | null;
++  started_at: string | null;
++  live_flow: LiveClassFlowSnapshot | null;
++};
++
++let lastSweepAt = 0;
++
++/**
++ * The session's own planned length in minutes, summed from its published
++ * lineup. Falls back to the spine floor when a session has no lineup yet -
++ * which is exactly the case for a session auto-created by a student's code
++ * entry before the teacher has loaded anything.
++ */
++export function plannedSessionMinutes(flow: LiveClassFlowSnapshot | null): number {
++  const steps = flow?.sequence?.steps;
++  if (!Array.isArray(steps) || steps.length === 0) return MIN_SCHEDULED_MINUTES;
++  let seconds = 0;
++  for (const step of steps) {
++    const duration = Number(step?.durationSeconds);
++    if (Number.isFinite(duration) && duration > 0) seconds += duration;
++  }
++  if (seconds <= 0) return MIN_SCHEDULED_MINUTES;
++  return Math.min(MAX_SCHEDULED_MINUTES, Math.max(MIN_SCHEDULED_MINUTES, Math.round(seconds / 60)));
++}
++
++/** The moment a session becomes stale, in ms since epoch. */
++export function staleCutoffMs(row: Pick<OpenSessionRow, "started_at" | "live_flow">): number {
++  const startedAt = row.started_at ? Date.parse(row.started_at) : NaN;
++  if (!Number.isFinite(startedAt)) return Number.POSITIVE_INFINITY;
++  const minutes = plannedSessionMinutes(row.live_flow) + STALE_GRACE_MINUTES;
++  return startedAt + minutes * 60_000;
++}
++
++/**
++ * Close the given sessions and any polls still open inside them. Mirrors the
++ * teacher-initiated close in /api/teacher/session so an auto-closed session is
++ * indistinguishable from one Steele ended himself - same cleared fields, so no
++ * projector or Chromebook is left pointing at a dead flow.
++ */
++export async function closeSessions(db: Db, sessionIds: string[]): Promise<string[]> {
++  if (!sessionIds.length) return [];
++  const now = new Date().toISOString();
++  const [, sessionResult] = await Promise.all([
++    db.from("polls").update({ status: "closed" }).in("session_id", sessionIds).eq("status", "open"),
++    db.from("sessions")
++      .update({ status: "closed", ended_at: now, broadcast: null, live_flow: null, abbie: null, remote_command: null })
++      .in("id", sessionIds)
++      .eq("status", "open")
++      .select("id"),
++  ]);
++  if (sessionResult.error) return [];
++  return (sessionResult.data ?? []).map((row) => (row as { id: string }).id);
++}
++
++async function readOpenSessions(db: Db): Promise<OpenSessionRow[]> {
++  const { data, error } = await db
++    .from("sessions")
++    .select("id,period_id,started_at,live_flow")
++    .eq("status", "open")
++    .order("started_at", { ascending: false })
++    .limit(50);
++  if (error) return [];
++  return (data ?? []) as OpenSessionRow[];
++}
++
++/**
++ * Close every open session that has outlived its planned length plus grace.
++ * Cheap and idempotent, so it is safe to call on any session-touching request.
++ * Throttled per server instance unless `force` is set.
++ */
++export async function sweepStaleSessions(db: Db, force = false): Promise<string[]> {
++  const now = Date.now();
++  if (!force && now - lastSweepAt < SWEEP_INTERVAL_MS) return [];
++  lastSweepAt = now;
++  const open = await readOpenSessions(db);
++  const stale = open.filter((row) => now > staleCutoffMs(row)).map((row) => row.id);
++  if (!stale.length) return [];
++  return closeSessions(db, stale);
++}
++
++/**
++ * Enforce one open session at a time. Closes every open session except
++ * `keepSessionId`. Called when a session is started or adopted, so moving from
++ * period 2 to period 3 ends period 2 rather than leaving both live and letting
++ * `latestOpen` pick the wrong one.
++ */
++export async function closeOtherOpenSessions(db: Db, keepSessionId: string): Promise<string[]> {
++  const open = await readOpenSessions(db);
++  const others = open.filter((row) => row.id !== keepSessionId).map((row) => row.id);
++  if (!others.length) return [];
++  return closeSessions(db, others);
++}
+-- 
+2.43.0
+

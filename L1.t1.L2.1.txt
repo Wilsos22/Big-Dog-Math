@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lesson Console — Every Way to Make 24</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2b303b;
+  --tx:#e8eaf0; --dim:#9aa2b1; --accent:#ffb020;
+  --green:#3fb984; --blue:#4b9fe1; --purple:#a678e2; --pink:#e46fa8;
+  --brown:#c2895a; --gray:#7d8695; --red:#e2564d;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font:15px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;padding:18px}
+.wrap{max-width:1400px;margin:0 auto}
+
+/* header */
+header{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 20px}
+h1{font-size:21px;letter-spacing:-.3px}
+.sub{color:var(--dim);font-size:13px;margin-top:3px}
+.intent{color:var(--accent);font-size:13px;font-style:italic;margin-top:6px}
+
+/* timer */
+.timer{display:flex;align-items:center;gap:12px}
+.clock{font:700 34px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:1px;min-width:118px;text-align:right}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:9px;
+  padding:8px 14px;cursor:pointer;font-size:13px;font-weight:600}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.on{background:var(--accent);color:#14161b;border-color:var(--accent)}
+
+/* progress */
+.prog{height:7px;background:var(--panel2);border-radius:6px;overflow:hidden;margin:14px 0}
+.prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green),var(--accent));transition:width .4s}
+
+/* tabs */
+nav{display:flex;gap:8px;margin:14px 0}
+nav button{background:none;border:1px solid var(--line);color:var(--dim);padding:8px 16px;
+  border-radius:9px;cursor:pointer;font-size:13px;font-weight:600}
+nav button.sel{background:var(--panel);color:var(--tx);border-color:var(--accent)}
+
+/* layout */
+.cols{display:grid;grid-template-columns:330px 1fr;gap:16px}
+@media(max-width:900px){.cols{grid-template-columns:1fr}}
+
+/* step rail */
+.rail{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;
+  max-height:76vh;overflow:auto}
+.phase{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);
+  padding:12px 10px 6px;font-weight:700}
+.step{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border-radius:9px;
+  cursor:pointer;border-left:3px solid transparent}
+.step:hover{background:var(--panel2)}
+.step.sel{background:var(--panel2);border-left-color:var(--accent)}
+.step.now{box-shadow:inset 0 0 0 1px var(--green)}
+.step.gap{opacity:.85;border-left-color:var(--red)}
+.num{font:700 12px/22px ui-monospace,monospace;width:22px;height:22px;text-align:center;
+  border-radius:6px;background:var(--panel2);color:var(--dim);flex:none}
+.step.sel .num{background:var(--accent);color:#14161b}
+.sname{font-size:13.5px;font-weight:600}
+.smeta{font-size:11.5px;color:var(--dim);margin-top:2px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px}
+
+/* detail */
+.detail{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;
+  max-height:76vh;overflow:auto}
+.dhead{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;justify-content:space-between}
+.dtitle{font-size:19px;font-weight:700}
+.dtime{font:600 13px ui-monospace,monospace;color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 18px}
+.chip{font-size:11.5px;padding:4px 10px;border-radius:20px;background:var(--panel2);
+  border:1px solid var(--line);color:var(--dim)}
+.chip b{color:var(--tx);font-weight:600}
+
+.sec{margin-top:18px}
+.lbl{font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:var(--dim);
+  font-weight:700;margin-bottom:7px}
+.disp{background:#000;border:1px solid var(--line);border-radius:11px;padding:22px;
+  font:600 17px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;
+  text-align:center;cursor:zoom-in;color:#fff}
+.pace{background:var(--panel2);border-radius:10px;padding:12px 14px;
+  font:13px/1.9 ui-monospace,monospace;white-space:pre-wrap;color:#cfd5e0}
+.notes{background:#231c10;border:1px solid #4a3a1c;border-radius:10px;padding:14px 16px;
+  white-space:pre-wrap;font-size:13.5px;line-height:1.65;color:#f0dfc0}
+.notes.hide{display:none}
+ul.plain{list-style:none}
+ul.plain li{padding:6px 0 6px 14px;border-left:2px solid var(--line);margin-bottom:4px;font-size:13.5px}
+.ans{color:var(--green);font-weight:700}
+.warn{background:#2a1614;border:1px solid #5c2a25;border-radius:10px;padding:14px 16px;
+  color:#f3c7c2;font-size:13.5px}
+
+/* projector overlay */
+#proj{position:fixed;inset:0;background:#000;color:#fff;display:none;align-items:center;
+  justify-content:center;text-align:center;padding:5vw;z-index:99;cursor:zoom-out;
+  font:700 clamp(26px,5.5vw,76px)/1.5 ui-monospace,monospace;white-space:pre-wrap}
+#proj.on{display:flex}
+.hint{position:fixed;bottom:10px;right:14px;font-size:11px;color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>Every Way to Make 24</h1>
+    <div class="sub">M1.T1.L2-LAUNCH · Math 6 · Module 1 · Topic M1.T1 · 6.NS.B.4 · Fri Aug 14, 2026 · 64 min</div>
+    <div class="intent">I am learning how to find every factor pair of a number.</div>
+  </div>
+  <div class="timer">
+    <div class="clock" id="clock">00:00</div>
+    <button class="btn" id="go">Start</button>
+    <button class="btn" id="rs">Reset</button>
+    <button class="btn on" id="tn">Notes</button>
+  </div>
+</header>
+
+<div class="prog"><i id="bar"></i></div>
+
+<nav>
+  <button class="sel" data-t="run">Run of Show</button>
+  <button data-t="ref">Reference</button>
+  <button data-t="chk">Checks &amp; Evidence</button>
+</nav>
+
+<div id="run">
+  <div class="cols">
+    <div class="rail" id="rail"></div>
+    <div class="detail" id="detail"></div>
+  </div>
+</div>
+
+<div id="ref" style="display:none" class="detail"></div>
+<div id="chk" style="display:none" class="detail"></div>
+
+</div>
+
+<div id="proj"></div>
+<div class="hint">space = start/pause · T = notes · P = projector · ← → = steps</div>
+
+<script>
+const C={warmup:'--green',launch:'--brown',concrete:'--green',representational:'--blue',
+  abstract:'--purple','tool-divisibility':'--pink','learning-check':'--purple',
+  question:'--gray',independent:'--blue',closeout:'--brown',missing:'--red'};
+
+const S=[
+{n:1,ph:'Open',name:'Warm-Up',dur:5,st:0,sid:'warmup',type:'Warm-Up',resp:'Google Form',
+ voice:'0 silent',body:'Seated',eyes:'Own paper',sup:'In your hands',
+ act:"Open today's warm-up and begin.",
+ disp:`24\n\nHow many different ways can two numbers\nmultiply to make 24?\n\nIs there a limit?`,
+ pace:`0:00-5:00   Open the warm-up. All five questions on your own.`,
+ note:`THE HOOK SITS ON THE PROJECTOR THROUGH THE WHOLE WARM-UP AND IS NEVER SOLVED. Five free minutes of incubation, and minute 5 becomes a release rather than a cold start.\n\nThe question is deliberately IS THERE A LIMIT and not FIND SOME. A student cannot answer it at minute 5, cannot answer it at minute 12, and it stays open until the rainbow closes at minute 25. It also plants the learning intention without you reading it aloud.`},
+
+{n:2,ph:'Open',name:'Every Way to Make 24',dur:5,st:5,sid:'launch',type:'Lesson Launch',
+ resp:'Physical Response',voice:'1 partner',body:'Seated',eyes:'Own paper',sup:'In your hands',
+ act:'Write every pair you can find on your whiteboard.',
+ disp:`24\n\nHow many different ways can two numbers\nmultiply to make 24?\n\nIs there a limit?`,
+ pace:`0:00-3:00   Boards up. Every pair of numbers that multiplies to 24.\n3:00-5:00   Compare with your neighbor. Add what you missed.\n5:00-6:00   Share out. Watch the left column fill.`,
+ vocab:['factor — a number that divides another evenly','factor pair — two numbers that multiply to the target','product — the answer when you multiply'],
+ stems:['A pair that makes 24 is [   ] times [   ].','One my table had that I missed is [   ].','I think we found them all because [   ].'],
+ note:`SAY TWO NUMBERS IN THE PROMPT. It costs one word and it keeps 2 x 3 x 4 off the board, which has no rectangle partner and would eat five minutes you do not have on day one. If someone writes one anyway, just reiterate: only two numbers. No discussion, no detour.\n\nTHE MESS IS THE POINT. Writing their list in the order given is what makes minute 23 have a reason to exist. A tidy list has nothing left to organize.\n\nThis is the routine's first outing. Narrate the phases by name so they hear the structure: think, write, neighbor, revise, share.`},
+
+{n:3,ph:'Open',name:'Build Every Rectangle',dur:5,st:11,sid:'concrete',type:'Concrete (I Do)',
+ resp:'Physical Response',voice:'1 partner',body:'Seated',eyes:'Own paper',sup:'In your hands',
+ act:'Build with your partner. Write dimensions on your board.',
+ disp:`Make as many rectangles as you can with 24 tiles.\nWrite the dimensions on your whiteboard.`,
+ pace:`0:00-0:30   Hands off. Just think about what you could make.\n0:30-3:30   Build. Write the dimensions of each rectangle.\n3:30-4:30   Compare with your neighbor. What did they have that you missed?\n4:30-6:30   Keep building.\n6:30-8:00   Share out. Watch the right column fill.`,
+ vocab:['dimensions — the length and width of a rectangle','area — the number of tiles inside a rectangle','factor pair — two numbers that multiply to the target'],
+ stems:['A rectangle I built is [   ] by [   ].','One my table had that I missed is [   ].','I know it is a rectangle because [   ].'],
+ note:`THE THIRTY SECONDS OF NOT TOUCHING is real. Cubes in hands before a plan means the plan never happens.\n\nSomebody will build a single row of 24. It is a rectangle and 1 is a factor, so it counts. A few will feel it is cheating — be ready for that.\n\nThe neighbor compare at 3:30 is where the ones they missed surface. Do not skip it to save time; it is cheaper than a share-out that has to fill the gaps.`},
+
+{n:4,ph:'Organize',name:'The Two Columns',dur:4,st:29,sid:'representational',type:'Representational (We Do)',
+ resp:'Physical Response',voice:'2 table',body:'Seated',eyes:'The screen',sup:'Parked flat',
+ act:'Talk with your table. Markers down.',
+ disp:`Ways to multiply            Rectangles\n\n\n\nWhat do you notice?`,
+ pace:`0:00-1:00   With your table. What do you notice about the two lists?\n1:00-4:00`,
+ note:`THIS IS THE BEST MOMENT IN THE LESSON. Two messy lists they generated separately turn out to be the same information.\n\nDO NOT SAY IT. Wait for it. If nobody gets there by 3:00, point at one pair on the left and its partner on the right and ask what they have to do with each other.\n\nTHEN THE COMMUTATIVITY MOMENT. Someone has 12 by 2 and someone has 2 by 12.\n  Same size? — yes, easy\n  So is this one rectangle or two?\nPick the build up and rotate it 90 degrees in front of them. Nothing added, nothing removed, just turned. Use 12 by 2 rather than 2 by 3 — a long skinny bar lying down versus standing up genuinely looks like two different things, so agreeing it is one rectangle actually costs them something. That decides whether their list has four entries or eight, so make them say it.\n\nThe lists live on YOUR whiteboard. The screen deliberately holds only the question — if it reproduces the lists it competes with the board, and the board is where you are pointing.`},
+
+{n:5,ph:'Organize',name:'Organize, Then Arch',dur:3,st:33,sid:'abstract',type:'Abstract (You Do)',
+ resp:'Physical Response',voice:'0 silent',body:'Seated',eyes:'The screen',sup:'In your hands',
+ act:'Reorder your list, then arch the pairs.',
+ disp:`Put your list in order.\n\n\n1   2   3   4   6   8   12   24\n\n\nWhich two combine to 24?`,
+ pace:`0:00-1:30   Organize your list on your board. Best order you can find.\n1:30-3:00   Which two combine to 24? Draw the arches.`,
+ vocab:['factor — a number that divides another number with nothing left over','factor pair — two factors that multiply to make the number'],
+ note:`ASK FOR THE ORGANIZING PRINCIPLE, DO NOT HAND IT OVER. You are hoping for numeric order. If you get something else that works, take it.\n\nNAME IT HERE. You have not said the word yet and this is the moment: these pairs are called FACTOR PAIRS, and each number in them is a FACTOR of 24. Meaning first, vocabulary second — but the vocabulary has to land or they leave with a good experience and no name for it.\n\nThe rainbow is the METHOD for meeting the success criterion, not the criterion itself. The durable skill is the ordered list, because that is what GCF compares tomorrow.`},
+
+{n:6,ph:'Organize',name:'Now Do It With 48',dur:2,st:36,sid:'missing',type:'Lesson Launch',
+ resp:'—',voice:'—',body:'—',eyes:'—',sup:'—',
+ gap:true,
+ act:'Every factor pair of 48.',
+ disp:`48\n\n\nEvery factor pair.`,
+ pace:`0:00-2:00   48. Every factor pair. Go.`,
+ note:`STRUCTURAL GAP: this step is on the lesson Agenda property but has no row in Math 6 Lesson Steps. Orders jump 5 → 7, so Step Count and Total Minutes are both under-reporting and Big Dog will not have a state to advance into.\n\nThe pedagogical job it does: 48 defeats recall. That is the whole reason the divisibility rules become worth learning in the next step. Without it the tool arrives as a solution to a problem nobody has yet.\n\nFix: add the row with Order 6, Duration 2, Start Minute 36, State ID launch.`},
+
+{n:7,ph:'Tool',name:'The Tool, Together',dur:5,st:38,sid:'tool-divisibility',type:'Tool — Divisibility Rules',
+ resp:'Assigned Tool',voice:'0 silent',body:'Seated',eyes:'The screen',sup:'In your hands',
+ act:'Follow along on the tool. Hands off until I say.',
+ disp:`Divisibility Rules\n\n24, then 48.`,
+ pace:`0:00-0:30   24 first. Does the machine get what we got?\n0:30-5:00   Now 48. Test each rule. Watch where it stops.`,
+ note:`24 IS A CALIBRATION, NOT A LESSON. Thirty seconds. Watch — it gets the same four pairs we did. They see the machine agrees with what they already know, so they trust it. Then move on fast.\n\n48 IS THE REAL RUN. The original plan ran the tool on 24 and that was the flaw: it demonstrated a machine solving a problem the class had already solved twenty minutes earlier.\n\nTHE STOPPING RULE IS THE ANSWER TO MINUTE 26. The run stops when d times d passes 48. Say it out loud when it happens — that is how you know you are done.\n\nNOTE THE RULE FOR 4 IS HALVING: cut it in half, and if the half is even, 4 works. It composes — 4 is 2 x 2, so it is the rule for 2 done twice, the same shape as 6 being 2 and 3. Until the tool is updated its left rail may still say last two digits, which is vacuous on every number in its bank.`},
+
+{n:8,ph:'Tool',name:'Your Own Reps',dur:4,st:43,sid:'tool-divisibility',type:'Tool — Divisibility Rules',
+ resp:'Assigned Tool',voice:'0 silent',body:'Seated',eyes:'Own paper',sup:'In your hands',
+ act:'Run the four numbers on your own.',
+ disp:`35   36   40   42\n\nYour own pace.`,
+ pace:`0:00-4:00   35, 36, 40, 42. One at a time. Prove each list is finished.`,
+ note:`THE METHOD GOES ON THE BOARD HERE, NOT ON A SLIDE. The tool renders full-bleed on the projector during a tool step, so Main Display does not show. The whiteboard is the only place the procedure can live, and the worked-example research says keep the finished procedure visible during independent work.\n\nWATCH 35 AND 42. Both hide a 7, and there is no rule for 7 on the rail — it turns up as the PARTNER of a factor they did find. Somebody will ask where the rule for 7 is. That is either your best thirty seconds of the block or a dead end, depending on whether you saw it coming. The answer: you do not need a rule for every number, because factors arrive in pairs.\n\nNothing here is logged. The divisibility tool has no evidence emitter, by design — this is practice, and the readiness checks and the paper are what you read.`},
+
+{n:9,ph:'Close',name:'Where Are We',dur:2,st:47,sid:'learning-check',type:'Learning Check',
+ resp:'Fist to Five',voice:'0 silent',body:'Seated',eyes:'The screen',sup:'Parked flat',
+ act:'Submit your honest 0 to 5.',
+ q:'How confident are you that you could list every factor of a new number and know you did not miss any?',
+ disp:`Today\n\nI am learning how to find every factor pair of a number.\n\nI can list all the factors of a number in sequential order.\n\n\nHow do you know you found them all?`,
+ pace:`0:00-1:00   Read the target. Then the question that has been open since minute 5.\n1:00-2:00   Honest 0 to 5. It is private.`,
+ note:`FIST TO FIVE IS ON THE SUCCESS CRITERION, NOT ON THE LESSON. Not did you like it — could you do it.\n\nEXPECT LOW FISTS AND SAY SO OUT LOUD. This criterion is aspirational for day one: most will list pairs fine and only a few will justify completeness. Low fists Friday and high fists Monday is visible growth, and it matches how you talk about confusion being step one. The alternative is a criterion everyone meets, which measures nothing.\n\nHow do you know you found them all is the day's real question and it has been open since the hook.`},
+
+{n:10,ph:'Close',name:'Readiness 1',dur:2,st:49,sid:'question',type:'Question',
+ resp:'Structured Numeric',voice:'0 silent',body:'Seated',eyes:'Own paper',sup:'In your hands',
+ act:'Build every factor pair, then send.',
+ q:'Build every factor pair of 18. Keep going until you cannot find any more.',
+ ans:'pairs(18) · bank: 20',
+ disp:`18\n\n\nBuild every factor pair of 18.`,
+ pace:`0:00-2:00   Build every factor pair of 18. Tap two numbers to make each pair.`,
+ note:`18 IS DELIBERATE. The other numbers that fit under 20 — 16, 20 — can be solved by halving over and over without ever using the rule for 3. 18 forces it: both 2 x 9 and 3 x 6 need them to see 18 is divisible by 3, and 9 is not a factor a sixth grader reaches for on reflex.\n\nTHE PAIR BUILDER SORTS THREE DIFFERENT STUDENTS.\n  Missing a factor pair — stopped early, or dropped the 1 x 18 pair\n  Listed a pair that is not a factor pair — invented 4 x 4, and 4 does not divide 18\n  Complete and correct — all three pairs, nothing invented\n\nThe real item now ships: a bank of 1 to 20 where students tap numbers into pairs until they cannot find more. Production, not recognition.`},
+
+{n:11,ph:'Close',name:'Readiness 2',dur:3,st:51,sid:'question',type:'Question',
+ resp:'Multiple Choice',voice:'0 silent',body:'Seated',eyes:'Own paper',sup:'In your hands',
+ act:'Find the pair that does not work.',
+ q:'Which pair does NOT make 28?',
+ choices:['1 x 28','2 x 14','4 x 7','3 x 9'],ans:'3 x 9',
+ disp:`28\n\n\nWhich pair does NOT make 28?`,
+ pace:`0:00-3:00   Read the stem twice. You are looking for the one that is WRONG.`,
+ note:`MAKE THE STEM UNMISSABLE. Select the pair that is NOT correct trips kids who have spent five years picking the right answer. Say it, then say it again.\n\nTHE DISTRACTORS ARE THE DIAGNOSIS.\n  2 x 14 — correct, and picking it means they think 14 is too big to be a factor of 28\n  4 x 7 — correct, and it brings the 7 back from the tool reps\n  3 x 9 — the answer. 27, off by one, so it catches the student who is close rather than lost\n\nThis one is diagnostic and does NOT land on the success criterion. Readiness 1 is the criterion-aligned item.`},
+
+{n:12,ph:'Close',name:'The Half Sheet',dur:5,st:54,sid:'independent',type:'Independent Work',
+ resp:'Paper',voice:'0 silent',body:'Seated',eyes:'Own paper',sup:'In your hands',
+ act:'Work the half sheet. Hand it to me on your way out.',
+ paper:'Three problems. List all the factors in order and draw the rainbow for 30, then 45, then 240. Collected at the door.',
+ disp:`30      45      240\n\n\nList all the factors in order.\nDraw the rainbow.\n\n\nDo what you can. Hand it in on your way out.`,
+ pace:`0:00-5:00   Half sheet. Do what you can. It comes to me at the door.`,
+ note:`IT DOUBLES AS THE EXIT TICKET. You get digital data from the readiness checks and handwritten work you can actually read, and an unfinished sheet is information rather than a hole.\n\nPROBLEMS 1 AND 2 ARE WHAT YOU ARE GRADING. Problem 3 is a silent extension and you never say so — same wording, same size, same spacing, no badge. The moment it looks special a kid decides in advance whether it is for them.\n\nTHE BANDS:\n  1 and 2 unfinished — needs help, start here Monday\n  1 and 2 done — ready\n  got into 3 — kept going past the required work. MOTIVATION more than ability. Use it to seed Monday's share-out, not to group anybody.\n\n30 exercises the rules for 2, 3, 5 and 6, and 5 x 6 is the pair they drop. 45 is odd so the rules for 2 and 4 die on the first move — a student running the method handles that in two seconds, a student guessing stalls or invents 2 x 22.5. Best discriminator on the sheet.\n\n240 IS A METHOD PROBLEM FIRST. They run the rules and get six of the ten pairs, which is real work. The noticing — these are the same numbers that worked for 24 — is supposed to surface DURING that, not before it. Look for a margin note: same as 24, an arrow, x10. Two or three kids a period, not a third of the class. Brute force cannot finish it because 240 stops past 15 and the rail only reaches 6, and that is Monday's thread: the rules ran out, now what?\n\nSAY DO WHAT YOU CAN, not finish the sheet. It does not tip that 3 is extra and it stops an anxious kid reading an unfinished page as failure.`},
+
+{n:13,ph:'Close',name:'Closeout',dur:5,st:59,sid:'closeout',type:'Closeout',
+ resp:'None',voice:'0 silent',body:'Standing to talk',eyes:'The speaker',sup:'In the tray',
+ act:'Pack up. Bring your half sheet to the door.',
+ disp:`Cubes counted back to 24.\nBoards and markers in the tray.\nChromebooks closed.\n\n\nHalf sheet in my hand on the way out.`,
+ pace:`0:00-5:00   Cubes back to 24. Boards away. Chromebook closed. Sheet in hand.`,
+ note:`COUNT THE CUBES BACK TO 24 as the packing rule. It is self-checking, it takes ten seconds, and it means tomorrow's bags are still right.\n\nSay the payoff out loud on the way out: Monday we use these lists on TWO numbers at once.`}
+];
+
+const TOTAL=64;
+let sel=0,t=0,run=false,notes=true,iv=null;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function rail(){
+  let h='',ph='';
+  S.forEach((s,i)=>{
+    if(s.ph!==ph){ph=s.ph;h+='<div class="phase">'+ph+'</div>';}
+    const cur=t/60>=s.st&&t/60<s.st+s.dur;
+    h+='<div class="step'+(i===sel?' sel':'')+(cur?' now':'')+(s.gap?' gap':'')+'" data-i="'+i+'">'
+      +'<div class="num">'+s.n+'</div><div><div class="sname">'+esc(s.name)+(s.gap?' ⚠':'')+'</div>'
+      +'<div class="smeta"><span class="dot" style="background:var('+C[s.sid]+')"></span>'
+      +s.dur+' min · starts '+s.st+"'"+' · '+esc(s.type)+'</div></div></div>';
+  });
+  $('rail').innerHTML=h;
+  $('rail').querySelectorAll('.step').forEach(e=>e.onclick=()=>{sel=+e.dataset.i;rail();detail();});
+}
+
+function detail(){
+  const s=S[sel];
+  let h='<div class="dhead"><div class="dtitle">'+s.n+'. '+esc(s.name)+'</div>'
+    +'<div class="dtime">'+s.st+"'"+' → '+(s.st+s.dur)+"'"+'  ('+s.dur+' min)</div></div>';
+  h+='<div class="chips">'
+    +'<span class="chip">Response <b>'+esc(s.resp)+'</b></span>'
+    +'<span class="chip">Voice <b>'+esc(s.voice)+'</b></span>'
+    +'<span class="chip">Body <b>'+esc(s.body)+'</b></span>'
+    +'<span class="chip">Eyes <b>'+esc(s.eyes)+'</b></span>'
+    +'<span class="chip">Supplies <b>'+esc(s.sup)+'</b></span>'
+    +'<span class="chip">State <b>'+esc(s.sid)+'</b></span></div>';
+  if(s.gap) h+='<div class="warn"><b>⚠ Not in Math 6 Lesson Steps.</b> This step exists on the Agenda only. Step Count and Total Minutes are under-reporting by 1 step / 2 minutes.</div>';
+  h+='<div class="sec"><div class="lbl">Main Display — click to project</div><div class="disp" id="dsp">'+esc(s.disp)+'</div></div>';
+  h+='<div class="sec"><div class="lbl">Pace &amp; Support projector</div><div class="pace">'+esc(s.pace)+'</div></div>';
+  h+='<div class="sec"><div class="lbl">Student action</div><div>'+esc(s.act)+'</div></div>';
+  if(s.q){h+='<div class="sec"><div class="lbl">Question</div><div>'+esc(s.q)+'</div>';
+    if(s.choices){h+='<ul class="plain" style="margin-top:8px">'+s.choices.map(c=>'<li>'+esc(c)+(c===s.ans?' <span class="ans">← answer</span>':'')+'</li>').join('')+'</ul>';}
+    else if(s.ans){h+='<div style="margin-top:6px" class="ans">'+esc(s.ans)+'</div>';}
+    h+='</div>';}
+  if(s.paper) h+='<div class="sec"><div class="lbl">Paper task</div><div>'+esc(s.paper)+'</div></div>';
+  if(s.vocab) h+='<div class="sec"><div class="lbl">Vocabulary</div><ul class="plain">'+s.vocab.map(v=>'<li>'+esc(v)+'</li>').join('')+'</ul></div>';
+  if(s.stems) h+='<div class="sec"><div class="lbl">Discussion stems</div><ul class="plain">'+s.stems.map(v=>'<li>'+esc(v)+'</li>').join('')+'</ul></div>';
+  h+='<div class="sec"><div class="lbl">Teacher notes — press T</div><div class="notes'+(notes?'':' hide')+'" id="nt">'+esc(s.note)+'</div></div>';
+  $('detail').innerHTML=h;
+  $('dsp').onclick=proj;
+}
+
+function proj(){const p=$('proj');p.textContent=S[sel].disp;p.classList.add('on');}
+$('proj').onclick=()=>$('proj').classList.remove('on');
+
+function tick(){
+  t++;
+  const m=Math.floor(t/60),sc=t%60;
+  $('clock').textContent=String(m).padStart(2,'0')+':'+String(sc).padStart(2,'0');
+  $('bar').style.width=Math.min(100,(t/60/TOTAL)*100)+'%';
+  const idx=S.findIndex(s=>m>=s.st&&m<s.st+s.dur);
+  if(idx>-1&&idx!==sel){sel=idx;detail();}
+  rail();
+}
+$('go').onclick=()=>{run=!run;$('go').textContent=run?'Pause':'Start';$('go').classList.toggle('on',run);
+  if(run){iv=setInterval(tick,1000);}else{clearInterval(iv);}};
+$('rs').onclick=()=>{clearInterval(iv);run=false;t=0;$('go').textContent='Start';
+  $('go').classList.remove('on');$('clock').textContent='00:00';$('bar').style.width='0';rail();};
+$('tn').onclick=()=>{notes=!notes;$('tn').classList.toggle('on',notes);
+  const n=$('nt');if(n)n.classList.toggle('hide',!notes);};
+
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('sel'));
+  b.classList.add('sel');
+  ['run','ref','chk'].forEach(id=>$(id).style.display=id===b.dataset.t?'':'none');
+});
+
+document.onkeydown=e=>{
+  if(e.code==='Space'){e.preventDefault();$('go').click();}
+  if(e.key==='t'||e.key==='T')$('tn').click();
+  if(e.key==='p'||e.key==='P')proj();
+  if(e.key==='Escape')$('proj').classList.remove('on');
+  if(e.key==='ArrowRight'&&sel<S.length-1){sel++;rail();detail();}
+  if(e.key==='ArrowLeft'&&sel>0){sel--;rail();detail();}
+};
+
+$('ref').innerHTML=`
+<div class="lbl">Anchor problem</div>
+<div class="disp" style="cursor:default;font-size:20px">24.  How many different ways can two numbers multiply to make 24?  Is there a limit?</div>
+<div class="sec"><div class="lbl">Anchor answer</div><div>Four pairs. 1 x 24 and 2 x 12 and 3 x 8 and 4 x 6. Eight factors in all. The list is finite and the rainbow is what shows nothing is missing. The hook is deliberately numeric and never mentions rows or area — naming the rectangle before minute 19 would give away the reveal.</div></div>
+<div class="sec"><div class="lbl">Essential ideas</div><ul class="plain">
+<li>A number has a finite set of factor pairs and they can be found on purpose rather than by guessing.</li>
+<li>Every factor pair of a number is a rectangle whose area is that number.</li>
+<li>The same rectangle turned 90 degrees is one pair and not two.</li>
+<li>You know the list is complete when the number you are testing times itself passes the target.</li>
+<li>A factor can arrive as the partner of a factor you found without ever having a rule of its own.</li>
+</ul></div>
+<div class="sec"><div class="lbl">Success criteria — selected one is starred</div><ul class="plain">
+<li>★ I can list all the factors of a number in sequential order.</li>
+<li>I can build every rectangle for a given number and read its dimensions as a factor pair.</li>
+<li>I can use the divisibility rules to test a number I do not already know.</li>
+<li>I can explain how I know there are no more factors to find.</li>
+</ul></div>
+<div class="sec"><div class="lbl">The 24 / 48 split</div>
+<div><b>24 is the structure number.</b> It carries the reveal — two lists, one truth, commutativity, the ordered list, the rainbow.<br><b>48 is the method number.</b> It defeats recall, which is what finally makes the divisibility rules worth learning.</div></div>
+<div class="sec"><div class="lbl">Supplies &amp; mode</div><div>Classroom Mode: Academic lesson · Tool: Divisibility Rules · 24 snap cubes per pair · individual whiteboards + markers · Chromebooks · half sheets pre-cut</div></div>
+<div class="sec"><div class="lbl">Standard</div><div>6.NS.B.4 — Find GCF and LCM; use them to solve problems (including with prime factorization). SBAC importance not yet set on this lesson.</div></div>`;
+
+$('chk').innerHTML=`
+<div class="lbl">Three sources of evidence today</div>
+<div class="sec"><div class="lbl">1 · Fist to Five (min 47) — private, not graded</div>
+<div>"How confident are you that you could list every factor of a new number and know you did not miss any?"<br>
+<span style="color:var(--accent)">Expect low fists and say so out loud.</span> Low Friday, high Monday is the visible growth.</div></div>
+<div class="sec"><div class="lbl">2 · Readiness 1 (min 49) — criterion-aligned</div>
+<div>Build every factor pair of 18. Answer: <span class="ans">pairs(18), bank 20</span><br>
+Sorts three students: <b>missing a pair</b> (stopped early / dropped 1 x 18) · <b>invented a pair</b> (4 x 4) · <b>complete and correct</b>.</div></div>
+<div class="sec"><div class="lbl">3 · Readiness 2 (min 51) — diagnostic only</div>
+<div>Which pair does NOT make 28? Answer: <span class="ans">3 x 9</span><br>
+<b>2 x 14</b> → thinks 14 is too big to be a factor · <b>4 x 7</b> → lost the 7 from the tool reps · <b>3 x 9</b> → 27, off by one, close not lost.</div></div>
+<div class="sec"><div class="lbl">4 · The half sheet (min 54) — doubles as the exit ticket</div>
+<div>30, 45, 240 — factors in order + rainbow. Grading problems 1 and 2 only; problem 3 is a silent, unbadged extension.<br><br>
+<b>Bands:</b><br>1 &amp; 2 unfinished → needs help, start here Monday<br>1 &amp; 2 done → ready<br>got into 3 → motivation, seed Monday's share-out (do not group)<br><br>
+<b>30</b> exercises 2/3/5/6; they drop 5 x 6. <b>45</b> is the best discriminator — odd, so 2 and 4 die on move one. <b>240</b> is a method problem; brute force cannot finish it, and that is Monday's thread: <i>the rules ran out, now what?</i></div></div>
+<div class="sec"><div class="lbl">Open data gaps on this lesson</div><div class="warn">
+Step 6 "Now Do It With 48" missing from Lesson Steps · Warm-Up Build Status = <b>Error</b> · Exit Ticket Prompt, Link and Answer all blank · Retention Q4 and Q5 blank (next-day warm-up will have nothing checking this lesson) · Homework Tool Assignment not created</div></div>`;
+
+rail();detail();
+</script>
+</body>
+</html>

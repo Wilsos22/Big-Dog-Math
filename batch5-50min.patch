@@ -1,0 +1,69 @@
+From 037cd4b589004243310da300d7f724fa1659d4fe Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 28 Jul 2026 21:54:08 +0000
+Subject: [PATCH] Move the period floor to 50 minutes
+
+The district schedule released 2026-07-28 is 50-minute periods; the CRA spine
+was written against 55. MIN_SCHEDULED_MINUTES is only a FLOOR - a lesson whose
+own lineup sums longer still keeps its own length, and the stale-session cutoff
+stays derived rather than fixed. At 50 the grace window lands where Steele
+asked: a 50-minute lesson auto-closes at 65 rather than 70.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011kWBfBZsCJUxvFbSuRw4Ze
+---
+ CLAUDE.md                   | 4 +++-
+ src/app/control/page.tsx    | 2 +-
+ src/lib/sessionLifecycle.ts | 8 ++++++--
+ 3 files changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 2d1ae8e..a453673 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -455,7 +455,9 @@ the invariants they protect are easy to break again.
+   session at a time: starting or adopting a session closes every other open row, so moving from
+   period 2 to period 3 ends period 2 rather than racing it. A session also auto-closes once it
+   outlives its own planned length plus `STALE_GRACE_MINUTES` (15). The cutoff is DERIVED from that
+-  session's lineup (`sequence.steps[].durationSeconds`) with a `MIN_SCHEDULED_MINUTES` floor of 55,
++  session's lineup (`sequence.steps[].durationSeconds`) with a `MIN_SCHEDULED_MINUTES` floor of 50
++  (the district moved to 50-minute periods, schedule released 2026-07-28; the CRA spine was
++  originally written against 55, so treat any surviving "55-minute day" reference as stale),
+   never a flat clock - a guardrail that can end a class still in progress is worse than none, so the
+   arithmetic only ever errs long. `sweepStaleSessions` is throttled to one real query per minute per
+   instance and is called from the teacher session GET, session start, and `/api/student/warmup-start`.
+diff --git a/src/app/control/page.tsx b/src/app/control/page.tsx
+index 5ae8845..697788f 100644
+--- a/src/app/control/page.tsx
++++ b/src/app/control/page.tsx
+@@ -2,7 +2,7 @@
+ 
+ // Teacher Classroom Control Panel — front-of-room display.
+ // Bank (bottom): pull states into the day's LINEUP (sequence) with a running
+-//   total vs. a 55-minute period.
++//   total vs. a 50-minute period (district schedule as of 2026-07-28).
+ // Each state loads an adjustable countdown. After Start, the timed sequence
+ // advances automatically until the teacher pauses or stops it.
+ // Ending sequence: 30-second alert, giant on-screen 10-to-1 countdown with ticks,
+diff --git a/src/lib/sessionLifecycle.ts b/src/lib/sessionLifecycle.ts
+index 047fe92..43909ce 100644
+--- a/src/lib/sessionLifecycle.ts
++++ b/src/lib/sessionLifecycle.ts
+@@ -20,8 +20,12 @@
+ import type { LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
+ import { getSupabaseAdmin } from "@/lib/supabaseServer";
+ 
+-/** Floor for a session's planned length. The CRA spine is a 55-minute day. */
+-export const MIN_SCHEDULED_MINUTES = 55;
++/**
++ * Floor for a session's planned length. The district moved to 50-minute periods
++ * (schedule released 2026-07-28); the CRA spine was written against 55. This is
++ * only a floor - a lesson whose own lineup sums longer keeps its own length.
++ */
++export const MIN_SCHEDULED_MINUTES = 50;
+ /** How far past the planned end a session may run before it closes itself. */
+ export const STALE_GRACE_MINUTES = 15;
+ /** Never trust a lineup that claims an implausible day. */
+-- 
+2.43.0
+

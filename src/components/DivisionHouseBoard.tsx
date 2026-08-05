@@ -25,8 +25,10 @@ import {
   serializeHouseSet,
   type HouseOp,
   type HousePrompt,
+  type HouseSlot,
   type HouseTrace,
 } from "@/lib/divisionHouse";
+import { buildArc, houseLayout, houseWidthUnits, type ArcGeometry } from "@/lib/divisionHouseArcs";
 import { LiveToolBanner, useLiveToolConfig } from "./useLiveToolConfig";
 
 const PROGRESS_KEY = "bdm-division-house";
@@ -47,8 +49,44 @@ const ROW = 96;
 // tall less 4px of margin top and bottom, and rowPx is cellPx * 96/104.
 const CELL_MIN = 58;
 const CELL_MAX = 168;
-/** Half the clear space kept around the sign so the arrow never runs through it. */
-const SIGN_GAP = 30;
+/** Space between the plaque naming the parts and the top of the house. */
+const PLAQUE_GAP = 46;
+/**
+ * One colour per round, cycling. "each round should keep the arched arrow
+ * lines, but the new round should be a different color."
+ *
+ * The fourth is the design system's orange-600, which is the one orange in the
+ * token set that clears AA on cream - `--bdb-amber` does not, and is spoken for
+ * by the target pulse anyway.
+ */
+const ARC_COLORS = [
+  "var(--bdb-coral-deep)",
+  "var(--bdb-teal-deep)",
+  "var(--bdb-brown)",
+  // NOT the ring's orange. A four-round problem would otherwise draw its last
+  // round in the same colour as the "tap here" ring. Ink-soft reads as pencil,
+  // is clearly none of the other three, and clears AA on cream at 5.6:1.
+  "var(--bdb-ink-soft)",
+];
+/**
+ * What a finished round dims to.
+ *
+ * 0.32 was the first number tried and it was wrong: composited over cream a
+ * coral arc at 0.32 measures about 1.6:1, which on a projector at the back of
+ * the room is not a faded pathway, it is no pathway. The whole point of keeping
+ * the rounds is that they can still be SEEN. 0.55 lands near 2.6:1 - clearly
+ * behind the live round, still legibly there.
+ */
+const ARC_FADED = 0.55;
+/**
+ * The ring round the spot to tap. NOT `--bdb-amber`, which measures 1.72:1 on
+ * cream - the ring exists because Steele said the amber pulse alone was easy to
+ * miss from the back of the room, so drawing it in the same amber would have
+ * missed for the same reason. This is the design system's orange-600, 3.71:1,
+ * which clears the 3:1 floor for a non-text mark and still reads as amber's
+ * darker cousin over the pulse it sits on.
+ */
+const RING_COLOR = "#c4660a";
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
@@ -67,9 +105,24 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
   const [published, setPublished] = useState<string | null>(null);
   const [linked, setLinked] = useState<string | null>(null);
 
+  /**
+   * True on the projector. `/teacher/present` embeds this tool in an iframe as
+   * `?presentation=1&embed=1`, and NOBODY EVER CLICKS THAT COPY - it sits at
+   * step 0 for the whole state. Anything that waits to be dismissed has to know
+   * that, or it parks over the middle of the board for the rest of the lesson,
+   * and it cannot even be cleared from the iPad: the pen surface lays a
+   * pointer-events:none sheet over the present iframe, so the only way to get
+   * rid of it is to walk to the laptop.
+   */
+  const [presentation, setPresentation] = useState(false);
+
   useBeforePaint(() => {
-    const raw = new URLSearchParams(window.location.search).get("set");
+    const q = new URLSearchParams(window.location.search);
+    const raw = q.get("set");
     if (raw && parseHouseSet(raw).problems.length) setLinked(raw);
+    const embedded = q.get("presentation") === "1" || q.get("embed") === "1";
+    setPresentation(embedded);
+    if (!embedded) setShowStart(true);
   }, []);
 
   const source = published ?? linked ?? set ?? "";
@@ -88,8 +141,22 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
   const [cheer, setCheer] = useState(0);
   const [visualKey, setVisualKey] = useState(0);
   const [wrapped, setWrapped] = useState(false);
+  /**
+   * The card that opens each problem - "select the number closest to the door".
+   *
+   * Starts FALSE and is turned on before the first paint, not on by default.
+   * This page is deliberately static, so the server-rendered HTML is what the
+   * browser paints first - and with it defaulted on, the projector showed the
+   * card for a beat on every state change and every deploy reload before
+   * hydration could work out it was a projector. Off-then-on costs a normal
+   * student nothing, because the layout effect lands before their first paint
+   * too.
+   */
+  const [showStart, setShowStart] = useState(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const plaqueRef = useRef<HTMLDivElement | null>(null);
   const targetRef = useRef<HTMLButtonElement | null>(null);
+  const askRef = useRef<HTMLDivElement | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
 
   const problem = problems[Math.min(idx, problems.length - 1)];
@@ -102,6 +169,7 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
     setWrongSlot(null);
     setWrapped(false);
     setVisualKey(0);
+    setShowStart(true);
   }, []);
 
   const liveToolId = liveTool?.id;
@@ -128,8 +196,22 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
       if (!alive || !stageRef.current) return;
       const rect = stageRef.current.getBoundingClientRect();
       const w = stageRef.current.clientWidth;
-      const h = Math.max(360, window.innerHeight - rect.top - 28);
-      if (w > 0) setBox((b) => (b.w === w && b.h === h ? b : { w, h }));
+      // THE PLAQUE IS INSIDE THE MEASURED REGION AND HAS TO COME OFF THE TOP.
+      // Spending all of the stage's height on the board put the last round back
+      // below the fold on a 1366x768 Chromebook - the exact failure this sizing
+      // code was written to fix, reintroduced the moment the headline moved
+      // from the page header into the stage.
+      // The gap under the plaque SCALES, so reading the constant under-counted
+      // it by up to 23px on a projector and put the board back below the fold
+      // on the one surface nobody can scroll. Read what is actually applied.
+      const pEl = plaqueRef.current;
+      const plaque = pEl
+        ? pEl.offsetHeight + (parseFloat(window.getComputedStyle(pEl).marginBottom) || PLAQUE_GAP)
+        : 0;
+      const h = Math.max(300, window.innerHeight - rect.top - 28 - plaque);
+      // A 1px wobble must not restart this: the plaque's own type scales with
+      // the cell size, so an exact-equality test can chase its own tail.
+      if (w > 0) setBox((b) => (b.w === w && Math.abs(b.h - h) <= 3 ? b : { w, h }));
     };
     measure();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
@@ -166,7 +248,13 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
   // short window plus a four-round problem can push the last round below the
   // fold, and the amber pulse is the only thing telling them where to tap.
   useEffect(() => {
-    targetRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    // On a SLOT step the spot to tap is what has to stay on screen. On an
+    // OPERATION step there is no spot, so this used to do nothing at all -
+    // while the four buttons sit in the right-hand rail, which a tall board can
+    // have pushed off the top. The room got a scroll on one step and none on
+    // the next, which mid-lesson is a fumble.
+    const el = targetRef.current ?? askRef.current;
+    el?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [step]);
 
   if (!trace) return <p style={{ padding: 24, fontWeight: 700 }}>That problem cannot be drawn in the house.</p>;
@@ -174,15 +262,19 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
   const prompt: HousePrompt | undefined = trace.prompts[step];
   const done = step >= trace.prompts.length;
   const filledSet = new Set(filled);
-  // The sign stays up while the round it belongs to is still running, and
-  // clears at the end - a connector left hanging over a finished board reads
-  // as a stray mark.
-  const activeVisual = done
-    ? undefined
-    : trace.prompts
-      .slice(0, step)
-      .reverse()
-      .find((p) => p.visual && p.round === (trace.prompts[Math.max(0, step - 1)]?.round ?? 0));
+  /**
+   * EVERY connector drawn so far, oldest first - not just this round's.
+   *
+   * This inverts what the board used to do. One `activeVisual` was found for
+   * the current round and everything before it was thrown away, so a student
+   * saw six separate moments and never the shape they add up to. Steele:
+   * "each round should keep the arched arrow lines, but the new round should be
+   * a different color. I want students to see the pathway the numbers take
+   * every time." They also survive `done` now, because the completed pathway is
+   * the thing worth looking at once the arithmetic is finished.
+   */
+  const liveRound = trace.prompts[Math.min(step, Math.max(0, trace.prompts.length - 1))]?.round ?? 0;
+  const drawnPrompts = trace.prompts.slice(0, step).filter((p) => p.visual);
 
   const advance = (p: HousePrompt) => {
     setFilled((f) => [...f, ...p.fill]);
@@ -194,6 +286,9 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
     setWrongSlot(null);
     setCheer((c) => c + 1);
     if (p.visual) setVisualKey((v) => v + 1);
+    // A right answer dismisses the opening card as surely as the button does -
+    // otherwise it hangs over the board for the rest of the problem.
+    setShowStart(false);
     setStep((s) => s + 1);
   };
 
@@ -226,9 +321,11 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
 
   // How big one cell gets: as wide as the space allows, but never so tall that
   // the last round falls off the bottom.
+  /** The board's width in CELL units, with the gutter counted at half. */
+  const widthUnits = houseWidthUnits(trace);
   const cellPx = (() => {
     if (!box.w) return CELL;
-    const byWidth = box.w / trace.columns;
+    const byWidth = box.w / widthUnits;
     const byHeight = (box.h / trace.rows) * (CELL / ROW);
     return Math.round(clamp(Math.min(byWidth, byHeight), CELL_MIN, CELL_MAX));
   })();
@@ -237,18 +334,14 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
   // than it already was and capped so it does not run away on a projector.
   const k = clamp(cellPx / CELL, 1, 1.7);
 
-  const centre = (id: string) => {
-    const s = trace.slots.find((x) => x.id === id);
-    if (!s) return null;
-    return { x: (s.col + 0.5) * cellPx, y: (s.rowIndex + 0.5) * rowPx };
-  };
-
-  const boardW = trace.columns * cellPx;
-  const boardH = trace.rows * rowPx;
+  // THE GRID IS NOT UNIFORM, and the arithmetic for that lives in the lib so a
+  // contract can check it. Nothing in this file may compute an x from a column
+  // by hand.
+  const layout = houseLayout(trace, cellPx, rowPx);
+  const { colW, colX, colMid, centre, boardW, boardH, gutterX, houseLeft, gridColumns } = layout;
+  const gutterPx = colW(trace.divisorWidth);
   /** The cell the scroll keeper follows - the first spot the prompt names. */
   const firstTargetId = prompt?.kind === "slot" ? prompt.slots?.[0] : undefined;
-  /** The clear column between the divisor and the bracket - where the signs live. */
-  const gutterX = (trace.houseCol - 0.5) * cellPx;
 
   // A line under the number being subtracted, with the difference below it.
   // Drawn as soon as that product is on the board, the way you would rule it
@@ -268,29 +361,139 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
       const round = Number(s.row.slice("work".length));
       const cols = [s.col, ...partialColsFor(round)];
       const existing = acc[s.row];
-      const left = Math.min(existing?.left ?? Infinity, ...cols.map((c) => c * cellPx + 6));
+      const left = Math.min(existing?.left ?? Infinity, ...cols.map((c) => colX(c) + 6));
       const right = Math.max(
         existing ? existing.left + existing.width : 0,
-        ...cols.map((c) => (c + 1) * cellPx - 6),
+        ...cols.map((c) => colX(c) + colW(c) - 6),
       );
       acc[s.row] = { key: s.row, left, top: (s.rowIndex + 1) * rowPx - 5, width: right - left };
       return acc;
     }, {});
   const subtractionRuleList = Object.values(subtractionRules);
-  const houseLeft = trace.houseCol * cellPx;
   const houseTop = rowPx; // the dividend row
 
   const done_ = done;
-  const vis = activeVisual?.visual;
-  const from = vis ? centre(vis.from) : null;
-  const to = vis ? centre(vis.to) : null;
+
+  /** Arrowhead size, scaled with the board but never a dot and never a wedge. */
+  const headPx = clamp(cellPx * 0.115, 8, 26);
+  /**
+   * The sign's knockout disc is SIZED TO THE GUTTER, not to the font.
+   *
+   * Every ÷, x and = anchors in the gutter column, and the gutter is half a
+   * cell now - a disc sized in rem spilled over the divisor on one side and the
+   * first digit inside the house on the other, and it does that once per round
+   * on a board that keeps every round.
+   */
+  const signPx = Math.max(26, Math.min(gutterPx * 1.15, cellPx * 0.62));
+  /** The plaque's chrome rides the same scale as everything else on the board. */
+  const plaqueGap = Math.round(PLAQUE_GAP * clamp(k, 1, 1.5));
+  const arrowW = Math.max(3, Math.round(3 * k));
+  const arrowHead = Math.max(9, Math.round(10 * k));
+
+  /**
+   * Every cell showing a digit right now - what an arc may not be drawn over.
+   *
+   * The arcs paint ABOVE the cells, so this is not a nicety: without it the
+   * "the answer goes up here" arc is a solid line struck through the answers
+   * already up there, which happens from round one on every problem in the
+   * built-in set.
+   */
+  const shownDigits = trace.slots
+    .filter((s) => s.given || filledSet.has(s.id))
+    .map((s) => ({ x: colMid(s.col), y: (s.rowIndex + 0.5) * rowPx }));
+
+  /**
+   * What each cell of a merged number should CALL itself.
+   *
+   * The boxes merge so that "16" reads as one number rather than a 1 and a 6 -
+   * and a screen reader was still hearing "1 at row 5 column 3" then "6 at row 5
+   * column 4", which is the exact split the picture now fixes. Every cell of a
+   * run answers with the whole number.
+   */
+  const runLabel = new Map<string, string>();
+  {
+    const rows = new Map<number, HouseSlot[]>();
+    for (const s of trace.slots) {
+      if (s.given || !filledSet.has(s.id)) continue;
+      const list = rows.get(s.rowIndex);
+      if (list) list.push(s);
+      else rows.set(s.rowIndex, [s]);
+    }
+    rows.forEach((list) => {
+      list.sort((x, y) => x.col - y.col);
+      let run: HouseSlot[] = [];
+      const flush = () => {
+        if (run.length > 1) {
+          const text = run.map((x) => x.text).join("");
+          run.forEach((x) => runLabel.set(x.id, text));
+        }
+        run = [];
+      };
+      for (const s of list) {
+        if (run.length && s.col !== run[run.length - 1].col + 1) flush();
+        run.push(s);
+      }
+      flush();
+    });
+  }
+  const arcBoard = { cellPx, rowPx, boardW, boardH, gutterX, houseLeft, digits: shownDigits };
+  const arcs = drawnPrompts
+    .map((p) => {
+      const v = p.visual;
+      const a = v ? centre(v.from) : null;
+      const b = v ? centre(v.to) : null;
+      if (!v || !a || !b) return null;
+      return buildArc({ key: p.id, round: p.round, sign: v.sign, from: a, to: b }, arcBoard);
+    })
+    .filter((x): x is ArcGeometry => Boolean(x));
+  const arcColor = (round: number) => ARC_COLORS[round % ARC_COLORS.length];
+  const arcOpacity = (round: number) => (round < liveRound ? ARC_FADED : 1);
+  const newestArc = arcs[arcs.length - 1];
+
+  /**
+   * The ring drawn round the spot to click. Steele: "Draw attention to this
+   * number more by either make it flash more demonstrably or animate a circle
+   * being drawn around it". The amber pulse stays underneath it - on a
+   * projector at the back of the room the pulse alone was easy to miss.
+   */
+  const targetRing = (() => {
+    if (!prompt || prompt.kind !== "slot") return null;
+    const ss = (prompt.slots ?? [])
+      .map((id) => trace.slots.find((s) => s.id === id))
+      .filter((s): s is NonNullable<typeof s> => Boolean(s));
+    if (!ss.length) return null;
+    const cols = ss.map((s) => s.col);
+    const lo = Math.min(...cols);
+    const hi = Math.max(...cols);
+    const left = colX(lo);
+    const right = colX(hi) + colW(hi);
+    return {
+      cx: (left + right) / 2,
+      cy: (ss[0].rowIndex + 0.5) * rowPx,
+      // Wider than the cells it circles, and a touch flatter, so it reads as a
+      // ring round the NUMBER rather than a second border on the box.
+      rx: (right - left) / 2 + Math.max(5, cellPx * 0.06),
+      ry: rowPx / 2 - 3,
+    };
+  })();
+
+  const houseMid = houseLeft + (boardW - houseLeft) / 2;
+  const divisorMid = colX(0) + (colX(trace.divisorWidth) - colX(0)) / 2;
+  /**
+   * The card that opens a problem. The "closest to the door" wording only holds
+   * when one digit is the answer - when the divisor does not fit the first
+   * digit the nearest number is exactly the wrong click, so that case borrows
+   * the prompt's own words instead.
+   */
+  const startCopy = (trace.prompts[0]?.slots?.length ?? 1) > 1
+    ? trace.prompts[0].ask
+    : "Select the number closest to the house door.";
 
   return (
     <div className="dh-root" style={{ ["--dh-k" as string]: k }}>
       <style>{`
         .dh-root { width:100%; display:grid; gap:18px; }
         .dh-top { display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap; }
-        .dh-headline { font-size:clamp(2rem,4.6vw,3rem); font-weight:900; margin:0; line-height:1.05; }
         .dh-count { font-size:0.78rem; font-weight:800; letter-spacing:0.14em; text-transform:uppercase; color:var(--bdb-ink-faint); margin:0 0 4px; }
         .dh-btn { font:inherit; font-weight:800; font-size:0.88rem; min-height:44px; padding:0 17px; border-radius:11px;
           border:1px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink); cursor:pointer; }
@@ -303,6 +506,53 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
 
         .dh-stage { display:grid; justify-items:center; padding:10px 0 20px; min-width:0; }
         .dh-board { position:relative; }
+
+        /* THE PROBLEM, NAMED, OVER THE HOUSE. Steele: it "should be centered
+           over the top of the long division house in a box with an arrow
+           identifying the 94 as the dividend (david in the house) and 4 as the
+           divisor (da visitor outside the house)". The mnemonic is his and it
+           is the point - the two words are near-identical on the page and a
+           sixth grader mixes them up all year. */
+        /* z-index 2 puts the plaque's overflowing arrow ABOVE the empty cells it
+           descends through and BELOW the arcs and their signs.
+           It was 6, and that was a bug of exactly the kind it was meant to fix:
+           .dh-board sets no stacking context, so 6 sat above .dh-arcs at 3, and
+           the dividend arrow descends the gutter - the one column every divide,
+           multiply and equals sign anchors in. Measured, the teal line passed
+           within 0-2px of the centre of the equals and multiply glyphs on every
+           round of every problem, and crossed four to nine retained arcs. A
+           cream halo cannot defend against something stacked on top of it. */
+        .dh-plaque { position:relative; z-index:2; display:grid; gap:7px; }
+        .dh-plaque-title { display:flex; justify-content:center; min-width:0; }
+        .dh-plaque-eq { display:inline-block; padding:7px 20px; border-radius:14px;
+          border:2px solid var(--bdb-line); background:var(--bdb-card);
+          font-size:calc(1.85rem * var(--dh-k)); font-weight:900;
+          font-variant-numeric:tabular-nums; line-height:1.15;
+          /* A short house plus a two-digit divisor makes the box wider than the
+             span it is centred over, and a flex item will not shrink below its
+             own min-content without this. */
+          max-width:100%; box-sizing:border-box; }
+        .dh-plaque-tags { display:grid; align-items:start; }
+        .dh-tag { display:grid; justify-items:center; gap:1px; text-align:center; padding:0 4px; }
+        .dh-tag i { font-style:normal; font-size:calc(0.66rem * var(--dh-k)); font-weight:800;
+          letter-spacing:0.13em; text-transform:uppercase; }
+        .dh-tag b { font-size:calc(0.8rem * var(--dh-k)); font-weight:800; line-height:1.2; }
+        .dh-tag.visitor { color:var(--bdb-brown); }
+        .dh-tag.david { color:var(--bdb-teal-deep); }
+        .dh-plaque-arrows { position:absolute; left:0; top:100%; pointer-events:none; overflow:visible; }
+        .dh-plaque-arrow { fill:none; stroke-linecap:round; stroke-linejoin:round; }
+
+        /* The card that opens each problem. */
+        .dh-start { position:absolute; left:50%; top:44%; transform:translate(-50%,-50%); z-index:9;
+          display:grid; gap:10px; justify-items:start; padding:18px 20px;
+          border-radius:16px; border:2px solid var(--bdb-brown); background:var(--bdb-card);
+          box-shadow:0 18px 40px rgba(32,30,26,0.18);
+          animation:dh-start-in 260ms cubic-bezier(.2,1.4,.4,1); }
+        @keyframes dh-start-in { from { opacity:0; transform:translate(-50%,-42%) scale(0.94); } }
+        .dh-start-t { margin:0; font-size:calc(0.72rem * var(--dh-k)); font-weight:800;
+          letter-spacing:0.14em; text-transform:uppercase; color:var(--bdb-brown); }
+        .dh-start-b { margin:0; font-size:calc(1.1rem * var(--dh-k)); font-weight:800; line-height:1.32; }
+        @media (prefers-reduced-motion: reduce) { .dh-start { animation:none; } }
         .dh-cells { display:grid; position:relative; z-index:1; }
         /* Every cell is a rectangle you can click, whether or not the answer
            uses it - otherwise "where does it go" is "click the only open box". */
@@ -339,17 +589,61 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
           .dh-slot.land, .dh-slot.wrong { animation:none; }
           .dh-slot:active { transform:none; }
         }
+        /* A NUMBER IS ONE BOX. Steele: "make these green boxes combine into 1
+           box when they select the number" - two green rectangles side by side
+           read as two numbers, which is the exact thing this tool spends the
+           rest of its time teaching against. The cells are pulled together and
+           their inner borders go transparent, so the green fill runs straight
+           through the join. Transparent rather than zero-width on purpose: the
+           background already paints under the border box, and removing 2px of
+           border would shift the digit inside it. */
+        .dh-slot.filled.mg-l { margin-left:0; border-left-color:transparent;
+          border-top-left-radius:0; border-bottom-left-radius:0; }
+        .dh-slot.filled.mg-r { margin-right:0; border-right-color:transparent;
+          border-top-right-radius:0; border-bottom-right-radius:0; }
 
         /* the L: vertical down the dividend, bar across its top */
         .dh-l { position:absolute; border-left:5px solid var(--bdb-ink); border-top:5px solid var(--bdb-ink);
           border-top-left-radius:14px; pointer-events:none; z-index:0; }
 
-        /* The sign lands twice: a big one that POPS and fades away, and a
-           steady one underneath it that stays between the two numbers. */
-        /* The burst is sized off the cell, and its top scale is held down so it
-           never spills out of the one-column gutter it lives in. */
-        .dh-pop { position:absolute; z-index:4; pointer-events:none; transform:translate(-50%,-50%);
-          font-size:calc(3.6rem * var(--dh-k)); font-weight:900; color:var(--bdb-coral-deep);
+        /* CONNECTORS ARE SOLID AND ARCHED, AND THEY DRAW.
+           Steele, 2026-08-03: "make the connectors not dashed lines but a solid
+           line", and "have them appear like starting at the back where it
+           starts from and make it slowly appear moving toward the end of the
+           arrow". pathLength:1 makes one dash cover a curve of any length, so
+           the same rule animates a 40px drop and a 600px sweep at one speed. */
+        /* STROKE WIDTHS RIDE THE BOARD'S SCALE. At a 168px cell the digits are
+           54px tall, and a fixed 3.4px pathway - the thing Steele asked to be
+           kept visible - was a hairline behind them on a 55-inch panel. */
+        .dh-arcs { position:absolute; left:0; top:0; z-index:3; pointer-events:none; overflow:visible; }
+        .dh-arc { fill:none; stroke-width:calc(3.4px * var(--dh-k)); stroke-linecap:round;
+          stroke-dasharray:1; stroke-dashoffset:1; animation:dh-arc-draw 520ms ease-out forwards; }
+        @keyframes dh-arc-draw { to { stroke-dashoffset:0; } }
+        /* The head waits for the line to reach it. As an SVG marker it appeared
+           at the destination before the line had left, which reads backwards. */
+        .dh-arrowhead { animation:dh-head-in 220ms ease-out 430ms both; }
+        @keyframes dh-head-in { from { opacity:0; } to { opacity:1; } }
+
+        /* ONLY THE LIVE MOVE KEEPS ITS GLYPH, and it is SVG text with a cream
+           halo rather than an HTML disc.
+           Steele asked for the LINES to persist - "each round should keep the
+           arched arrow lines" - and keeping the signs too was the builder's
+           addition, not his. It did not survive contact with the geometry: four
+           signs a round all anchor in the gutter, the gutter is half a cell, and
+           an opaque disc big enough to read is bigger than the gap between two
+           of them. Measured on 96/4, the FIRST problem in the built-in set: 13
+           overlapping pairs, the worst 13px apart under 51px discs, each one
+           erasing the one before it. The halo knocks the line out of the glyph's
+           own outline instead of out of a circle, so it cannot bite the bracket
+           or a neighbouring digit either. */
+        .dh-sign { paint-order:stroke fill; stroke:var(--bdb-ground); stroke-linejoin:round;
+          text-anchor:middle; dominant-baseline:central; font-weight:900;
+          animation:dh-settle 700ms ease-out; }
+        @keyframes dh-settle { 0%,45% { opacity:0; } 100% { opacity:1; } }
+        /* Only the NEWEST sign bursts. On a board that now keeps every earlier
+           move, the pop is what says which one just happened. */
+        .dh-pop { position:absolute; z-index:5; pointer-events:none; transform:translate(-50%,-50%);
+          font-size:calc(3.6rem * var(--dh-k)); font-weight:900;
           animation:dh-burst 780ms cubic-bezier(.2,1.5,.4,1) forwards; }
         @keyframes dh-burst {
           0% { transform:translate(-50%,-50%) scale(0.25) rotate(-22deg); opacity:0; }
@@ -357,20 +651,28 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
           55% { transform:translate(-50%,-50%) scale(1.05) rotate(0); opacity:0.9; }
           100% { transform:translate(-50%,-50%) scale(1.5) rotate(0); opacity:0; }
         }
-        .dh-vis { position:absolute; z-index:3; pointer-events:none; transform:translate(-50%,-50%);
-          font-size:calc(2.2rem * var(--dh-k)); font-weight:900; color:var(--bdb-coral-deep);
-          animation:dh-settle 780ms ease-out; }
-        @keyframes dh-settle { 0%,45% { opacity:0; } 100% { opacity:1; } }
-        @media (prefers-reduced-motion: reduce) { .dh-pop { display:none; } .dh-vis { animation:none; } }
         /* The rule under the number being subtracted; the difference goes below it. */
-        .dh-subrule { position:absolute; z-index:2; height:4px; border-radius:2px;
+        .dh-subrule { position:absolute; z-index:2; height:calc(4px * var(--dh-k)); border-radius:2px;
           background:var(--bdb-ink); animation:dh-rule 300ms ease-out; transform-origin:left center; }
         @keyframes dh-rule { from { transform:scaleX(0); } to { transform:scaleX(1); } }
-        .dh-link { position:absolute; z-index:2; pointer-events:none; stroke:var(--bdb-coral-deep);
-          stroke-width:3; stroke-dasharray:7 6; fill:none; animation:dh-draw 460ms ease-out; }
-        @keyframes dh-draw { from { opacity:0; } to { opacity:1; } }
+
+        /* A ring drawn round the spot to tap, and drawn again every couple of
+           seconds. Steele: "animate a circle being drawn around it" - the amber
+           pulse alone was easy to miss from the back of the room, so the ring
+           sits on top of the pulse rather than replacing it. */
+        .dh-ring { fill:none; stroke:${RING_COLOR}; stroke-width:calc(4px * var(--dh-k)); stroke-linecap:round;
+          stroke-dasharray:1; stroke-dashoffset:1; animation:dh-ring 2.4s ease-out infinite; }
+        @keyframes dh-ring {
+          0% { stroke-dashoffset:1; opacity:1; }
+          30% { stroke-dashoffset:0; opacity:1; }
+          82% { stroke-dashoffset:0; opacity:1; }
+          100% { stroke-dashoffset:0; opacity:0; }
+        }
         @media (prefers-reduced-motion: reduce) {
-          .dh-vis, .dh-link { animation:none; }
+          .dh-pop { display:none; }
+          .dh-sign, .dh-arrowhead { animation:none; }
+          .dh-arc { animation:none; stroke-dashoffset:0; }
+          .dh-ring { animation:none; stroke-dashoffset:0; }
           /* The rule was still sweeping in under reduce - it had no override. */
           .dh-subrule { animation:none; transform:scaleX(1); }
         }
@@ -419,13 +721,9 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
       <LiveToolBanner tool={liveTool} />
 
       <div className="dh-top">
-        <div>
-          <p className="dh-count">Problem {Math.min(idx, problems.length - 1) + 1} of {problems.length}</p>
-          <h2 className="dh-headline">
-            {trace.headline}
-            {done_ ? ` = ${trace.quotient}${trace.remainder ? ` r${trace.remainder}` : ""}` : ""}
-          </h2>
-        </div>
+        {/* The headline moved onto the plaque over the house, where it can name
+            which number is which. This keeps the count and the controls. */}
+        <p className="dh-count">Problem {Math.min(idx, problems.length - 1) + 1} of {problems.length}</p>
         <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
           <button className="dh-btn" onClick={reset} type="button">Start over</button>
           {problems.length > 1 && <button className="dh-btn" onClick={nextProblem} type="button">Next problem</button>}
@@ -434,6 +732,69 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
 
       <div className="dh-grid">
         <div className="dh-stage" ref={stageRef}>
+          {/* Centred over the HOUSE, not over the whole board - the divisor is
+              outside it, which is the whole joke the mnemonic runs on. */}
+          <div className="dh-plaque" ref={plaqueRef} style={{ width: boardW, marginBottom: plaqueGap }}>
+            <div className="dh-plaque-title" style={{ marginLeft: houseLeft }}>
+              <span className="dh-plaque-eq">
+                {trace.headline}
+                {done_ ? ` = ${trace.quotient}${trace.remainder ? ` r${trace.remainder}` : ""}` : ""}
+              </span>
+            </div>
+            <div className="dh-plaque-tags" style={{ gridTemplateColumns: `${houseLeft}px 1fr` }}>
+              <span className="dh-tag visitor"><i>divisor</i><b>da visitor, outside</b></span>
+              <span className="dh-tag david"><i>dividend</i><b>David, in the house</b></span>
+            </div>
+            {/* BOTH ARROWS REACH THEIR ACTUAL TARGET, and the dividend's goes
+                in through the door.
+
+                Stopping them above the board was the first attempt and it was
+                wrong: the board's first row is the QUOTIENT, so a teal arrow
+                labelled "dividend / David, in the house" pointing down at the
+                column was pointing at the answer the moment the first quotient
+                digit landed. On a plaque whose whole job is to stop those two
+                words being confused, that taught a third confusion.
+
+                Carrying it straight down would cross the quotient row for the
+                same reason. So it swings left into the GUTTER - the one column
+                with no cell in any row - drops down it, and turns right through
+                the bracket into the dividend. Which is also, usefully, exactly
+                what "the door" means in the card that opens each problem. */}
+            <svg
+              className="dh-plaque-arrows"
+              width={boardW}
+              height={plaqueGap + rowPx * 1.62}
+              aria-hidden="true"
+            >
+              <path
+                className="dh-plaque-arrow"
+                strokeWidth={arrowW}
+                stroke="var(--bdb-brown)"
+                d={`M ${houseLeft / 2} 2 Q ${houseLeft / 2} ${plaqueGap * 0.6} ${divisorMid} ${plaqueGap + rowPx * 0.98}`}
+              />
+              {/* Reaches INTO the divisor's own row, the way the teal one
+                  reaches into the dividend's. Stopping in the empty quotient
+                  row above it read as pointing at nothing. */}
+              <path
+                fill="var(--bdb-brown)"
+                d={`M ${divisorMid} ${plaqueGap + rowPx * 1.18} l ${-arrowHead / 2} ${-arrowHead} l ${arrowHead} 0 z`}
+              />
+              <path
+                className="dh-plaque-arrow"
+                strokeWidth={arrowW}
+                stroke="var(--bdb-teal-deep)"
+                d={`M ${houseMid} 2`
+                  + ` Q ${houseMid} ${plaqueGap * 0.42} ${(houseMid + gutterX) / 2} ${plaqueGap * 0.55}`
+                  + ` Q ${gutterX} ${plaqueGap * 0.74} ${gutterX} ${plaqueGap + rowPx * 0.7}`
+                  + ` Q ${gutterX} ${plaqueGap + rowPx * 1.5} ${houseLeft - arrowHead - 3} ${plaqueGap + rowPx * 1.5}`}
+              />
+              <path
+                fill="var(--bdb-teal-deep)"
+                d={`M ${houseLeft - 2} ${plaqueGap + rowPx * 1.5} l ${-arrowHead} ${-arrowHead / 2} l 0 ${arrowHead} z`}
+              />
+            </svg>
+          </div>
+
           <div className="dh-board" style={{ width: boardW, height: boardH }}>
             <div
               className="dh-l"
@@ -442,7 +803,7 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
             <div
               className="dh-cells"
               style={{
-                gridTemplateColumns: `repeat(${trace.columns}, ${cellPx}px)`,
+                gridTemplateColumns: gridColumns,
                 gridTemplateRows: `repeat(${trace.rows}, ${rowPx}px)`,
               }}
             >
@@ -464,18 +825,28 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
                 // miss. Remounting the button would do it too, and would throw
                 // keyboard focus back to the body every time.
                 const wrongCls = wrongSlot?.id === id ? (wrongSlot.n % 2 ? "wrong wrong-b" : "wrong wrong-a") : "";
+                // A filled cell whose neighbour in the same row is also filled
+                // is half of ONE number - "16" is not a 1 and a 6 - so the two
+                // boxes are joined into one.
+                const boxed = Boolean(slot && !slot.given && filledSet.has(slot.id));
+                const neighbourBoxed = (c: number) => trace.slots.some(
+                  (o) => o.rowIndex === row && o.col === c && !o.given && filledSet.has(o.id),
+                );
+                const mergeCls = boxed
+                  ? `${neighbourBoxed(col - 1) ? "mg-l" : ""} ${neighbourBoxed(col + 1) ? "mg-r" : ""}`
+                  : "";
                 const place = `row ${row + 1}, column ${col + 1}`;
                 return (
                   <button
                     key={i}
                     ref={slot && slot.id === firstTargetId ? targetRef : undefined}
-                    className={`dh-slot ${slot?.given ? "given" : ""} ${shown && !slot?.given ? "filled land" : ""} ${isTarget ? "target" : ""} ${wrongCls}`.replace(/\s+/g, " ").trim()}
+                    className={`dh-slot ${slot?.given ? "given" : ""} ${shown && !slot?.given ? "filled land" : ""} ${mergeCls} ${isTarget ? "target" : ""} ${wrongCls}`.replace(/\s+/g, " ").trim()}
                     style={{ gridColumn: col + 1, gridRow: row + 1 }}
                     onClick={() => clickSlot(id)}
                     disabled={done_}
                     // Up to sixty buttons used to share "empty spot", which told
                     // a screen reader nothing about where any of them were.
-                    aria-label={shown ? `${slot!.text} at ${place}` : `empty spot at ${place}`}
+                    aria-label={shown ? `${runLabel.get(slot!.id) ?? slot!.text} at ${place}` : `empty spot at ${place}`}
                     data-target={isTarget ? "1" : undefined}
                     type="button"
                   >
@@ -495,76 +866,78 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
               />
             ))}
 
-            {vis && from && to && (() => {
-              // Where the sign sits depends on the sign, because that is how
-              // each one is written by hand:
-              //   ÷ and x  BETWEEN the two numbers, arrow split around it
-              //   −        to the LEFT of the number being taken away
-              //   ↓        no glyph at all - the arrow IS the notation
-              const stacked = vis.sign === "−";
-              const arrowOnly = vis.sign === "↓";
-              const dx = to.x - from.x;
-              const dy = to.y - from.y;
-              const len = Math.hypot(dx, dy) || 1;
-              const ux = dx / len;
-              const uy = dy / len;
-              // ÷ AND x LIVE IN THE GUTTER COLUMN, ALWAYS.
-              //
-              // The raw midpoint of the diagonal walks right one cell per round,
-              // so by round three the multiply sign sat INSIDE the house on top
-              // of the bracket and the first dividend digit. The gutter is one
-              // column wide and it is where these signs belong, so the x is
-              // pinned there and only the y follows the line.
-              const t = Math.abs(dx) > 1 ? clamp((gutterX - from.x) / dx, 0.12, 0.88) : 0.5;
-              const onLine = { x: from.x + dx * t, y: from.y + dy * t };
-              const signAt = stacked
-                ? { x: to.x - cellPx * 0.62, y: to.y }
-                : { x: gutterX, y: onLine.y };
-              // Never let the two segments swallow each other on a short span.
-              const lead = Math.min(30, len * 0.3);
-              const gap = arrowOnly || stacked ? 0 : Math.min(SIGN_GAP, len * 0.22);
-              const start = { x: from.x + ux * lead, y: from.y + uy * lead };
-              const end = { x: to.x - ux * (lead + 4), y: to.y - uy * (lead + 4) };
-              // The break in the arrow follows the sign, not the geometry, or
-              // the line runs straight through the glyph.
-              const mid = onLine;
-              return (
-                <span key={`vis-${visualKey}`}>
-                  {!stacked && (
-                    <svg className="dh-link" width={boardW} height={boardH} style={{ left: 0, top: 0, position: "absolute" }} aria-hidden="true">
-                      <defs>
-                        <marker id="dh-head" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
-                          <path d="M0,0 L6,3.5 L0,7 Z" fill="var(--bdb-coral-deep)" stroke="none" />
-                        </marker>
-                      </defs>
-                      {gap > 0 ? (
-                        <>
-                          <path d={`M ${start.x} ${start.y} L ${mid.x - ux * gap} ${mid.y - uy * gap}`} />
-                          <path d={`M ${mid.x + ux * gap} ${mid.y + uy * gap} L ${end.x} ${end.y}`} markerEnd="url(#dh-head)" />
-                        </>
-                      ) : (
-                        <path d={`M ${start.x} ${start.y} L ${end.x} ${end.y}`} markerEnd="url(#dh-head)" />
-                      )}
-                    </svg>
-                  )}
-                  {!arrowOnly && (
-                    <>
-                      {/* Pops big and fades away ... */}
-                      <span className="dh-pop" style={{ left: signAt.x, top: signAt.y }}>{vis.sign}</span>
-                      {/* ... while this one stays. */}
-                      <span className="dh-vis" style={{ left: signAt.x, top: signAt.y }}>{vis.sign}</span>
-                    </>
-                  )}
-                </span>
-              );
-            })()}
+            {/* THE PATHWAY, and the ring round the next spot. One SVG for both:
+                they share the board's coordinate space, and the ring has to
+                paint over the cells the same way the arcs do. */}
+            {(arcs.length > 0 || targetRing) && (
+              <svg className="dh-arcs" width={boardW} height={boardH} aria-hidden="true">
+                {arcs.map((arc) => (
+                  <g key={arc.key} opacity={arcOpacity(arc.round)}>
+                    <path className="dh-arc" d={arc.d} pathLength={1} stroke={arcColor(arc.round)} />
+                    <path
+                      className="dh-arrowhead"
+                      fill={arcColor(arc.round)}
+                      d={`M 0 0 L ${-headPx} ${-headPx * 0.52} L ${-headPx} ${headPx * 0.52} Z`}
+                      transform={`translate(${arc.head.x} ${arc.head.y}) rotate(${arc.head.angle})`}
+                    />
+                  </g>
+                ))}
+                {/* The glyph for the move that just happened, and only that
+                    one. It rides inside the SVG so its halo can knock the arc
+                    out of its own outline. */}
+                {newestArc?.sign ? (
+                  <text
+                    key={`sign-${newestArc.key}`}
+                    className="dh-sign"
+                    x={newestArc.signAt.x}
+                    y={newestArc.signAt.y}
+                    fill={arcColor(newestArc.round)}
+                    fontSize={Math.round(signPx * 0.92)}
+                    strokeWidth={Math.max(5, Math.round(signPx * 0.24))}
+                  >
+                    {newestArc.sign}
+                  </text>
+                ) : null}
+                {targetRing && (
+                  <ellipse
+                    className="dh-ring"
+                    pathLength={1}
+                    cx={targetRing.cx}
+                    cy={targetRing.cy}
+                    rx={targetRing.rx}
+                    ry={targetRing.ry}
+                  />
+                )}
+              </svg>
+            )}
+
+            {newestArc?.sign ? (
+              <span
+                key={`pop-${visualKey}`}
+                className="dh-pop"
+                style={{ left: newestArc.signAt.x, top: newestArc.signAt.y, color: arcColor(newestArc.round) }}
+              >
+                {newestArc.sign}
+              </span>
+            ) : null}
+
+            {/* Steele: "This should be a pop out to get started." One per
+                problem - it clears on the first right click or on the button,
+                and never comes back mid-problem. */}
+            {showStart && !presentation && !done_ && step === 0 && (
+              <div className="dh-start" role="note" style={{ width: `min(${Math.round(430 * k)}px, 90%)` }}>
+                <p className="dh-start-t">Get started</p>
+                <p className="dh-start-b">{startCopy}</p>
+                <button className="dh-btn go" onClick={() => setShowStart(false)} type="button">Got it</button>
+              </div>
+            )}
           </div>
         </div>
 
         {/* The question and the two feedback lines announce themselves. The
             whole column would announce the step strip and the trail with them,
             which is a paragraph of speech on every tap. */}
-        <div className="dh-ask">
+        <div className="dh-ask" ref={askRef}>
           {done_ ? (
             <>
               <p className="dh-q">Every step is placed.</p>

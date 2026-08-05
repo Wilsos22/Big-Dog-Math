@@ -87,7 +87,11 @@ check("the first move points inside the house, the divisor move outside it", () 
   assert.match(t.prompts[0].ask, /first number inside the house/i);
   assert.deepEqual(t.prompts[0].slots, ["dv-0"]);
   const divisorPrompt = t.prompts.find((p) => p.id === "pick-divisor-0");
-  assert.match(divisorPrompt.ask, /dividing WITH/);
+  // "dividing by not with" (Steele, 2026-08-03). You divide BY a number, and
+  // the sentence under this ask has always said "Dividing by 4" - the tool was
+  // teaching both at once.
+  assert.match(divisorPrompt.ask, /dividing BY/);
+  assert.ok(!/dividing WITH/i.test(divisorPrompt.ask));
   assert.deepEqual(divisorPrompt.slots, ["ds-0"]);
   // The divisor really is outside: left of where the house starts.
   const ds = t.slots.find((s) => s.id === "ds-0");
@@ -110,6 +114,63 @@ check("every operation step draws its own sign between two real spots", () => {
   assert.ok(signs["x"] >= 1, "multiplying needs its sign");
   assert.ok(signs["−"] >= 1, "subtracting needs its sign");
   assert.ok(signs["↓"] >= 1, "bringing down needs its arrow");
+});
+
+check("every round traces Steele's six moves, in his order and his directions", () => {
+  // "to the left, up, diagonal left, diagnal right, down ,down" - the pathway
+  // the numbers take, which the board now keeps on screen for the whole
+  // problem. Three of these six were missing entirely until 2026-08-03: the
+  // board drew the question (9 ÷ 4) and never drew any answer arriving.
+  const EXPECT = [
+    ["op-divide", "÷"],       // left:            what we divide -> the divisor
+    ["place-quotient", "="],  // up:              the divisor    -> the quotient
+    ["pick-mult", "x"],       // diagonal left:   the quotient   -> the divisor
+    ["place-product", "="],   // diagonal right:  the divisor    -> the product
+    ["op-subtract", "−"],     // down:            what we divide -> the product
+    ["place-rest", ""],       // down:            the product    -> the difference
+  ];
+  for (const [dividend, divisor] of SHAPES) {
+    const t = buildHouseTrace(dividend, divisor);
+    const slotOf = (id) => t.slots.find((s) => s.id === id);
+    const rounds = roundCount(t);
+    for (let r = 0; r < rounds; r += 1) {
+      const drawn = t.prompts.filter((p) => p.round === r && p.visual);
+      const six = drawn.slice(0, 6);
+      const where = `${dividend}/${divisor} round ${r}`;
+      assert.deepEqual(
+        six.map((p) => [p.id.replace(/-\d+$/, ""), p.visual.sign]),
+        EXPECT,
+        where,
+      );
+      const [divide, upEq, mult, downEq, minus, drop] = six;
+      // Four of the six touch the divisor, which never moves. That is what
+      // makes it the hub of the picture, and what a colour per round is for.
+      assert.equal(divide.visual.to, "ds-0", `${where} divide points at the divisor`);
+      assert.equal(upEq.visual.from, "ds-0", `${where} the answer comes off the divisor`);
+      assert.equal(mult.visual.to, "ds-0", `${where} multiply points at the divisor`);
+      assert.equal(downEq.visual.from, "ds-0", `${where} the product comes off the divisor`);
+      // Up really is up, and the two downs really do land below.
+      assert.equal(slotOf(upEq.visual.to).row, "quotient", `${where} up lands above the bracket`);
+      assert.ok(slotOf(minus.visual.to).row.startsWith("work"), `${where} subtract lands on the product`);
+      assert.ok(slotOf(drop.visual.to).row.startsWith("rest"), `${where} the difference lands below`);
+      // THE LAST MOVE IS A TRUE VERTICAL DROP. The product and the difference
+      // are both right-aligned under the number being divided, so it has to be
+      // anchored on the LAST digit of each - first-to-first slants whenever the
+      // two are different widths, which is most of the time.
+      assert.equal(
+        slotOf(drop.visual.from).col,
+        slotOf(drop.visual.to).col,
+        `${where}: the difference arrow must fall straight down`,
+      );
+      // The seventh, on every round but the last, is the bring-down arrow.
+      if (r < rounds - 1) {
+        assert.equal(drawn.length, 7, `${where} also brings a digit down`);
+        assert.equal(drawn[6].visual.sign, "↓", where);
+      } else {
+        assert.equal(drawn.length, 6, `${where} is the last round and draws six`);
+      }
+    }
+  }
 });
 
 check("the four operation buttons are the four steps of the cycle", () => {

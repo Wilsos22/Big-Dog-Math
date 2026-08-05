@@ -1,0 +1,641 @@
+From 3fec3834f05112889857e5f78dc39bc92b7aa502 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 28 Jul 2026 20:26:08 +0000
+Subject: [PATCH] Fix projector, ink, timer and discussion wiring
+
+Site-code only. No Notion lesson content, states or structure touched.
+
+Assigned tools never embedded
+- liveAssignedToolRoute now drops a trailing dash qualifier and falls back to
+  longest-key prefix match. "Distributive Area Method" and its "- teacher
+  display" / "- equation phase" / "- optional support" variants all resolved
+  to null against the distributivearea key, so every Area Tool step in
+  M1.T1.L1-D1 failed to embed on any surface, silently.
+
+Blank projector on direct instruction and guided practice
+- Board mode follows boardOpen instead of a hardcoded i-do/we-do/manip list.
+  Those states were handing the projector an unwritten ink canvas and
+  discarding Main Display, so the authored mathematics never reached the room.
+- The board renders mainDisplay || body, keeping the mathematics behind the ink.
+
+Ink surfaces were on different channels
+- present's two InkBoard mounts used session.id while /ipad and /board
+  broadcast on ink-main. The projector board could never receive a stroke.
+- ScreenInkOverlay is now mounted on /teacher/pace; write-on-screen existed
+  only on /present, so the support projector could not be annotated.
+
+Hustle and Settle erased themselves
+- Control's snapshot is a full replace and omitted interlude and transition,
+  so republishing (about once a second while a timer runs) deleted the
+  interlude, and auto-advance then skipped the transition. Both fields are
+  carried through, and auto-advance is gated on an active interlude.
+- Same class of bug: remoteActions and slideOverlay were absent from
+  sequence.steps but read back on rehydrate, so any reconnect wiped the iPad's
+  Remote Actions and every slide overlay.
+
+Discussion
+- Back on round 1 now steps out to the previous lesson state instead of
+  sitting disabled. The overlay covers Control at z-index 50, so Control's own
+  Back was unreachable and Close was the only exit.
+- The discussion branch outranks a resolved lesson visual, which was silently
+  dropping the stems and vocabulary aside.
+
+Escalating countdown warning (Steele's ask)
+- New src/lib/timerUrgency.ts: amber at 30s, coral and pulsing at 15s, faster
+  at 5s. Applied to the main projector, the pace screen and the student device
+  so a head-down student gets the same runway the room gets. The student
+  threshold moved from 10s, which was too late to be a warning at all.
+  Colour and opacity only, never layout; colour survives reduced-motion.
+
+Also: AREA_MODEL_SKIP_STATES is checked against the raw class-state id as well
+as the stage id, so the warmup and learning-check skips actually fire.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_011kWBfBZsCJUxvFbSuRw4Ze
+---
+ CLAUDE.md                             | 27 +++++++++++
+ src/app/control/page.tsx              | 43 +++++++++++++++--
+ src/app/live-flow/page.tsx            | 11 ++++-
+ src/app/teacher/pace/page.tsx         | 28 +++++++++--
+ src/app/teacher/present/page.tsx      | 31 +++++++++++--
+ src/components/DiscussionProtocol.tsx | 12 ++++-
+ src/lib/lessonVisuals.ts              | 18 ++++++-
+ src/lib/liveFlowContract.ts           | 41 +++++++++++++++-
+ src/lib/timerUrgency.ts               | 67 +++++++++++++++++++++++++++
+ 9 files changed, 261 insertions(+), 17 deletions(-)
+ create mode 100644 src/lib/timerUrgency.ts
+
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 105a7b3..fec6a1c 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -411,6 +411,33 @@ the invariants they protect are easy to break again.
+   Notion page. Unknown ids now get a synthesized bank entry with an EMPTY `desc` and are named in the
+   load message. When adding a second consumer of `lesson.steps`, make it agree with `stepsFromLesson`.
+ - **`Anchor Problem` IS THE HOOK.** There is no `Hook` property in the lessons database.
++- **`liveAssignedToolRoute` MATCHES BY PREFIX, and drops a trailing dash qualifier.** A Lesson Step
++  names a tool the way a teacher writes it - `Distributive Area Method`, `... - teacher display`,
++  `... - equation phase`, `... - optional support` - and exact-match-only resolved NONE of them
++  against the `distributivearea` key. Every Area Tool step in M1.T1.L1-D1 silently failed to embed
++  on any surface for the whole lesson. Keep the longest-key-wins rule; it is what stops `numberline`
++  stealing `numberlineplus`.
++- **BOARD MODE FOLLOWS `boardOpen`, NEVER A STATE ID.** Keying it to `i-do`/`we-do`/`manip` handed
++  those states an unwritten ink canvas - a blank projector - and discarded `Main Display` entirely.
++  The board also renders `mainDisplay || body`, so the mathematics stays visible behind the ink.
++- **EVERY INK SURFACE USES THE `?room=` PARAM, DEFAULT `"main"`.** `/teacher/present` used
++  `session.id` for its two `InkBoard` mounts while `/ipad` and `/board` broadcast on `ink-main`, so
++  the projector board was permanently blank. `ScreenInkOverlay` is now mounted on `/teacher/pace`
++  too - it was on `/present` only, so the support projector could never be annotated.
++- **CONTROL'S SNAPSHOT IS A FULL REPLACE.** Any field Control does not carry through is DELETED.
++  `interlude` and `transition` are owned by `/api/control-remote`, and omitting them erased a Hustle
++  or Settle about one second after it started, then auto-advanced past it. Same class of bug wiped
++  `remoteActions` and `slideOverlay` on any reconnect. When adding a server-authored `live_flow`
++  field, add it to the `liveFlowSignature` snapshot in the same commit.
++- **THE DISCUSSION OVERLAY COVERS `/control` AT z-index 50.** Any control the teacher needs mid-
++  discussion must be reachable from inside `DiscussionProtocol`; Control's own Back is invisible.
++- **`resolveLessonVisual` TAKES TWO ID NAMESPACES.** `stateId` is the `ClassroomStageId` (warmup maps
++  to `evergreen`, launch to `scenario`); `rawStateId` is the class-state id. Skip lists written in
++  raw ids must be checked against `rawStateId` or they never fire.
++- **TIMER WARNINGS ARE SHARED** (`src/lib/timerUrgency.ts`, Steele 2026-07-28): amber at 30s, coral
++  and pulsing at 15s, faster at 5s, on the projector, the pace screen AND the student device - a
++  head-down student needs the same runway the room gets. Colour and opacity only, never layout, and
++  the colour survives `prefers-reduced-motion`. The sound must never be the first signal.
+ - **SESSIONS CLOSE THEMSELVES** (`src/lib/sessionLifecycle.ts`, Steele's ask 2026-07-28). One open
+   session at a time: starting or adopting a session closes every other open row, so moving from
+   period 2 to period 3 ends period 2 rather than racing it. A session also auto-closes once it
+diff --git a/src/app/control/page.tsx b/src/app/control/page.tsx
+index 93207f3..5ae8845 100644
+--- a/src/app/control/page.tsx
++++ b/src/app/control/page.tsx
+@@ -89,6 +89,9 @@ interface LineupItem {
+   paceDirections?: string;
+   studentAction?: string;
+   remoteActions?: string;
++  // Carried through the published sequence so a Control reconnect cannot wipe
++  // the slide overlays the lesson authored.
++  slideOverlay?: string;
+   discussionStems?: string;
+   vocabulary?: string;
+   responseMode?: string;
+@@ -1191,6 +1194,10 @@ export default function ControlPage() {
+   // advance while lesson pacing remains on.
+   useEffect(() => {
+     if (!finished || !autoAdvance || (controlPoll?.stage === "results" && controlPoll.awaitingTeacherAdvance)) return;
++    // A Hustle or Settle is fired at the END of a state, so `finished` is already
++    // true when it starts. Without this guard the auto-advance fired 2.6s later
++    // and skipped straight past the transition the room was still executing.
++    if (teacherSession?.live_flow?.interlude) return;
+     if (controlPoll?.stage === "responding") {
+       setControlPoll((current) => current ? { ...current, stage: "results" } : null);
+       void teacherPost("/api/teacher/poll", { action: "close", pollId: controlPoll.id });
+@@ -1213,7 +1220,7 @@ export default function ControlPage() {
+       startMusicFor(st.id);
+     }, controlPoll?.stage === "results" ? 6000 : 2600);
+     return () => clearTimeout(t);
+-  }, [armTimer, finished, autoAdvance, bank, controlPoll, currentIndex, lineup, startMusicFor, stopMusic]);
++  }, [armTimer, finished, autoAdvance, bank, controlPoll, currentIndex, lineup, startMusicFor, stopMusic, teacherSession?.live_flow?.interlude]);
+ 
+   const activeItem = currentIndex >= 0 ? lineup[currentIndex] : undefined;
+   const filteredPresets = presets.filter((p) => {
+@@ -1562,6 +1569,12 @@ export default function ControlPage() {
+     }
+   }, [activeUsesDiscussionProtocol, showDiscussion]);
+ 
++  // Server-owned pacing fields. Control does not author these - /api/control-remote
++  // does - but Control's snapshot is a full replace, so it has to hand them back
++  // untouched or it deletes them.
++  const serverInterlude = teacherSession?.live_flow?.interlude ?? null;
++  const serverTransition = teacherSession?.live_flow?.transition ?? null;
++
+   const liveFlowSignature = useMemo(() => {
+     const activeSemantic = activeState
+       ? inferClassroomStage(activeState.id, activeItem?.title || activeState.label)
+@@ -1635,7 +1648,13 @@ export default function ControlPage() {
+               ? "poll" as const
+               : tool
+                 ? "tool" as const
+-                : activeState.id === "i-do" || activeState.id === "manip" || activeState.id === "we-do"
++                // Board mode ONLY when the teacher actually opened the board.
++                // Keying it to i-do / we-do / manip meant those states handed the
++                // projector an unwritten ink canvas - a blank screen - and threw
++                // away Main Display entirely, so the authored mathematics for
++                // every direct-instruction and guided-practice step was never
++                // shown to the room.
++                : boardOpen
+                   ? "board" as const
+                   : "directions" as const,
+           notionStepId: activeItem?.notionStepId || null,
+@@ -1744,6 +1763,12 @@ export default function ControlPage() {
+               workSpaceAvailable: item.workSpaceAvailable,
+               publicSurfaceMode: item.publicSurfaceMode || defaultPublicSurfaceModeForState(item.stateId),
+               routineConfig: item.routineConfig || null,
++              // Both of these are READ BACK during rehydration. Omitting them
++              // here meant any Control reconnect - or a remote-driven rehydrate -
++              // silently wiped the iPad's Remote Actions and every slide overlay,
++              // and the iPad then degraded to restating the pace directions.
++              remoteActions: item.remoteActions || "",
++              slideOverlay: item.slideOverlay || undefined,
+             };
+           }),
+         }
+@@ -1753,8 +1778,17 @@ export default function ControlPage() {
+       || "";
+     const paper = activePaperTask ? { task: activePaperTask } : null;
+ 
+-    return JSON.stringify({ version: 2, state, phase, timer, poll, resource, presentation, tool, lesson, sequence, paper });
+-  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, finished, lineup, publishedTool, running, scoreboardStage, secondsLeft, showDiscussion]);
++    // CARRY the server's interlude and transition through. This snapshot is
++    // written with a full replace, and Control republishes about once a second
++    // while a timer runs - so omitting these keys ERASED a Hustle or Settle
++    // roughly one second after it started. The room saw the transition flash up
++    // and vanish, then the state auto-advanced out from under it.
++    return JSON.stringify({
++      version: 2, state, phase, timer, poll, resource, presentation, tool, lesson, sequence, paper,
++      interlude: serverInterlude,
++      transition: serverTransition,
++    });
++  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, finished, lineup, publishedTool, running, scoreboardStage, secondsLeft, serverInterlude, serverTransition, showDiscussion]);
+ 
+   const flushLiveFlowUpdates = useCallback(async () => {
+     if (liveFlowSyncingRef.current) return;
+@@ -3625,6 +3659,7 @@ export default function ControlPage() {
+               initialFlow={discussionFlow}
+               remoteCommand={discussionRemoteCommand}
+               onRemoteCommandHandled={handleDiscussionRemoteCommand}
++              onPreviousState={() => { closeDiscussion(); previous(); }}
+             />
+           </div>
+         )}
+diff --git a/src/app/live-flow/page.tsx b/src/app/live-flow/page.tsx
+index 9b7305f..0aa04ab 100644
+--- a/src/app/live-flow/page.tsx
++++ b/src/app/live-flow/page.tsx
+@@ -13,6 +13,7 @@ import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
+ import { classroomStageTheme } from "@/lib/classroomPilot";
+ import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
+ import { WARM_ACCENTS } from "@/lib/warmNotebook";
++import { TIMER_URGENCY_CSS, TIMER_URGENT_SECONDS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
+ import {
+   publicSuccessCriterion,
+   selectedSuccessCriterion,
+@@ -519,7 +520,12 @@ export default function LiveFlowPage() {
+   // red and announces inside 10.
+   const timerTicking = Boolean(showTimer && timer && (timer.running || (phase?.timed && typeof phase.secondsLeft === "number")));
+   const timeWarning = timerTicking && activeTimerSeconds <= 30 && activeTimerSeconds > 0;
+-  const timeCritical = timerTicking && activeTimerSeconds <= 10 && activeTimerSeconds > 0;
++  // 10s was too late to be a warning - by then the sound is the only thing a
++  // student reacts to. Match the projectors: amber at 30, coral and pulsing at
++  // 15, so a head-down student on a Chromebook gets the same runway the room
++  // gets (Steele, 2026-07-28).
++  const studentTimerUrgency = timerUrgency(activeTimerSeconds, { running: timerTicking });
++  const timeCritical = timerTicking && activeTimerSeconds <= TIMER_URGENT_SECONDS && activeTimerSeconds > 0;
+   // A new lesson step clears the local signal highlight - "stuck" on the last
+   // step is not "stuck" on this one. The server row keeps its step tag and the
+   // teacher view scopes to the current step on its own.
+@@ -654,6 +660,7 @@ export default function LiveFlowPage() {
+         .lf-timer.low { border-color:#ef4444; animation:lfTimerLow 1s ease-in-out infinite; }
+         .lf-timer.low::before { background:#ef4444; }
+         .lf-timer.low .lf-time { color:#b91c1c; font-weight:900; }
++        ${TIMER_URGENCY_CSS}
+         .lf-time-left { color:#b91c1c; font-size:0.72rem; font-weight:900; text-transform:uppercase; letter-spacing:0.08em; }
+         @media (max-width:640px) { .lf-time-left { display:none; } }
+         /* Student self-signals: persistent, low-stakes, bottom of the screen. */
+@@ -769,7 +776,7 @@ export default function LiveFlowPage() {
+           <span className="lf-sync">{!hasStudentSession ? "Not joined" : connectionState === "connected" ? "Synced" : "Connecting"}</span>
+           {showTimer && timer ? (
+             <div className={`lf-timer${timeCritical ? " low" : ""}`} aria-label="Current lesson timer" role={timeCritical ? "status" : undefined}>
+-              <div className="lf-time">{formatTime(activeTimerSeconds)}</div>
++              <div className={`lf-time ${timerUrgencyClass(studentTimerUrgency)}`}>{formatTime(activeTimerSeconds)}</div>
+               {timeCritical ? <span className="lf-time-left">left</span> : null}
+             </div>
+           ) : null}
+diff --git a/src/app/teacher/pace/page.tsx b/src/app/teacher/pace/page.tsx
+index ded3f7f..da42baf 100644
+--- a/src/app/teacher/pace/page.tsx
++++ b/src/app/teacher/pace/page.tsx
+@@ -2,6 +2,8 @@
+ 
+ import { useEffect, useState, type CSSProperties } from "react";
+ import ClassroomSpinner from "@/components/ClassroomSpinner";
++import ScreenInkOverlay from "@/components/ScreenInkOverlay";
++import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
+ import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
+ import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson } from "@/lib/classroomPilot";
+ import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
+@@ -164,10 +166,25 @@ export default function PaceSupportPage() {
+     };
+   }, [pollId]);
+ 
++  const [inkOverlay, setInkOverlay] = useState<{ room: string; embed: boolean } | null>(null);
++  useEffect(() => {
++    try {
++      const p = new URLSearchParams(window.location.search);
++      setInkOverlay({ room: p.get("room")?.trim() || "main", embed: p.get("embed") === "1" });
++    } catch {
++      setInkOverlay({ room: "main", embed: false });
++    }
++  }, []);
++
+   const state = flow?.state ?? null;
+   const timer = flow?.timer ?? null;
+   const timerSeconds = liveTimerSeconds(timer);
+   const timerFinished = Boolean(timer?.finished || (timer?.running && timerSeconds <= 0));
++  // Escalating visual warning ahead of every state change (Steele, 2026-07-28).
++  const currentTimerUrgency = timerUrgency(timerSeconds, {
++    running: Boolean(timer?.running),
++    finished: timerFinished,
++  });
+   // Fallback through the inferrer if the semantic is unknown - a stray value
+   // in a snapshot must never crash a projector (see the same guard on Main).
+   const theme = (state?.semantic ? CLASSROOM_STAGE_THEMES[state.semantic] : undefined)
+@@ -318,6 +335,7 @@ export default function PaceSupportPage() {
+         .pw-timer::before { content:""; width:8px; height:8px; border-radius:999px; background:var(--acc); }
+         .pw-timer.finished { color:#A82C15; }
+         .pw-timer.finished::before { background:#F95335; }
++        ${TIMER_URGENCY_CSS}
+         .pw-textbtns { display:inline-flex; gap:6px; margin-left:auto; }
+         .pw-textbtns + .pw-timer { margin-left:12px; }
+         .pw-textbtn { min-width:40px; min-height:30px; border:1.2px solid var(--hair); border-radius:8px; background:var(--card); color:var(--head); font:inherit; font-size:0.78rem; font-weight:800; cursor:pointer; }
+@@ -374,7 +392,7 @@ export default function PaceSupportPage() {
+           <button className="pw-textbtn" type="button" onClick={() => adjustTextScale(-0.25)} disabled={textScale <= 1} aria-label="Smaller text">A-</button>
+           <button className="pw-textbtn" type="button" onClick={() => adjustTextScale(0.25)} disabled={textScale >= 2.5} aria-label="Bigger text">A+</button>
+         </span>
+-        <span className={`pw-timer${timerFinished ? " finished" : ""}`} aria-label="Class timer">
++        <span className={`pw-timer${timerFinished ? " finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`} aria-label="Class timer">
+           {previewSample ? "5:00" : timer ? formatTime(timerSeconds) : "--:--"}
+         </span>
+       </header>
+@@ -520,7 +538,7 @@ export default function PaceSupportPage() {
+               ) : null}
+               {timer ? (
+                 <div className="pw-pace">
+-                  <span className={`pw-bigtimer${timerFinished ? " finished" : ""}`}>{formatTime(timerSeconds)}</span>
++                  <span className={`pw-bigtimer${timerFinished ? " finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`}>{formatTime(timerSeconds)}</span>
+                   <span className="pw-pace-copy"><b>{flow.presentation?.title || state.label}</b><span>Shared class clock</span></span>
+                 </div>
+               ) : null}
+@@ -551,7 +569,7 @@ export default function PaceSupportPage() {
+               ) : null}
+               {timer ? (
+                 <div className="pw-pace">
+-                  <span className={`pw-bigtimer${timerFinished ? " finished" : ""}`}>{formatTime(timerSeconds)}</span>
++                  <span className={`pw-bigtimer${timerFinished ? " finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`}>{formatTime(timerSeconds)}</span>
+                   <span className="pw-pace-copy"><b>{flow.presentation?.title || state.label}</b><span>Shared class clock</span></span>
+                 </div>
+               ) : null}
+@@ -569,6 +587,10 @@ export default function PaceSupportPage() {
+         )}
+         </div>
+       </section>
++      {/* Write-on-screen was mounted only on /teacher/present, so the support
++          projector could never be annotated - the teacher circled something on
++          the iPad and half the room's screen never changed. */}
++      {inkOverlay && !inkOverlay.embed ? <ScreenInkOverlay room={inkOverlay.room} /> : null}
+     </main>
+   );
+ }
+diff --git a/src/app/teacher/present/page.tsx b/src/app/teacher/present/page.tsx
+index fd04da1..5922c7c 100644
+--- a/src/app/teacher/present/page.tsx
++++ b/src/app/teacher/present/page.tsx
+@@ -24,6 +24,7 @@ import {
+ import { WARM_ACCENTS } from "@/lib/warmNotebook";
+ import { studioPreviewSession, useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
+ import { parseSlideOverlay } from "@/lib/slideOverlay";
++import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
+ 
+ interface StageSession {
+   id: string;
+@@ -487,6 +488,7 @@ export default function ClassroomStagePage() {
+   const lessonVisual = flow ? resolveLessonVisual({
+     lessonCode: lesson?.code || activeSequenceStep?.lessonCode,
+     stateId: theme.id,
++    rawStateId: state?.id,
+     text: slideBody,
+     fallbackTexts: [
+       activeSequenceStep?.mainDisplay || "",
+@@ -553,6 +555,12 @@ export default function ClassroomStagePage() {
+   const overrideDirection = (presentation?.mainDisplay || presentation?.body || "")
+     .split(/\n+/).slice(1).join(" ").trim();
+   const overrideTimerText = timer ? formatTime(timerSeconds) : "";
++  // Escalating visual warning so a state change is never a surprise the sound
++  // announces first (Steele, 2026-07-28).
++  const currentTimerUrgency = timerUrgency(timerSeconds, {
++    running: Boolean(timer?.running),
++    finished: timerFinished,
++  });
+   useEffect(() => {
+     if (!overrideFrame) return;
+     const doc = overrideFrame.contentDocument;
+@@ -655,6 +663,7 @@ export default function ClassroomStagePage() {
+         .stage-timer::before { content:""; width:8px; height:8px; border-radius:999px; background:var(--acc); }
+         .stage-timer.finished { color:#A82C15; }
+         .stage-timer.finished::before { background:#F95335; }
++        ${TIMER_URGENCY_CSS}
+         .stage-textbtns { display:inline-flex; gap:6px; margin-left:12px; }
+         .stage-textbtn { min-width:40px; min-height:30px; border:1.2px solid var(--hair); border-radius:8px; background:var(--card); color:var(--head); font:inherit; font-size:0.78rem; font-weight:800; cursor:pointer; }
+         .stage-textbtn:hover:not(:disabled) { border-color:var(--acc); }
+@@ -895,7 +904,7 @@ export default function ClassroomStagePage() {
+             <button className="stage-textbtn" type="button" onClick={() => adjustTextScale(-0.25)} disabled={textScale <= 1} aria-label="Smaller text">A-</button>
+             <button className="stage-textbtn" type="button" onClick={() => adjustTextScale(0.25)} disabled={textScale >= 2.5} aria-label="Bigger text">A+</button>
+           </span>
+-          <div className={`stage-timer ${timerFinished ? "finished" : ""}`}>{previewSample ? "5:00" : timer ? formatTime(timerSeconds) : "--:--"}</div>
++          <div className={`stage-timer ${timerFinished ? "finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`}>{previewSample ? "5:00" : timer ? formatTime(timerSeconds) : "--:--"}</div>
+         </div>
+ 
+         {/* zoom, not transform: the stage is fixed and non-scrolling, so zoom
+@@ -1054,7 +1063,13 @@ export default function ClassroomStagePage() {
+             <div className="stage-board-scene">
+               <div className="stage-board-wrap">
+                 {slideOverlayData ? <SlideOverlayLayer overlay={slideOverlayData} /> : null}
+-                <InkBoard room={session.id} interactive problem={stripSlideTitlePrefix(presentation.body, slideTitle, state?.label)} />
++                {/* Main Display first: the mathematics stays visible BEHIND the
++                    ink instead of being discarded the moment the board opens. */}
++                <InkBoard
++                  room={inkOverlay?.room ?? "main"}
++                  interactive
++                  problem={stripSlideTitlePrefix(presentation.mainDisplay || presentation.body, slideTitle, state?.label)}
++                />
+                 {lessonVisual?.kind === "area-model" ? (
+                   <aside className="stage-figure-float" aria-label="Area model support">
+                     <LessonVisual visual={lessonVisual} variant="projector" accent={accent} />
+@@ -1062,7 +1077,11 @@ export default function ClassroomStagePage() {
+                 ) : null}
+               </div>
+             </div>
+-          ) : lessonVisual && !anchorMode ? (
++          ) : lessonVisual && !anchorMode && theme.id !== "discussion" ? (
++            // Discussion outranks a lesson visual. Evaluated the other way round,
++            // any discussion step whose text happened to resolve a visual took
++            // this branch and silently dropped the entire stems and vocabulary
++            // aside - the supports the protocol exists to put in front of them.
+             lessonVisual.kind === "area-model" ? (
+               <div className="stage-directions">
+                 <div className="stage-directions-inner">
+@@ -1192,7 +1211,11 @@ export default function ClassroomStagePage() {
+           </div>
+           {showBoardPanel && session ? (
+             <aside className="stage-board-panel" aria-label="Live writing workspace">
+-              <InkBoard room={session.id} interactive={false} />
++              {/* Same room as the glass sheet and the iPad. Keying the board to
++                  session.id put the projector on channel ink-<uuid> while /ipad
++                  and /board broadcast on ink-main, so nothing the teacher wrote
++                  ever arrived and the board was permanently empty. */}
++              <InkBoard room={inkOverlay?.room ?? "main"} interactive={false} />
+             </aside>
+           ) : null}
+         </section>
+diff --git a/src/components/DiscussionProtocol.tsx b/src/components/DiscussionProtocol.tsx
+index 96ae95c..205a174 100644
+--- a/src/components/DiscussionProtocol.tsx
++++ b/src/components/DiscussionProtocol.tsx
+@@ -142,6 +142,7 @@ export default function DiscussionProtocol({
+   initialFlow,
+   remoteCommand,
+   onRemoteCommandHandled,
++  onPreviousState,
+ }: {
+   onClose?: () => void;
+   onFlowChange?: (snapshot: DiscussionPhaseSnapshot) => void;
+@@ -150,6 +151,11 @@ export default function DiscussionProtocol({
+   initialFlow?: DiscussionPhaseSnapshot | null;
+   remoteCommand?: TeacherRemoteCommand | null;
+   onRemoteCommandHandled?: (command: TeacherRemoteCommand) => void;
++  /** Step back out of discussion into the PREVIOUS lesson state. This overlay
++   *  covers Control at z-index 50, so without it the only reachable Back is the
++   *  one below - which is disabled on arrival, because discussion always opens
++   *  on round 1. That read as a dead Back button with no way out but Close. */
++  onPreviousState?: () => void;
+ }) {
+   const normalizedInitialFlow = normalizeDiscussionPhaseSnapshot(initialFlow);
+   const initialIndex = normalizedInitialFlow ? discussionRoundIndex(normalizedInitialFlow.id) : 0;
+@@ -544,7 +550,11 @@ export default function DiscussionProtocol({
+         </div>
+ 
+         <div className="dp-actions">
+-          <button className="dp-a" onClick={() => goAdjacentPhase(idx - 1)} disabled={idx === 0}>Back</button>
++          <button
++            className="dp-a"
++            onClick={() => (idx === 0 && onPreviousState ? onPreviousState() : goAdjacentPhase(idx - 1))}
++            disabled={idx === 0 && !onPreviousState}
++          >Back</button>
+           <button className="dp-a next" onClick={() => goAdjacentPhase(idx + 1)} disabled={idx + 1 >= DISCUSSION_ROUNDS.length}>Next round</button>
+         </div>
+       </main>
+diff --git a/src/lib/lessonVisuals.ts b/src/lib/lessonVisuals.ts
+index 7d8355b..868304f 100644
+--- a/src/lib/lessonVisuals.ts
++++ b/src/lib/lessonVisuals.ts
+@@ -65,7 +65,16 @@ export type LessonVisual =
+ 
+ export interface LessonVisualInput {
+   lessonCode?: string;
++  /** The projector's ClassroomStageId (evergreen, scenario, concrete, ...). */
+   stateId: string;
++  /**
++   * The RAW class-state id (warmup, launch, learning-check, ...). Callers pass
++   * the stage id above, and the two namespaces only partly overlap - warmup maps
++   * to `evergreen`, launch to `scenario` - so a skip list written in raw ids
++   * never fired for those states. Any a x b product in a warm-up could hand the
++   * warm-up screen to an area-model figure and displace the hook.
++   */
++  rawStateId?: string;
+   text: string;
+   fallbackTexts?: string[];
+   contextSteps?: Array<{ stateId: string; text: string }>;
+@@ -138,9 +147,11 @@ function resolveAreaModelVisual(
+   lessonCode: string | undefined,
+   stateId: string,
+   candidates: string[],
++  rawStateId?: string,
+ ): LessonVisual | null {
+   if (!AREA_MODEL_LESSONS.test((lessonCode || "").trim())) return null;
+   if (AREA_MODEL_SKIP_STATES.has(stateId)) return null;
++  if (rawStateId && AREA_MODEL_SKIP_STATES.has(rawStateId)) return null;
+   for (const text of candidates) {
+     // Equation-chain steps (two equals signs, or fill-in blanks) deliberately
+     // remove the model - the chain layout is the scaffold there.
+@@ -306,7 +317,12 @@ export function resolveLessonVisual(input: LessonVisualInput): LessonVisual | nu
+     images.findIndex((candidate) => candidate.url === image.url) === index
+   ));
+ 
+-  const areaModel = resolveAreaModelVisual(input.lessonCode, stateId, candidates);
++  const areaModel = resolveAreaModelVisual(
++    input.lessonCode,
++    stateId,
++    candidates,
++    input.rawStateId?.trim().toLowerCase(),
++  );
+   if (areaModel) return areaModel;
+ 
+   if (importedImages.length && (stateId === "launch" || stateId === "scenario")) {
+diff --git a/src/lib/liveFlowContract.ts b/src/lib/liveFlowContract.ts
+index 5aca6cc..43645c6 100644
+--- a/src/lib/liveFlowContract.ts
++++ b/src/lib/liveFlowContract.ts
+@@ -209,10 +209,47 @@ const ASSIGNED_TOOL_ROUTES: Record<string, string> = {
+   divisibilityrules: "/divisibility",
+ };
+ 
++function normalizeAssignedToolName(value: string): string {
++  return value.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/^bigdogmath/, "");
++}
++
++/**
++ * Resolve a Notion `Tool:` value to a route.
++ *
++ * Three passes, because a Lesson Step names a tool the way a teacher writes it,
++ * not the way a lookup table is keyed:
++ *
++ * 1. Exact match on the normalized name.
++ * 2. Drop a trailing qualifier after a dash - "Distributive Area Method -
++ *    teacher display", "... - equation phase", "... - optional support" all
++ *    name the same tool used in a different beat of the lesson.
++ * 3. Longest key that PREFIXES the normalized name, so "Distributive Area
++ *    Method" resolves through the `distributivearea` key instead of returning
++ *    null. Exact-match-only silently dropped every Area Tool step in
++ *    M1.T1.L1-D1 - the tool never embedded on any surface for the entire
++ *    lesson, and nothing anywhere reported it.
++ *
++ * Longest-first is what keeps `numberline` from stealing `numberlineplus`.
++ */
+ export function liveAssignedToolRoute(toolName: string | undefined): string | null {
+   if (!toolName) return null;
+-  const normalized = toolName.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/^bigdogmath/, "");
+-  return ASSIGNED_TOOL_ROUTES[normalized] || null;
++  const candidates = [toolName, toolName.split(/\s[-‐-―]\s|[–—]/)[0] ?? ""];
++  for (const candidate of candidates) {
++    const normalized = normalizeAssignedToolName(candidate);
++    if (!normalized) continue;
++    if (ASSIGNED_TOOL_ROUTES[normalized]) return ASSIGNED_TOOL_ROUTES[normalized];
++  }
++  const normalized = normalizeAssignedToolName(candidates[0]);
++  if (!normalized) return null;
++  let best: string | null = null;
++  let bestLength = 0;
++  for (const [key, route] of Object.entries(ASSIGNED_TOOL_ROUTES)) {
++    if (key.length > bestLength && normalized.startsWith(key)) {
++      best = route;
++      bestLength = key.length;
++    }
++  }
++  return best;
+ }
+ 
+ export function splitLiveFlowLines(value: string | undefined): string[] {
+diff --git a/src/lib/timerUrgency.ts b/src/lib/timerUrgency.ts
+new file mode 100644
+index 0000000..587e05d
+--- /dev/null
++++ b/src/lib/timerUrgency.ts
+@@ -0,0 +1,67 @@
++// Visual countdown warning.
++//
++// Steele, 2026-07-28: students were startled every time a state ended, because
++// the sound was the FIRST signal anything was about to change. They need time to
++// anticipate. So the screens escalate before the clock runs out.
++//
++// The escalation is gradual on purpose. A hard flash appearing out of nowhere at
++// 0:30 is the same startle problem wearing a different hat - it has to read as
++// "wrap up", then "finish the sentence", then "now".
++//
++//   > 30s  calm    normal ink, no motion
++//   <= 30s warn    amber, still no motion - the "start wrapping up" beat
++//   <= 15s urgent  coral, slow pulse
++//   <= 5s  final   coral, pulse on the digit change
++//
++// Two hard constraints, both classroom-driven: the animation touches opacity and
++// color ONLY, never layout, because a projector that reflows mid-class pulls
++// thirty pairs of eyes off the mathematics; and it must read at 25 feet.
++
++export type TimerUrgency = "calm" | "warn" | "urgent" | "final";
++
++export const TIMER_WARN_SECONDS = 30;
++export const TIMER_URGENT_SECONDS = 15;
++export const TIMER_FINAL_SECONDS = 5;
++
++export function timerUrgency(
++  secondsLeft: number | null | undefined,
++  options?: { running?: boolean; finished?: boolean },
++): TimerUrgency {
++  if (options?.finished) return "final";
++  if (options?.running === false) return "calm";
++  const seconds = Number(secondsLeft);
++  if (!Number.isFinite(seconds) || seconds <= 0) return "calm";
++  if (seconds <= TIMER_FINAL_SECONDS) return "final";
++  if (seconds <= TIMER_URGENT_SECONDS) return "urgent";
++  if (seconds <= TIMER_WARN_SECONDS) return "warn";
++  return "calm";
++}
++
++/** Class suffix for styling, e.g. `bdb-urgency-warn`. */
++export function timerUrgencyClass(urgency: TimerUrgency): string {
++  return `bdb-urgency-${urgency}`;
++}
++
++/**
++ * One shared stylesheet for every surface that shows a class clock. Injected as
++ * a plain string so each page keeps its own inline <style> convention and its
++ * own class prefix, per the Warm Notebook page-styling rule.
++ *
++ * `prefers-reduced-motion` drops the pulse but KEEPS the colour shift - the
++ * warning must survive for a student who has motion reduced.
++ */
++export const TIMER_URGENCY_CSS = `
++.bdb-urgency-warn { color: var(--bdb-amber, #fcaf38); }
++.bdb-urgency-urgent,
++.bdb-urgency-final { color: var(--bdb-coral, #f95335); }
++.bdb-urgency-urgent { animation: bdb-timer-pulse 1s ease-in-out infinite; }
++.bdb-urgency-final { animation: bdb-timer-pulse 0.5s ease-in-out infinite; }
++@keyframes bdb-timer-pulse {
++  0%, 100% { opacity: 1; }
++  50% { opacity: 0.45; }
++}
++@media (prefers-reduced-motion: reduce) {
++  .bdb-urgency-urgent,
++  .bdb-urgency-final { animation: none; }
++}
++`;
+-- 
+2.43.0
+
