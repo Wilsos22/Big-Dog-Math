@@ -215,10 +215,39 @@ bars and live misconception grouping).
    ONLY id/period_id/created_at/auth_user_id/auth_claimed_at/alias/email_hmac - and the mock class
    reseeded pseudonymously. REMAINING is the Workspace side, Steele's hands only, per
    `supabase/FERPA-CUTOVER.md`: roster Sheet + `BDM_ROSTER_HMAC_KEY` + Apps Script paste-ins +
-   roster push + archiving the Notion student databases. Until those paste-ins land, warm-up
+   roster push. Until those paste-ins land, warm-up
    identity posts carry a raw email and the site REFUSES them by design - do them before the first
    class day. The old hold on new student-data plumbing is LIFTED; build against the pseudonymous
    model.
+   **THE NOTION HALF (step 8) RAN 2026-08-05 AND IT WAS TWICE THE SIZE OF THE LIST.** Nine live
+   databases went to the trash, including the `Rosters` / All Contact Information source of truth
+   (174 rows, 157 real `@nv.ccsd.net` emails, 168 student numbers, guardian emails and phones in
+   the page bodies), a SECOND `Warm Up Submissions`, `Parent INfo` (guardian names + phone
+   numbers), `Student Emails`, and four MAP/SBAC score tables carrying student names. Six others
+   were already archived, which is exactly why nobody noticed: **a partly-run cleanup looks like a
+   finished one.** The runbook named five databases and five more existed. Never clean this from a
+   remembered list - enumerate every data source
+   (`POST /v1/search {"filter":{"value":"data_source","property":"object"}}`) and test each.
+   FOUR THINGS THAT COST TIME OR WOULD HAVE PRODUCED A WRONG ANSWER. (1) **The Notion MCP has no
+   archive or delete tool at all** - use the raw API with the `NOTION_TOKEN` already in
+   `.env.local`: `PATCH /v1/databases/<id>` `{"in_trash": true}`, `Notion-Version: 2025-09-03`.
+   (2) **Notion search reports a data source as `archived: false` while its PARENT DATABASE sits in
+   the trash**, so a scan that trusts that flag reports PII that is already gone; check
+   `GET /v1/databases/<parent>`. (3) **A bare `@nv.ccsd.net` grep flags STEELE'S OWN account**
+   (`wilsos13@`, plus `googledrive-wilsos13@` from the Drive connector) across Document Hub, Assets
+   Library and People - none of it student data, none of it to be touched. Student addresses have
+   the shape `Firstname.1234567@nv.ccsd.net`; match `[A-Za-z]+\.\d{5,}@nv\.ccsd\.net`.
+   (4) **The API refuses workspace-level pages** ("Archiving workspace level pages via API not
+   supported") - one 1-row database needs a hand click. And ARCHIVING IS NOT DELETING: the data is
+   in Notion's trash until Steele empties it, so the exposure is reduced, not removed.
+   ONE ROUTE WAS STILL SERVING DISTRICT EMAILS OUT OF NOTION and no contract covered it:
+   `/api/form-responses` + `src/lib/notionFormAnalytics.ts` returned per-student warm-up rows
+   including the raw `Email Address`, flatly contradicting "Notion holds zero student data". It had
+   ZERO callers in `src/`. Both are DELETED (2026-08-05) and `npm run test:ferpa-boundary` now pins
+   the deletion, the `warmup-notion-sync.gs` retirement stub, and a new `looksIdentified` refusal on
+   `/api/live/visit-list` - which was the one identity-bearing ingest with no boundary check. Its
+   proxy entries in `src/proxy.ts` are deliberately LEFT in place: a prefix guarding a route that
+   does not exist costs nothing and fails safe if one ever returns.
    Pseudonymized is not anonymized - Steele holds the key, and the posture still needs CCSD's
    sign-off; if CCSD requires even pseudonymous records in-district, that is a new project.
 9. KEEP THIS FILE TRUE, IMMEDIATELY. The moment you discover something that would have prevented a bug

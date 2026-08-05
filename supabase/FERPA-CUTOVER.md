@@ -52,8 +52,71 @@ live database on 2026-08-04:
   by design.
 
 STILL REMAINING: step 2 (confirm the warm-up project's `BDM_ROSTER_HMAC_KEY`
-matches), step 6 (one real warm-up on a district account), step 8 (archive the
-Notion student databases by hand).
+matches), step 6 (one real warm-up on a district account). **Step 8 was RUN
+2026-08-05 - see the block below.**
+
+## STATUS UPDATE 2026-08-05 - STEP 8 IS DONE, AND IT WAS BIGGER THAN THE LIST
+
+Step 8 had been PARTLY run before tonight, which is the dangerous state: six
+databases were already in the trash, so the workspace looked cleaned, and the
+single most sensitive one was still live. Measured and fixed 2026-08-05.
+
+**What was still live and is now archived (Notion trash - restore in one click
+for 30 days, then empty the trash to make it permanent):**
+
+| Database | Rows | What it held |
+|---|---|---|
+| `Rosters` / All Contact Information | 174 | 157 real `@nv.ccsd.net` emails, 168 student numbers, names in the title, parent emails + phones in the page bodies |
+| `Warm Up Submissions` (a SECOND one) | many | `Student Email` + `Name`, real district emails |
+| `Parent INfo` | many | guardian names, personal guardian emails, **phone numbers** |
+| `Student Emails` | many | First Name, Username, district email, student number |
+| `Fall 25 Map Score Database` | 66 | student names + MAP scores |
+| `Period 4` (MAP) | 15 | student names + MAP scores |
+| `Period 2 Map Data` | many | StudentFirstName / StudentLastName + MAP |
+| `Period 5 Winter Map` | many | StudentFirstName / StudentLastName + MAP |
+| `SBAC Data Source` | 80 | state test scores |
+
+Already archived before tonight: `Warm up Submissions` (1,388), `student
+emails.csv` (103), `Curriculum Test Scores` (554, via an archived ancestor),
+`Parent Contact Log`, `i-Ready Evaluations`. `Behavior Incidents` was already
+gone.
+
+**THE RUNBOOK'S LIST WAS INCOMPLETE AND THAT IS THE LESSON.** Step 8 below
+names five things by name; FIVE MORE existed that nobody remembered - the
+guardian phone list among them. Do not clean this by working a remembered
+list. Enumerate every data source through the API and test each one, which
+is what `POST /v1/search {"filter":{"value":"data_source"}}` plus a property
+scan does in one pass.
+
+**Two traps that make verification lie:**
+- Notion's search reports a data source as `archived: false` even when its
+  PARENT DATABASE is in the trash. Check the parent's `archived` flag
+  (`GET /v1/databases/<parent>`), or you will "find" PII that is already gone
+  and archive things twice.
+- A bare `@nv.ccsd.net` grep flags **Steele's own** teacher account
+  (`wilsos13@nv.ccsd.net`, and `googledrive-wilsos13@...` from the Drive
+  connector) in Document Hub, Assets Library and People. Those are NOT student
+  data and must not be touched. Student emails have the shape
+  `Firstname.1234567@nv.ccsd.net` - regex `[A-Za-z]+\.\d{5,}@nv\.ccsd\.net`
+  separates them cleanly.
+
+**How it was done:** the Notion MCP has no archive or delete tool. Use the raw
+API with the `NOTION_TOKEN` already in `.env.local`:
+`PATCH /v1/databases/<id>` with `{"in_trash": true}` and
+`Notion-Version: 2025-09-03`.
+
+**VERIFIED AFTER:** every live data source was re-enumerated and each one's
+rows scanned - zero carry a student email, student name, guardian name or
+phone. `MAP_SBAC_DataFeed_Template` survives deliberately: 4 rows, all empty.
+
+**TWO THINGS ONLY STEELE CAN FINISH:**
+1. **Empty the Notion trash.** Archiving moves data to the trash; it does not
+   delete it from Notion's servers. Until the trash is emptied this is a
+   reduction in exposure, not a removal. Settings > Trash.
+2. **`Student Submissions`** (1 row, database `589bb315-cec1-466f-847f-13037c5d3782`)
+   could not be archived: the API answers *"Archiving workspace level pages via
+   API not supported."* Its one row scanned clean of identity, so it is
+   cosmetic - delete it by hand when convenient.
 
 RELATED, AND IT BLOCKS WARM-UP CREATION TODAY: `/api/warmup` is now GATED (it
 is in `SECURE_ROLLOUT_PREFIXES` and production has
@@ -140,11 +203,13 @@ it costs you a confusing error. Only the steps marked **[TODO]** remain.
    and the generated `email_normalized`, rewrote stored display_names to the
    alias, scrubbed emails out of old dedupe keys, and dropped the
    `abbie_questions` table plus the dormant `sessions.abbie` column.
-8. **[TODO] Clean up Notion by hand** (the site cannot do this for you): archive or
-   delete the "All Contact Information" roster database, the "Warm up
-   Submissions" database, the "Warm-Up Weekly Summaries" database, the
-   i-Ready Evaluations database, and any student-profile pages. Lesson
-   content stays.
+8. **[DONE 2026-08-05 - archived, trash not yet emptied]** Clean up Notion.
+   Nine live databases went to the trash; see the 2026-08-05 status block at
+   the top for the table, the two verification traps, and the API call used.
+   Lesson content is untouched. **Remaining human steps: empty the Notion
+   trash, and hand-delete the 1-row `Student Submissions` database the API
+   cannot archive.** The original wording of this step named only five
+   databases and missed five more - do not treat that list as complete.
 9. **[DONE] Mock class re-seeded** 2026-08-01 from `mock-classroom-seed.sql`
    (Amber Fox and friends, pseudonymous). `mock-live-session-seed.sql` was
    deliberately NOT run - it opens a live session; run it only when you want

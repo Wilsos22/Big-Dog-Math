@@ -1135,11 +1135,19 @@ work that no longer exists, and one of them would have broken teacher auth.
    `pushRosterToSite()` has run. A re-run that day reported
    `created:0 updated:0 unchanged:142`, proving the roster project's key still
    matches the stored hashes.
+   **STEP 8 RAN 2026-08-05** - nine live Notion databases archived, including the
+   `Rosters` source of truth (174 rows / 157 real district emails / 168 student
+   numbers), `Parent INfo` (guardian names + phone numbers) and four MAP/SBAC
+   tables carrying student names. Six were already archived, which is why the
+   workspace looked clean; the runbook's named list was half the real set. Two
+   human steps remain there: **empty the Notion trash** (archiving is not
+   deleting) and hand-delete the 1-row `Student Submissions` database the API
+   refuses. Details and the two verification traps: `supabase/FERPA-CUTOVER.md`.
    WHAT IS ACTUALLY LEFT: **step 2** (confirm the WARM-UP project's
    `BDM_ROSTER_HMAC_KEY` matches the roster project's - unproven, and invisible
    until a real warm-up returns "not on roster"), **step 6** (one real warm-up on
    a district account - this is what writes `auth_user_id`; the roster never
-   does), **step 8** (archive the Notion student databases by hand).
+   does).
    **Until step 6 lands, no student write can succeed at all** - fist-to-5, the
    stuck chip, tool evidence and now the poll -> mastery bridge all fail the
    verified-student gate and present as dead buttons. Re-measured 8/4:
