@@ -17,8 +17,6 @@ import { teacherApiRequest } from "@/lib/teacherApi";
 import { LIVE_FLOW_MODE, getStoredTeacherSessionId, liveTimerSeconds, type LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { studioPreviewSession, useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
-import LessonSlideStage from "@/components/screen/LessonSlideStage";
-import { stepScreenData, defaultZones, type ScreenStepData, type ScreenZones } from "@/lib/lessonScreenModel";
 
 // ?preview=<stage id> renders the shell with sample content and no session.
 const PREVIEW_SAMPLES: Record<string, { label: string; action: string; steps: string[]; anchor?: string }> = {
@@ -355,54 +353,11 @@ export default function PaceSupportPage() {
         ? "idle"
         : `${state.id}:${flow?.sequence?.currentIndex ?? -1}`;
 
-  // The support screen mirrors the main projector: a plain worded/info state shows the SAME studio
-  // slide (auto-default from the Notion step), so pace and present match. Interactive/second-purpose
-  // scenes (poll, discussion, spinner, anchor, warm-up agenda, mirrored slide) keep their own render.
-  const lessonSlideData: ScreenStepData | null = flow && state && flow.presentation
-    ? stepScreenData({
-        order: (flow.sequence?.currentIndex ?? 0) + 1,
-        duration: (timer?.totalSeconds ?? 0) / 60,
-        title: flow.presentation.title || state.label || "",
-        stateId: state.id,
-        mainDisplay: flow.presentation.mainDisplay || flow.presentation.body || "",
-        paceDirections: flow.presentation.paceDirections || "",
-        studentDirections: flow.presentation.studentAction || "",
-        vocabulary: Array.isArray(flow.presentation.vocabulary) ? flow.presentation.vocabulary.join("\n") : String(flow.presentation.vocabulary || ""),
-        question: "",
-        responseMode: flow.presentation.responseMode || "",
-        screenNotes: "",
-        slideUrl: "",
-      })
-    : null;
-  const lessonSlideZones: ScreenZones = lessonSlideData ? defaultZones(lessonSlideData, "main") : [];
-  // Mirroring main means showing the slide only where MAIN shows the slide. The
-  // overlay is position:fixed inset:0 z-index:12, so anywhere present keeps a
-  // bespoke scene and pace puts the auto-composed slide up instead, pace is not
-  // mirroring the room - it is covering its own frame with something the main
-  // projector is not showing. Found live 2026-08-03 on the Divisibility tool
-  // state ("a your own partial screen") and on You Do. Every clause below has a
-  // twin in present/page.tsx's own showLessonSlide; keep the two lists together.
-  const isTransition = Boolean(state?.id?.startsWith("transition"));
-  const isExitState = state?.id === "exit" || theme.id === "exit";
-  // The fact of a published tool, not its URL - pace never embeds one, it shows
-  // the directions for it, which is exactly its documented second purpose.
-  // The state id is checked DIRECTLY as well as the payload, because both
-  // payload signals are conditional: flow.tool needs the teacher to have pressed
-  // Send tool setup, and flow.resource needs Response Mode to be literally
-  // "Assigned Tool" with a Tool name that resolves. A step authored with State
-  // ID tool-divisibility and neither of those is still a tool state, and it was
-  // still getting the slide. `tool-` is the canonical prefix test (classStates.ts).
-  const hasLiveTool = Boolean(flow?.tool) || Boolean(state?.id?.startsWith("tool-"));
-  const hasAssignedResource = Boolean(
-    flow?.resource?.url?.startsWith("/")
-    && !["discussion", "independent", "closeout"].includes(theme.id),
-  );
-  const showLessonSlide = Boolean(
-    lessonSlideData && connected && !interlude && !mirroredSlideUrl && !warmupAgenda &&
-    !anchorPose && !linkedSpinnerMode && !poll && !hasDiscussionTimeline && !isDiscussion && !isLearningCheck &&
-    !isTransition && !isExitState && !routineConfig && !hasLiveTool && !hasAssignedResource &&
-    theme.id !== "independent" && flow?.presentation?.mode !== "board" && state?.id !== "warmup",
-  );
+  // A `lessonSlideData` / `showLessonSlide` block stood here and fed the
+  // LessonSlideStage overlay, along with the four predicates (isTransition,
+  // isExitState, hasLiveTool, hasAssignedResource) that existed only to exclude
+  // states from it. All gone 2026-08-04 with the overlay itself - see the note at
+  // its old mount point below. Pace draws its own frame on every state again.
 
   return (
     <main className="pace-page" style={style}>
@@ -804,20 +759,15 @@ export default function PaceSupportPage() {
         {/* Last child of the body stage, so it paints over the inset-0 scene.
             Pinned top right INSIDE the stage rather than in the topbar, where the
             clock already lives. */}
-        {/* The slide overlay draws its own strip; suppress this one so they do not double up. */}
-        {!showLessonSlide ? <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} /> : null}
+        <ClassroomStateStrip strip={behaviorStrip} showWords={stripWords} overridden={behaviorOverridden} />
       </section>
-      {showLessonSlide && lessonSlideData ? (
-        <LessonSlideStage
-          data={lessonSlideData}
-          zones={lessonSlideZones}
-          totalSteps={flow?.sequence?.totalSteps ?? 1}
-          screen="main"
-          strip={behaviorStrip}
-          showWords={stripWords}
-          overridden={behaviorOverridden}
-        />
-      ) : null}
+      {/* The LessonSlideStage overlay used to sit here, passing screen="main" so
+          the support projector drew the MAIN screen's zones. It is gone
+          (2026-08-04, Steele): two visual languages in one lesson, and this
+          surface's copy of the exclusion list never matched present's, so on a
+          tool or You Do state the two projectors showed different designs at the
+          same moment. Pace draws its own frame on every state now, which is also
+          the end of the "keep the two clause lists together" hazard. */}
       {/* Write-on-screen was mounted only on /teacher/present, so the support
           projector could never be annotated - the teacher circled something on
           the iPad and half the room's screen never changed. */}
