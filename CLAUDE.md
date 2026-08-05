@@ -1408,9 +1408,11 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   now move a bar. What it grades is DELIBERATELY NARROW (Steele, 2026-08-04): `structured-numeric`
   and `multiple-choice` only. NOT `short-answer` (bare string equality marks a right answer wrong
   over a stray space - and note M1.T1.L5-D1's exit ticket is that kind, so that lesson's exit still
-  contributes nothing), NOT `multiple-choice-explain` (readinessEvidence cannot see the kind at
-  all, so bridging it would make the bars and the visit list disagree about one student - fix the
-  reader first), and NOT `fist-to-five` (a confidence self-report must never score a standard).
+  contributes nothing), NOT `multiple-choice-explain` (the reason WAS that readinessEvidence could
+  not see the kind at all, so bridging it would make the bars and the visit list disagree about one
+  student - **that reader was fixed 2026-08-05 and now covers every kind `resolveLiveStepPollKind`
+  can produce, so adding mce to `GRADED_POLL_KINDS` is unblocked; it is a decision, not a
+  blocker**), and NOT `fist-to-five` (a confidence self-report must never score a standard).
   FOUR THINGS THAT WILL BITE WHOEVER TOUCHES IT. (1) **The bar row carries `standard_id: null` and
   that is not a mistake** - `recompute.ts:133` filters bar events to `!standardId`, so attaching
   the resolved standard is exactly the edit that stops the bar moving. There are two row shapes: a
@@ -1427,10 +1429,14 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   a bare `continue`). (4) **A multiple-choice key that is in none of the choices makes the poll
   ungradable, not the class wrong** - see the `splitList` trap below. `npm run test:poll-evidence`
   pins all four, and each was verified by reverting the fix and watching the suite go red.
-  STILL TRUE and still the gap: `practice_assignment_attempts` and 16 of 23 tools reach nothing,
-  and nothing calls the bridge automatically yet - it is a route you POST, and `GET` on it is a dry
-  run. Also NOT verified end to end, because `poll_answers` has zero rows lifetime until the FERPA
-  Workspace half lands.
+  STILL TRUE and still the gap: `practice_assignment_attempts` and 16 of 23 tools reach nothing.
+  **THE BRIDGE NOW HAS A CALLER (2026-08-05).** `POST /api/teacher/session` end-session calls the
+  lib directly before the close update, wrapped so a failure can never keep a session open, with
+  `recomputePeriod` deferred into `after()` so Close does not block on a rebuild. It is idempotent
+  on `dedupe_key`, so re-running is safe and the route you POST by hand still works as before
+  (`GET` is still a dry run). Until 2026-08-05 `select * from responses where source='poll'`
+  returned zero rows lifetime - every fist-to-five and ready check ever run was invisible to the
+  proficiency spine. Anything before that date is not recoverable.
   **A MULTIPLE-CHOICE ANSWER KEY CAN BE UNTAPPABLE** (found 2026-08-04, PARSER FIXED THE SAME DAY -
   this paragraph used to end "the AUTHORING bug is unfixed", which is no longer true). `splitList`
   splits on `[\n,]`, and `Choices` used to be read through it while `Correct Answer` is read whole,
