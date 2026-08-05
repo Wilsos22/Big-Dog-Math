@@ -2082,7 +2082,22 @@ the invariants they protect are easy to break again.
   `liveFlowScreensChanged` (`src/lib/liveFlowScreens.ts`), which ignores `updatedAt`,
   `timer.secondsLeft` and the Remote's `transition` claim marker. Ping every write and thirty
   Chromebooks re-fetch every second - the storm, arrived by another road, and it would present as
-  "the sync broke". (3) **The student surfaces must call `invalidateSharedSessionState` BEFORE
+  "the sync broke".
+  **IT DOES NOT STAY RARE DURING A DISCUSSION STATE, AND THAT IS AN OPEN BUG** (measured
+  2026-08-05). The strip is keyed on the literal top-level key `"timer"`, but Control publishes the
+  discussion overlay's `phase` as its OWN top-level key alongside it (`/control` page.tsx, the
+  `version: 2, state, phase, timer, ...` snapshot), and `phase.secondsLeft` counts down once a
+  second exactly like `timer.secondsLeft` does. Nothing strips it. Verified by driving the compiled
+  module: two snapshots differing ONLY in `phase.secondsLeft`, with an identical `endsAt`, still
+  return `true` from `liveFlowScreensChanged` - so for the whole of a two-minute discussion round
+  every republish is scored a real change and pings every student device once a second. This is
+  pre-existing and not caused by the deadline work; it is simply what nobody had measured. The fix
+  is to strip `phase.secondsLeft` the same way `timer.secondsLeft` is stripped, which is only SAFE
+  now that the phase carries an `endsAt` for surfaces to derive from - do it as its own change with
+  a contract assertion, not as a drive-by.
+  ANY NEW TOP-LEVEL SNAPSHOT KEY CARRYING A PER-SECOND COUNTDOWN HAS THIS BUG BY DEFAULT. The
+  projection is an allowlist of one special case, so the protection does not generalise on its own.
+  (3) **The student surfaces must call `invalidateSharedSessionState` BEFORE
   re-reading**, or the shared cache serves a value up to 2.8s old and the ping looks like it did
   nothing. (4) **The payload carries nothing.** It says "something changed"; each surface then
   re-reads through the gated endpoint it already used, so `studentSafeLiveFlow`, the teacher gate and
