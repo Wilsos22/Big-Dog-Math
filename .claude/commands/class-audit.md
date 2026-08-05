@@ -40,7 +40,10 @@ single dates, Publish Workflow = Published, steps with known State IDs,
 explicit Response Mode on every exit step; (2) warm-up readiness (forms built,
 retention fields sane); (3) roster database populated with REAL students -
 report counts per period only, never names or emails; (4) Feature Tracker rows
-at Priority "Now" not Done. Output a coverage table + ranked gaps.
+at `Priority = "Now"` AND the `Done` CHECKBOX = `__NO__`. Do NOT filter on
+`Status != Done` — `Status` has no such value (it runs Live / Planned / Parked /
+Needs revision / In progress), so that filter matches EVERY row and reports
+finished features as outstanding work. Output a coverage table + ranked gaps.
 
 ## Scope: student / teacher (the live simulation - run in this session)
 
