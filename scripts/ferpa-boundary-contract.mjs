@@ -108,8 +108,20 @@ ok(offenders(/full_name/).length === 0,
   `"full_name" must not appear in src/ (found in: ${offenders(/full_name/).map((f) => path.relative(root, f)).join(", ")})`);
 
 // The Notion student-data modules are deleted; nothing may resurrect them.
-ok(offenders(/notionRoster|notionIReady|notionSubmissions|notionOutreach|fetchNotionRoster|getWeeklySummaries/).length === 0,
+// notionFormAnalytics joined them 2026-08-05: it read the Notion warm-up
+// submissions DB and handed /api/form-responses raw district emails, which
+// is the exact thing "Notion holds zero student data" forbids. The route had
+// no caller in src/ and its Notion source is archived.
+ok(offenders(/notionRoster|notionIReady|notionSubmissions|notionOutreach|notionFormAnalytics|fetchNotionRoster|getWeeklySummaries|getAllFormResponses/).length === 0,
   "deleted Notion student-data modules must not be referenced in src/");
+ok(!fs.existsSync(path.join(root, "src/app/api/form-responses/route.ts")),
+  "/api/form-responses must stay deleted (it served raw district emails out of Notion)");
+
+// The per-student warm-up sync to Notion is retired in the Apps Script
+// bridge and must stay a stub - nothing may send a submission row to Notion.
+const notionSyncGs = readAppsScript("warmup-notion-sync.gs");
+ok(/function syncWarmupSubmissionToNotionSafely_[\s\S]{0,400}?status: "retired"/.test(notionSyncGs),
+  "warmup-notion-sync.gs must keep the retired stub (no student row may reach Notion)");
 
 // Students never sign in to the site with a provider - that would put
 // district emails into Supabase Auth.
@@ -132,6 +144,13 @@ ok(rosterSync.includes("assertPseudonymousRoster") && !/notion/i.test(rosterSync
   "roster sync must validate pseudonymous pushes and carry no Notion read");
 const checkpointUpload = fs.readFileSync(path.join(root, "src/app/api/checkpoints/upload/route.ts"), "utf8");
 ok(checkpointUpload.includes("identified_csv_rejected"), "checkpoint upload must refuse email-bearing CSVs");
+// A visit tap is teacher-authored, so it is the one ingest that could carry a
+// name the teacher just resolved in their browser. VisitListPanel posts the
+// alias on purpose; the route now refuses anything identified rather than
+// trusting that.
+const visitList = fs.readFileSync(path.join(root, "src/app/api/live/visit-list/route.ts"), "utf8");
+ok(visitList.includes("looksIdentified") && visitList.includes("identified_visit_rejected"),
+  "visit-list must refuse identified check-ins (taps carry the alias, never a name)");
 
 // The Apps Script bridge sends HMACs, never the email.
 const evidenceGs = readAppsScript("warmup-evidence.gs");

@@ -14,6 +14,7 @@
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { loadReadinessEvidence } from "@/lib/readinessEvidence";
 import { buildVisitList, type VisitCheckInStatus, type VisitStudent } from "@/lib/visitList";
+import { looksIdentified } from "@/lib/pseudonym";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,11 +110,24 @@ export async function POST(request: Request) {
     return Response.json({ error: "sessionId, studentKey and a valid status are required." }, { status: 400 });
   }
 
+  // FERPA boundary: a visit tap carries the ALIAS, never a resolved name -
+  // VisitListPanel reads the name key in the browser and deliberately posts
+  // student.name (the alias) back. This route is the only identity-bearing
+  // ingest that had no refusal, so an identified value is rejected here the
+  // way evidence, warmup-verify, roster sync and checkpoint upload reject one.
+  const displayName = typeof body.displayName === "string" ? body.displayName.slice(0, 200) : null;
+  if (looksIdentified(studentKey) || (displayName && looksIdentified(displayName))) {
+    return Response.json(
+      { error: "identified_visit_rejected", detail: "Visit check-ins carry the alias, never a name or email." },
+      { status: 400 },
+    );
+  }
+
   const { error } = await db.from("visit_check_ins").upsert(
     {
       session_id: sessionId,
       student_key: studentKey,
-      display_name: typeof body.displayName === "string" ? body.displayName.slice(0, 200) : null,
+      display_name: displayName,
       status,
       promoted: typeof body.promoted === "string" ? body.promoted.slice(0, 80) : null,
       updated_at: new Date().toISOString(),
