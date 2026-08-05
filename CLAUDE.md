@@ -1779,6 +1779,28 @@ the invariants they protect are easy to break again.
   symptom is that a shipped fix is not there. `UpdateReadyChip` polls `/api/build-id` and offers a
   tap-to-reload chip. It must NEVER reload on its own. When a fix is reported as not working, check
   what build the iPad is actually running before re-debugging the fix.
+- **"THE IPAD KEEPS SELECT-ALLING AND MOVING AROUND" IS THE PAGE, NOT THE INK** (2026-08-04, Steele).
+  Three separate gaps, none of them in the drawing engine, and no ink library swap touches any of
+  them. (a) `/ipad` sets NO `user-select:none`, NO `-webkit-touch-callout:none` and NO
+  `-webkit-tap-highlight-color` - the palette is a row of text buttons, so a touch that drags a few
+  px on one starts an iOS text selection with the Copy/Look Up callout. (b) The root `viewport` in
+  `layout.tsx` permits user scaling, so Safari's OWN pinch and double-tap zoom the whole document;
+  `touch-action:none` on `.ip-screen-stage` and the wet canvas cannot stop that, because it is the
+  page being zoomed, not the board. (c) Nothing sets `overscroll-behavior`, so the document still
+  rubber-bands under the fixed layers.
+  **AND `toggleFullscreen()` ON `/ipad` IS A NO-OP ON THE ACTUAL DEVICE.** It calls
+  `document.documentElement.requestFullscreen()`, which iPadOS Safari does not implement for page
+  elements (WebKit ships element fullscreen on macOS only; on iOS/iPadOS it is `webkitEnterFullscreen`
+  on `<video>`). The real full-screen path is Add to Home Screen, and there is NO webmanifest in
+  `public/` and no `apple-mobile-web-app-capable` in the layout, so standalone mode has never been
+  available. Standalone also removes the address bar, the swipe-back edge gesture and the bounce -
+  three more sources of "moving around" - at the cost of a separate cookie jar, so the teacher signs
+  in once inside the installed app.
+  **DO NOT REACH FOR A NATIVE APP TO GET PALM REJECTION - INKBOARD ALREADY HAS IT.** `InkBoard.tsx`
+  onDown: `pointerType === "touch"` never marks, it becomes a gesture, so only the Pencil draws. That
+  is `PKCanvasView.drawingPolicy = .pencilOnly` by another road. What PencilKit would genuinely buy
+  is latency (Apple's ~9ms path vs ~30-60ms for Safari canvas) and immunity to the three gaps above -
+  nothing else. Weigh a second codebase against that list, not against a palm problem that is solved.
 - **PEN FEEL: THE GEOMETRY FIXES, AND WHY "JAGGED" WAS FOUR SEPARATE THINGS** (2026-08-03, from
   Steele: "too jagged and doesnt respond well to writing. especially back to back strokes", then
   "a few weeks ago it was running fantastic"). `npm run test:ink-geometry` (35 checks) pins all of
@@ -1804,6 +1826,29 @@ the invariants they protect are easy to break again.
   right angle - and handwriting is almost entirely corners. `strokeOutline` now scales the offset
   by 1/cos(theta/2) with `MITER_LIMIT` 2.5 so a retraced stroke cannot throw a spike. Measured
   nib width kept at the corner: 94% -> 100% (right angle), 80% -> 100% (zig-zag).
+  (2b) **THAT LIMIT CLAMPED THE SPIKE INSTEAD OF BEVELLING IT, AND SHIPPED A BARB ON EVERY HAIRPIN
+  FOR A DAY** (fixed 2026-08-04). `miterLimit` in a real 2D renderer means "past this angle, cut the
+  corner FLAT"; the code did `miter = min(2.5, 1/cos(theta/2))` and still pushed ONE vertex along the
+  bisector, so a near-reversal got a spur 2.5 nib radii long - on the 6px pen, a ~15px barb sticking
+  3.5px clear of the stroke edge. Cursive is a chain of near-reversals, so the top of every l, b and
+  th grew one; Steele photographed it and called the pen "not serviceable". The fix emits TWO points
+  at the plain nib radius, one on each segment's own normal. Measured on the contract's near-retrace,
+  3px nib: **7.50px -> 3.00px**. TWO THINGS TO CARRY FORWARD. `left`/`right` are FLAT arrays and the
+  ring used to walk the right edge by `right[i * 2]` - a bevelled joint contributes two points, so
+  that indexing tears the polygon; walk it back by PAIRS. And the exact-retrace case cannot test any
+  of this: at gap zero the `mlen < 1e-6` branch takes over and is bounded on its own, so a hair off
+  zero is the case that binds (the same trap the file already records one paragraph up).
+  (2c) **ASSERTING A DEFECT IS BOUNDED IS NOT ASSERTING IT IS ABSENT - THIS IS A NEW WAY FOR A GREEN
+  CONTRACT TO MEAN NOTHING.** `ink-geometry-contract.mjs` pinned the barb at `reach <= 2.5 * W / 2`,
+  which is the clamp ceiling itself - so the assertion was satisfied BY the spike it existed to
+  catch, and 35 checks stayed green across the whole 2026-08-03 geometry pass. The bound is
+  `BEVELLED_REACH` (1.25 nib radii) now and loosening it back toward 7.5 un-tests the bevel. The
+  general form, and the third variant of this failure in this file after "a contract can pass on the
+  wrong element" and "an exit code is not evidence": when you write a bound, ask what the BUG
+  measures, not just what the fix measures - if both satisfy it, the check is decoration. Verify the
+  way this repo already demands: revert the fix and watch the suite go red (`.tmp-mastery/` holds the
+  compiled module the contract requires, so swapping that artifact mutation-tests it without
+  touching the shared tree).
   (3) **THERE IS NO SEPARATE DE-JITTER PASS, AND THAT IS MEASURED, NOT AN OVERSIGHT.** One was
   built (a binomial pre-filter over the control points) and then removed, because
   `smoothCenterline`'s midpoint quadratic already averages each pair of samples and that is itself
