@@ -25,7 +25,8 @@ import {
 import type { LessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import type { LessonStepData } from "@/lib/notionLessons";
-import { BEHAVIOR_OVERRIDE_BUTTONS, CLEAR_ON_DEMAND_TIMER_BUTTON, ON_DEMAND_TIMER_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, SPEAKER_REMOTE_BUTTON, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
+import { BEHAVIOR_OVERRIDE_BUTTONS, CLEAR_ON_DEMAND_TIMER_BUTTON, ON_DEMAND_TIMER_BUTTONS, SLIDE_VIDEO_REMOTE_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, SPEAKER_REMOTE_BUTTON, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
+import { resolveSlideSource } from "@/lib/embedUrl";
 import { joinRealtimeRoom } from "@/lib/realtimeRooms";
 import {
   SOUND_LABEL_ROOM,
@@ -812,6 +813,11 @@ export default function TeacherRemotePage() {
     if (sequence && privateLessonSteps[sequence.currentIndex]) return privateLessonSteps[sequence.currentIndex];
     return privateLessonSteps.find((step) => step.stateId === flow?.state?.id) || null;
   }, [flow?.presentation?.notionStepId, flow?.state?.id, privateLessonSteps, sequence]);
+  // Ask the shared classifier rather than sniffing for ".mp4" here - a second opinion about what a
+  // URL is is exactly how the deck ends up offering Play for a step showing a Canva board.
+  const showSlideVideoKeys = resolveSlideSource(
+    String(sequence?.steps?.[sequence.currentIndex]?.slideUrl || "").trim(),
+  ).kind === "video";
   const currentSpeakerNotes = speakerNoteItems(
     privateLessonStep?.remoteActions
       || privateLessonStep?.teacherNotes
@@ -1359,6 +1365,15 @@ export default function TeacherRemotePage() {
                     <div className="deck-grid spinner-control">
                       <DeckKey button={SPEAKER_REMOTE_BUTTON} busy={busy} disabled={controlsDisabled} onSend={send} />
                     </div>
+                    {/* Only on a step whose slide is actually a video. On every other step these
+                        would be three dead keys on a deck navigated by muscle memory. */}
+                    {showSlideVideoKeys ? (
+                      <div className="deck-grid">
+                        {SLIDE_VIDEO_REMOTE_BUTTONS.map((button) => (
+                          <DeckKey key={button.action} button={button} busy={busy} disabled={controlsDisabled} onSend={send} />
+                        ))}
+                      </div>
+                    ) : null}
                     {spinnerButton ? (
                       <div className="deck-grid spinner-control">
                         <DeckKey button={spinnerButton} busy={busy} disabled={controlsDisabled} onSend={send} />
