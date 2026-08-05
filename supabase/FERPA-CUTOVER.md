@@ -167,7 +167,7 @@ the SQL ones now FAILS (they reference `full_name`, which the scrub dropped)
 - harmless, since each file is wrapped in a transaction and rolls back, but
 it costs you a confusing error. Only the steps marked **[TODO]** remain.
 
-1. **[TODO] Create the roster Sheet in your district Workspace.** A spreadsheet with
+1. **[DONE 2026-08-01, verified 2026-08-04] Create the roster Sheet in your district Workspace.** A spreadsheet with
    a tab named `Roster`, header row `Name | Email | Period | Alias`, one row
    per student for the new year. Open its Apps Script editor and paste in
    `warmup-roster-push.gs`. In Project Settings > Script Properties set:
@@ -189,7 +189,7 @@ it costs you a confusing error. Only the steps marked **[TODO]** remain.
 4. **[DONE - DO NOT RE-RUN] Merge and deploy the FERPA branch.** Shipped
    2026-08-01 as build `c1d9c6d`; the Notion roster pull and its daily Vercel
    cron are gone, and the identified-payload refusals are live.
-5. **[TODO] Push the roster:** run `pushRosterToSite()` in the roster Sheet's Apps
+5. **[DONE - 167 students carry an alias + email_hmac] Push the roster:** run `pushRosterToSite()` in the roster Sheet's Apps
    Script. Check the log: created/updated counts, no skipped rows. Optional:
    add a daily time trigger on it.
 6. **[TODO] Verify after pushing:**

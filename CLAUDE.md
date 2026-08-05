@@ -214,8 +214,11 @@ bars and live misconception grouping).
    (they held zero evidence), `ferpa-pii-scrub.sql` run - the live `students` table now carries
    ONLY id/period_id/created_at/auth_user_id/auth_claimed_at/alias/email_hmac - and the mock class
    reseeded pseudonymously. REMAINING is the Workspace side, Steele's hands only, per
-   `supabase/FERPA-CUTOVER.md`: roster Sheet + `BDM_ROSTER_HMAC_KEY` + Apps Script paste-ins +
-   roster push. Until those paste-ins land, warm-up
+   `supabase/FERPA-CUTOVER.md`, and it is now just TWO steps: **step 2** (paste the updated `.gs`
+   files into the WARM-UP Apps Script project and give it a `BDM_ROSTER_HMAC_KEY` identical to the
+   roster project's) and **step 6** (one real warm-up on a district account - the only thing that
+   writes `auth_user_id`). The roster Sheet and the roster push are DONE: 167 students carry an
+   alias and an `email_hmac`. Until those paste-ins land, warm-up
    identity posts carry a raw email and the site REFUSES them by design - do them before the first
    class day. The old hold on new student-data plumbing is LIFTED; build against the pseudonymous
    model.
@@ -957,7 +960,11 @@ Codex and cloud sessions need them too (rule 9).
   `/api/form-responses` was DELETED 2026-08-05 (it returned raw district emails out of Notion - see
   rule 8). Its `PROTECTED_PREFIXES` and matcher entries in `src/proxy.ts` were deliberately KEPT:
   a prefix guarding a route that does not exist costs nothing and fails safe if one ever returns,
-  and removing it would be the one edit that could let a rebuilt route come back ungated.
+  and removing it would be the one edit that could let a rebuilt route come back ungated. It is
+  also load-bearing for CI in a way that reads as a bug if you meet it cold:
+  `scripts/proxy-gate-contract.mjs` throws when the prefix list drops below SIXTEEN, and there are
+  exactly sixteen - so "tidying up" this entry fails the suite with a parse-error message that
+  says nothing about why.
 
 Slide overlays: `/teacher/slides` is the Canva-lite editor writing the Lesson Step's `Slide Overlay`
 Notion property (percent-based element JSON via `src/lib/slideOverlay.ts`; rich_text values chunk at

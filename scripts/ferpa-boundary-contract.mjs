@@ -114,14 +114,25 @@ ok(offenders(/full_name/).length === 0,
 // no caller in src/ and its Notion source is archived.
 ok(offenders(/notionRoster|notionIReady|notionSubmissions|notionOutreach|notionFormAnalytics|fetchNotionRoster|getWeeklySummaries|getAllFormResponses/).length === 0,
   "deleted Notion student-data modules must not be referenced in src/");
-ok(!fs.existsSync(path.join(root, "src/app/api/form-responses/route.ts")),
+// Assert the DIRECTORY, not route.ts: Next.js also serves route.js, and
+// walk() above only collects .ts/.tsx - so a route.js would have been
+// invisible to this check AND to the module grep at the same time. Caught by
+// review with a working route.js that served a district email and still
+// passed.
+ok(!fs.existsSync(path.join(root, "src/app/api/form-responses")),
   "/api/form-responses must stay deleted (it served raw district emails out of Notion)");
 
 // The per-student warm-up sync to Notion is retired in the Apps Script
 // bridge and must stay a stub - nothing may send a submission row to Notion.
+// Checking for the "retired" marker alone is not enough: a body that returns
+// that marker AND posts to Notion passes it. Read the function body and
+// assert it makes no Notion write.
 const notionSyncGs = readAppsScript("warmup-notion-sync.gs");
-ok(/function syncWarmupSubmissionToNotionSafely_[\s\S]{0,400}?status: "retired"/.test(notionSyncGs),
+const syncStub = (notionSyncGs.match(/function syncWarmupSubmissionToNotionSafely_[\s\S]{0,800}?\n\}/) || [""])[0];
+ok(syncStub.includes('status: "retired"'),
   "warmup-notion-sync.gs must keep the retired stub (no student row may reach Notion)");
+ok(syncStub.length > 0 && !/createNotionPage_|updateNotionPage_|notionRequest_|UrlFetchApp/.test(syncStub),
+  "the retired stub must not contact Notion (a 'retired' return value is not a promise it made no write)");
 
 // Students never sign in to the site with a provider - that would put
 // district emails into Supabase Auth.

@@ -91,7 +91,10 @@ export default function VisitListPanel({ sessionId }: { sessionId: string }) {
         });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
-          setError(body.error || `That check-in did not save (${response.status}).`);
+          // Prefer `detail`: routes that refuse for a boundary reason put a
+          // machine token in `error` and the sentence in `detail`, and this is
+          // read off an iPad mid-lesson - a raw token tells the teacher nothing.
+          setError(body.detail || body.error || `That check-in did not save (${response.status}).`);
           return;
         }
         await refresh();
