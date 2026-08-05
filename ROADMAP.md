@@ -752,18 +752,29 @@ original four are resolved and were pruned by `/status sync` on 2026-08-05.
   **STILL WRONG, re-confirmed 2026-08-05 at `.claude/commands/class-audit.md:43`.**
   Same file, same line, unchanged since it was first written down - so this is a
   one-line edit nobody has made, not a hard problem.
-- **Seven branches never merged into `origin/main`** (re-measured 2026-08-05;
-  the entry said five). Unmerged locals: `backup-before-rebuild-80e3da5`,
-  `claude/big-dog-website-roadmap-yp65vy`, `claude/ipad-writing-interface-7bb70b`,
-  `claude/quizzical-mcnulty-effb35`, `codex/integrated-security`,
-  `codex/warmup-identity-preview`; plus `origin/codex/two-panel-classroom` on the
-  remote only. The two `codex/` ones sound load-bearing and nobody has said
-  whether they are finished work or abandoned. **The one that is newly urgent is
-  `claude/ipad-writing-interface-7bb70b`** - 2 commits from 8/4 on
-  `src/lib/inkGeometry.ts` and `scripts/ink-geometry-contract.mjs` ("bevel the
-  corner past the miter limit instead of shortening the spike"). That is pen-feel
-  work on the surface CLAUDE.md calls the priority after data collection, and it
-  is sitting unmerged. Needs a read, then a merge or a delete.
+- **Unmerged branches - worked 2026-08-05, one merged, two with a verdict.**
+  The entry said five; it was seven.
+  - `claude/ipad-writing-interface-7bb70b` - **MERGED 2026-08-05** (`fc8c11c`,
+    deployed and verified live). It carried the fix for the barbs Steele
+    photographed on every `l`, `b` and `th`. Verified independently before
+    merging by running the NEW contract against the OLD geometry: fails at
+    `7.50px <= 3.75px`, passes with the fix.
+  - `codex/integrated-security` and `codex/warmup-identity-preview` -
+    **RECOMMEND DELETE, evidence below. Steele's call; not deleted.** Main is
+    **623 and 643 commits ahead** of them. Their actual deliverables ALREADY
+    LANDED by another route - `notion-warmup-requests.gs`,
+    `docs/warmup-verified-identity.md` and
+    `src/app/api/student/warmup-verify/route.ts` are all on main - and the
+    identity model they piloted was then REPLACED wholesale by the FERPA cutover
+    (alias + `email_hmac`), so their premise no longer exists. What is unique to
+    them is peripheral: `src/lib/liveFlowTransport.ts`, a `/ratio-builder` route,
+    a `/teacher/timer` route and an mp4. They touch `live-flow`, `control`,
+    `ipad`, `board` and student API routes that have each been rewritten several
+    times since 7/12 - merging them now would be a regression risk on the
+    classroom surfaces, not a recovery of lost work.
+  - Still unread: `backup-before-rebuild-80e3da5` (a snapshot, not a feature),
+    `claude/big-dog-website-roadmap-yp65vy`, `claude/quizzical-mcnulty-effb35`,
+    and `origin/codex/two-panel-classroom` (remote only).
 
 RESOLVED AND PRUNED 2026-08-05: "Vercel is not building from `main`" (Steele's
 manual redeploy restored it; live `/api/build-id` has tracked `origin/main`
