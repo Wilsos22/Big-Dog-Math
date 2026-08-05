@@ -16,6 +16,7 @@
 import assert from "node:assert/strict";
 import {
   DEFAULT_HOUSE_SET,
+  HOUSE_CYCLE,
   HOUSE_OPS,
   buildHouseTrace,
   normalizeHouseSet,
@@ -259,9 +260,103 @@ check("two numerals never sit side by side with only a space between them", () =
   for (const [dividend, divisor] of [...SHAPES, [936, 4], [824, 4], [100, 99], [7, 7]]) {
     const t = buildHouseTrace(dividend, divisor);
     for (const p of t.prompts) {
-      for (const [field, text] of [["say", p.say], ["ask", p.ask], ["hint", p.hint]]) {
+      const fields = [["say", p.say], ["ask", p.ask], ["hint", p.hint]];
+      // The work line is read the same way and is nothing BUT numerals, so it
+      // is the likeliest place for this to come back.
+      if (p.work) fields.push(["work", p.work.text]);
+      for (const [field, text] of fields) {
         assert.ok(!/\d\s\d/.test(text), `${dividend}/${divisor} ${p.id}.${field}: ${text}`);
       }
+    }
+  }
+});
+
+check("the rail is five letters, and only four of them are pressable", () => {
+  // Steele: "A Big D, M, S, B, R just like we did on the other tools like gems".
+  // R is not an operation - nothing is asked for it - so it lives on the rail
+  // and NOT in HOUSE_OPS, which is what the four buttons are built from.
+  assert.deepEqual(HOUSE_CYCLE.map((c) => c.letter), ["D", "M", "S", "B", "R"]);
+  assert.deepEqual(HOUSE_CYCLE.slice(0, 4).map((c) => c.key), HOUSE_OPS.map((o) => o.op));
+  assert.equal(HOUSE_CYCLE[4].key, "repeat");
+  assert.ok(!HOUSE_OPS.some((o) => o.op === "repeat"), "R must never become a fifth button");
+  for (const c of HOUSE_CYCLE) assert.ok(c.label.trim());
+});
+
+check("every prompt says which letter of the rail it belongs to", () => {
+  // Carried on the prompt rather than parsed out of its id: the rail is what a
+  // student reads to work out where they are, and a regex over ids puts the
+  // wrong tile under the highlight the first time one is renamed.
+  const CYCLE = [
+    "divide", "divide", "divide", "divide",
+    "multiply", "multiply", "multiply",
+    "subtract", "subtract",
+    "bringdown", "bringdown", "bringdown",
+  ];
+  for (const [dividend, divisor] of SHAPES) {
+    const t = buildHouseTrace(dividend, divisor);
+    t.prompts.forEach((p, i) => {
+      assert.equal(p.cycle, CYCLE[i % 12], `${dividend}/${divisor} ${p.id}`);
+    });
+    // The last round has no bring-down, which is what greys the B tile out -
+    // and a tile that greys for the wrong reason is worse than no tile.
+    const rounds = roundCount(t);
+    const lastB = t.prompts.some((p) => p.round === rounds - 1 && p.cycle === "bringdown");
+    assert.ok(!lastB, `${dividend}/${divisor}: the last round must have nothing to bring down`);
+    for (let r = 0; r < rounds - 1; r += 1) {
+      assert.ok(t.prompts.some((p) => p.round === r && p.cycle === "bringdown"), `${dividend}/${divisor} round ${r}`);
+    }
+  }
+});
+
+check("a work line only ever GROWS, so it cannot print an answer first", () => {
+  // Steele: "show the math happening in numbers next to the step so show the 9
+  // divide sign 4". The rail panel prints the latest state of each line, so the
+  // ONE thing keeping "9 ÷ 4 = 2" off the screen while "where does that answer
+  // go?" is still the question is that the pieces arrive in order and each is a
+  // prefix of the next.
+  for (const [dividend, divisor] of [...SHAPES, [936, 4], [1000, 8], [7, 7]]) {
+    const t = buildHouseTrace(dividend, divisor);
+    const lines = new Map();
+    for (const p of t.prompts) {
+      if (!p.work) continue;
+      const prev = lines.get(p.work.key);
+      if (prev !== undefined) {
+        assert.ok(
+          p.work.text.startsWith(prev) && p.work.text.length > prev.length,
+          `${dividend}/${divisor} ${p.id}: "${prev}" -> "${p.work.text}" is not one piece longer`,
+        );
+        assert.ok(
+          !prev.includes("="),
+          `${dividend}/${divisor} ${p.id}: the line was already finished at "${prev}"`,
+        );
+      }
+      lines.set(p.work.key, p.work.text);
+      // A work line belongs to the round it is part of, or the panel prints
+      // last round's arithmetic beside this round's words.
+      assert.equal(p.work.key, `${p.work.key[0]}${p.round}`, `${p.id} keys the wrong round`);
+    }
+    // Three finished facts per round, and each says what actually happened.
+    const slotText = (id) => t.slots.find((s) => s.id === id)?.text ?? "";
+    const rounds = roundCount(t);
+    for (let r = 0; r < rounds; r += 1) {
+      const of = (id) => t.prompts.find((p) => p.id === `${id}-${r}`);
+      // WRITTEN, THAT NUMBER CAN CARRY A LEADING ZERO and the number it names
+      // does not. On 618/6 round one the board holds a leftover 0 with the 1
+      // brought down beside it - "01" on paper, the number 1 in the sentence -
+      // so the digits are read back as a number, exactly as the engine builds
+      // them, or this check fails on the tool being right.
+      const partial = String(Number(of("pick-partial").slots.map(slotText).join("")));
+      const q = of("place-quotient").fill.map(slotText).join("");
+      const product = of("place-product").fill.map(slotText).join("");
+      const rest = of("place-rest").fill.map(slotText).join("");
+      assert.equal(lines.get(`d${r}`), `${partial} ÷ ${divisor} = ${q}`, `${dividend}/${divisor} round ${r} divide`);
+      assert.equal(lines.get(`m${r}`), `${q} x ${divisor} = ${product}`, `${dividend}/${divisor} round ${r} multiply`);
+      assert.equal(lines.get(`s${r}`), `${partial} − ${product} = ${rest}`, `${dividend}/${divisor} round ${r} subtract`);
+      // The bring-down deliberately has none - it is not a fact with an answer.
+      assert.ok(
+        !t.prompts.some((p) => p.round === r && p.cycle === "bringdown" && p.work),
+        `${dividend}/${divisor} round ${r}: a bring-down must not invent a fourth equation`,
+      );
     }
   }
 });

@@ -417,72 +417,72 @@ Codex and cloud sessions need them too (rule 9).
   goes -> bring down -> which digit -> where it goes, and then it resets. `npm run
   test:division-house` pins that order; collapsing two of those into one step removes a decision.
   IT IS REPS, NOT A TEST (Steele: "its not testing as much as just getting reps following the
-  numbers" / "I just want them to start to remember what the sequence is"). That is WHY the target
-  spot PULSES, why a placed number STAYS GREEN, and why the divide/multiply/subtract/bring-down strip
-  fills in as they name each one - none of those are giveaways to be tightened up later, they are the
-  design. What the strip must NOT do is light the step BEFORE it is named, or the question answers
-  itself.
+  numbers" / "I just want them to start to remember what the sequence is"). That is why a placed
+  number STAYS GREEN and why the D-M-S-B-R rail fills in as they name each step. What the rail must
+  NOT do is light a step BEFORE it is named, or the question answers itself.
   Four layout rules that were notes first. Only the inside of the house is clickable - there is no
   such thing as a number above or below the divisor, so those cells are not drawn ("this isnt
   needed"). A multi-digit number is ONE number: the leftover plus the digit brought down highlight
   together and clicking either counts, which is why a prompt carries `slots: string[]` and not a
-  single id. There is a CLEAR GUTTER COLUMN between the divisor and the bracket, and it is not
-  decoration - the divide and multiply signs and their arrows live in it. And each sign is placed
-  the way it is written by hand: `÷`/`x` BETWEEN the two numbers, `−` to the LEFT of the number
-  being taken away with a rule under it and the difference below, and a bring-down draws the arrow
-  ALONE (the glyph would be redundant).
-  REBUILT 2026-08-04 FROM NINE MORE TOOLBAR COMMENTS, and five things about it changed shape.
-  (1) **EVERY ROUND TRACES SIX MOVES AND THE LINES STAY** - Steele named them by direction, "to the
-  left, up, diagonal left, diagnal right, down ,down": divide, `=` up to the quotient, multiply,
-  `=` down to the product, subtract, and the difference dropping. THREE OF THOSE SIX WERE MISSING -
-  the board drew the question (9 ÷ 4) and never drew any answer arriving. Connectors are SOLID (his
-  words: "not dashed lines but a solid line"), ARCHED, dash-drawn from the tail toward the head, and
-  every round KEEPS its lines, one colour per round, finished rounds at `ARC_FADED`. Not 0.32 - a
-  coral arc at 0.32 over cream is about 1.6:1, which on a projector is not a faded pathway, it is no
-  pathway.
-  (2) **THE GRID IS NO LONGER UNIFORM.** The gutter is HALF a cell (`GUTTER_RATIO`), because the
-  divisor was "way too far over to the left". So NOTHING may compute an x from a column by hand -
-  `houseLayout()` in `src/lib/divisionHouseArcs.ts` owns `colX`/`colW`/`colMid`/`centre`, and a
-  stray `col * cellPx` is right on the divisor side of the board and half a cell wrong on the house
-  side, which is the hardest kind of wrong to see in a screenshot.
-  (3) **ONLY THE NEWEST MOVE KEEPS ITS GLYPH.** He asked for the LINES to persist; keeping a sign
-  per round as well was an addition that did not survive the geometry. Four signs a round all anchor
-  in a gutter half a cell wide: on 96/4, the FIRST problem in the built-in set, that is thirteen
-  overlapping pairs, the worst thirteen pixels apart under fifty-one pixel discs, each erasing the
-  one before it. The glyph is now SVG text with a `paint-order:stroke` cream halo - it knocks the
-  line out of its own outline instead of out of a disc. The halo can still notch the BRACKET when
-  the minus lands on it, which is the round-0 subtract of most problems, so `buildArc` nudges that
-  one sign into the gutter when it would; do not remove that clamp thinking the halo covers it.
-  THE PLAQUE'S ARROW MUST STAY BELOW THE ARCS IN THE STACKING ORDER (`.dh-plaque` z-index 2, under
-  `.dh-arcs` at 3). `.dh-board` sets no stacking context, so a plaque at z-index 6 painted its
-  dividend arrow straight over the signs - and that arrow descends the gutter, which is the one
-  column every divide, multiply and equals anchors in. A halo cannot defend against something
-  stacked above it.
-  (4) **THE ARCS PAINT ABOVE THE CELLS, SO THEY MUST BE ROUTED AROUND THE DIGITS.** `buildArc`
-  searches widening and then flipped bows until the curve clears every digit showing. A digit
-  sitting in the same row right beside an endpoint gets a REDUCED clearance - the quotient digits
-  are shoulder to shoulder, so an arrow arriving at `q-2` has to pass the edge of `q-1` - but an arc
-  drawn ACROSS a row is not. Unrouted, the `=` to `q-3` on 9876/4 struck through three answers the
-  student had earned. REDUCED, NOT EXEMPT, and the difference is not academic: a blanket exemption
-  let arcs pass 0.03 cells from a quotient digit's centre when the numeral's ink is 0.09, and 60% of
-  three-digit problems did. The BUILT-IN SET IS NOT A SAMPLE - it happens to be clean, which is why
-  that went unseen for a review cycle; the contract sweeps ~900 teacher-shaped problems instead.
-  (5) A plaque over the house names the parts with his mnemonic (dividend = David in the house,
-  divisor = da visitor outside). ITS DIVIDEND ARROW GOES IN THROUGH THE DOOR - down the gutter, the
-  one column with no cell in any row, then right through the bracket - because the board's first row
-  is the QUOTIENT, so an arrow pointing down the column at "the dividend" points at the answer the
-  moment the first quotient digit lands.
-  TWO THINGS THAT BIT AND WILL BIT AGAIN. The opening "Get started" card is gated on
-  `presentation`/`embed`: `/teacher/present` embeds this tool in an iframe that sits at step 0
-  forever, nobody clicks the projector, and `.ip-screen-frame` is `pointer-events:none` so it could
-  not be dismissed from the iPad either. And the plaque is INSIDE the measured stage, so its height
-  comes off the board's height budget - spending all of it on the board put the last round back below
-  the fold on a 1366x768 Chromebook, the exact failure the sizing code was written to fix.
-  `npm run test:division-house-arcs` walks the real prompts through the real layout and looks at the
-  resulting curves. It exists because `typecheck` plus twenty engine checks passed straight over
-  every one of the collisions above: the engine contract can only see prompt data, and the geometry
-  used to be inlined in the component where nothing could reach it. Geometry that decides what the
-  room sees belongs in a lib with a contract, not in JSX.
+  single id. There is a CLEAR GUTTER COLUMN between the divisor and the bracket. And the rule under
+  a subtraction spans the number being taken away FROM as well as the product, with the difference
+  below it, the way it is written by hand.
+  **REBUILT TWICE IN TWO DAYS, AND THE SECOND REBUILD DELETED MOST OF THE FIRST. READ THIS BEFORE
+  BUILDING ANYTHING BACK.** On 2026-08-03 nine toolbar comments produced a board that traced six
+  arched connectors per round and kept every round on screen in its own colour. Steele ran that
+  board on 2026-08-04 and said, in three messages: "maybe no arrows. Just use the higlighting pulse
+  to show what is happening", then "no arrows or lines", then "the animation is clunky". So:
+  (1) **THERE ARE NO CONNECTORS ON THE BOARD. NONE.** The arched line that drew itself over 520ms,
+  the arrowhead that faded in behind it, the sign glyph that burst in at 1.5x and rotated, and the
+  plaque's two arrows down to the divisor and in through the door are ALL GONE. What is happening is
+  said by the two cells the move runs between lighting up together (`.dh-slot.act`, a RING so it
+  composes with the green of a placed digit instead of fighting it), in the round's colour, plus the
+  arithmetic written out in numbers in the right rail. The engine still traces the same six moves
+  per round and `visual.from`/`visual.to` are still the two numbers being operated on - they are now
+  READ rather than DRAWN. `npm run test:division-house-arcs` pins the absence.
+  (2) **THE PULSE IS WHAT A MISS BUYS, NOT WHAT THE QUESTION OPENS WITH** ("get rid of the circle.
+  have it say to select the number closest to the door inside the house and if they get it wrong
+  then have it pulse"). The drawn ring is gone and `.dh-slot.target` is applied only once `missed`
+  is set. This REVERSES the 2026-08-03 note that the always-on pulse was "the design, not a giveaway
+  to be tightened up later" - he tightened it.
+  (3) **THE MNEMONIC RAIL IS D-M-S-B-R, ON THE LEFT, BUILT LIKE GEMS'** ("just like we did on the
+  other tools like gems"). Five tiles, one colour each on `--c`, four states. R is NOT a fifth
+  operation - `HOUSE_OPS` stays four, because nothing is pressed for R - and its word changes:
+  "Repeat" while digits are still waiting, "Remainder" on the last round, which is where "No
+  remainder. All done. Nice!" gets said. B shows as SKIPPED on the last round; that grey tile is not
+  a gap, it is the reason the problem is ending. DO NOT put a strikethrough through the letters: a
+  struck-through capital D is a different letter, on a rail whose entire job is those five.
+  (4) **THE NUMBERS RIDE ALONGSIDE THE WORDS** ("show the math happening in numbers next to the step
+  so show the 9 divide sign 4"). Each prompt carries `work: {key, text}` - the line as it reads AFTER
+  that prompt is answered - and a line only ever GROWS by one piece. That growth is the whole safety
+  property: "9 ÷ 4 = 2" cannot appear while "where does that answer go?" is still on screen. The
+  contract asserts each piece is a prefix of the next and that only the last one contains an `=`.
+  The bring-down deliberately has NO work line; it is not a fact with an answer.
+  (5) **EVERY PROBLEM OPENS WITH THE STUDENT SETTING UP THE HOUSE** ("have students drag the divisor
+  to the outside and dividend inside... they click the spot and it slowly moves to it... or they
+  have to actually click and drag it"). The board starts BLANK - neither given digit is printed
+  until it is put there - and the two numbers sit as chips in the plaque equation. Drag, or tap to
+  pick up and tap a zone to place; a sub-`TAP_SLOP` press is a TAP, tested BEFORE the zone, which is
+  the trap Fraction Bars found. The travel is a straight transform between two MEASURED viewport
+  points over `FLY_MS`, not a path being traced - the arrows it used to follow are gone. This
+  REPLACED the "Get started" pop-out.
+  THE GRID IS NOT UNIFORM. The gutter is HALF a cell (`GUTTER_RATIO`), so NOTHING may compute an x
+  from a column by hand - `houseLayout()` in `src/lib/divisionHouseArcs.ts` owns
+  `colX`/`colW`/`colMid`/`centre`, and a stray `col * cellPx` is right on the divisor side and half
+  a cell wrong on the house side, which is the hardest kind of wrong to see in a screenshot.
+  `buildArc` IS PARKED, NOT DELETED, and its half of the arcs contract guards a capability nothing
+  calls. It is kept because this decision has now flipped twice and the collision routing took a
+  review cycle to get right; if the arcs stay gone, it and those checks go together.
+  THREE THINGS THAT BIT AND WILL BIT AGAIN. **The set-up act is gated on `presentation`/`embed`**,
+  read through the derived `setupPhase` and NEVER off `phase` directly - `/teacher/present` embeds
+  this tool in an iframe nobody touches, so a phase waiting to be dragged through would park an
+  empty house and two hovering numbers on the wall for the whole state. That skip cannot live in
+  `reset`: the layout effect that discovers `?embed=1` lands AFTER the first render's `reset`, so a
+  reset consulting `presentation` reads false and puts the projector back into setup. The plaque is
+  INSIDE the measured stage, so its height comes off the board's height budget - spending all of it
+  on the board put the last round below the fold on a 1366x768 Chromebook. And the plaque equation
+  is `white-space:nowrap`: with the two numbers as chips it wrapped the divisor onto its own line on
+  a two-column house, which is the one arrangement that makes a division problem unreadable.
 - `/decimal-steps` IS ITS OWN TOOL, NOT PART OF `/long-division` (Steele, 2026-08-02, unprompted:
   "this is its own tool from long division"). `/long-division` (`LongDivisionHouse`) is a
   WHOLE-NUMBER choreographed demo with no scoring, built for M1.T3.L4; `/decimal-steps`

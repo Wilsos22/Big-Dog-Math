@@ -1,13 +1,23 @@
-// Contract for what the division house actually DRAWS.
+// Contract for the division house's geometry.
 //
-// This suite exists because the first review of the arcs found four kinds of
-// collision on the DEFAULT problem set - lines struck through the digits they
-// were pointing at, sign glyphs erasing each other - and `npm run typecheck`
-// plus twenty engine checks had all passed straight over every one of them. The
-// engine contract can only see the prompt data; this one sees the geometry.
+// TWO HALVES, AND THEY ARE IN DIFFERENT STATES. Read this before adding to it.
+//
+// The LAYOUT checks are live: the non-uniform grid (the gutter is half a cell)
+// is what every column position on the board is computed from, and a stray
+// `col * cellPx` anywhere is right on the divisor side and half a cell wrong on
+// the house side.
+//
+// The ARC checks guard a PARKED capability. `buildArc` is no longer called by
+// anything - Steele took the connectors off the board on 2026-08-04 ("no arrows
+// or lines") - and the first check below is what pins that. The routing is kept
+// because this decision has already flipped twice in two days and the collision
+// search took a review cycle to get right: it was written after the first review
+// found four kinds of collision on the DEFAULT problem set, with `npm run
+// typecheck` plus twenty engine checks passing straight over every one. If the
+// arcs stay gone for good, this half and `buildArc` can go together.
 //
 // It walks the real prompts through the real layout and the real arc builder,
-// exactly as the component does, and then looks at the resulting curves.
+// and then looks at the resulting curves.
 //
 // Run: npm run test:division-house-arcs
 
@@ -179,30 +189,47 @@ check("no arc wanders off the board", () => {
   }
 });
 
-check("the component renders ONE sign glyph, not one per arc", () => {
-  // THE CHECK THIS REPLACED WAS INVERTED AND COVERED NOTHING. It asserted only
-  // that the signs WOULD collide if they were all drawn - which is true whether
-  // the component draws one or thirteen, so the actual fix had zero coverage,
-  // and its failure message told the next reader to relax the rule.
+check("THE BOARD DRAWS NO CONNECTORS, and marks no spot until a miss", () => {
+  // Three comments in a row on 2026-08-04, all pointing the same way: "maybe no
+  // arrows. Just use the higlighting pulse to show what is happening", then "no
+  // arrows or lines", then "the animation is clunky".
   //
-  // The render decision lives in JSX, so this is a source assertion, the same
-  // tool `classroom-surface-contract.mjs` uses on the classroom surfaces.
+  // So the entire connector layer came off: the arched line that drew itself
+  // over 520ms, the arrowhead that faded in behind it, the sign glyph that burst
+  // in at 1.5x and rotated, and the plaque's two arrows down to the divisor and
+  // in through the door. What the move IS gets said by the two cells it runs
+  // between lighting up, plus the arithmetic written out in the rail.
+  //
+  // Same batch: "get rid of the circle ... if they get it wrong then have it
+  // pulse", so the amber pulse is what a miss buys rather than what the question
+  // opens with.
+  //
+  // The render lives in JSX, so these are source assertions, the same tool
+  // `classroom-surface-contract.mjs` uses on the classroom surfaces.
   const src = readFileSync(new URL("../src/components/DivisionHouseBoard.tsx", import.meta.url), "utf8");
+  for (const gone of ["dh-arcs", "dh-arrowhead", "dh-sign", "dh-pop", "dh-ring", "dh-plaque-arrow", "buildArc"]) {
+    assert.ok(
+      !new RegExp(`className="[^"]*${gone}|<${gone}|\\b${gone}\\(`).test(src),
+      `${gone} is drawn again - Steele asked twice for no arrows or lines`,
+    );
+  }
+  // What says it instead.
+  assert.ok(/dh-slot\.act \{/.test(src), "the two cells in the move must light up");
   assert.ok(
-    /newestArc\?\.sign\s*\?/.test(src),
-    "the board must render the newest arc's sign",
+    /actSlots\.has\(slot\.id\) \? "act"/.test(src),
+    "the highlight must come from the move's own two spots, not from a guess",
   );
   assert.ok(
-    !/arcs\s*\.\s*filter\(\s*\(?\s*\w+\s*\)?\s*=>\s*\w+\.sign\s*\)\s*\.map/.test(src),
-    "the board must NOT map every arc to its own sign - four a round anchor in a half-cell gutter and erase each other",
+    /isTarget && revealTarget \? "target"/.test(src),
+    "the pulse must be gated on a miss, or the board answers the question it just asked",
   );
-  // And the glyph is knocked out of the line by its own outline, never by a
-  // disc: a disc big enough to read is wider than the gutter it sits in, and it
-  // bit the bracket and the digit beside it.
-  assert.ok(/paint-order:stroke/.test(src), "the sign needs its halo");
+  assert.ok(/const revealTarget = Boolean\(missed\)/.test(src), "a miss is what reveals the spot");
+  // The set-up travel is a straight line between two measured points. A motion
+  // path would be a curve traced along an arrow that no longer exists.
+  assert.ok(!/offset-path/.test(src), "no path-following - the arrows it followed are gone");
   assert.ok(
-    !/\.dh-sign\s*\{[^}]*border-radius:50%/.test(src),
-    "the sign must not go back to being an opaque disc",
+    /\.dh-fly\.go \{ transform:translate\(-50%,-50%\) translate\(var\(--dx\), var\(--dy\)\)/.test(src),
+    "the number must travel straight from where it was to where it is going",
   );
 });
 

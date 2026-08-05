@@ -19,16 +19,18 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   DEFAULT_HOUSE_SET,
+  HOUSE_CYCLE,
   HOUSE_OPS,
+  HOUSE_REPEAT_END_LABEL,
   buildHouseTrace,
   parseHouseSet,
   serializeHouseSet,
+  type HouseCycleKey,
   type HouseOp,
   type HousePrompt,
   type HouseSlot,
-  type HouseTrace,
 } from "@/lib/divisionHouse";
-import { buildArc, houseLayout, houseWidthUnits, type ArcGeometry } from "@/lib/divisionHouseArcs";
+import { houseLayout, houseWidthUnits } from "@/lib/divisionHouseArcs";
 import { LiveToolBanner, useLiveToolConfig } from "./useLiveToolConfig";
 
 const PROGRESS_KEY = "bdm-division-house";
@@ -52,43 +54,56 @@ const CELL_MAX = 168;
 /** Space between the plaque naming the parts and the top of the house. */
 const PLAQUE_GAP = 46;
 /**
- * One colour per round, cycling. "each round should keep the arched arrow
- * lines, but the new round should be a different color."
+ * One colour per round, cycling. "the new round should be a different color."
  *
- * The fourth is the design system's orange-600, which is the one orange in the
- * token set that clears AA on cream - `--bdb-amber` does not, and is spoken for
- * by the target pulse anyway.
+ * The colour survives the cut to one arc at a time and still earns its place:
+ * the line changing colour is what says a NEW round has started, on a board
+ * where every round otherwise draws the same six shapes in the same six places.
  */
 const ARC_COLORS = [
   "var(--bdb-coral-deep)",
   "var(--bdb-teal-deep)",
   "var(--bdb-brown)",
-  // NOT the ring's orange. A four-round problem would otherwise draw its last
-  // round in the same colour as the "tap here" ring. Ink-soft reads as pencil,
-  // is clearly none of the other three, and clears AA on cream at 5.6:1.
+  // Ink-soft reads as pencil, is clearly none of the other three, and clears AA
+  // on cream at 5.6:1.
   "var(--bdb-ink-soft)",
 ];
+/** The five letters, in cycle order, and what each one is filled with. */
+const CYCLE_COLORS: Record<string, string> = {
+  divide: "var(--bdb-teal)",
+  multiply: "var(--bdb-amber)",
+  subtract: "var(--bdb-coral)",
+  bringdown: "var(--bdb-brown)",
+  repeat: "var(--bdb-green)",
+};
 /**
- * What a finished round dims to.
+ * How long a number takes to travel to its spot. Steele asked for it SLOWLY -
+ * "they click the spot and it slowly moves to it" - and slow is the point: it
+ * is the one moment in this tool where a student watches a number take up its
+ * role instead of being asked something.
+ */
+const FLY_MS = 850;
+/**
+ * Pointer travel under which a press counts as a TAP, not a drag.
  *
- * 0.32 was the first number tried and it was wrong: composited over cream a
- * coral arc at 0.32 measures about 1.6:1, which on a projector at the back of
- * the room is not a faded pathway, it is no pathway. The whole point of keeping
- * the rounds is that they can still be SEEN. 0.55 lands near 2.6:1 - clearly
- * behind the live round, still legibly there.
+ * A tap PICKS THE NUMBER UP and leaves it held, so the next tap on a zone
+ * places it. Fraction Bars learned this the hard way: a drop handler that reads
+ * zones first swallows every tap on touch, which is exactly the hardware this
+ * runs on.
  */
-const ARC_FADED = 0.55;
-/**
- * The ring round the spot to tap. NOT `--bdb-amber`, which measures 1.72:1 on
- * cream - the ring exists because Steele said the amber pulse alone was easy to
- * miss from the back of the room, so drawing it in the same amber would have
- * missed for the same reason. This is the design system's orange-600, 3.71:1,
- * which clears the 3:1 floor for a non-text mark and still reads as amber's
- * darker cousin over the pulse it sits on.
- */
-const RING_COLOR = "#c4660a";
+const TAP_SLOP = 12;
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+
+/** The two numbers the student puts on the board before the drill starts. */
+type SetupPart = "dividend" | "divisor";
+
+/** Which drop zone is under a point, whatever is capturing the pointer. */
+const zoneUnder = (x: number, y: number): string | null => {
+  const el = document.elementFromPoint(x, y) as HTMLElement | null;
+  return el?.closest<HTMLElement>("[data-drop]")?.dataset.drop ?? null;
+};
+
 
 /**
  * A layout effect on the client, a plain one on the server.
@@ -122,7 +137,6 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
     if (raw && parseHouseSet(raw).problems.length) setLinked(raw);
     const embedded = q.get("presentation") === "1" || q.get("embed") === "1";
     setPresentation(embedded);
-    if (!embedded) setShowStart(true);
   }, []);
 
   const source = published ?? linked ?? set ?? "";
@@ -139,21 +153,59 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
   /** The spot they just got wrong, with a nonce so the shake replays. */
   const [wrongSlot, setWrongSlot] = useState<{ id: string; n: number } | null>(null);
   const [cheer, setCheer] = useState(0);
-  const [visualKey, setVisualKey] = useState(0);
   const [wrapped, setWrapped] = useState(false);
   /**
-   * The card that opens each problem - "select the number closest to the door".
+   * THE SET-UP ACT, which is how every problem now opens.
    *
-   * Starts FALSE and is turned on before the first paint, not on by default.
-   * This page is deliberately static, so the server-rendered HTML is what the
-   * browser paints first - and with it defaulted on, the projector showed the
-   * card for a beat on every state change and every deploy reload before
-   * hydration could work out it was a projector. Off-then-on costs a normal
-   * student nothing, because the layout effect lands before their first paint
-   * too.
+   * Steele: "have students drag the divisor to the outside and dividend inside.
+   * then say yes! make this an animation showing the divisor and dividend moving
+   * down to their places. following the arrows, then the arrows can disappear."
+   *
+   * It replaces the "Get started" pop-out, which said "select the number closest
+   * to the house door" - a sentence the first prompt already says, and which two
+   * of the same batch of comments asked to be carried by words rather than by a
+   * mark on the board. So the opening is now a thing the student DOES.
+   *
+   * The board starts blank: neither the dividend nor the divisor is printed
+   * until it has been put there.
+   *
+   * READ IT THROUGH `setupPhase`, NEVER DIRECTLY. The projector has to skip this
+   * act - nobody ever touches that copy, so a phase waiting to be dragged
+   * through would leave the wall showing an empty house with two hovering
+   * numbers for the whole state, the same trap the opening card fell into. That
+   * skip cannot live in `reset`: the layout effect that discovers `?embed=1`
+   * lands AFTER the first render's `reset` has already run, so a reset that
+   * consulted `presentation` would read false and put the projector right back
+   * into setup. A derived gate has no such ordering to get wrong.
    */
-  const [showStart, setShowStart] = useState(false);
+  const [phase, setPhase] = useState<"setup" | "solve">("setup");
+  const [placed, setPlaced] = useState<Record<SetupPart, "out" | "flying" | "in">>(
+    { dividend: "out", divisor: "out" },
+  );
+  /** Picked up by a tap, waiting for a zone to be tapped. */
+  const [held, setHeld] = useState<SetupPart | null>(null);
+  const [drag, setDrag] = useState<SetupPart | null>(null);
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const [setupMiss, setSetupMiss] = useState<string | null>(null);
+  const [wrongZone, setWrongZone] = useState<{ zone: string; n: number } | null>(null);
+  /**
+   * The number in transit, in viewport pixels: where it started and how far it
+   * has to go. Steele: "they click the spot and it slowly moves to it".
+   *
+   * A straight travel between two measured points, not a curve traced along
+   * something - the arrows it used to follow are gone ("no arrows or lines"),
+   * and a slow line from the equation to the box is the whole of what he asked
+   * for. `go` is flipped a frame later so the transition has a start state to
+   * move away from.
+   */
+  const [fly, setFly] = useState<{ part: SetupPart; x: number; y: number; dx: number; dy: number } | null>(null);
+  const [flyGo, setFlyGo] = useState(false);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const flyTimers = useRef<number[]>([]);
+  const tryPlaceRef = useRef<(part: SetupPart, zone: string) => void>(() => {});
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
   const plaqueRef = useRef<HTMLDivElement | null>(null);
   const targetRef = useRef<HTMLButtonElement | null>(null);
   const askRef = useRef<HTMLDivElement | null>(null);
@@ -168,8 +220,18 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
     setMissed(null);
     setWrongSlot(null);
     setWrapped(false);
-    setVisualKey(0);
-    setShowStart(true);
+    flyTimers.current.forEach((t) => window.clearTimeout(t));
+    flyTimers.current = [];
+    setPlaced({ dividend: "out", divisor: "out" });
+    setHeld(null);
+    setDrag(null);
+    setDragPos(null);
+    setDragOver(null);
+    setSetupMiss(null);
+    setWrongZone(null);
+    setFly(null);
+    setFlyGo(false);
+    setPhase("setup");
   }, []);
 
   const liveToolId = liveTool?.id;
@@ -244,6 +306,55 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
     catch { /* progress just will not survive a reload */ }
   }, [signature, idx]);
 
+  /** Both numbers home: say yes, then hand over to the drill. */
+  useEffect(() => {
+    if (phase !== "setup" || presentation) return;
+    if (placed.dividend !== "in" || placed.divisor !== "in") return;
+    setCheer((c) => c + 1);
+    const b = window.setTimeout(() => setPhase("solve"), 700);
+    return () => window.clearTimeout(b);
+  }, [phase, presentation, placed]);
+
+  /**
+   * THE SET-UP DRAG, ON POINTER CAPTURE.
+   *
+   * Fraction Bars does this with window listeners attached from an effect keyed
+   * on the drag state, and that works - do not go "fix" it on the strength of
+   * this comment. Capture is used here because it needs nothing to be attached
+   * in time: the pointerdown that starts the gesture also claims every later
+   * move and the release for that one button, so there is no window between the
+   * press and React's re-render for a fast flick to fall into, and no window
+   * listener to leak if the component goes away mid-gesture.
+   *
+   * `touch-action:none` on the chip is the other half - without it the browser
+   * claims the gesture as a scroll before we see a single move.
+   *
+   * The one rule it keeps from Fraction Bars: TEST THE TAP BEFORE THE ZONE. A
+   * tap and a missed drop are identical from the pointer's side, so resolving
+   * the zone first swallows every tap on touch.
+   */
+  const onChipMove = (e: React.PointerEvent) => {
+    if (!drag) return;
+    setDragPos({ x: e.clientX, y: e.clientY });
+    setDragOver(zoneUnder(e.clientX, e.clientY));
+  };
+  const onChipUp = (e: React.PointerEvent) => {
+    if (!drag) return;
+    const start = dragStartRef.current;
+    const moved = start ? Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_SLOP : false;
+    const zone = zoneUnder(e.clientX, e.clientY);
+    setDrag(null);
+    setDragPos(null);
+    setDragOver(null);
+    // A tap leaves the number HELD, so the next tap on a zone places it.
+    if (!moved) return;
+    if (zone) tryPlaceRef.current(drag, zone);
+    else setHeld(null);
+  };
+
+
+  useEffect(() => () => flyTimers.current.forEach((t) => window.clearTimeout(t)), []);
+
   // Keep the spot the student has to click on screen. Even sized to fit, a
   // short window plus a four-round problem can push the last round below the
   // fold, and the amber pulse is the only thing telling them where to tap.
@@ -262,19 +373,33 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
   const prompt: HousePrompt | undefined = trace.prompts[step];
   const done = step >= trace.prompts.length;
   const filledSet = new Set(filled);
+  /** The set-up act, with the projector held out of it. */
+  const setupPhase = phase === "setup" && !presentation;
   /**
-   * EVERY connector drawn so far, oldest first - not just this round's.
+   * THE CURRENT MOVE, SHOWN BY LIGHTING THE TWO NUMBERS IN IT. NO LINE.
    *
-   * This inverts what the board used to do. One `activeVisual` was found for
-   * the current round and everything before it was thrown away, so a student
-   * saw six separate moments and never the shape they add up to. Steele:
-   * "each round should keep the arched arrow lines, but the new round should be
-   * a different color. I want students to see the pathway the numbers take
-   * every time." They also survive `done` now, because the completed pathway is
-   * the thing worth looking at once the arithmetic is finished.
+   * Steele, 2026-08-04, in three steps and they all point the same way: "maybe
+   * no arrows. Just use the higlighting pulse to show what is happening", then
+   * "no arrows or lines", then "the animation is clunky".
+   *
+   * What went is the whole connector system - the arched line that drew itself
+   * over 520ms, the arrowhead that faded in behind it, and the sign glyph that
+   * burst in at 1.5x and rotated. On a board where four of every six moves
+   * anchor on the same half-cell gutter, that was a lot of motion saying
+   * something the two lit cells say at a glance.
+   *
+   * The move itself is unchanged: the engine still traces the same six per
+   * round, and `visual.from` / `visual.to` are still exactly the two numbers
+   * being operated on. They are now READ as a highlight rather than drawn as a
+   * curve, and the arithmetic is spelled out in numbers in the rail beside it.
+   *
+   * The geometry that used to draw them is still in `divisionHouseArcs.ts` and
+   * still under contract - this decision has flipped twice in two days, and the
+   * routing in there took a review cycle to get right.
    */
-  const liveRound = trace.prompts[Math.min(step, Math.max(0, trace.prompts.length - 1))]?.round ?? 0;
-  const drawnPrompts = trace.prompts.slice(0, step).filter((p) => p.visual);
+  const liveVisual = trace.prompts.slice(0, step).filter((p) => p.visual).slice(-1)[0];
+  const actSlots = new Set(liveVisual?.visual ? [liveVisual.visual.from, liveVisual.visual.to] : []);
+  const actColor = ARC_COLORS[(liveVisual?.round ?? 0) % ARC_COLORS.length];
 
   const advance = (p: HousePrompt) => {
     setFilled((f) => [...f, ...p.fill]);
@@ -285,11 +410,21 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
     // overrides the amber pulse when it later becomes the spot to tap.
     setWrongSlot(null);
     setCheer((c) => c + 1);
-    if (p.visual) setVisualKey((v) => v + 1);
-    // A right answer dismisses the opening card as surely as the button does -
-    // otherwise it hangs over the board for the rest of the problem.
-    setShowStart(false);
     setStep((s) => s + 1);
+  };
+
+  const startDrag = (part: SetupPart, e: React.PointerEvent) => {
+    if (!setupPhase || placed[part] !== "out") return;
+    // Without this the browser starts its own text/image drag and the pointer
+    // stream stops arriving halfway through the gesture.
+    e.preventDefault();
+    // Everything from here to the release comes to this button, so nothing
+    // depends on a listener being attached in time.
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* older engines */ }
+    setDrag(part);
+    setHeld(part);
+    setDragPos({ x: e.clientX, y: e.clientY });
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
   };
 
   const clickSlot = (id: string) => {
@@ -338,8 +473,7 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
   // contract can check it. Nothing in this file may compute an x from a column
   // by hand.
   const layout = houseLayout(trace, cellPx, rowPx);
-  const { colW, colX, colMid, centre, boardW, boardH, gutterX, houseLeft, gridColumns } = layout;
-  const gutterPx = colW(trace.divisorWidth);
+  const { colW, colX, boardW, boardH, houseLeft, gridColumns } = layout;
   /** The cell the scroll keeper follows - the first spot the prompt names. */
   const firstTargetId = prompt?.kind === "slot" ? prompt.slots?.[0] : undefined;
 
@@ -374,33 +508,8 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
 
   const done_ = done;
 
-  /** Arrowhead size, scaled with the board but never a dot and never a wedge. */
-  const headPx = clamp(cellPx * 0.115, 8, 26);
-  /**
-   * The sign's knockout disc is SIZED TO THE GUTTER, not to the font.
-   *
-   * Every ÷, x and = anchors in the gutter column, and the gutter is half a
-   * cell now - a disc sized in rem spilled over the divisor on one side and the
-   * first digit inside the house on the other, and it does that once per round
-   * on a board that keeps every round.
-   */
-  const signPx = Math.max(26, Math.min(gutterPx * 1.15, cellPx * 0.62));
   /** The plaque's chrome rides the same scale as everything else on the board. */
   const plaqueGap = Math.round(PLAQUE_GAP * clamp(k, 1, 1.5));
-  const arrowW = Math.max(3, Math.round(3 * k));
-  const arrowHead = Math.max(9, Math.round(10 * k));
-
-  /**
-   * Every cell showing a digit right now - what an arc may not be drawn over.
-   *
-   * The arcs paint ABOVE the cells, so this is not a nicety: without it the
-   * "the answer goes up here" arc is a solid line struck through the answers
-   * already up there, which happens from round one on every problem in the
-   * built-in set.
-   */
-  const shownDigits = trace.slots
-    .filter((s) => s.given || filledSet.has(s.id))
-    .map((s) => ({ x: colMid(s.col), y: (s.rowIndex + 0.5) * rowPx }));
 
   /**
    * What each cell of a merged number should CALL itself.
@@ -436,58 +545,128 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
       flush();
     });
   }
-  const arcBoard = { cellPx, rowPx, boardW, boardH, gutterX, houseLeft, digits: shownDigits };
-  const arcs = drawnPrompts
-    .map((p) => {
-      const v = p.visual;
-      const a = v ? centre(v.from) : null;
-      const b = v ? centre(v.to) : null;
-      if (!v || !a || !b) return null;
-      return buildArc({ key: p.id, round: p.round, sign: v.sign, from: a, to: b }, arcBoard);
-    })
-    .filter((x): x is ArcGeometry => Boolean(x));
-  const arcColor = (round: number) => ARC_COLORS[round % ARC_COLORS.length];
-  const arcOpacity = (round: number) => (round < liveRound ? ARC_FADED : 1);
-  const newestArc = arcs[arcs.length - 1];
+  /**
+   * NOTHING MARKS THE SPOT UNTIL THEY HAVE MISSED IT.
+   *
+   * Steele, having watched a ring draw itself round the answer: "get rid of the
+   * circle. have it say to select the number closest to the door inside the
+   * house and if they get it wrong then have it pulse." So the words carry the
+   * instruction, and the amber pulse becomes what a miss buys you rather than
+   * what the question opens with. `missed` already holds exactly that state -
+   * set on a wrong tap, cleared by `advance`.
+   */
+  const revealTarget = Boolean(missed);
 
   /**
-   * The ring drawn round the spot to click. Steele: "Draw attention to this
-   * number more by either make it flash more demonstrably or animate a circle
-   * being drawn around it". The amber pulse stays underneath it - on a
-   * projector at the back of the room the pulse alone was easy to miss.
+   * WHERE EACH NUMBER IS GOING, in the board's own coordinates.
+   *
+   * The divisor lands on the middle of its own columns; the dividend lands on
+   * the middle of the house, because it is one number spread across every
+   * column in there. Both sit in the dividend ROW, which is row 1 - the
+   * quotient row is above it and stays empty until the drill starts.
    */
-  const targetRing = (() => {
-    if (!prompt || prompt.kind !== "slot") return null;
-    const ss = (prompt.slots ?? [])
-      .map((id) => trace.slots.find((s) => s.id === id))
-      .filter((s): s is NonNullable<typeof s> => Boolean(s));
-    if (!ss.length) return null;
-    const cols = ss.map((s) => s.col);
-    const lo = Math.min(...cols);
-    const hi = Math.max(...cols);
-    const left = colX(lo);
-    const right = colX(hi) + colW(hi);
-    return {
-      cx: (left + right) / 2,
-      cy: (ss[0].rowIndex + 0.5) * rowPx,
-      // Wider than the cells it circles, and a touch flatter, so it reads as a
-      // ring round the NUMBER rather than a second border on the box.
-      rx: (right - left) / 2 + Math.max(5, cellPx * 0.06),
-      ry: rowPx / 2 - 3,
-    };
+  const partTarget: Record<SetupPart, { x: number; y: number }> = {
+    divisor: { x: colX(0) + (colX(trace.divisorWidth) - colX(0)) / 2, y: rowPx * 1.5 },
+    dividend: { x: houseLeft + (boardW - houseLeft) / 2, y: rowPx * 1.5 },
+  };
+  const partValue: Record<SetupPart, number> = { divisor: trace.divisor, dividend: trace.dividend };
+  /** A given digit is on the board only once its number has been put there. */
+  const givenShown = (s: HouseSlot) =>
+    !setupPhase || placed[s.row === "divisor" ? "divisor" : "dividend"] === "in";
+
+  /**
+   * Put a number where the student dropped it, or say why it does not go there.
+   *
+   * The nudge names what the SPOT is for, never which number belongs in it -
+   * deciding that 96 is the one being divided up is the whole content of this
+   * act, and a hint that hands it over turns the drag into a formality.
+   */
+  const tryPlace = (part: SetupPart, zone: string) => {
+    if (zone !== "divisor" && zone !== "dividend") return;
+    if (zone !== part) {
+      setSetupMiss(zone === "divisor"
+        ? "That spot outside is for da visitor - the number we are dividing BY."
+        : "The house is David's - the number being divided up lives in there.");
+      setWrongZone((w) => ({ zone, n: (w?.n ?? 0) + 1 }));
+      return;
+    }
+    setSetupMiss(null);
+    setWrongZone(null);
+    setHeld(null);
+    setPlaced((p) => (p[part] === "out" ? { ...p, [part]: "flying" } : p));
+    // Measure both ends NOW, while the chip is still on screen, and travel
+    // between them. Read off the live DOM rather than computed from the layout:
+    // the chip sits inside a plaque whose type scales with the board, so where
+    // it actually is depends on wrapping this file does not model.
+    const chip = document.querySelector<HTMLElement>(`.dh-chip[data-part="${part}"]`);
+    const board = boardRef.current;
+    if (chip && board) {
+      const c = chip.getBoundingClientRect();
+      const b = board.getBoundingClientRect();
+      const from = { x: c.x + c.width / 2, y: c.y + c.height / 2 };
+      const to = { x: b.x + partTarget[part].x, y: b.y + partTarget[part].y };
+      setFly({ part, x: from.x, y: from.y, dx: to.x - from.x, dy: to.y - from.y });
+      setFlyGo(false);
+      // Two frames: one to paint it at the start, one to move it. A single rAF
+      // can be coalesced into the same paint and the travel never happens.
+      requestAnimationFrame(() => requestAnimationFrame(() => setFlyGo(true)));
+    }
+    flyTimers.current.push(window.setTimeout(() => {
+      setPlaced((p) => (p[part] === "flying" ? { ...p, [part]: "in" } : p));
+      setFly((f) => (f?.part === part ? null : f));
+    }, FLY_MS));
+  };
+  tryPlaceRef.current = tryPlace;
+
+  /**
+   * THE ARITHMETIC, IN NUMBERS, BESIDE THE WORDS. Steele: "show the math
+   * happening in numbers next to the step so show the 9 divide sign 4 between
+   * the blocks and the words on the right."
+   *
+   * One line per fact of the round the student is in, each showing exactly what
+   * has been earned - the engine grows them a piece at a time, so the panel can
+   * simply print the latest state of each and never leak an answer.
+   */
+  const workLines = (() => {
+    if (setupPhase || done || !prompt) return [];
+    const byKey = new Map<string, string>();
+    const order: string[] = [];
+    for (const p of trace.prompts.slice(0, step)) {
+      if (!p.work || p.round !== prompt.round) continue;
+      if (!byKey.has(p.work.key)) order.push(p.work.key);
+      byKey.set(p.work.key, p.work.text);
+    }
+    return order.map((key, i) => ({ key, text: byKey.get(key)!, live: i === order.length - 1 }));
   })();
 
-  const houseMid = houseLeft + (boardW - houseLeft) / 2;
-  const divisorMid = colX(0) + (colX(trace.divisorWidth) - colX(0)) / 2;
   /**
-   * The card that opens a problem. The "closest to the door" wording only holds
-   * when one digit is the answer - when the divisor does not fit the first
-   * digit the nearest number is exactly the wrong click, so that case borrows
-   * the prompt's own words instead.
+   * THE D-M-S-B-R RAIL. Steele: "make the mnemonic device rail on the left side.
+   * A Big D, M, S, B, R just like we did on the other tools like gems."
+   *
+   * Read off the prompts rather than counted: a letter is done when this round
+   * has no steps of it left, active when the student is standing in one, and
+   * SKIPPED when the round has none at all - which is what B is on the last
+   * round, where there is nothing left to bring down. That grey B is not a gap
+   * in the picture, it is the reason the problem is about to end.
    */
-  const startCopy = (trace.prompts[0]?.slots?.length ?? 1) > 1
-    ? trace.prompts[0].ask
-    : "Select the number closest to the house door.";
+  const lastRound = trace.prompts[trace.prompts.length - 1]?.round ?? 0;
+  const railRound = done ? lastRound : prompt?.round ?? 0;
+  const onLastRound = railRound === lastRound;
+  const cycleState = (key: HouseCycleKey): "done" | "active" | "skipped" | "upcoming" => {
+    if (key === "repeat") {
+      // R is where the cycle goes NEXT, so it is never a step you stand in. It
+      // lights once the round has actually repeated, and on the last round it
+      // becomes the remainder, which is the one thing left to say.
+      if (done) return "done";
+      if (onLastRound && prompt?.cycle === "subtract") return "active";
+      return railRound > 0 ? "done" : "upcoming";
+    }
+    const mine = trace.prompts.filter((p) => p.round === railRound && p.cycle === key);
+    if (!mine.length) return "skipped";
+    const left = trace.prompts.some((p, i) => i >= step && p.round === railRound && p.cycle === key);
+    if (!left) return "done";
+    return prompt?.cycle === key ? "active" : "upcoming";
+  };
 
   return (
     <div className="dh-root" style={{ ["--dh-k" as string]: k }}>
@@ -501,8 +680,24 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
         .dh-btn:focus-visible, .dh-slot:focus-visible, .dh-op:focus-visible {
           outline:3px solid var(--bdb-brown); outline-offset:2px; }
 
-        .dh-grid { display:grid; grid-template-columns:minmax(300px,1.5fr) minmax(280px,1fr); gap:26px; align-items:start; }
-        @media (max-width:960px) { .dh-grid { grid-template-columns:1fr; } }
+        /* THREE COLUMNS NOW: the mnemonic rail, the house, the words. Steele
+           asked for the rail "on the left side ... just like we did on the other
+           tools like gems", which is also the manipulative convention in this
+           repo - reference in a large left rail, the thing being acted on in the
+           middle, what the student is building on the right. */
+        .dh-grid { display:grid; grid-template-columns:auto minmax(280px,1.5fr) minmax(260px,1fr);
+          gap:22px; align-items:start; }
+        /* The words drop under the board before the rail does: the rail is the
+           reference you glance at, and it is worth far less once it is below a
+           board taller than the screen. */
+        @media (max-width:1180px) {
+          .dh-grid { grid-template-columns:auto minmax(0,1fr); }
+          .dh-ask { grid-column:1 / -1; }
+        }
+        @media (max-width:760px) {
+          .dh-grid { grid-template-columns:1fr; }
+          .dh-rail { flex-direction:row; flex-wrap:wrap; justify-content:center; }
+        }
 
         .dh-stage { display:grid; justify-items:center; padding:10px 0 20px; min-width:0; }
         .dh-board { position:relative; }
@@ -513,15 +708,6 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
            divisor (da visitor outside the house)". The mnemonic is his and it
            is the point - the two words are near-identical on the page and a
            sixth grader mixes them up all year. */
-        /* z-index 2 puts the plaque's overflowing arrow ABOVE the empty cells it
-           descends through and BELOW the arcs and their signs.
-           It was 6, and that was a bug of exactly the kind it was meant to fix:
-           .dh-board sets no stacking context, so 6 sat above .dh-arcs at 3, and
-           the dividend arrow descends the gutter - the one column every divide,
-           multiply and equals sign anchors in. Measured, the teal line passed
-           within 0-2px of the centre of the equals and multiply glyphs on every
-           round of every problem, and crossed four to nine retained arcs. A
-           cream halo cannot defend against something stacked on top of it. */
         .dh-plaque { position:relative; z-index:2; display:grid; gap:7px; }
         .dh-plaque-title { display:flex; justify-content:center; min-width:0; }
         .dh-plaque-eq { display:inline-block; padding:7px 20px; border-radius:14px;
@@ -531,7 +717,14 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
           /* A short house plus a two-digit divisor makes the box wider than the
              span it is centred over, and a flex item will not shrink below its
              own min-content without this. */
-          max-width:100%; box-sizing:border-box; }
+          max-width:100%; box-sizing:border-box;
+          /* NEVER BREAK THE EQUATION ACROSS TWO LINES. In set-up the two numbers
+             are chips with their own padding and borders, which pushed "96 ÷ 4"
+             just past the width of a two-column house and wrapped the divisor
+             onto its own row - the one arrangement that makes a division problem
+             unreadable. Overflowing the span it is centred over is the lesser
+             evil, and only happens on the narrowest houses. */
+          white-space:nowrap; }
         .dh-plaque-tags { display:grid; align-items:start; }
         .dh-tag { display:grid; justify-items:center; gap:1px; text-align:center; padding:0 4px; }
         .dh-tag i { font-style:normal; font-size:calc(0.66rem * var(--dh-k)); font-weight:800;
@@ -539,20 +732,59 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
         .dh-tag b { font-size:calc(0.8rem * var(--dh-k)); font-weight:800; line-height:1.2; }
         .dh-tag.visitor { color:var(--bdb-brown); }
         .dh-tag.david { color:var(--bdb-teal-deep); }
-        .dh-plaque-arrows { position:absolute; left:0; top:100%; pointer-events:none; overflow:visible; }
-        .dh-plaque-arrow { fill:none; stroke-linecap:round; stroke-linejoin:round; }
+        /* THE SET-UP ACT: the two numbers start in the equation and get dragged
+           to their places. A chip is a real button so a keyboard or a switch can
+           pick it up, and touch-action:none is what stops a Chromebook or an
+           iPad scrolling the page instead of dragging the number. */
+        .dh-chip { font:inherit; font-size:inherit; font-weight:inherit; color:inherit;
+          font-variant-numeric:tabular-nums; padding:1px 7px; margin:0 1px; border-radius:9px;
+          border:2px dashed var(--bdb-brown); background:color-mix(in srgb, var(--bdb-amber) 20%, transparent);
+          cursor:grab; touch-action:none; transition:transform 120ms ease, opacity 200ms ease; }
+        .dh-chip:hover { transform:translateY(-2px); }
+        .dh-chip.held { border-style:solid; background:color-mix(in srgb, var(--bdb-amber) 46%, transparent);
+          transform:translateY(-3px) scale(1.04); }
+        .dh-chip.gone { opacity:0.2; border-color:transparent; background:transparent; cursor:default; }
+        .dh-chip:disabled { cursor:default; }
 
-        /* The card that opens each problem. */
-        .dh-start { position:absolute; left:50%; top:44%; transform:translate(-50%,-50%); z-index:9;
-          display:grid; gap:10px; justify-items:start; padding:18px 20px;
-          border-radius:16px; border:2px solid var(--bdb-brown); background:var(--bdb-card);
-          box-shadow:0 18px 40px rgba(32,30,26,0.18);
-          animation:dh-start-in 260ms cubic-bezier(.2,1.4,.4,1); }
-        @keyframes dh-start-in { from { opacity:0; transform:translate(-50%,-42%) scale(0.94); } }
-        .dh-start-t { margin:0; font-size:calc(0.72rem * var(--dh-k)); font-weight:800;
-          letter-spacing:0.14em; text-transform:uppercase; color:var(--bdb-brown); }
-        .dh-start-b { margin:0; font-size:calc(1.1rem * var(--dh-k)); font-weight:800; line-height:1.32; }
-        @media (prefers-reduced-motion: reduce) { .dh-start { animation:none; } }
+        /* Where the two numbers land. Big targets on purpose - these are the
+           first thing a finger touches on this tool. */
+        .dh-zone { position:absolute; z-index:4; font:inherit; border-radius:12px; cursor:pointer;
+          border:2px dashed var(--bdb-brown); background:color-mix(in srgb, var(--bdb-brown) 7%, transparent);
+          display:grid; place-items:end center; padding-bottom:3px;
+          font-size:calc(0.62rem * var(--dh-k)); font-weight:800; letter-spacing:0.1em;
+          text-transform:uppercase; color:var(--bdb-brown);
+          transition:background 140ms ease, border-color 140ms ease, transform 140ms ease; }
+        .dh-zone.over { border-style:solid; background:color-mix(in srgb, var(--bdb-teal) 22%, transparent);
+          border-color:var(--bdb-teal-deep); color:var(--bdb-teal-deep); transform:scale(1.02); }
+        .dh-zone.set { opacity:0; pointer-events:none; }
+        .dh-zone.bad-a { animation:dh-shake 320ms ease; border-color:var(--bdb-coral-deep);
+          background:color-mix(in srgb, var(--bdb-coral) 16%, transparent); }
+        .dh-zone.bad-b { animation:dh-shake-b 320ms ease; border-color:var(--bdb-coral-deep);
+          background:color-mix(in srgb, var(--bdb-coral) 16%, transparent); }
+
+        /* THE NUMBER MOVING TO ITS SPOT. Steele: "just have the divisor and
+           dividend BOTH slowly fade into their spots ... they click the spot and
+           it slowly moves to it."
+           A plain transform transition between two measured points - one
+           straight line, no path to trace, nothing drawn behind it. It is
+           position:fixed so it can cross out of the plaque and into the board
+           without either one clipping it. */
+        .dh-fly { position:fixed; z-index:80; pointer-events:none;
+          font-size:calc(1.9rem * var(--dh-k)); font-weight:800; font-variant-numeric:tabular-nums;
+          color:var(--bdb-ink); transform:translate(-50%,-50%);
+          transition:transform ${FLY_MS}ms cubic-bezier(.32,0,.24,1); }
+        .dh-fly.go { transform:translate(-50%,-50%) translate(var(--dx), var(--dy)); }
+        /* Under reduce it simply appears where it was going. */
+        @media (prefers-reduced-motion: reduce) {
+          .dh-fly { transition:none; transform:translate(-50%,-50%) translate(var(--dx), var(--dy)); }
+        }
+
+        /* The number under the pointer while it is being dragged. */
+        .dh-ghost { position:fixed; z-index:80; pointer-events:none; transform:translate(-50%,-52%);
+          font-size:calc(1.8rem * var(--dh-k)); font-weight:900; font-variant-numeric:tabular-nums;
+          color:var(--bdb-ink); padding:4px 12px; border-radius:12px;
+          border:2px solid var(--bdb-brown); background:var(--bdb-card);
+          box-shadow:0 12px 26px rgba(32,30,26,0.22); }
         .dh-cells { display:grid; position:relative; z-index:1; }
         /* Every cell is a rectangle you can click, whether or not the answer
            uses it - otherwise "where does it go" is "click the only open box". */
@@ -566,11 +798,24 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
            of the reps they have just done rather than resetting to plain ink. */
         .dh-slot.filled { border-style:solid; border-color:var(--bdb-green-deep);
           background:color-mix(in srgb, var(--bdb-green) 17%, transparent); color:var(--bdb-green-deep); }
-        .dh-slot.land { animation:dh-land 420ms cubic-bezier(.2,1.6,.4,1); }
-        @keyframes dh-land { 0% { transform:scale(0.4); opacity:0; } 60% { transform:scale(1.15); } 100% { transform:scale(1); opacity:1; } }
-        /* The spot the next number goes into pulses (Steele's ask). This is a
-           choreography trainer, so showing WHERE while still asking WHICH
-           OPERATION is the point - the naming stays a real decision. */
+        /* A DIGIT ARRIVING SETTLES, IT DOES NOT BOUNCE. This was 420ms of
+           scale 0.4 -> 1.15 -> 1, and a springy overshoot on every one of the
+           twenty-odd placements in a problem is a good part of what "the
+           animation is clunky" was about. */
+        .dh-slot.land { animation:dh-land 260ms ease-out; }
+        @keyframes dh-land { from { transform:scale(0.92); opacity:0; } to { transform:scale(1); opacity:1; } }
+        /* The dividend and the divisor fade up as they arrive, so the travelling
+           number hands over to the printed one instead of snapping. */
+        .dh-slot.given.arrive { animation:dh-arrive 320ms ease-out; }
+        @keyframes dh-arrive { from { opacity:0; } to { opacity:1; } }
+        @media (prefers-reduced-motion: reduce) { .dh-slot.given.arrive { animation:none; } }
+        /* THE PULSE IS WHAT A MISS BUYS YOU, not what the question opens with.
+           Steele: "have it say to select the number closest to the door inside
+           the house and if they get it wrong then have it pulse." So the ask
+           carries the instruction and the board stays quiet until the student
+           has actually got it wrong - the target class is only applied once a
+           miss has been recorded. The drawn ring that used to sit on top of
+           this went with the same comment ("get rid of the circle"). */
         .dh-slot.target { border-style:solid; border-color:var(--bdb-amber);
           animation:dh-target 1.15s ease-in-out infinite; }
         @keyframes dh-target {
@@ -606,86 +851,83 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
         .dh-l { position:absolute; border-left:5px solid var(--bdb-ink); border-top:5px solid var(--bdb-ink);
           border-top-left-radius:14px; pointer-events:none; z-index:0; }
 
-        /* CONNECTORS ARE SOLID AND ARCHED, AND THEY DRAW.
-           Steele, 2026-08-03: "make the connectors not dashed lines but a solid
-           line", and "have them appear like starting at the back where it
-           starts from and make it slowly appear moving toward the end of the
-           arrow". pathLength:1 makes one dash cover a curve of any length, so
-           the same rule animates a 40px drop and a 600px sweep at one speed. */
-        /* STROKE WIDTHS RIDE THE BOARD'S SCALE. At a 168px cell the digits are
-           54px tall, and a fixed 3.4px pathway - the thing Steele asked to be
-           kept visible - was a hairline behind them on a 55-inch panel. */
-        .dh-arcs { position:absolute; left:0; top:0; z-index:3; pointer-events:none; overflow:visible; }
-        .dh-arc { fill:none; stroke-width:calc(3.4px * var(--dh-k)); stroke-linecap:round;
-          stroke-dasharray:1; stroke-dashoffset:1; animation:dh-arc-draw 520ms ease-out forwards; }
-        @keyframes dh-arc-draw { to { stroke-dashoffset:0; } }
-        /* The head waits for the line to reach it. As an SVG marker it appeared
-           at the destination before the line had left, which reads backwards. */
-        .dh-arrowhead { animation:dh-head-in 220ms ease-out 430ms both; }
-        @keyframes dh-head-in { from { opacity:0; } to { opacity:1; } }
+        /* WHAT IS HAPPENING, SAID BY THE TWO NUMBERS IN IT.
+           Steele, 2026-08-04: "maybe no arrows. Just use the higlighting pulse
+           to show what is happening", then "no arrows or lines", then "the
+           animation is clunky". The connector layer that used to sit here - an
+           arched line drawing itself over 520ms, an arrowhead fading in behind
+           it, and a sign glyph bursting in at 1.5x and rotating - is gone.
+           What replaces it is the pair of cells the move runs between, lit in
+           the round's colour. It is a state, not an animation: 180ms to arrive
+           and then it holds, so a student glancing up mid-step sees the same
+           thing as one who watched it change.
+           It is deliberately NOT the amber the target class uses, which now
+           means something else entirely - that one only appears after a miss
+           and says "here is the spot you were looking for". */
+           IT IS A RING, NOT A FILL, so that it composes with every other thing
+           a cell can be. Painted as a background it fought the green of a spot
+           the student had just placed - a coral box with a green numeral in it -
+           and the placed-stays-green rule is load-bearing on this board. A ring
+           sits outside all of that, in the 4px margin the cells already carry. */
+        .dh-slot.act { box-shadow:0 0 0 3px var(--act); transition:box-shadow 180ms ease; }
 
-        /* ONLY THE LIVE MOVE KEEPS ITS GLYPH, and it is SVG text with a cream
-           halo rather than an HTML disc.
-           Steele asked for the LINES to persist - "each round should keep the
-           arched arrow lines" - and keeping the signs too was the builder's
-           addition, not his. It did not survive contact with the geometry: four
-           signs a round all anchor in the gutter, the gutter is half a cell, and
-           an opaque disc big enough to read is bigger than the gap between two
-           of them. Measured on 96/4, the FIRST problem in the built-in set: 13
-           overlapping pairs, the worst 13px apart under 51px discs, each one
-           erasing the one before it. The halo knocks the line out of the glyph's
-           own outline instead of out of a circle, so it cannot bite the bracket
-           or a neighbouring digit either. */
-        .dh-sign { paint-order:stroke fill; stroke:var(--bdb-ground); stroke-linejoin:round;
-          text-anchor:middle; dominant-baseline:central; font-weight:900;
-          animation:dh-settle 700ms ease-out; }
-        @keyframes dh-settle { 0%,45% { opacity:0; } 100% { opacity:1; } }
-        /* Only the NEWEST sign bursts. On a board that now keeps every earlier
-           move, the pop is what says which one just happened. */
-        .dh-pop { position:absolute; z-index:5; pointer-events:none; transform:translate(-50%,-50%);
-          font-size:calc(3.6rem * var(--dh-k)); font-weight:900;
-          animation:dh-burst 780ms cubic-bezier(.2,1.5,.4,1) forwards; }
-        @keyframes dh-burst {
-          0% { transform:translate(-50%,-50%) scale(0.25) rotate(-22deg); opacity:0; }
-          30% { transform:translate(-50%,-50%) scale(1.25) rotate(5deg); opacity:1; }
-          55% { transform:translate(-50%,-50%) scale(1.05) rotate(0); opacity:0.9; }
-          100% { transform:translate(-50%,-50%) scale(1.5) rotate(0); opacity:0; }
-        }
         /* The rule under the number being subtracted; the difference goes below it. */
         .dh-subrule { position:absolute; z-index:2; height:calc(4px * var(--dh-k)); border-radius:2px;
           background:var(--bdb-ink); animation:dh-rule 300ms ease-out; transform-origin:left center; }
         @keyframes dh-rule { from { transform:scaleX(0); } to { transform:scaleX(1); } }
 
-        /* A ring drawn round the spot to tap, and drawn again every couple of
-           seconds. Steele: "animate a circle being drawn around it" - the amber
-           pulse alone was easy to miss from the back of the room, so the ring
-           sits on top of the pulse rather than replacing it. */
-        .dh-ring { fill:none; stroke:${RING_COLOR}; stroke-width:calc(4px * var(--dh-k)); stroke-linecap:round;
-          stroke-dasharray:1; stroke-dashoffset:1; animation:dh-ring 2.4s ease-out infinite; }
-        @keyframes dh-ring {
-          0% { stroke-dashoffset:1; opacity:1; }
-          30% { stroke-dashoffset:0; opacity:1; }
-          82% { stroke-dashoffset:0; opacity:1; }
-          100% { stroke-dashoffset:0; opacity:0; }
-        }
         @media (prefers-reduced-motion: reduce) {
-          .dh-pop { display:none; }
-          .dh-sign, .dh-arrowhead { animation:none; }
-          .dh-arc { animation:none; stroke-dashoffset:0; }
-          .dh-ring { animation:none; stroke-dashoffset:0; }
+          .dh-slot.act { transition:none; }
           /* The rule was still sweeping in under reduce - it had no override. */
           .dh-subrule { animation:none; transform:scaleX(1); }
+          .dh-zone.bad-a, .dh-zone.bad-b { animation:none; }
         }
 
         .dh-ask { display:grid; gap:12px; align-content:start; }
         .dh-round { font-size:calc(0.86rem * var(--dh-k)); font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:var(--bdb-ink-soft); }
         .dh-q { font-size:calc(clamp(1.2rem,2.5vw,1.55rem) * var(--dh-k)); font-weight:800; margin:0; line-height:1.28; }
-        .dh-cycle { display:flex; gap:6px; flex-wrap:wrap; }
-        .dh-cyc { display:inline-grid; place-items:center; gap:1px; padding:7px 12px; border-radius:10px;
-          border:2px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink-soft);
-          font-size:calc(0.8rem * var(--dh-k)); font-weight:800; letter-spacing:0.04em; text-transform:uppercase; }
-        .dh-cyc b { font-size:calc(1.3rem * var(--dh-k)); font-weight:900; }
-        .dh-cyc.on { border-color:var(--bdb-green-deep); background:color-mix(in srgb, var(--bdb-green) 15%, var(--bdb-card)); color:var(--bdb-ink); }
+        /* THE D-M-S-B-R RAIL, built to the shape /order-of-operations uses for
+           GEMS: a square tile, one big letter, a small caption under it, and one
+           colour per step carried on --c so every state reads from the same
+           token. Ink labels on the bright fills - white fails AA on teal, coral
+           and green - with brown the one exception, where it is the fill that is
+           dark and white is what passes. */
+        .dh-rail { display:flex; flex-direction:column; gap:9px; }
+        .dh-tile { width:calc(58px * var(--dh-k)); height:calc(58px * var(--dh-k)); border-radius:15px;
+          display:grid; place-items:center; position:relative; padding-bottom:12px; box-sizing:border-box;
+          background:var(--bdb-card); border:2px solid var(--bdb-line);
+          transition:background 200ms ease, border-color 200ms ease, transform 200ms ease; }
+        .dh-tile .L { font-size:calc(1.7rem * var(--dh-k)); font-weight:900; color:var(--bdb-ink-faint); line-height:1; }
+        .dh-tile .S { position:absolute; bottom:4px; font-size:calc(0.5rem * var(--dh-k)); font-weight:800;
+          letter-spacing:0.02em; line-height:1.1; text-transform:uppercase; color:var(--bdb-ink-faint);
+          text-align:center; width:94%; }
+        .dh-tile.active { background:var(--c); border-color:var(--c); transform:scale(1.05);
+          box-shadow:0 10px 26px -10px var(--c); }
+        /* Done is the same colour, washed out - NOT the same colour with the
+           letter struck through, which GEMS can afford and this cannot: a
+           capital D with a line through it is a letter in its own right, and the
+           first tile of a rail whose entire job is D-M-S-B-R was rendering as
+           something else. The wash reads as "been there" without touching the
+           letterform, and it stays clearly behind the solid active tile. */
+        .dh-tile.done { background:color-mix(in srgb, var(--c) 42%, var(--bdb-card));
+          border-color:var(--c); }
+        .dh-tile.active .L, .dh-tile.active .S { color:var(--bdb-ink); }
+        .dh-tile.done .L, .dh-tile.done .S { color:var(--bdb-ink); }
+        .dh-tile.cat-bringdown.active .L, .dh-tile.cat-bringdown.active .S { color:var(--bdb-card); }
+        /* B on the last round: there is nothing left to bring down, and saying
+           so is more use than leaving the tile looking merely unvisited. */
+        .dh-tile.skipped { background:var(--bdb-ground-2); border-color:var(--bdb-line); opacity:0.5; }
+        /* Not a strikethrough here either, for the same reason - and B does not
+           need one: greyed out beside four coloured tiles already reads. */
+        .dh-tile.skipped .S { text-decoration:line-through; }
+        @media (prefers-reduced-motion: reduce) { .dh-tile.active { transform:none; } }
+
+        /* The numbers beside the words. */
+        .dh-work { display:grid; gap:4px; justify-items:start; }
+        .dh-work span { font-variant-numeric:tabular-nums; font-size:calc(1.15rem * var(--dh-k));
+          font-weight:800; color:var(--bdb-ink-soft); padding:3px 12px; border-radius:9px; }
+        .dh-work span.live { color:var(--bdb-ink); font-size:calc(1.5rem * var(--dh-k));
+          background:color-mix(in srgb, var(--bdb-amber) 17%, transparent); }
         .dh-ops { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
         .dh-op { font:inherit; font-weight:800; font-size:calc(1.05rem * var(--dh-k)); min-height:66px; border-radius:13px;
           border:2px solid var(--bdb-line); background:var(--bdb-card); color:var(--bdb-ink); cursor:pointer;
@@ -731,71 +973,90 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
       </div>
 
       <div className="dh-grid">
+        {/* The mnemonic, in a left rail, the way GEMS carries its own. It is a
+            reference the student glances at, so it holds no aria-live - the
+            question column is what announces. */}
+        <div className="dh-rail">
+          {HOUSE_CYCLE.map((c) => {
+            const state = cycleState(c.key);
+            const label = c.key === "repeat" && onLastRound ? HOUSE_REPEAT_END_LABEL : c.label;
+            return (
+              <div
+                key={c.key}
+                className={`dh-tile cat-${c.key} ${state}`}
+                style={{ ["--c" as string]: CYCLE_COLORS[c.key] }}
+              >
+                <span className="L">{c.letter}</span>
+                <span className="S">{label}</span>
+              </div>
+            );
+          })}
+        </div>
+
         <div className="dh-stage" ref={stageRef}>
           {/* Centred over the HOUSE, not over the whole board - the divisor is
               outside it, which is the whole joke the mnemonic runs on. */}
           <div className="dh-plaque" ref={plaqueRef} style={{ width: boardW, marginBottom: plaqueGap }}>
             <div className="dh-plaque-title" style={{ marginLeft: houseLeft }}>
+              {/* IN SET-UP THE TWO NUMBERS ARE THE THINGS YOU PICK UP. Steele:
+                  "have students drag the divisor to the outside and dividend
+                  inside". The equation stays legible while they go, because a
+                  placed chip fades rather than vanishing. */}
               <span className="dh-plaque-eq">
-                {trace.headline}
-                {done_ ? ` = ${trace.quotient}${trace.remainder ? ` r${trace.remainder}` : ""}` : ""}
+                {setupPhase ? (
+                  <>
+                    <button
+                      className={`dh-chip ${held === "dividend" ? "held" : ""} ${placed.dividend !== "out" ? "gone" : ""}`.replace(/\s+/g, " ").trim()}
+                      data-part="dividend"
+                      onPointerDown={(e) => startDrag("dividend", e)}
+                      onPointerMove={onChipMove}
+                      onPointerUp={onChipUp}
+                      onPointerCancel={onChipUp}
+                      onClick={() => { if (placed.dividend === "out") setHeld("dividend"); }}
+                      disabled={placed.dividend !== "out"}
+                      aria-label={`${trace.dividend}, pick up to place`}
+                      type="button"
+                    >
+                      {trace.dividend}
+                    </button>
+                    {" ÷ "}
+                    <button
+                      className={`dh-chip ${held === "divisor" ? "held" : ""} ${placed.divisor !== "out" ? "gone" : ""}`.replace(/\s+/g, " ").trim()}
+                      data-part="divisor"
+                      onPointerDown={(e) => startDrag("divisor", e)}
+                      onPointerMove={onChipMove}
+                      onPointerUp={onChipUp}
+                      onPointerCancel={onChipUp}
+                      onClick={() => { if (placed.divisor === "out") setHeld("divisor"); }}
+                      disabled={placed.divisor !== "out"}
+                      aria-label={`${trace.divisor}, pick up to place`}
+                      type="button"
+                    >
+                      {trace.divisor}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {trace.headline}
+                    {done_ ? ` = ${trace.quotient}${trace.remainder ? ` r${trace.remainder}` : ""}` : ""}
+                  </>
+                )}
               </span>
             </div>
             <div className="dh-plaque-tags" style={{ gridTemplateColumns: `${houseLeft}px 1fr` }}>
               <span className="dh-tag visitor"><i>divisor</i><b>da visitor, outside</b></span>
               <span className="dh-tag david"><i>dividend</i><b>David, in the house</b></span>
             </div>
-            {/* BOTH ARROWS REACH THEIR ACTUAL TARGET, and the dividend's goes
-                in through the door.
-
-                Stopping them above the board was the first attempt and it was
-                wrong: the board's first row is the QUOTIENT, so a teal arrow
-                labelled "dividend / David, in the house" pointing down at the
-                column was pointing at the answer the moment the first quotient
-                digit landed. On a plaque whose whole job is to stop those two
-                words being confused, that taught a third confusion.
-
-                Carrying it straight down would cross the quotient row for the
-                same reason. So it swings left into the GUTTER - the one column
-                with no cell in any row - drops down it, and turns right through
-                the bracket into the dividend. Which is also, usefully, exactly
-                what "the door" means in the card that opens each problem. */}
-            <svg
-              className="dh-plaque-arrows"
-              width={boardW}
-              height={plaqueGap + rowPx * 1.62}
-              aria-hidden="true"
-            >
-              <path
-                className="dh-plaque-arrow"
-                strokeWidth={arrowW}
-                stroke="var(--bdb-brown)"
-                d={`M ${houseLeft / 2} 2 Q ${houseLeft / 2} ${plaqueGap * 0.6} ${divisorMid} ${plaqueGap + rowPx * 0.98}`}
-              />
-              {/* Reaches INTO the divisor's own row, the way the teal one
-                  reaches into the dividend's. Stopping in the empty quotient
-                  row above it read as pointing at nothing. */}
-              <path
-                fill="var(--bdb-brown)"
-                d={`M ${divisorMid} ${plaqueGap + rowPx * 1.18} l ${-arrowHead / 2} ${-arrowHead} l ${arrowHead} 0 z`}
-              />
-              <path
-                className="dh-plaque-arrow"
-                strokeWidth={arrowW}
-                stroke="var(--bdb-teal-deep)"
-                d={`M ${houseMid} 2`
-                  + ` Q ${houseMid} ${plaqueGap * 0.42} ${(houseMid + gutterX) / 2} ${plaqueGap * 0.55}`
-                  + ` Q ${gutterX} ${plaqueGap * 0.74} ${gutterX} ${plaqueGap + rowPx * 0.7}`
-                  + ` Q ${gutterX} ${plaqueGap + rowPx * 1.5} ${houseLeft - arrowHead - 3} ${plaqueGap + rowPx * 1.5}`}
-              />
-              <path
-                fill="var(--bdb-teal-deep)"
-                d={`M ${houseLeft - 2} ${plaqueGap + rowPx * 1.5} l ${-arrowHead} ${-arrowHead / 2} l 0 ${arrowHead} z`}
-              />
-            </svg>
+            {/* THE PLAQUE DRAWS NO ARROWS. It ran a brown one down to the
+                divisor and a teal one in through the door, and those were
+                what the numbers travelled along - then Steele, 2026-08-04:
+                "no arrows or lines". The two tags still sit over their own
+                columns, so which side is which is still said by position,
+                and a number now goes to its spot in a straight slow line
+                rather than tracing a curve. */}
           </div>
 
-          <div className="dh-board" style={{ width: boardW, height: boardH }}>
+          <div className="dh-board" ref={boardRef} style={{ width: boardW, height: boardH }}>
             <div
               className="dh-l"
               style={{ left: houseLeft, top: houseTop, width: boardW - houseLeft, height: boardH - houseTop }}
@@ -818,7 +1079,9 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
                 if (col < trace.houseCol && slot?.row !== "divisor") {
                   return <span key={i} style={{ gridColumn: col + 1, gridRow: row + 1 }} />;
                 }
-                const shown = slot && (slot.given || filledSet.has(slot.id));
+                // In set-up the house is EMPTY: a given digit is printed only
+                // once the student has put its number there.
+                const shown = slot && (slot.given ? givenShown(slot) : filledSet.has(slot.id));
                 const isTarget = Boolean(prompt?.kind === "slot" && slot && prompt.slots?.includes(slot.id));
                 const id = slot?.id ?? `empty-${row}-${col}`;
                 // Two alternating animation names replay the shake on a repeat
@@ -840,10 +1103,14 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
                   <button
                     key={i}
                     ref={slot && slot.id === firstTargetId ? targetRef : undefined}
-                    className={`dh-slot ${slot?.given ? "given" : ""} ${shown && !slot?.given ? "filled land" : ""} ${mergeCls} ${isTarget ? "target" : ""} ${wrongCls}`.replace(/\s+/g, " ").trim()}
-                    style={{ gridColumn: col + 1, gridRow: row + 1 }}
+                    className={`dh-slot ${slot?.given ? "given" : ""} ${setupPhase && shown ? "arrive" : ""} ${shown && !slot?.given ? "filled land" : ""} ${mergeCls} ${slot && actSlots.has(slot.id) ? "act" : ""} ${isTarget && revealTarget ? "target" : ""} ${wrongCls}`.replace(/\s+/g, " ").trim()}
+                    style={{
+                      gridColumn: col + 1,
+                      gridRow: row + 1,
+                      ...(slot && actSlots.has(slot.id) ? { ["--act" as string]: actColor } : null),
+                    }}
                     onClick={() => clickSlot(id)}
-                    disabled={done_}
+                    disabled={done_ || setupPhase}
                     // Up to sixty buttons used to share "empty spot", which told
                     // a screen reader nothing about where any of them were.
                     aria-label={shown ? `${runLabel.get(slot!.id) ?? slot!.text} at ${place}` : `empty spot at ${place}`}
@@ -866,70 +1133,38 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
               />
             ))}
 
-            {/* THE PATHWAY, and the ring round the next spot. One SVG for both:
-                they share the board's coordinate space, and the ring has to
-                paint over the cells the same way the arcs do. */}
-            {(arcs.length > 0 || targetRing) && (
-              <svg className="dh-arcs" width={boardW} height={boardH} aria-hidden="true">
-                {arcs.map((arc) => (
-                  <g key={arc.key} opacity={arcOpacity(arc.round)}>
-                    <path className="dh-arc" d={arc.d} pathLength={1} stroke={arcColor(arc.round)} />
-                    <path
-                      className="dh-arrowhead"
-                      fill={arcColor(arc.round)}
-                      d={`M 0 0 L ${-headPx} ${-headPx * 0.52} L ${-headPx} ${headPx * 0.52} Z`}
-                      transform={`translate(${arc.head.x} ${arc.head.y}) rotate(${arc.head.angle})`}
-                    />
-                  </g>
-                ))}
-                {/* The glyph for the move that just happened, and only that
-                    one. It rides inside the SVG so its halo can knock the arc
-                    out of its own outline. */}
-                {newestArc?.sign ? (
-                  <text
-                    key={`sign-${newestArc.key}`}
-                    className="dh-sign"
-                    x={newestArc.signAt.x}
-                    y={newestArc.signAt.y}
-                    fill={arcColor(newestArc.round)}
-                    fontSize={Math.round(signPx * 0.92)}
-                    strokeWidth={Math.max(5, Math.round(signPx * 0.24))}
-                  >
-                    {newestArc.sign}
-                  </text>
-                ) : null}
-                {targetRing && (
-                  <ellipse
-                    className="dh-ring"
-                    pathLength={1}
-                    cx={targetRing.cx}
-                    cy={targetRing.cy}
-                    rx={targetRing.rx}
-                    ry={targetRing.ry}
-                  />
-                )}
-              </svg>
-            )}
+            {/* NO CONNECTOR LAYER. The arched line, its arrowhead and the
+                sign glyph that burst in over it all lived here in one SVG
+                at z-index 3. Steele ran it: "no arrows or lines", "the
+                animation is clunky". What is happening is now said by the
+                two cells in the move lighting up together - `.dh-slot.act`
+                - with the arithmetic spelled out in the rail beside it. */}
 
-            {newestArc?.sign ? (
-              <span
-                key={`pop-${visualKey}`}
-                className="dh-pop"
-                style={{ left: newestArc.signAt.x, top: newestArc.signAt.y, color: arcColor(newestArc.round) }}
-              >
-                {newestArc.sign}
-              </span>
-            ) : null}
-
-            {/* Steele: "This should be a pop out to get started." One per
-                problem - it clears on the first right click or on the button,
-                and never comes back mid-problem. */}
-            {showStart && !presentation && !done_ && step === 0 && (
-              <div className="dh-start" role="note" style={{ width: `min(${Math.round(430 * k)}px, 90%)` }}>
-                <p className="dh-start-t">Get started</p>
-                <p className="dh-start-b">{startCopy}</p>
-                <button className="dh-btn go" onClick={() => setShowStart(false)} type="button">Got it</button>
-              </div>
+            {/* THE TWO PLACES A NUMBER CAN GO. They cover the dividend row
+                only - which is the one row that exists before the drill starts -
+                and the divisor zone stops at the gutter, so the clear column
+                between them stays clear. */}
+            {setupPhase && (
+              <>
+                <button
+                  className={`dh-zone ${dragOver === "divisor" ? "over" : ""} ${placed.divisor !== "out" ? "set" : ""} ${wrongZone?.zone === "divisor" ? (wrongZone.n % 2 ? "bad-b" : "bad-a") : ""}`.replace(/\s+/g, " ").trim()}
+                  data-drop="divisor"
+                  style={{ left: colX(0), top: houseTop, width: colX(trace.divisorWidth) - colX(0), height: rowPx }}
+                  onClick={() => { if (held) tryPlace(held, "divisor"); }}
+                  type="button"
+                >
+                  outside
+                </button>
+                <button
+                  className={`dh-zone ${dragOver === "dividend" ? "over" : ""} ${placed.dividend !== "out" ? "set" : ""} ${wrongZone?.zone === "dividend" ? (wrongZone.n % 2 ? "bad-b" : "bad-a") : ""}`.replace(/\s+/g, " ").trim()}
+                  data-drop="dividend"
+                  style={{ left: houseLeft, top: houseTop, width: boardW - houseLeft, height: rowPx }}
+                  onClick={() => { if (held) tryPlace(held, "dividend"); }}
+                  type="button"
+                >
+                  in the house
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -938,12 +1173,32 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
             whole column would announce the step strip and the trail with them,
             which is a paragraph of speech on every tap. */}
         <div className="dh-ask" ref={askRef}>
-          {done_ ? (
+          {setupPhase ? (
             <>
-              <p className="dh-q">Every step is placed.</p>
+              <p className="dh-q" aria-live="polite">Set up the house. Drag each number to its place.</p>
+              <p className="dh-say">
+                One of them waits outside and one of them lives in the house. Drag a number, or tap it and
+                then tap where it goes.
+              </p>
+              {setupMiss && <p className="dh-hint" role="alert">{setupMiss}</p>}
+            </>
+          ) : done_ ? (
+            <>
+              {/* Steele: "No remainder = All done, Nice!" - the finish says
+                  which of the two endings this was, because "there is nothing
+                  left over" is the thing a student is checking for and it used
+                  to be left for them to work out of the equation. */}
+              <p className="dh-q">
+                {trace.remainder ? "Every step is placed." : "No remainder. All done. Nice!"}
+              </p>
               <p className="dh-done">
                 {trace.headline} = {trace.quotient}{trace.remainder ? ` remainder ${trace.remainder}` : ""}
               </p>
+              {trace.remainder > 0 && (
+                <p className="dh-say">
+                  {trace.remainder} could not be shared out - that is the remainder.
+                </p>
+              )}
               {/* Finishing the last problem used to loop silently back to the
                   first, so a student had no way to tell they were done. */}
               {Math.min(idx, problems.length - 1) === problems.length - 1 && problems.length > 1 && (
@@ -960,23 +1215,6 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
                 Round {prompt.round + 1}
                 {wrapped && step === 0 ? " - back at the start of the set" : ""}
               </span>
-              {/* The cycle, building up as they go. Steele: "I just want them to
-                  start to remember what the sequence is" - so the steps they
-                  have already named stay lit, and the one coming next does NOT
-                  light early, or the question answers itself. */}
-              <div className="dh-cycle">
-                {HOUSE_OPS.map((o) => {
-                  const taken = trace.prompts
-                    .slice(0, step)
-                    .some((p) => p.kind === "operation" && p.op === o.op && p.round === prompt.round);
-                  return (
-                    <span key={o.op} className={`dh-cyc ${taken ? "on" : ""}`.trim()}>
-                      <b>{o.sign}</b>
-                      {o.label}
-                    </span>
-                  );
-                })}
-              </div>
               <p className="dh-q" aria-live="polite">{prompt.ask}</p>
               {prompt.kind === "operation" && (
                 <div className="dh-ops">
@@ -1000,6 +1238,16 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
                   the screen at the moment the student needed it - and the trail
                   below deliberately excludes it, so it was in neither place. */}
               {step > 0 && <p className="dh-say" aria-live="polite">{trace.prompts[step - 1].say}</p>}
+              {/* The same fact in numbers, right under the words for it.
+                  aria-hidden because the sentence above already says it out
+                  loud - a screen reader does not need "9 ÷ 4 = 2" twice. */}
+              {workLines.length > 0 && (
+                <div className="dh-work" aria-hidden="true">
+                  {workLines.map((l) => (
+                    <span key={l.key} className={l.live ? "live" : ""}>{l.text}</span>
+                  ))}
+                </div>
+              )}
               {missed && <p className="dh-hint" role="alert">{missed}</p>}
               {/* The green line above IS prompt[step - 1], so the trail starts
                   before it - otherwise the same sentence is stacked twice. */}
@@ -1012,6 +1260,30 @@ export default function DivisionHouseBoard({ set }: { set?: string | null }) {
           ) : null}
         </div>
       </div>
+
+      {drag && dragPos && (
+        <span className="dh-ghost" style={{ left: dragPos.x, top: dragPos.y }} aria-hidden="true">
+          {partValue[drag]}
+        </span>
+      )}
+
+      {/* "they click the spot and it slowly moves to it" - a straight travel
+          from the equation to the box, over the whole board rather than inside
+          it, because the two ends are measured in viewport pixels. */}
+      {fly && (
+        <span
+          className={`dh-fly ${flyGo ? "go" : ""}`.trim()}
+          style={{
+            left: fly.x,
+            top: fly.y,
+            ["--dx" as string]: `${fly.dx}px`,
+            ["--dy" as string]: `${fly.dy}px`,
+          }}
+          aria-hidden="true"
+        >
+          {partValue[fly.part]}
+        </span>
+      )}
 
       {cheer > 0 && <span className="dh-yes" key={cheer}>Yes!</span>}
     </div>
