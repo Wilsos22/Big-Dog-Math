@@ -606,6 +606,15 @@ class; all four came out of reading the live site against the repo.
   repo access when the repo went private on 8/3 - the last successful deploy
   still records `githubRepoVisibility: "public"`). ONLY STEELE CAN TEST IT: one
   redeploy from the Vercel dashboard settles whether the connection recovers.
+  **RESOLVED THE SAME EVENING.** Steele pushed two "Trigger deploy" commits
+  (`40da109`, `c3e0a92`); both built READY to production, and every push since
+  has deployed automatically. Live `/api/build-id` now tracks `origin/main`
+  within a couple of minutes, so all 26 stranded commits - including every
+  projector fix from the 8/3 run - are finally in the room. The ROOT CAUSE was
+  never established: a manual trigger restored it, which is consistent with the
+  GitHub App theory but does not prove it. If pushes ever stop deploying again,
+  the check is `/api/build-id` against `origin/main`, and the fix to try first
+  is a manual redeploy.
 - **`.claude/commands/class-audit.md` asks Notion the wrong question.** Its
   curriculum scope says "Feature Tracker rows at Priority 'Now' not Done". The
   tracker's `Status` select has no `Done` value, so that filter matches every
