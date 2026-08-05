@@ -813,6 +813,11 @@ export default function ControlPage() {
   const previousScoreboardStageRef = useRef<"halftime" | "final" | null>(null);
   const autoOpenedStepRef = useRef<Set<string>>(new Set());
   const openingStepRef = useRef<string | null>(null);
+  // Every poll id Control has ever held. The adopt-the-published-poll effect
+  // below uses it to tell a NEW server-opened poll from the snapshot echo of one
+  // Control already opened - without it, a session row read back a beat behind
+  // Control's own publish would hand the stale id straight back.
+  const heldPollIdsRef = useRef<Set<string>>(new Set());
   const lastRemoteCommandRef = useRef<string | null>(null);
   const pendingRemoteReceiptRef = useRef<{ sessionId: string; command: TeacherRemoteCommand } | null>(null);
   const remoteReceiptInFlightRef = useRef(false);
@@ -1547,6 +1552,38 @@ export default function ControlPage() {
   }, [liveChallenge, supabase]);
 
   useEffect(() => {
+    if (controlPoll) heldPollIdsRef.current.add(controlPoll.id);
+  }, [controlPoll]);
+
+  // The room answers live_flow.poll, so /control must never hold a different id.
+  // /teacher/present re-derives the poll id from the published flow on every
+  // tick and is always right; Control kept its own copy and only replaced it on
+  // the once-per-session hydrate or a fresh remote_command receipt. A poll
+  // opened server-side (the Remote's "start lesson") stamps neither, so Control
+  // went on polling a dead pollId and drew empty bars while the class answered.
+  const publishedPollId = teacherSession?.live_flow?.poll?.id ?? null;
+  useEffect(() => {
+    const flow = teacherSession?.live_flow;
+    const published = flow?.poll;
+    const publishedStateId = flow?.state?.id;
+    if (!published || !publishedStateId) return;
+    if (controlPoll?.id === published.id || heldPollIdsRef.current.has(published.id)) return;
+    setControlPoll({
+      id: published.id,
+      stepIndex: flow?.sequence?.currentIndex ?? null,
+      stateId: publishedStateId,
+      kind: published.kind,
+      question: published.question,
+      choices: published.choices,
+      stage: published.stage,
+      awaitingTeacherAdvance: published.awaitingTeacherAdvance,
+      boxes: published.boxes,
+      pairs: published.pairs,
+    });
+    setPollAnswers([]);
+  }, [controlPoll, publishedPollId, teacherSession]);
+
+  useEffect(() => {
     if (!controlPoll) return;
     let stopped = false;
     const loadAnswers = async () => {
@@ -1633,9 +1670,15 @@ export default function ControlPage() {
   // the rest of the lesson.
   const autoOpenQuestion = liveStepPollQuestion(activeItem?.question, configuredResponseKind);
   useEffect(() => {
-    if (!autoOpenQuestion || !activeItem || !activeInteractiveState || !configuredResponseKind || controlPoll || autoOpenedStepRef.current.has(activeItem.uid)) return;
-    if (!teacherSession || openingStepRef.current === activeItem.uid) return;
-    openingStepRef.current = activeItem.uid;
+    if (!autoOpenQuestion || !activeItem || !activeInteractiveState || !configuredResponseKind || controlPoll) return;
+    // uid is minted fresh on every rehydrate (lineupItemFromStep calls uid()),
+    // so keying the already-opened memory on it forgot the poll this panel had
+    // just opened and auto-opened a second one for the same step - which closed
+    // the poll the room was already answering. Key on the Notion step instead.
+    const openKey = `${currentIndex}:${activeItem.notionStepId || activeItem.uid}`;
+    if (autoOpenedStepRef.current.has(openKey)) return;
+    if (!teacherSession || openingStepRef.current === openKey) return;
+    openingStepRef.current = openKey;
     void openControlPoll({
       stateId: activeInteractiveState,
       kind: configuredResponseKind,
@@ -1647,12 +1690,12 @@ export default function ControlPage() {
       notionLessonId: activeItem.notionLessonId,
       lessonCode: activeItem.lessonCode,
     }).then((opened) => {
-      if (opened) autoOpenedStepRef.current.add(activeItem.uid);
+      if (opened) autoOpenedStepRef.current.add(openKey);
       openingStepRef.current = null;
     });
     // openControlPoll intentionally reads the latest teacher/session state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeInteractiveState, activeItem, configuredResponseKind, controlPoll, teacherSession]);
+  }, [activeInteractiveState, activeItem, configuredResponseKind, controlPoll, currentIndex, teacherSession]);
 
   function prepareAnotherPoll() {
     setControlPoll(null);
@@ -1890,6 +1933,12 @@ export default function ControlPage() {
           secondsLeft: safeTimerSeconds(phase.secondsLeft),
           running: phase.running,
           finished: phase.finished,
+          // Without a deadline `liveTimerSeconds` takes its frozen-fallback
+          // branch on every surface, so the four screens watching a discussion
+          // each showed whatever number their own last fetch happened to carry.
+          // The overlay arms this once per round and nulls it on a pause, which
+          // is exactly the contract the lesson timer below already keeps.
+          endsAt: phase.running && phase.endsAt ? phase.endsAt : null,
         }
       : activeState && !(stepIsUntimed && onDemandSeconds === null)
         ? {

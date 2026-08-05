@@ -320,7 +320,27 @@ function SurfaceMirror({ label, src, meta }: SurfaceMirrorProps) {
   );
 }
 
+// An unresolved "I'm stuck" outlives the step it was raised on. The pacing
+// timer advances the lineup while the hand is still up, and scoping the strip
+// to the current step alone made the alert vanish with no teacher action.
+const STUCK_CARRY_MS = 5 * 60_000;
+
+function stuckStillFresh(updatedAt: string | null | undefined, now: number) {
+  if (!updatedAt) return false;
+  const raisedAt = Date.parse(updatedAt);
+  return Number.isFinite(raisedAt) && now - raisedAt < STUCK_CARRY_MS;
+}
+
 export default function TeacherRemotePage() {
+  // A 1s heartbeat so the Remote's clock re-renders every second, independent
+  // of the 0.5-1.2s refresh poll. timerSeconds is derived from the timer's
+  // deadline in the render body, so without a tick of its own the handheld
+  // clock only moves when a fetch returns and the teacher watches it stutter.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setClockTick((t) => (t + 1) % 3600), 1000);
+    return () => window.clearInterval(id);
+  }, []);
   const [sessions, setSessions] = useState<RemoteSession[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [session, setSession] = useState<RemoteSession | null>(null);
@@ -333,7 +353,7 @@ export default function TeacherRemotePage() {
   const [signalState, setSignalState] = useState<{
     controls: boolean;
     signalsOff: boolean;
-    signals: Array<{ student_id: string | null; display_name: string | null; signal: string; step_index: number | null }>;
+    signals: Array<{ student_id: string | null; display_name: string | null; signal: string; step_index: number | null; updated_at: string | null }>;
   } | null>(null);
   const [signalBusy, setSignalBusy] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<{
@@ -717,7 +737,7 @@ export default function TeacherRemotePage() {
     const load = async () => {
       try {
         const response = await fetch(`/api/live/signals?sessionId=${encodeURIComponent(signalSessionId)}`, { cache: "no-store" });
-        const data = await response.json().catch(() => ({})) as { enabled?: boolean; controls?: boolean; signalsOff?: boolean; signals?: Array<{ student_id: string | null; display_name: string | null; signal: string; step_index: number | null }> };
+        const data = await response.json().catch(() => ({})) as { enabled?: boolean; controls?: boolean; signalsOff?: boolean; signals?: Array<{ student_id: string | null; display_name: string | null; signal: string; step_index: number | null; updated_at: string | null }> };
         if (stopped) return;
         setSignalState(response.ok && data.enabled
           ? { controls: Boolean(data.controls), signalsOff: Boolean(data.signalsOff), signals: data.signals || [] }
@@ -749,9 +769,12 @@ export default function TeacherRemotePage() {
   const signalStepIndex = session?.liveFlow?.sequence?.currentIndex ?? null;
   const currentSignals = useMemo(() => {
     if (!signalState || signalState.signalsOff) return [];
-    return signalStepIndex === null
-      ? signalState.signals
-      : signalState.signals.filter((s) => s.step_index === signalStepIndex);
+    const now = Date.now();
+    return signalState.signals.filter((s) => (
+      signalStepIndex === null
+      || s.step_index === signalStepIndex
+      || (s.signal === "stuck" && stuckStillFresh(s.updated_at, now))
+    ));
   }, [signalState, signalStepIndex]);
 
   // A count going 0 to 1 in a thin bar is not an alert. This is a handheld held

@@ -84,8 +84,16 @@ export async function closeSessions(db: Db, sessionIds: string[]): Promise<strin
   const now = new Date().toISOString();
   const [, sessionResult] = await Promise.all([
     db.from("polls").update({ status: "closed" }).in("session_id", sessionIds).eq("status", "open"),
+    // live_flow IS DELIBERATELY RETAINED. It is the only record of which
+    // questions the class was asked, and readinessEvidence reads the question
+    // set out of it AFTER the bell; nulling it here left every closed session
+    // with zero readiness questions, so every student's answers read as empty
+    // and the visit list ranked the whole class as needing a teacher visit.
+    // Nothing releases students on live_flow - ClassSync returns on
+    // `status === "closed"` before it ever looks, and every other reader gates
+    // on `status === "open"` - so keeping it changes no classroom surface.
     db.from("sessions")
-      .update({ status: "closed", ended_at: now, broadcast: null, live_flow: null, remote_command: null })
+      .update({ status: "closed", ended_at: now, broadcast: null, remote_command: null })
       .in("id", sessionIds)
       .eq("status", "open")
       .select("id"),

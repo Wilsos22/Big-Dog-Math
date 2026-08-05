@@ -52,6 +52,18 @@ const DURATIONS = [
   { label: "5 min", value: 300 },
 ];
 
+// An unresolved "I'm stuck" outlives the step it was raised on. The pacing
+// timer can advance the lineup while the hand is still up, and scoping the
+// strip to the current step alone made the alert vanish with no teacher
+// action at all. Carry a stuck forward for this long instead.
+const STUCK_CARRY_MS = 5 * 60_000;
+
+function stuckStillFresh(updatedAt: string | null | undefined, now: number) {
+  if (!updatedAt) return false;
+  const raisedAt = Date.parse(updatedAt);
+  return Number.isFinite(raisedAt) && now - raisedAt < STUCK_CARRY_MS;
+}
+
 function makeCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let c = "DOG";
@@ -660,6 +672,7 @@ export default function SessionPage() {
         .se-signal-count.gotit { color:var(--bdb-green-deep); }
         .se-signal-names { flex-basis:100%; display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; color:var(--bdb-ink-soft); font-weight:700; font-size:0.82rem; }
         .se-signal-name { display:inline-flex; align-items:center; gap:5px; }
+        .se-signal-carry { color:var(--bdb-ink-soft); font-size:0.72rem; font-weight:650; opacity:0.78; }
         .se-signal-mute { border:1px solid var(--bdb-line); border-radius:999px; background:#fff; color:var(--bdb-ink-soft); font:inherit; font-size:0.7rem; font-weight:800; padding:2px 9px; min-height:24px; cursor:pointer; }
         .se-signal-mute:hover:not(:disabled) { border-color:var(--bdb-coral-deep); color:var(--bdb-coral-deep); }
         .se-signal-toggle { margin-left:auto; border:1px solid var(--bdb-line); border-radius:999px; background:#fff; color:var(--bdb-ink-soft); font:inherit; font-size:0.76rem; font-weight:800; padding:5px 13px; min-height:32px; cursor:pointer; }
@@ -921,11 +934,16 @@ export default function SessionPage() {
                   );
                 }
                 // Scope to the current lesson step when one is running - a
-                // "stuck" from three steps ago is not a stuck right now.
+                // "say again" from three steps ago is not a say again right
+                // now. A stuck is the exception: it stays on the strip until
+                // it ages out, so an auto-advance cannot clear a raised hand.
                 const currentStep = liveFlow?.sequence?.currentIndex ?? null;
-                const current = currentStep === null
-                  ? signalState.signals
-                  : signalState.signals.filter((s) => s.step_index === currentStep);
+                const signalsNow = Date.now();
+                const current = signalState.signals.filter((s) => (
+                  currentStep === null
+                  || s.step_index === currentStep
+                  || (s.signal === "stuck" && stuckStillFresh(s.updated_at, signalsNow))
+                ));
                 const stuck = current.filter((s) => s.signal === "stuck");
                 const again = current.filter((s) => s.signal === "again");
                 const gotIt = current.filter((s) => s.signal === "got-it");
@@ -937,6 +955,9 @@ export default function SessionPage() {
                       {list.map((s) => (
                         <span className="se-signal-name" key={`${s.student_id || s.display_name}`}>
                           {labelFor(names, s.display_name)}
+                          {currentStep !== null && s.step_index !== null && s.step_index !== currentStep ? (
+                            <span className="se-signal-carry">from step {s.step_index + 1}</span>
+                          ) : null}
                           {signalState.controls && s.student_id ? (
                             <button
                               className="se-signal-mute"
