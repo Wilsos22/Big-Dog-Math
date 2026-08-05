@@ -1288,15 +1288,39 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   and nothing calls the bridge automatically yet - it is a route you POST, and `GET` on it is a dry
   run. Also NOT verified end to end, because `poll_answers` has zero rows lifetime until the FERPA
   Workspace half lands.
-  **A MULTIPLE-CHOICE ANSWER KEY CAN BE UNTAPPABLE, AND THREE LIVE POLLS ALREADY ARE** (found
-  2026-08-04). `splitList` (`notionLessons.ts:453`) splits the Notion `Choices` property on
-  `[\n,]`, while `Correct Answer` is read whole - so an authored choice containing a comma
-  ("6 x 6 = 36, so every later pair would repeat one she already recorded") is shattered into two
-  choices and the key matches neither. 3 of 29 live multiple-choice polls are in that state, on the
-  M1.T1 factor-pair material. No student can submit the key, so bare equality marks EVERY student
-  wrong. The bridge refuses to grade those (`answerKeyIsTappable`) rather than making a whole class
-  fail permanently, but the AUTHORING bug is unfixed: a comma inside a Notion choice still breaks
-  the choice list on every surface that renders it.
+  **A MULTIPLE-CHOICE ANSWER KEY CAN BE UNTAPPABLE** (found 2026-08-04, PARSER FIXED THE SAME DAY -
+  this paragraph used to end "the AUTHORING bug is unfixed", which is no longer true). `splitList`
+  splits on `[\n,]`, and `Choices` used to be read through it while `Correct Answer` is read whole,
+  so an authored choice containing a comma was shattered and the key matched none of the fragments.
+  `Choices` now goes through `splitChoices` (newline only); `splitList` KEEPS its commas for
+  `Supplies` and `Tools`, which really are authored inline. `npm run test:notion-lesson-contract`
+  pins BOTH directions, so the tempting unification - make `splitList` newline-only and delete
+  `splitChoices` - goes red on the supplies assertion.
+  THE CAUSE WAS NOT MAINLY PROSE, WHICH IS WHY IT SURVIVED SO LONG. Measured on the live Lesson
+  Steps data source: 121 steps carry authored choices, 14 have a comma INSIDE a choice, and ZERO
+  author their choices comma-separated on one line - comma splitting never once did anything useful
+  on that property. The commonest shape is a THOUSANDS SEPARATOR: `2 / 20 / 200 / 2,000` became
+  `2, 20, 200, 2, 000`, inventing a fifth choice and putting "2" in twice (two identical entries
+  also collide as a React key - `key={c}` at `lesson/page.tsx`, and six other surfaces share it).
+  A factor-pair list, `1, 2, 3, 6` against `1, 2, 3, 4, 6`, became 17 fragments and was then
+  silently TRUNCATED by the 12-choice cap in `/api/teacher/poll`. The worst cases were the ones
+  whose key happened to match a surviving fragment: those passed `answerKeyIsTappable` and GRADED
+  NORMALLY off a choice list the room could see was wrong. Four steps go from untappable to
+  gradable with this fix.
+  `answerKeyIsTappable` STAYS, and its reason is unchanged - a teacher can still type a key that
+  matches no choice for ordinary reasons, and three live steps do exactly that (two with a prose
+  sentence as the key, one with an EMPTY `Correct Answer` on a 4-choice step). Nothing names them at
+  lesson load, so they contribute no evidence until someone edits them. That is AUTHORING.
+  TWO "CHOICES" INPUTS EXIST AND THEY HAVE OPPOSITE RULES. `/control`'s own exit-ticket field is
+  labelled "Choices (comma-separated)" with the placeholder "Yes, No, Not sure" and still splits on
+  `[\n,]` - correct for a field a teacher types into directly. The Notion property is one per line.
+  Nothing in Notion says so, so the habit can cross over, and the failure is silent and room-facing:
+  one button reading "Yes, No, Not sure" on thirty Chromebooks. Do not "unify" these two.
+  THE 3 SHATTERED `polls` ROWS IN THE DATABASE ARE NOT REPAIRED, and the reason is narrower than it
+  looks. `/api/student/session-state` DOES read a stored open poll's `choices` and `/lesson` renders
+  them verbatim, so a reader-side fix is invisible on a poll left open - this is safe ONLY because
+  `poll_answers` is 0 rows lifetime and ZERO polls sit on an open session (all 80 rows are dead
+  rehearsal artifacts). If a shattered poll is ever found open, fix the ROW, not the parser.
   THE ORIGINAL NOTE (found 2026-07-29), kept because its reasoning is still the reason the bridge
   looks the way it does: **`poll_answers` NEVER REACHES `responses`, SO THE EXIT TICKET MOVES
   NO MASTERY BAR.** Steele moved the exit ticket on-site specifically for data retention and mid-lesson
