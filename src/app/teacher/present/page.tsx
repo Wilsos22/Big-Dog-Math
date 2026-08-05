@@ -307,6 +307,16 @@ function WarmupLearningSteps({ direction }: { direction?: string }) {
 export default function ClassroomStagePage() {
   const [session, setSession] = useState<StageSession | null>(null);
   const reloadRef = useRef<(() => void) | null>(null);
+  // A 1s heartbeat so the big clock re-renders every second, independent of the
+  // 1-1.5s session poll. timerSeconds is derived from the timer's deadline in
+  // the render body, so without a tick of its own the projector clock only
+  // moves when a fetch returns - a second takes about 1.5s and then a whole
+  // second is skipped.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setClockTick((t) => (t + 1) % 3600), 1000);
+    return () => window.clearInterval(id);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [sessionMessage, setSessionMessage] = useState("Connecting to the confirmed class session.");
   const [pollAnswers, setPollAnswers] = useState<PollAnswer[]>([]);

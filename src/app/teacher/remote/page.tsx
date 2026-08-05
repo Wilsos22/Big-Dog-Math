@@ -321,6 +321,15 @@ function SurfaceMirror({ label, src, meta }: SurfaceMirrorProps) {
 }
 
 export default function TeacherRemotePage() {
+  // A 1s heartbeat so the Remote's clock re-renders every second, independent
+  // of the 0.5-1.2s refresh poll. timerSeconds is derived from the timer's
+  // deadline in the render body, so without a tick of its own the handheld
+  // clock only moves when a fetch returns and the teacher watches it stutter.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setClockTick((t) => (t + 1) % 3600), 1000);
+    return () => window.clearInterval(id);
+  }, []);
   const [sessions, setSessions] = useState<RemoteSession[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [session, setSession] = useState<RemoteSession | null>(null);

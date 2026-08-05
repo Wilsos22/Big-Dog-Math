@@ -1890,6 +1890,12 @@ export default function ControlPage() {
           secondsLeft: safeTimerSeconds(phase.secondsLeft),
           running: phase.running,
           finished: phase.finished,
+          // Without a deadline `liveTimerSeconds` takes its frozen-fallback
+          // branch on every surface, so the four screens watching a discussion
+          // each showed whatever number their own last fetch happened to carry.
+          // The overlay arms this once per round and nulls it on a pause, which
+          // is exactly the contract the lesson timer below already keeps.
+          endsAt: phase.running && phase.endsAt ? phase.endsAt : null,
         }
       : activeState && !(stepIsUntimed && onDemandSeconds === null)
         ? {
