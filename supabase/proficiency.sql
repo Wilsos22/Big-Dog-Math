@@ -163,6 +163,9 @@ insert into misconceptions (label, standard_id, description) values
   ('stops at the first shared prime',                  '6.NS.B.4',  'Finds one match and stops searching. GCF(48,72) becomes 2 instead of 24.'),
   ('leaves a composite in the tree',                   '6.NS.B.4',  'Stops a factor tree branch on a leaf that still has more than two factors, so the piece list is not irreducible.'),
   ('answers the group size not the count',             '6.NS.B.4',  'Finds the GCF correctly then reports what is inside each group instead of how many groups. Says 3 or 5 instead of 12.'),
+  -- Factor-pair builds (the structured-numeric pairs() scorer).
+  ('lists a non-factor pair',                          '6.NS.B.4',  'Builds a pair that does not multiply to the target, e.g. 4x4 for 18. The student is generating pairs by pattern rather than checking the product, so the count may even be complete while the list is wrong.'),
+  ('stops before all pairs are found',                 '6.NS.B.4',  'Every pair listed is valid, but the list is short - usually stopping at the pairs recalled from a times table rather than testing upward to the square root. Different move from an invented pair: the checking is sound, the search was not exhaustive.'),
   -- Fraction division (M1.T1.L4-L5). "division always makes smaller" is the
   -- Fischbein intuitive rule the estimation work targets; it is a belief about
   -- direction, not an arithmetic slip, so it needs its own tag.
