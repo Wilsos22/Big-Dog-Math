@@ -273,7 +273,12 @@ Codex and cloud sessions need them too (rule 9).
 ## Repo layout
 
 - `src/app/**` - App Router pages and API routes (one folder per route, direct `page.tsx`/`route.ts`;
-  no route groups, no per-segment layouts except the root `layout.tsx`).
+  no route groups. PER-SEGMENT LAYOUTS ARE FINE AND TWO EXIST - corrected 2026-08-05; this line said
+  "no per-segment layouts except the root `layout.tsx`" and was already untrue when written.
+  `src/app/teacher/remote/layout.tsx` and `src/app/ipad/layout.tsx` each exist for the one thing only
+  a layout can do: a `"use client"` page cannot export `metadata`, so an installable home-screen
+  surface has to hang its manifest and apple-web-app tags off a layout. Do not add one for anything
+  else.)
 - `src/components/**` - shared React components (SiteNav, ToolNav, AbbieTalk, the manipulatives, etc.).
   THE LIVE TOOL IS USUALLY THE `*Board.tsx` FILE. A pre-redesign generation of dark-themed
   (slate-900, Tailwind, placekitten fallbacks) prototypes still sits beside the real components
@@ -1801,6 +1806,27 @@ the invariants they protect are easy to break again.
   is `PKCanvasView.drawingPolicy = .pencilOnly` by another road. What PencilKit would genuinely buy
   is latency (Apple's ~9ms path vs ~30-60ms for Safari canvas) and immunity to the three gaps above -
   nothing else. Weigh a second codebase against that list, not against a palm problem that is solved.
+  ALL THREE ARE CLOSED AS OF 2026-08-05, and `/ipad` is now installable like the Remote already was:
+  `src/app/ipad/layout.tsx` + `public/ipad.webmanifest`, the selection lockdown on `.ip-page`, and a
+  document-level `gesturestart`/`gesturechange`/`gestureend` preventDefault - the only way to stop
+  Safari's page pinch, since `touch-action` does not govern it and `user-scalable=no` has been
+  ignored since iOS 10. The Full screen button now says what to do instead of failing silently, and
+  hides once the surface is running standalone. NOT YET CONFIRMED ON THE DEVICE - verified in a
+  desktop browser, and `-webkit-touch-callout` cannot even be computed in Chrome, so the real test is
+  Steele's iPad.
+  **`appleWebApp: { capable: true }` NO LONGER EMITS THE TAG SAFARI READS.** Measured in the browser
+  2026-08-05: Next renders `mobile-web-app-capable` (the Chrome/Android spelling) and NO
+  `apple-mobile-web-app-capable`. iPadOS 16.4+ falls back to the manifest's `display: standalone`, so
+  this is not fatal, but both layouts now also pass `other: { "apple-mobile-web-app-capable": "yes" }`.
+  Check the rendered head, not the Next metadata object, when a home-screen install misbehaves.
+  **TO LOAD `/ipad` LOCALLY AT ALL** you need auth, because the proxy gates it. Recipe, about a
+  minute: put `TEACHER_PASSWORD=localdev` in the gitignored `.env.local`, start the dev server, then
+  from the page run `fetch('/ipad', { headers: { Authorization: 'Basic ' + btoa('teacher:localdev') },
+  credentials: 'include' })` and navigate. The `bdm_teacher` cookie is HttpOnly, so `document.cookie`
+  will show nothing and setting it from JS does nothing - the fetch is what stores it, and a 200 back
+  is the confirmation. And the stage measures 0x0 until the pane tab has a viewport, which only a
+  SCREENSHOT against that tabId grants (`window.innerWidth` reads 0 before that) - so screenshot
+  first, then measure, or every rect lies.
 - **PEN FEEL: THE GEOMETRY FIXES, AND WHY "JAGGED" WAS FOUR SEPARATE THINGS** (2026-08-03, from
   Steele: "too jagged and doesnt respond well to writing. especially back to back strokes", then
   "a few weeks ago it was running fantastic"). `npm run test:ink-geometry` (35 checks) pins all of
