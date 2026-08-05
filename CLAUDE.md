@@ -422,7 +422,12 @@ Codex and cloud sessions need them too (rule 9).
   Measured that day: `Priority = Now` returns 18 rows and NINE of them are already complete, so
   the wrong filter reports shipped features as outstanding work - the exact failure a status
   read exists to prevent. Correct filter is `Priority = "Now"` AND `Done = "__NO__"`.
-  `.claude/commands/class-audit.md` (curriculum scope) still carries the wrong wording.
+  `.claude/commands/class-audit.md` (curriculum scope) still carries the wrong wording - confirmed
+  still wrong 2026-08-05 at `.claude/commands/class-audit.md:43`.
+  THE TITLE COLUMN IS `Feature`, NOT `Name` (2026-08-05). Nearly every other database here titles
+  its rows `Name`, so the obvious query fails with
+  `no such column: "Name" - should this be a string literal in single-quotes?`, which reads as a
+  quoting problem and is not one. Select `"Feature", "Status", "Area", "Who acts", "Next step"`.
 
 ## Routes (as of this writing)
 
