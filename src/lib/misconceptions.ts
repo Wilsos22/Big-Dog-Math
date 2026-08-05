@@ -42,6 +42,12 @@ export const MISCONCEPTION_TAGS = [
   "stops at the first shared prime",
   "leaves a composite in the tree",
   "answers the group size not the count",
+  // Factor-pair builds, emitted by the structured-numeric `pairs()` scorer.
+  // These two exist because a student who INVENTS a pair and a student who
+  // merely STOPS EARLY need different moves, and the pairs scorer deliberately
+  // attached no tag at all until the vocabulary had words for them.
+  "lists a non-factor pair",
+  "stops before all pairs are found",
   // Fraction division (M1.T1.L4-L5).
   "treats numerator and denominator as separate",
   "division always makes smaller",

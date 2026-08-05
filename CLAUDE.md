@@ -1259,7 +1259,46 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   works from home with no live session. `assignments` / `assignment_problems` / `problems` have full RLS
   policies in `student-data-security.sql` but ZERO application code - schema without a UI, so assigning
   a manipulative is not a capability yet.
-  THE BIG ONE (found 2026-07-29): **`poll_answers` NEVER REACHES `responses`, SO THE EXIT TICKET MOVES
+  **BRIDGED 2026-08-04 - READ THIS BEFORE THE PARAGRAPH BELOW, WHICH IS NOW HISTORY.**
+  `src/lib/pollEvidence.ts` + `POST /api/teacher/poll-evidence` turn graded poll answers into
+  `responses` rows and then call `recomputePeriod`, so the learning checks and the exit ticket do
+  now move a bar. What it grades is DELIBERATELY NARROW (Steele, 2026-08-04): `structured-numeric`
+  and `multiple-choice` only. NOT `short-answer` (bare string equality marks a right answer wrong
+  over a stray space - and note M1.T1.L5-D1's exit ticket is that kind, so that lesson's exit still
+  contributes nothing), NOT `multiple-choice-explain` (readinessEvidence cannot see the kind at
+  all, so bridging it would make the bars and the visit list disagree about one student - fix the
+  reader first), and NOT `fist-to-five` (a confidence self-report must never score a standard).
+  FOUR THINGS THAT WILL BITE WHOEVER TOUCHES IT. (1) **The bar row carries `standard_id: null` and
+  that is not a mistake** - `recompute.ts:133` filters bar events to `!standardId`, so attaching
+  the resolved standard is exactly the edit that stops the bar moving. There are two row shapes: a
+  per-question STANDARD row for the stage gate, and one aggregate BAR row. (2) **The bar row is one
+  per student per lesson per domain, not one per question.** The bars are an EWMA at alpha 0.30 per
+  event, so a row per question would take a domain bar 60 -> 42 -> 29 -> 21 -> 14 on four wrong
+  answers in one period, where a whole warm-up day is a single step. Every other writer aggregates
+  first; this matches them. (3) **Notion's `Standard` property does not match the seeded
+  `standards` ids** - measured on the live `polls` table, five of the six distinct authored values
+  were unseeded (`6.NS.4` omits the cluster letter, and some carry two codes as `6.EE.2b; 6.EE.3`).
+  `normalizeStandardId` inserts the cluster letter when exactly one seeded id qualifies and takes
+  the first RESOLVABLE code of a list; anything left over is REPORTED, never guessed, and a poll
+  with no resolvable standard writes nothing at all (a domainless row is dropped by recompute with
+  a bare `continue`). (4) **A multiple-choice key that is in none of the choices makes the poll
+  ungradable, not the class wrong** - see the `splitList` trap below. `npm run test:poll-evidence`
+  pins all four, and each was verified by reverting the fix and watching the suite go red.
+  STILL TRUE and still the gap: `practice_assignment_attempts` and 16 of 23 tools reach nothing,
+  and nothing calls the bridge automatically yet - it is a route you POST, and `GET` on it is a dry
+  run. Also NOT verified end to end, because `poll_answers` has zero rows lifetime until the FERPA
+  Workspace half lands.
+  **A MULTIPLE-CHOICE ANSWER KEY CAN BE UNTAPPABLE, AND THREE LIVE POLLS ALREADY ARE** (found
+  2026-08-04). `splitList` (`notionLessons.ts:453`) splits the Notion `Choices` property on
+  `[\n,]`, while `Correct Answer` is read whole - so an authored choice containing a comma
+  ("6 x 6 = 36, so every later pair would repeat one she already recorded") is shattered into two
+  choices and the key matches neither. 3 of 29 live multiple-choice polls are in that state, on the
+  M1.T1 factor-pair material. No student can submit the key, so bare equality marks EVERY student
+  wrong. The bridge refuses to grade those (`answerKeyIsTappable`) rather than making a whole class
+  fail permanently, but the AUTHORING bug is unfixed: a comma inside a Notion choice still breaks
+  the choice list on every surface that renders it.
+  THE ORIGINAL NOTE (found 2026-07-29), kept because its reasoning is still the reason the bridge
+  looks the way it does: **`poll_answers` NEVER REACHES `responses`, SO THE EXIT TICKET MOVES
   NO MASTERY BAR.** Steele moved the exit ticket on-site specifically for data retention and mid-lesson
   deployment - no Google Form to click into - and the rows do persist. But every exit step in the
   deployable lessons carries a `Response Mode` + `Question`, so `navigateFlow` creates a POLL and the
