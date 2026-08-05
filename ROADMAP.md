@@ -944,18 +944,28 @@ NARROWED 2026-08-05: steps 1, 5 and 8 are done, so what is left is
   off rivals by hand. Erase model (anti-snowball); zero X's = out of the shooting
   but still answering + immune; "back with a grudge" revives after 2 wilds-while-out
   wins, taking 3 from the nemesis. `/teacher/grudge` (+`/board`,`/scoreboard`,
-  `/remote`), `/grudge` student. Code + migration done; waiting on Steele to run
-  `supabase/grudge.sql` and a live run. Deliberately not on the proficiency spine.
+  `/remote`), `/grudge` student. Deliberately not on the proficiency spine.
+  **MIGRATION IS APPLIED (verified against the live database 2026-08-05: five
+  `grudge_*` tables exist).** This entry said it was "waiting on Steele to run
+  `supabase/grudge.sql`"; it is not. The only thing left is a live run with a
+  class.
 - **Week builder** — code shipped (`warmup-pools-data.gs` + `warmup-week-builder.gs`,
   `buildWeekFromNotionLessons` at warmup-week-builder.gs:31); waiting on Steele's
   Apps Script paste-in. Builds the week from published Notion lessons: pool-backed
   Q4/Q5 (verified tags), AI openers only.
-  **CORRECTED 2026-08-05: there is no sidebar button.** This entry claimed one.
-  `warmup-sidebar-functions.gs:10-21` exposes only Warm-Up Builder, trigger repair
-  and backfill, and `generateWeekAuto` routes to `generateWeekFormsFromEngine_`
-  (warmup-engine.gs) — it never calls `buildWeekFromNotionLessons`. So after the
-  paste-in there is still nothing to press: wiring the menu entry is real
-  remaining work, not a done thing waiting on Steele.
+  **THERE WAS NO SIDEBAR BUTTON; ONE WAS BUILT 2026-08-05.** This entry claimed
+  one for weeks. `generateWeekAuto` routes to `generateWeekFormsFromEngine_`
+  (warmup-engine.gs) and never calls `buildWeekFromNotionLessons`, so after the
+  paste-in there would still have been nothing to press. Fixed: a
+  `Build Week from Notion Lessons` item now sits under the Big Dog Math menu
+  (`warmup-sidebar-functions.gs`, `promptBuildWeekFromNotion`). A menu item takes
+  no arguments and the builder needs a `{number, startDate}`, which is why it is a
+  prompting wrapper rather than a bare entry; it builds all five days in one press
+  and deliberately does NOT stop at the first failure, so a Wednesday with no
+  published lesson cannot cost you Thursday and Friday. Parses clean;
+  `npm run test:warmup-apps-script` green. **Still waiting on Steele's paste-in of
+  `warmup-week-builder.gs` + `warmup-pools-data.gs` + this file** - and NOT yet
+  run against a real week, so the first press is the test.
 ## Planned
 - **The laptop as the participation and edge-case view** (Steele, 2026-07-29,
   refining "the laptop shows student data"): a general state of participation that
@@ -1146,11 +1156,17 @@ work that no longer exists, and one of them would have broken teacher auth.
    "duplicate row for one site student" (Golden Badger, Jolly Ocelot, Vivid
    Ocelot, Sunny Walrus, Smart Toucan, Eager Salmon - usually a schedule change
    leaving both rows), and rows 153-157 skipped for "no period".
-5. Run `supabase/table-captains-and-supply-checks.sql` - table captains and the
-   closeout supply check are DARK until it is applied, and `/api/roster/sync`
-   500s on the `table_number` select without it.
-6. Run `supabase/grudge.sql` - Grudge Ball's code and migration are done and
-   waiting on this plus a live run.
+5. ~~Run `supabase/table-captains-and-supply-checks.sql`~~ **ALREADY RUN -
+   verified against the live database 2026-08-05.** `students.table_number`,
+   `table_captains`, `supply_checks` and the `supply_check_streaks` view all
+   exist. Table captains and the closeout supply check are NOT dark, and
+   `/api/roster/sync` does not 500 on the `table_number` select. This item had
+   been telling you to do work that was already done - if the captain spinner
+   still looks empty, the cause is the roster Sheet having no Table column yet
+   (a blank cell means "not tracking seating", by design), not the migration.
+6. ~~Run `supabase/grudge.sql`~~ **ALREADY RUN - verified 2026-08-05.** Five
+   `grudge_*` tables exist, including `grudge_games`. What Grudge Ball is
+   actually waiting on is a LIVE RUN with a class, not a migration.
 7. The FERPA cutover's Workspace half - **NARROWED 2026-08-04, steps 1 and 5 are
    DONE.** All 156 students in Periods 1-5 carry an `alias` AND an `email_hmac`,
    created 2026-08-01; the site cannot compute an HMAC, so the key exists and
@@ -1175,8 +1191,14 @@ work that no longer exists, and one of them would have broken teacher auth.
    verified-student gate and present as dead buttons. Re-measured 8/4:
    `select count(*) from students where auth_user_id is not null` returns 0.
    This is still the single biggest blocker in the file.
-8. Paste `warmup-week-builder.gs` + `warmup-pools-data.gs` into the WARM-UP
-   Apps Script project (code shipped, waiting on the paste-in).
+8. Paste `warmup-week-builder.gs` + `warmup-pools-data.gs` **+ the updated
+   `warmup-sidebar-functions.gs`** into the WARM-UP Apps Script project (code
+   shipped, waiting on the paste-in). **The third file is new to this list as of
+   2026-08-05 and is the one that gives you a button** - it adds
+   `Build Week from Notion Lessons` to the Big Dog Math menu. Paste the first two
+   without it and the week builder is still unreachable, which is the state this
+   item was silently in for weeks. After pasting, reopen the spreadsheet so
+   `onOpen()` re-runs and the menu redraws.
 9. Add `Misconception Plans` text property to the Lessons DB; author
    `tag :: move` lines. The code side reads it already
    (`src/lib/notionLessons.ts:685`, consumed by `/teacher/rightnow`).
