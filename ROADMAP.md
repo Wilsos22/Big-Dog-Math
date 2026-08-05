@@ -760,7 +760,11 @@ original four are resolved and were pruned by `/status sync` on 2026-08-05.
     merging by running the NEW contract against the OLD geometry: fails at
     `7.50px <= 3.75px`, passes with the fix.
   - `codex/integrated-security` and `codex/warmup-identity-preview` -
-    **RECOMMEND DELETE, evidence below. Steele's call; not deleted.** Main is
+    **DECIDED 2026-08-05, Steele: "dont delet anything ... just leave it."
+    LEAVE THEM. Do not delete them, and do not re-propose deleting them.**
+    They cost nothing sitting there. The analysis below is kept only so nobody
+    has to redo it, and so nobody merges them by mistake - it is NOT a standing
+    recommendation to act on. Main is
     **623 and 643 commits ahead** of them. Their actual deliverables ALREADY
     LANDED by another route - `notion-warmup-requests.gs`,
     `docs/warmup-verified-identity.md` and
@@ -772,9 +776,12 @@ original four are resolved and were pruned by `/status sync` on 2026-08-05.
     `ipad`, `board` and student API routes that have each been rewritten several
     times since 7/12 - merging them now would be a regression risk on the
     classroom surfaces, not a recovery of lost work.
-  - Still unread: `backup-before-rebuild-80e3da5` (a snapshot, not a feature),
-    `claude/big-dog-website-roadmap-yp65vy`, `claude/quizzical-mcnulty-effb35`,
-    and `origin/codex/two-panel-classroom` (remote only).
+  - Left alone, same decision: `backup-before-rebuild-80e3da5` (a snapshot, not
+    a feature), `claude/big-dog-website-roadmap-yp65vy`,
+    `claude/quizzical-mcnulty-effb35`, and `origin/codex/two-panel-classroom`
+    (remote only). Unread, and staying that way unless Steele asks - an unmerged
+    branch is not a problem to be solved, and this item should stop presenting
+    itself as one.
 
 RESOLVED AND PRUNED 2026-08-05: "Vercel is not building from `main`" (Steele's
 manual redeploy restored it; live `/api/build-id` has tracked `origin/main`
