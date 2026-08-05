@@ -22,6 +22,51 @@ function warmupEngineUrl_() {
   return PropertiesService.getScriptProperties().getProperty("WARMUP_ENGINE_URL") || WARMUP_ENGINE_DEFAULT_URL;
 }
 
+// Read a Script Property that holds a secret. Two cleanups, both from real
+// failures on 2026-08-04: surrounding whitespace survives a paste and is
+// compared byte-for-byte by the proxy, and a value copied off a .env line
+// arrives as "CRON_SECRET=<value>" with the name still attached.
+function warmupEngineSecretValue_(name) {
+  const raw = PropertiesService.getScriptProperties().getProperty(name);
+  if (!raw) return "";
+  return String(raw).trim().replace(/^[A-Z][A-Z0-9_]*=/, "").trim();
+}
+
+// Every credential the site's gate (src/proxy.ts) will accept, in order.
+//
+// Bearer CRON_SECRET is the intended one, but Vercel never re-reveals an
+// existing secret, so there is no way to confirm the two values match - which
+// is how a correct-looking key produced "Teacher login required." for hours.
+// HTTP Basic with the TEACHER_PASSWORD is the escape hatch: same gate, no new
+// auth surface, and it is a value the teacher actually knows and can retype.
+function warmupEngineAuthCandidates_() {
+  const candidates = [];
+
+  const engineKey = warmupEngineSecretValue_("WARMUP_ENGINE_KEY");
+  if (engineKey) {
+    candidates.push({ label: "WARMUP_ENGINE_KEY", headers: { Authorization: "Bearer " + engineKey } });
+  }
+
+  // The roster project stores the same secret under a different name. If it
+  // ever gets pasted into this project it should just work.
+  const cronKey = warmupEngineSecretValue_("BDM_CRON_SECRET");
+  if (cronKey && cronKey !== engineKey) {
+    candidates.push({ label: "BDM_CRON_SECRET", headers: { Authorization: "Bearer " + cronKey } });
+  }
+
+  const password = warmupEngineSecretValue_("BDM_TEACHER_PASSWORD");
+  if (password) {
+    const user = warmupEngineSecretValue_("BDM_TEACHER_USERNAME") || "teacher";
+    candidates.push({
+      label: "BDM_TEACHER_PASSWORD",
+      headers: { Authorization: "Basic " + Utilities.base64Encode(user + ":" + password) }
+    });
+  }
+
+  candidates.push({ label: "no credentials", headers: {} });
+  return candidates;
+}
+
 // Low-level fetch. params: { date, topic, prevTopic, seed } - all optional.
 // With only a date, the endpoint resolves the topic (and the previous taught
 // day's topic) from the Notion lesson calendar on its own.
@@ -34,21 +79,46 @@ function fetchWarmupSetFromEngine_(params) {
   if (p.seed) query.push("seed=" + encodeURIComponent(p.seed));
   const url = warmupEngineUrl_() + (query.length ? "?" + query.join("&") : "");
 
-  const headers = {};
-  const key = PropertiesService.getScriptProperties().getProperty("WARMUP_ENGINE_KEY");
-  if (key) headers.Authorization = "Bearer " + key;
+  const candidates = warmupEngineAuthCandidates_();
+  const tried = [];
+  let lastCode = 0;
+  let lastText = "";
 
-  const res = UrlFetchApp.fetch(url, { method: "get", muteHttpExceptions: true, headers: headers });
-  const code = res.getResponseCode();
-  const text = res.getContentText();
-  if (code < 200 || code >= 300) {
-    throw new Error("Warm-up engine " + code + ": " + String(text).slice(0, 300));
+  for (let i = 0; i < candidates.length; i++) {
+    const res = UrlFetchApp.fetch(url, {
+      method: "get",
+      muteHttpExceptions: true,
+      headers: candidates[i].headers
+    });
+    const code = res.getResponseCode();
+    const text = res.getContentText();
+
+    if (code >= 200 && code < 300) {
+      try {
+        return JSON.parse(text);
+      } catch (err) {
+        throw new Error("Warm-up engine returned non-JSON: " + String(text).slice(0, 200));
+      }
+    }
+
+    tried.push(candidates[i].label + " -> " + code);
+    lastCode = code;
+    lastText = text;
+    // Only an auth failure is worth another credential. A 500 is the endpoint.
+    if (code !== 401 && code !== 403) break;
   }
-  try {
-    return JSON.parse(text);
-  } catch (err) {
-    throw new Error("Warm-up engine returned non-JSON: " + String(text).slice(0, 200));
+
+  // This message lands in the Notion "Warm-Up Build Note", which is the only
+  // place the teacher sees it - so it names the fix rather than the symptom.
+  // It prints which credential was tried, never the credential.
+  let message = "Warm-up engine " + lastCode + " (tried " + tried.join(", ") + "): "
+    + String(lastText).slice(0, 200);
+  if (lastCode === 401 || lastCode === 403) {
+    message += " -- FIX: in THIS Apps Script project, set BDM_TEACHER_PASSWORD to your"
+      + " bigdogmath.com teacher password. That is the same login the site already accepts"
+      + " and needs no Vercel change.";
   }
+  throw new Error(message);
 }
 
 // Fetch + shape into what buildForm_ expects. The engine guarantees validity;
