@@ -75,6 +75,16 @@ export default function IpadPage() {
   // the content moves with the writing. The ink needs no CSS transform - it is
   // redrawn vectorially at the new scale, which is what keeps it sharp.
   const [view, setView] = useState({ s: 1, x: 0, y: 0 });
+  // Installed to the home screen already? Then this IS full screen and a Full
+  // screen button is a control with nothing left to do. Detected in an effect,
+  // never at module scope - matchMedia does not exist during the server render.
+  // `navigator.standalone` is the iOS-specific answer and is kept alongside the
+  // media query because older iPadOS did not report display-mode at all.
+  const [standalone, setStandalone] = useState(false);
+  useEffect(() => {
+    const nav = navigator as Navigator & { standalone?: boolean };
+    setStandalone(window.matchMedia("(display-mode: standalone)").matches || nav.standalone === true);
+  }, []);
   const ctrlRef = useRef<InkChannel | null>(null);
   const paperRef = useRef(false);
   useEffect(() => { paperRef.current = paper; }, [paper]);
@@ -154,6 +164,26 @@ export default function IpadPage() {
       document.removeEventListener("visibilitychange", onVisible);
       void lock?.release().catch(() => undefined);
     };
+  }, []);
+
+  // Cancel Safari's OWN pinch zoom. This is the other half of the selection
+  // lockdown in the stylesheet, and it has to be JS: on iPadOS the page-level
+  // pinch is not governed by touch-action at all, and `user-scalable=no` in the
+  // viewport has been ignored since iOS 10 for accessibility reasons. The
+  // WebKit-proprietary gesture events are what is left, and preventing them is
+  // what stops a stray second finger - a palm, a knuckle, a student leaning in -
+  // from zooming the whole document out from under the pen mid-sentence.
+  //
+  // Registered on the DOCUMENT rather than the stage on purpose: the gesture
+  // can start anywhere, including on the toolbar or the bare ground beside it,
+  // and it zooms the page wherever it starts. `passive:false` is required or
+  // preventDefault is ignored. These are not in TypeScript's DOM event map, so
+  // the names go through as plain strings.
+  useEffect(() => {
+    const stopGesture = (e: Event) => e.preventDefault();
+    const names = ["gesturestart", "gesturechange", "gestureend"];
+    for (const n of names) document.addEventListener(n, stopGesture, { passive: false });
+    return () => { for (const n of names) document.removeEventListener(n, stopGesture); };
   }, []);
 
   // Control channel: the attention call, and the paper background the displays
@@ -273,17 +303,45 @@ export default function IpadPage() {
     });
   }
 
+  // THIS BUTTON DID NOTHING ON THE IPAD AND SAID NOTHING ABOUT IT. WebKit ships
+  // element fullscreen on macOS Safari only; on iPadOS `requestFullscreen` is
+  // simply absent, so the call threw into an empty catch and the teacher tapped
+  // a button that looked like the fix for the exact complaint it could not
+  // address. It still works on the desktop browsers this surface gets tested
+  // in; where it cannot, it now names the one path that does - installing to the
+  // home screen, which is what the manifest in this route's layout is for.
   function toggleFullscreen() {
-    try {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else document.documentElement.requestFullscreen();
-    } catch { /* ignore */ }
+    const el = document.documentElement;
+    if (typeof el.requestFullscreen !== "function") {
+      flashToast("iPadOS has no full screen for web pages. Share, then Add to Home Screen - it opens with no browser bar at all.");
+      return;
+    }
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    else void el.requestFullscreen().catch(() => flashToast("The browser refused full screen."));
   }
 
   return (
     <main className="ip-page">
       <style>{`
-        .ip-page { position:fixed; inset:0; background:var(--bdb-ground); font-family:var(--bdb-font); }
+        /* THE SELECTION LOCKDOWN. Steele, 2026-08-04: "constantly select alling
+           and highlighting and moving around the screen." None of that was the
+           ink - it was iOS treating a writing surface like a document.
+           user-select + touch-callout stop a touch that drags a few px on a
+           palette button from starting a text selection and raising the
+           Copy / Look Up menu; tap-highlight stops the grey flash on every
+           press; overscroll-behavior stops the document rubber-banding under
+           the fixed layers. There is not one text input on this page, so none
+           of this can cost anything.
+           touch-action:manipulation kills double-tap-to-zoom page-wide while
+           still letting the palette scroll if it ever outgrows the screen -
+           .ip-screen-stage keeps its stricter "none", because touch-action
+           INTERSECTS down the tree and the stricter value wins. Safari's
+           pinch-zoom is not a touch-action matter at all; it is cancelled
+           through the gesture events in the effect that pairs with this. */
+        .ip-page { position:fixed; inset:0; background:var(--bdb-ground); font-family:var(--bdb-font);
+          overscroll-behavior:none; touch-action:manipulation;
+          -webkit-user-select:none; user-select:none;
+          -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
         .ip-topbar { position:fixed; top:10px; left:10px; z-index:30; display:flex; gap:8px; }
         .ip-handle { display:inline-flex; align-items:center; gap:8px; min-height:40px; padding:0 15px; border-radius:999px; border:1px solid rgba(32,30,26,0.14); background:rgba(255,255,255,0.72); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); font:inherit; font-weight:800; font-size:0.85rem; color:var(--bdb-ink); cursor:pointer; touch-action:manipulation; box-shadow:0 8px 22px rgba(40,32,20,0.14); }
         .ip-bark { display:inline-flex; align-items:center; min-height:40px; padding:0 16px; border-radius:999px; border:1px solid color-mix(in srgb, var(--bdb-amber) 65%, rgba(32,30,26,0.14)); background:var(--bdb-amber); color:var(--bdb-ink); font:inherit; font-weight:800; font-size:0.85rem; cursor:pointer; touch-action:manipulation; box-shadow:0 8px 22px rgba(252,175,56,0.35); }
@@ -405,7 +463,7 @@ export default function IpadPage() {
           {moreOpen && (
             <div className="ip-row">
               <button className="ip-btn" onClick={() => setExportSignal((n) => n + 1)}>Export</button>
-              <button className="ip-btn" onClick={toggleFullscreen}>Full screen</button>
+              {!standalone && <button className="ip-btn" onClick={toggleFullscreen}>Full screen</button>}
             </div>
           )}
         </div>

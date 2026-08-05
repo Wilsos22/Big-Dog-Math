@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   icons: {
     apple: "/big-dog-mark.png",
   },
+  // Next's `appleWebApp.capable` emits only `mobile-web-app-capable` now, which
+  // is the Chrome/Android spelling Safari ignores - so the Remote has been
+  // relying on the manifest alone for standalone mode. Additive, and the
+  // spelling that works on every iPadOS. See the same note on /ipad.
+  other: { "apple-mobile-web-app-capable": "yes" },
 };
 
 export const viewport: Viewport = {

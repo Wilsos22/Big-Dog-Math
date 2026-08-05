@@ -1,0 +1,19 @@
+{
+  "name": "Big Dog Math Pen Surface",
+  "short_name": "Pen Surface",
+  "description": "Write on the classroom board from anywhere in the room.",
+  "start_url": "/ipad",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#faf6ee",
+  "theme_color": "#28241e",
+  "icons": [
+    {
+      "src": "/big-dog-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
