@@ -1080,7 +1080,10 @@ work that no longer exists, and one of them would have broken teacher auth.
    in **60 seconds**. Nothing is stranded behind the deploy gap any more. Keep
    the CLAUDE.md habit of checking `/api/build-id` after a push anyway - the gap
    was real for 22 commits and "pushed" is still a different claim from "live".
-2. **Run `supabase/poll-evidence-vocabulary.sql`** - four lines. The poll -> mastery
+2. ~~**Run `supabase/poll-evidence-vocabulary.sql`**~~ **RESOLVED 2026-08-04 -
+   Steele ran it, and both rows are confirmed in the live `misconceptions` table
+   carrying `standard_id = 6.NS.B.4`.** The tags now cluster with a domain
+   instead of into blanks. Original note follows. Four lines. The poll -> mastery
    bridge shipped 2026-08-04 and writes two new misconception tags
    (`lists a non-factor pair`, `stops before all pairs are found`). An unseeded
    tag does NOT error: it silently loses its domain, so i-Ready corroboration in
@@ -1094,6 +1097,16 @@ work that no longer exists, and one of them would have broken teacher auth.
    is set - so building a warm-up fails with `Teacher login required.` from
    `src/proxy.ts:104`. The script's own comment says to set it "once /api/warmup
    is gated"; the condition came true and nobody re-read the comment.
+   **PARTLY DONE 2026-08-04 AND NOT YET PROVEN.** Steele set the property, but
+   Vercel does not let you read `CRON_SECRET` back, so whether the two values
+   MATCH is unverified - and a mismatch is invisible until a warm-up build
+   returns `Teacher login required.` The fix is not to recover the old value but
+   to ROTATE: generate one new string and paste the identical value into THREE
+   places - Vercel `CRON_SECRET` (then redeploy, or the change does not take),
+   the WARM-UP project's `WARMUP_ENGINE_KEY`, and the ROSTER project's Bearer
+   token for `warmup-roster-push.gs`. Miss the third and the roster push starts
+   401ing silently. The proof it worked is `testWarmupEngineFetch()` in the
+   warm-up project returning a set rather than an auth error.
 4. **Clean the roster Sheet.** The 2026-08-04 push reported 151 sheet rows
    against 156 site students, so roughly **14 stale draft-roster students** sit
    in the database and the push NEVER deletes - they will pad every roster count
