@@ -1817,6 +1817,31 @@ the invariants they protect are easy to break again.
   republish replaces them with `[]`. The contract pins Control's current behaviour, so closing the
   gap means changing that assertion too. It is a real divergence and it changes what students read
   on screen, which is why a refactor did not get to decide it.
+- **A LIVE POLL BELONGS TO A STEP, NOT TO A KIND OF STEP** (fixed 2026-08-04; it was the "first ready
+  check shows the previous state's directions" report). `/control` decided whether the question on
+  screen was still current by comparing the STATE ID, and the lessons here are authored with
+  consecutive interactive steps sharing one - "Readiness Question 1" and "Readiness Question 2" are
+  both `question`, lesson after lesson, and Steele's shape is always a fist-to-five poll followed by
+  TWO ready checks. Advancing between two such steps made all three of these happen at once: the
+  clear effect returned early so the first poll was never closed, the publish republished its
+  question AND its revealed bars as the second step's, and the auto-open guard (`|| controlPoll`)
+  stopped the second step from ever opening its own poll. So the pair that exists to show whether the
+  class moved could only ever show one answer, twice, and nothing a student did on the second check
+  could register. `ControlPoll.stepIndex` is the key now - the sequence index, because it is the
+  identity BOTH paths already have (server hydration reads `flow.sequence.currentIndex`, and a
+  Remote-driven Next updates `currentIndex`, which is what makes the stale poll fall away). Every
+  other lifecycle marker in that file was already per-step (`autoOpenedStepRef`, `openingStepRef`,
+  `autoOpenedDiscussionStepRef` all key on `activeItem.uid`); these two were the outliers.
+  `npm run test:control-lineup` pins it, mutation-tested both ways.
+  MAKE THE FIELD REQUIRED, NOT OPTIONAL. Typing `stepIndex` as required is what surfaced the THIRD
+  construction site - the remote-command rehydrate at the bottom of the file, which is the path the
+  iPad actually drives and the one no reading of the top of the file would have found.
+  FOUND IN THE SAME LINES: that rehydrate also DROPPED `boxes` and `pairs` while the server hydration
+  carried them. Control republishes the poll from its own object about once a second and its snapshot
+  is a full replace, so a Remote-driven Next into a `Structured Numeric` step blanked the input count
+  and students lost the boxes they answer in. Same class as the state-strip and `discussionPhases`
+  drift - and note this one hid in a poll field rather than a step field, so the `controlLineup.ts`
+  extraction did not cover it. The contract now pins both rehydrates.
 - **THE DISCUSSION OVERLAY COVERS `/control` AT z-index 50.** Any control the teacher needs mid-
   discussion must be reachable from inside `DiscussionProtocol`; Control's own Back is invisible.
 - **`resolveLessonVisual` TAKES TWO ID NAMESPACES.** `stateId` is the `ClassroomStageId` (warmup maps

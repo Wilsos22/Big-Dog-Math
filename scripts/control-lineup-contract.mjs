@@ -319,4 +319,54 @@ check("control/page.tsx maps through the shared helpers only", () => {
   );
 });
 
+// A POLL BELONGS TO A STEP, NOT TO A KIND OF STEP. Lessons here are authored
+// with consecutive interactive steps sharing one state id - "Readiness Question
+// 1" and "Readiness Question 2" are both `question`, lesson after lesson - so
+// keying the live poll on stateId made Control treat the pair as one question:
+// the first poll never closed, its question and its revealed bars republished
+// as the second step's, and the second never opened its own. Two ready checks
+// exist to show whether the class moved; that made them show one answer twice.
+check("the live poll is keyed to the step, never to the state id", () => {
+  const page = fs.readFileSync(path.join(root, "src", "app", "control", "page.tsx"), "utf8");
+  assert.ok(
+    page.includes("stepIndex: number | null"),
+    "ControlPoll must carry the step it belongs to",
+  );
+  assert.ok(
+    page.includes("controlPoll.stepIndex === currentIndex"),
+    "the poll-clearing effect must compare the step, not the state id",
+  );
+  assert.ok(
+    !/controlPoll\??\.stateId === activeInteractiveState/.test(page),
+    "no site may still decide poll identity by comparing stateId to the active state",
+  );
+  // Every construction site must set it, or a poll starts life unable to match
+  // any step and is cleared the moment it opens. Three today: server hydration,
+  // openControlPoll, and the remote-command rehydrate.
+  const stepIndexSets = (page.match(/\bstepIndex: /g) || []).length;
+  assert.ok(
+    stepIndexSets >= 3,
+    `every setControlPoll construction must set stepIndex, found ${stepIndexSets}`,
+  );
+});
+
+// Control republishes the poll from its own object about once a second and the
+// snapshot is a full replace, so a field missing from a rehydrate is deleted for
+// the room. The remote-command rehydrate dropped boxes/pairs while the server
+// hydration carried them, which blanked the inputs on a Structured Numeric step
+// the moment the Remote advanced into it.
+check("both rehydrates carry the structured-numeric input shape", () => {
+  const page = fs.readFileSync(path.join(root, "src", "app", "control", "page.tsx"), "utf8");
+  for (const field of ["boxes", "pairs"]) {
+    assert.ok(
+      page.includes(`${field}: flow.poll.${field}`),
+      `the server hydration must carry ${field}`,
+    );
+    assert.ok(
+      page.includes(`${field}: publishedPoll.${field}`),
+      `the remote-command rehydrate must carry ${field}`,
+    );
+  }
+});
+
 console.log(`control-lineup contract: ${checks} checks passed`);

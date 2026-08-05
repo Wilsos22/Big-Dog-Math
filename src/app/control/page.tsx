@@ -207,6 +207,20 @@ interface PublishedTool {
 
 interface ControlPoll {
   id: string;
+  /**
+   * WHICH STEP this poll belongs to, not just what kind of step it was. Control
+   * used to decide "is this still the current question?" by comparing stateId
+   * alone, and lessons here are authored with consecutive steps sharing one
+   * state id - "Readiness Question 1" and "Readiness Question 2" are both
+   * `question`, in lesson after lesson. Advancing between them left the first
+   * poll open, republished its question (and its revealed bars) as the second
+   * step's, and blocked the second from ever opening its own - so the pair that
+   * exists to show whether the class moved could only ever show one answer.
+   * The sequence index is the identity both paths already have: the server
+   * hydration reads flow.sequence.currentIndex, and a Remote-driven Next
+   * updates currentIndex here, which is what makes the stale poll fall away.
+   */
+  stepIndex: number | null;
   stateId: InteractiveStateId;
   kind: LivePollKind;
   question: string;
@@ -1310,6 +1324,7 @@ export default function ControlPage() {
     setControlPoll(flow.poll && interactiveStateId
       ? {
           id: flow.poll.id,
+          stepIndex: flow.sequence.currentIndex,
           stateId: interactiveStateId,
           kind: flow.poll.kind,
           question: flow.poll.question,
@@ -1482,11 +1497,14 @@ export default function ControlPage() {
   }, [controlPoll, supabase]);
 
   useEffect(() => {
-    if (!controlPoll || controlPoll.stateId === activeInteractiveState) return;
+    // Keyed to the STEP. Two Readiness Questions in a row share a state id, so
+    // the old stateId test called them the same question and never closed the
+    // first. A poll whose step is gone is finished, whatever kind of step it was.
+    if (!controlPoll || controlPoll.stepIndex === currentIndex) return;
     closeActivePoll();
     setControlPoll(null);
     setPollAnswers([]);
-  }, [activeInteractiveState, closeActivePoll, controlPoll]);
+  }, [currentIndex, closeActivePoll, controlPoll]);
 
   useEffect(() => {
     if (publishedTool?.stateId !== activeToolState) {
@@ -1591,6 +1609,7 @@ export default function ControlPage() {
 
     setControlPoll({
       id: pollId,
+      stepIndex: currentIndex,
       stateId,
       kind,
       question,
@@ -1771,7 +1790,9 @@ export default function ControlPage() {
     const phase = activeUsesDiscussionProtocol && showDiscussion
       ? normalizeDiscussionPhaseSnapshot(discussionFlow)
       : null;
-    const poll = controlPoll?.stateId === activeInteractiveState
+    // Same step test as the clear effect above, plus the original guard that a
+    // poll never rides a non-interactive state.
+    const poll = controlPoll && controlPoll.stepIndex === currentIndex && activeInteractiveState
       ? {
           id: controlPoll.id,
           kind: controlPoll.kind,
@@ -2815,12 +2836,21 @@ export default function ControlPage() {
       setControlPoll(publishedPoll && interactiveStateId
         ? {
             id: publishedPoll.id,
+            stepIndex: publishedFlow.sequence?.currentIndex ?? null,
             stateId: interactiveStateId,
             kind: publishedPoll.kind,
             question: publishedPoll.question,
             choices: publishedPoll.choices,
             stage: publishedPoll.stage,
             awaitingTeacherAdvance: publishedPoll.awaitingTeacherAdvance,
+            // boxes/pairs were dropped here while the other rehydrate at the top
+            // of the file carried them. Control republishes the poll from this
+            // object about once a second, and its snapshot is a full replace, so
+            // a Remote-driven Next into a Structured Numeric step blanked the
+            // input count and students lost the boxes they answer in. Same class
+            // as the state-strip and discussionPhases drift.
+            boxes: publishedPoll.boxes,
+            pairs: publishedPoll.pairs,
           }
         : null);
       setPollAnswers([]);
