@@ -947,13 +947,17 @@ Codex and cloud sessions need them too (rule 9).
   paused clock), so pacing advances as long as ANY surface (Remote,
   /session's toolbar) is polling. `/control` remains the full host; `/session` carries a minimal
   Start / Back / Pause / Next toolbar for rush days.
-- API: gated - `/api/form-responses`, `/api/mastery` (+`/history`,`/recompute`), `/api/live/*`,
+- API: gated - `/api/mastery` (+`/history`,`/recompute`), `/api/live/*`,
   `/api/roster/sync`, `/api/checkpoints/upload`, `/api/abbie` (+`/voice`). Public - `/api/today`,
   `/api/lessons`, `/api/warmup-summaries`, `/api/session/*`, `/api/auth/login`,
   `/api/evidence` (authed separately by header, see Notion pipeline).
   `/api/abbie` WAS PUBLIC and was gated 2026-07-29: it forwards whatever text it is handed straight
   to api.anthropic.com on the server's key, so an ungated prefix was an open relay anyone could
   spend on and put arbitrary text through. It is in `PROTECTED_PREFIXES` now. Do not move it back.
+  `/api/form-responses` was DELETED 2026-08-05 (it returned raw district emails out of Notion - see
+  rule 8). Its `PROTECTED_PREFIXES` and matcher entries in `src/proxy.ts` were deliberately KEPT:
+  a prefix guarding a route that does not exist costs nothing and fails safe if one ever returns,
+  and removing it would be the one edit that could let a rebuilt route come back ungated.
 
 Slide overlays: `/teacher/slides` is the Canva-lite editor writing the Lesson Step's `Slide Overlay`
 Notion property (percent-based element JSON via `src/lib/slideOverlay.ts`; rich_text values chunk at
