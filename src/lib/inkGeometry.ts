@@ -180,6 +180,7 @@ export function strokeOutline(raw: InkRenderPoint[], baseWidth: number, taper = 
     let mx = n1x + n2x, my = n1y + n2y;
     const mlen = Math.hypot(mx, my);
     let miter = 1;
+    let bevel = false;
     if (mlen < 1e-6) {
       // A true 180-degree reversal has no bisector to build on - fall back to
       // the outgoing normal and let the round cap logic carry the tip.
@@ -187,11 +188,26 @@ export function strokeOutline(raw: InkRenderPoint[], baseWidth: number, taper = 
     } else {
       mx /= mlen; my /= mlen;
       const cosHalf = mx * n1x + my * n1y; // = cos(theta/2)
-      miter = Math.min(MITER_LIMIT, 1 / Math.max(cosHalf, 1e-3));
+      miter = 1 / Math.max(cosHalf, 1e-3);
+      // PAST THE LIMIT THE CORNER BEVELS - IT DOES NOT GET A SHORTER SPIKE.
+      // Clamping the multiplier and still pushing ONE point along the bisector
+      // is not what miterLimit means: it leaves a barb 2.5 nib-radii long
+      // sticking out of the joint, which on a 6px pen is a visible ~15px spur.
+      // Cursive is a chain of hairpins - the top of an l, a b, a th - so every
+      // one of them grew one, and the contract never caught it because it only
+      // ever asserted the reach was BOUNDED by the limit, which a clamped spike
+      // satisfies. A real bevel cuts the corner flat instead: one point on each
+      // segment's own normal, at the plain nib radius, no bisector involved.
+      if (miter > MITER_LIMIT) { miter = 1; bevel = true; }
     }
     const r = radiusFor(baseWidth, cur.p) * (taper ? taperScale(i, n) : 1) * miter;
-    left.push(cur.x + mx * r, cur.y + my * r);
-    right.push(cur.x - mx * r, cur.y - my * r);
+    if (bevel) {
+      left.push(cur.x + n1x * r, cur.y + n1y * r, cur.x + n2x * r, cur.y + n2y * r);
+      right.push(cur.x - n1x * r, cur.y - n1y * r, cur.x - n2x * r, cur.y - n2y * r);
+    } else {
+      left.push(cur.x + mx * r, cur.y + my * r);
+      right.push(cur.x - mx * r, cur.y - my * r);
+    }
   }
 
   // Round caps: a small fan of points around each end, oriented by the local
@@ -231,7 +247,10 @@ export function strokeOutline(raw: InkRenderPoint[], baseWidth: number, taper = 
   for (let i = 0; i < left.length; i += 1) ring.push(left[i]);
   const endCap = cap(pts[n - 1].x, pts[n - 1].y, endAngle + Math.PI, endR);
   for (let i = 0; i < endCap.length; i += 1) ring.push(endCap[i]);
-  for (let i = n - 1; i >= 0; i -= 1) ring.push(right[i * 2], right[i * 2 + 1]);
+  // Walk the right edge back by PAIRS, never by point index: a bevelled joint
+  // contributes two points instead of one, so `right[i * 2]` stopped being
+  // point i the moment the bevel above existed and the ring would tear.
+  for (let i = right.length - 2; i >= 0; i -= 2) ring.push(right[i], right[i + 1]);
   const startCap = cap(pts[0].x, pts[0].y, startAngle + Math.PI, startR);
   for (let i = 0; i < startCap.length; i += 1) ring.push(startCap[i]);
   return ring;

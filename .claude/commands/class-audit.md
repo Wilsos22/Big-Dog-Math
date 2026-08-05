@@ -43,7 +43,11 @@ report counts per period only, never names or emails; (4) Feature Tracker rows
 at `Priority = "Now"` AND the `Done` CHECKBOX = `__NO__`. Do NOT filter on
 `Status != Done` — `Status` has no such value (it runs Live / Planned / Parked /
 Needs revision / In progress), so that filter matches EVERY row and reports
-finished features as outstanding work. Output a coverage table + ranked gaps.
+finished features as outstanding work. Note also that the tracker's title column
+is `Feature`, not `Name`: selecting `"Name"` fails with
+`no such column: "Name" - should this be a string literal in single-quotes?`,
+which reads as a quoting problem and is not one. Output a coverage table +
+ranked gaps.
 
 ## Scope: student / teacher (the live simulation - run in this session)
 
