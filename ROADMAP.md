@@ -96,10 +96,23 @@ blob, so "reset to auto" is free. Three main-screen "demonstration objects" —
 slide the split, snap two pieces, move + resize — let the teacher drag a live
 model during class; they are deliberately ephemeral (never synced, saved, or
 recorded). The prior lesson-content editor is preserved
-at `/teacher/studio/edit`. OPEN: present and pace do not yet render the shared
+at `/teacher/studio/edit`. OPEN: present and pace do not render the shared
 `LessonScreen` library — they are fluid, not a 1920x1080 canvas — so the studio
 authors layouts ahead of the projector reading them; that adoption is a separate,
 verified follow-up.
+
+TRIED AND REVERSED (8/3 → 8/4). An additive `LessonSlideStage` overlay did put
+the auto-composed `LessonScreen` on both projectors for "plain worded" states.
+Steele ran it and cut it: the gate was a per-surface list of exclusions, so the
+room got the dotted frame on some states and the studio's colour band on others
+inside one lesson — and on `launch` the two projectors disagreed with each other
+at the same instant. There is one projector design again (dotted paper, accent
+state pill top left, clock top right, state strip). The lesson for the follow-up
+is that a design landing on some states and not others must not be gated by
+exclusion; it needs a positive test both surfaces read from one place. And per
+the DIRECTION below, the route to the wall is the `slide` frame around an
+imported deck, not the native zone grid — which is why this reversal leaves
+`/teacher/studio` with no output path to a projector, on purpose.
 
 **DIRECTION — frame + imported slides, not a native slide editor** (Steele,
 8/3). The native slide-composition path (the drag-resize component grid) is
