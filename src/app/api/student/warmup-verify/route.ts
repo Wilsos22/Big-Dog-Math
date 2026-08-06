@@ -21,6 +21,15 @@ function validUuid(value: unknown): value is string {
 export async function POST(request: Request) {
   const key = process.env.EVIDENCE_INGEST_KEY;
   if (!key || request.headers.get("x-bdm-key") !== key) {
+    // Only Apps Script calls this route, so a rejected key means every warm-up
+    // submission that period is silently never marked complete - with no
+    // symptom anywhere on the site. Leave a trail so it is discoverable.
+    // Never record the submitted key or any part of it.
+    await recordSecurityEvent({
+      eventType: "warmup_verify_rejected",
+      outcome: "denied",
+      details: { reason: key ? "key_mismatch" : "key_not_configured" },
+    });
     return Response.json({ error: "Unauthorized." }, { status: 401 });
   }
 
