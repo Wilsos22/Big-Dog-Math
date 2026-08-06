@@ -2743,14 +2743,18 @@ the invariants they protect are easy to break again.
   `normalize()` strips punctuation before matching. `npm run test:warmup-challenge` pins the
   comma-free form of every label, so making the match stricter fails loudly instead of silently
   dropping the one option a teacher picked.
-  **TWO PROPERTIES THAT NORMALIZE ALIKE ARE A SILENT COIN-FLIP, AND THERE ARE CURRENTLY TWO.**
+  **TWO PROPERTIES THAT NORMALIZE ALIKE ARE A SILENT COIN-FLIP, AND IT HAPPENED THE SAME DAY.**
   `propByName` iterates `Object.entries(properties)` and returns the FIRST key whose normalized
   name matches (`notionLessons.ts:269-271`), so `Warm up Challenge` and `Warm-Up Challenge` both
-  normalize to `warmupchallenge` and which one the site reads depends on Notion's property order -
-  not on the order of the names passed in. A value set on the losing one is ignored with nothing
-  anywhere saying so. `Warm up Challenge` appeared during the 2026-08-06 fix with ZERO options
-  (so no page can carry a value on it) and is Steele's to delete; it is called out here because
-  the same trap will recur the next time anyone hand-creates a property the code already reads.
+  normalize to `warmupchallenge` and which one the site reads depends on NOTION'S PROPERTY ORDER -
+  not on the order of the names passed in, which is the natural assumption and is wrong. Both
+  existed for a few minutes on 2026-08-06 (one hand-created in the UI while the other was created
+  through the API), and the EMPTY one sat at position 22 against position 28, so it won: the
+  15-option property was unreachable and any per-lesson pick would have been discarded with the
+  whole class sent to the default instead. Resolved by deleting the empty one, leaving exactly one
+  key that normalizes to `warmupchallenge` - which is the invariant to preserve. Before
+  hand-creating a property the code already reads, check the schema for one that normalizes the
+  same way; the failure is invisible from every surface.
   `WARMUP_CHALLENGE_OPTIONS` is DERIVED from `SKILLS`, so a Notion option can never name a drill
   the engine does not have. `multiplication` is the one deliberate override, pointing at
   `/multiplication-fluency` (Steele's first-few-weeks default); every other skill resolves to
