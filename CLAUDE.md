@@ -702,9 +702,16 @@ Codex and cloud sessions need them too (rule 9).
   only names how many cards to move (the smallest set that fixes it, not everything after the first
   mistake). DECIMALS AND PERCENTS ALREADY WORK: the compare-the-forms lesson Steele wants "later"
   needs no code, only a set like `0.75, 1/2, 60%, 1 1/4, 250%`.
-- Room/display surfaces: `/warmup` and `/live-flow` are public; `/board` + `/ipad` (pen-to-board)
+- Room/display surfaces: `/live-flow` is public; `/board` + `/ipad` (pen-to-board)
   are TEACHER-GATED by the proxy (they are in PROTECTED_PREFIXES - an anonymous fetch redirects to
   /teacher-login, so curl probes of them return no page markup).
+  **THE `/warmup` PAGE ROUTE WAS RETIRED 2026-08-05 on Steele's call.** Nothing in `src/` linked to
+  it; it was a standalone drifting decrement clock duplicating the `warmup` class state, which
+  `/teacher/present` and `/teacher/pace` already render off the shared `endsAt` clock, and its
+  defaults had gone stale (8 minutes against the spine's 5). `/api/warmup` is a DIFFERENT and still
+  LIVE route - the warm-up engine endpoint the Apps Script calls - and its `PROTECTED_PREFIXES` /
+  `SECURE_ROLLOUT_PREFIXES` entries in `src/proxy.ts` are untouched. `public/screens/warmup.html`
+  is the unrelated hand-owned screen kit and also stays.
 - Attention call (2026-07-27, Steele's ask): the Bark pill on /ipad (always visible beside the
   Tools handle, 4s cooldown) sends `{t:"attention"}` on the `ink-<room>__ctrl` channel. /board
   handles it in its EXISTING ctrl handler; /teacher/present mounts `AttentionListener` (its first
@@ -2736,7 +2743,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   is how "the wall is missing the feature" happens (cost a live confusion 2026-07-22: the
   projector's present tab predated the glass sheet entirely). `DeployRefresh` (root layout) polls
   the public `/api/build-id` on display routes (/board, /teacher/present, /teacher/pace,
-  /live-flow, /warmup, /weekly-display - the pace projector and the all-day TVs joined
+  /live-flow, /weekly-display - the pace projector and the all-day TVs joined
   2026-07-27; they are the longest-open tabs in the building and were silently missing
   deploys - and /teacher/scoreboard joined 2026-08-03 when it became a first-class
   second-screen card on the teacher home; it holds no local state a reload could lose,
