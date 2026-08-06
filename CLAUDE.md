@@ -314,6 +314,24 @@ bars and live misconception grouping).
    between "it does not work" and "it was not wired yet when that data was made".
    Check the commit time of the caller against the timestamp of the data before
    concluding anything.
+   **AND ON 2026-08-06 IT RAN BY ITSELF. FIRST FULL LESSON END TO END, FIRST
+   AUTOMATIC PROMOTION.** Steele: "this is the first full lesson run all the way
+   through to the final button press". Session `08f0580a-4af5-4d32-ad45-3873fac28b4d`
+   ran 07:09:43 to 07:59:04 UTC - about 49 minutes, a real period - reached
+   `closeout` at step 13 of 14, and closed on his own button press. NO manual
+   `POST /api/teacher/poll-evidence` was involved: `mastery.updated_at` moved to
+   07:59:04.569, **379ms after the session's `ended_at` of 07:59:04.19**, which is
+   `closeSessions` -> `pollEvidencePromotion` -> `recomputePeriod` in `after()`
+   firing on its own. `mastery_history` took 138 new rows.
+   WHAT PROMOTED, AND WHY THE OTHER TWO CORRECTLY DID NOT. Four polls, four answers:
+   both `multiple-choice` checks promoted; the `fist-to-five` did not (a confidence
+   self-report must never score a standard) and the `short-answer` exit ticket did
+   not (bare string equality marks a right answer wrong over a stray space). Those
+   are exactly the two kinds `GRADED_POLL_KINDS` excludes on purpose, so 2 of 4 is
+   the designed behaviour, not a shortfall. `responses` source `poll` gained 3 rows
+   from 2 graded answers - the documented split of per-question standard rows plus
+   one aggregate bar row. **When auditing a run, expect graded < answered and check
+   the KINDS before calling anything dropped.**
    **EXIT TICKETS ARE GOOGLE FORMS AS OF 2026-08-05** (Steele: "we also decided exit
    tickets are google forms"). This REVERSES the 2026-07-28 decision recorded below
    that moved the exit ticket on-site for data retention and mid-lesson deployment.
@@ -1482,7 +1500,30 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   follows if it carries the per-tab student marker (`sessionStorage['bdm-student-tab']`, set when
   the verified join completes, DIES on tab close and on Safari tab restore) - a reopened student
   tab on the teacher's own browser silently stops following forever; re-entering the class code
-  re-arms it. Real student Chromebooks (no teacher session) never hit the guard. Also know:
+  re-arms it. Real student Chromebooks (no teacher session) never hit the guard.
+  **IT NO LONGER FAILS SILENTLY, BECAUSE IT COST A SECOND SESSION ON 2026-08-06.** The guard is
+  correct and stays - a device that has held a teacher session must not be dragged around by class
+  mode - but it used to `return` with no log, no state and nothing on screen, which is
+  indistinguishable from a lesson that has not advanced. ClassSync now sets `notFollowing` and the
+  existing status chip reads "This tab is not following class. Enter the class code again to
+  reconnect." Deliberately DIFFERENT copy from the transient-read-failure chip beneath it: that one
+  does heal on its own and says to keep working, and this one never does, so inheriting its wording
+  is what turns a held tab into a lost period. It speaks ONLY when a student session is actually
+  being held, and NEVER on a teacher surface - the guard runs ABOVE the `isTeacherRoute` check, so
+  without an explicit exclusion the notice renders on `/control` and `/teacher/present`, which are
+  on the wall. `npm run test:student-warmup-home` pins all three conditions, mutation-tested.
+  **THE SYMPTOM DOES NOT LOOK LIKE A NAVIGATION BUG, WHICH IS WHY IT TOOK TWO GOES.** Reported as
+  "it went to the multiplication tool but then didn't follow the lesson", then "the learning checks
+  and the exit ticket popped up just on the lesson home page", then "it wasn't showing the
+  presentation screens but it was accepting information and logging it into the remote". Those read
+  as three faults and are ONE: the device never reached `/live-flow`, so the polls rendered through
+  whatever surface it was parked on, and the answers still posted normally because
+  `/api/student/poll-answer` does not care which surface submitted them. Evidence flowing correctly
+  is therefore NOT evidence that class-mode navigation works - check `location.pathname` on the
+  student device before believing the follower is fine. Note also that the warm-up handoff to the
+  challenge tool is page-local (`router.push` in the landing) and fires whether or not class mode is
+  armed, so a working handoff says nothing about ClassSync either.
+  Also know:
   ClassSync treats every session-state failure (wrong period, missing session_joins row, expired
   anon auth) as transient and retries silently, so ALL of them present identically as "the student
   screen just stays put" - check the class-mode selector on /session and the joins list before
