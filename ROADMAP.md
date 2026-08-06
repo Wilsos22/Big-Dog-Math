@@ -1239,12 +1239,20 @@ work that no longer exists, and one of them would have broken teacher auth.
    was the last real gate and it is cleared, which also proves the warm-up and
    roster projects' `BDM_ROSTER_HMAC_KEY` values match (step 2) - that could not
    have succeeded otherwise. Everything below is history.
-   **THE NEW TOP ITEM ON THE SPINE IS THAT `mastery` IS STILL 0 ROWS.** Three of
-   those five answers are gradable (one multiple-choice, two structured-numeric,
-   all on the seeded standard `6.NS.B.4`, all with an answer key); the two
-   fist-to-five correctly are not. They moved no bar because nothing calls
-   `/api/teacher/poll-evidence` automatically - it is a route you POST, `GET` is
-   a dry run. For the first time there is real evidence waiting to be bridged.
+   **AND THE SPINE CLOSED THE SAME DAY: `mastery` WENT FROM 0 ROWS TO 141.**
+   The three gradable answers (one multiple-choice, two structured-numeric, all on
+   the seeded `6.NS.B.4`) were bridged with
+   `POST /api/teacher/poll-evidence {"sessionId":"50c2b90e-..."}` after a clean dry
+   run: 4 rows written, 0 skipped, 0 unresolved standards, one period recomputed.
+   Verified after - `mastery` 141 rows / 35 students / 4 domains,
+   `mastery_history` 142, and `responses` source `poll` split exactly as designed
+   (3 rows with a standard, 1 aggregate bar row with `standard_id` NULL).
+   35 students have bars because the POST's second act is `recomputePeriod`, which
+   NOTHING had ever called - so it also turned the 216 warm-up responses already in
+   the table into bars for the whole period. That is not a participation count.
+   A backfill was needed only because the run (14:36 PDT) predated
+   `pollEvidencePromotion.ts` (18:09 PDT) by three and a half hours; the automatic
+   path covers every session from here.
    HISTORY: **NARROWED 2026-08-04, steps 1 and 5 are
    DONE.** All 156 students in Periods 1-5 carry an `alias` AND an `email_hmac`,
    created 2026-08-01; the site cannot compute an HMAC, so the key exists and
