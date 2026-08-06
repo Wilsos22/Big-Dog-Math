@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -52,16 +52,17 @@ assert.equal(
   "not-i-can",
 );
 
-const warmupSource = readFileSync(path.join(root, "src", "app", "warmup", "page.tsx"), "utf8");
-assert.doesNotMatch(
-  warmupSource,
-  /lesson\?\.(?:learningIntention|successCriteria)/,
-  "The warm-up projector must not reveal lesson targets before their lesson state.",
-);
-assert.doesNotMatch(
-  warmupSource,
-  />\s*(?:Learning intention|Success criteria)\s*</i,
-  "Learning intention and success criterion labels belong on their later lesson state, not the warm-up.",
+// The /warmup PAGE route was retired 2026-08-05 - a standalone drifting clock
+// nothing linked to, duplicating the warmup class state the projectors already
+// render off the shared endsAt clock. This used to assert that page never
+// revealed a lesson target before its own state; the guarantee is structural
+// now, so what is pinned is the retirement. If a warm-up projector is ever
+// rebuilt, restore the two doesNotMatch checks with it.
+// NOTE: /api/warmup is a DIFFERENT and still live route (the warm-up engine
+// endpoint the Apps Script calls) and is deliberately not named here.
+assert.ok(
+  !existsSync(path.join(root, "src", "app", "warmup", "page.tsx")),
+  "The /warmup page route is retired - do not restore it without restoring its lesson-target checks too.",
 );
 
 // The all-day boards show ONE criterion a day, from the chosen Notion property.
