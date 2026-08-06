@@ -18,6 +18,7 @@
 // than no guardrail, so the arithmetic only ever errs long.
 
 import type { LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
+import { promotePollEvidenceForSession } from "@/lib/pollEvidencePromotion";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 
 /**
@@ -81,6 +82,24 @@ export function staleCutoffMs(row: Pick<OpenSessionRow, "started_at" | "live_flo
  */
 export async function closeSessions(db: Db, sessionIds: string[]): Promise<string[]> {
   if (!sessionIds.length) return [];
+  // EVERY CLOSE PROMOTES THE DAY'S EVIDENCE, NOT JUST THE ONE THE TEACHER
+  // PRESSED. This ran only in the manual Close branch of /api/teacher/session,
+  // which is the path a five-period day uses least - so starting period 2
+  // (closeOtherOpenSessions) and forgetting period 5 (sweepStaleSessions) both
+  // dropped their learning checks and exit ticket silently. Ordering: BEFORE
+  // the updates below, so the evidence is durable even if the close itself
+  // errors. The promotion's poll read does not filter on poll status, so
+  // closing the polls first would not have broken it either.
+  //
+  // Non-fatal per session by construction (the promotion swallows its own
+  // failures), and guarded again here: a class that is over must always close.
+  for (const sessionId of sessionIds) {
+    try {
+      await promotePollEvidenceForSession(db, sessionId);
+    } catch (error) {
+      console.warn("session close: poll evidence promotion threw", { sessionId, error });
+    }
+  }
   const now = new Date().toISOString();
   const [, sessionResult] = await Promise.all([
     db.from("polls").update({ status: "closed" }).in("session_id", sessionIds).eq("status", "open"),
