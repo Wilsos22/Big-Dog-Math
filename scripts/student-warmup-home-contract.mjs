@@ -30,19 +30,62 @@ if (!submitCode || submitCode.includes("/api/student/admission-request")) {
 if (!home.includes("Warm-up not connecting? Ask for help") || !home.includes("Tell your teacher this help code")) {
   throw new Error("A teacher admission request must remain available only as an explicit recovery action.");
 }
-if (!home.includes("background:var(--bdb-amber)") || !home.includes("Open today's warm-up")) {
-  throw new Error("The accepted-code homepage must expose the assigned warm-up as the bright amber action.");
+// 2026-08-05 (Steele): the warm-up is EMBEDDED in the page, not a button that
+// opens a tab. Google Forms cannot redirect on submit, so keeping the student
+// on this page is what makes the handoff to the challenge possible at all.
+// Anchored on the RENDERED iframe, not on the class name: `st-warmup-frame`
+// also appears in the page's <style> block, so a className-only check stays
+// green while nothing is on screen. (This contract shipped that way for one
+// mutation-test cycle - the same trap CLAUDE.md records for the /present logo
+// and the .dh-slot.act rule.)
+const warmupFrame = sliceBetween(home, "<iframe", "/>");
+if (!warmupFrame
+  || !warmupFrame.includes('className="st-warmup-frame"')
+  || !warmupFrame.includes("src={embeddedFormUrl(warmupHref)}")) {
+  throw new Error("The accepted-code homepage must embed the assigned warm-up in the page.");
+}
+// The prefill query carries the receipt token (entry.NNN=<token>). Rebuilding
+// the URL instead of extending it would break identity while the form still
+// looked perfectly fine on screen - a silent failure with no symptom.
+const embedHelper = sliceBetween(home, "function embeddedFormUrl", "export default function");
+if (!embedHelper.includes("new URL(href)") || !embedHelper.includes('searchParams.set("embedded", "true")')) {
+  throw new Error("The embed URL must extend the personalized form URL, never rebuild it.");
+}
+// A browser not already signed in to the district account gets Google's
+// sign-in page, which refuses to render in an iframe and shows a blank box.
+// The new-tab escape is the only way through that, so it is load-bearing.
+if (!home.includes("Warm-up not showing up?") || !home.includes('target="_blank"')) {
+  throw new Error("The embedded warm-up must keep a new-tab escape for the iframe sign-in case.");
 }
 if (!home.includes("Today&apos;s lesson") || !home.includes("Module {moduleNumber}") || !home.includes("Topic {topicNumber}")) {
   throw new Error("The accepted-code homepage must show today's lesson, module, and topic before the warm-up action.");
 }
-// 2026-07-26 home-base redesign: the homepage NEVER locks navigation. The
-// warm-up card adapts its copy to identity state; onward links stay live.
-if (!home.includes('href="/explore"')) {
-  throw new Error("The home base must always link students onward to Explore - links are never locked.");
+// REVERSES the 2026-07-26 "onward links stay live" rule (Steele, 2026-08-05:
+// "right now they have access to the tools the lesson and the warm up"). The
+// accepted-code view is the warm-up and nothing else; where a student goes
+// next is the teacher's call, via the Notion pick and then class-mode sync.
+// /explore and /demo remain on the CODE-ENTRY view, which is a different
+// screen and is deliberately untouched.
+if (home.includes("st-home-card") || home.includes("HOME_LINKS")) {
+  throw new Error("The accepted-code home base must not carry the lesson/practice/tools link grid.");
 }
-if (!home.includes("Warm-up connected") || !home.includes("Open today's warm-up")) {
+// The /homework-help chip survives the cut: it is a support affordance for a
+// stuck student, not somewhere to wander, and CLAUDE.md pins it to this view.
+if (!home.includes('href="/homework-help"')) {
+  throw new Error("The Stuck walkthrough chip must remain on the student home base.");
+}
+if (!home.includes("Warm-up connected")) {
   throw new Error("The warm-up card must adapt to identity state instead of locking the page.");
+}
+// The handoff itself. It hangs off VERIFICATION (the receipt chain), never off
+// anything the cross-origin iframe could report, and an unresolved Notion pick
+// must leave the student here rather than navigating nowhere.
+if (!home.includes("warmupChallengeHref") || !home.includes("router.push(challenge.href)")) {
+  throw new Error("A confirmed warm-up must hand off to the Notion-picked challenge.");
+}
+const handoff = sliceBetween(home, "if (!identityReady || !challenge) return;", "}, [identityReady, challenge, router]);");
+if (!handoff.includes("setTimeout")) {
+  throw new Error("The challenge handoff must pause on the confirmation instead of navigating instantly.");
 }
 // Verification runs GLOBALLY (WarmupJoinSync in the root layout) so it
 // survives the student navigating anywhere in the tab; the homepage only
