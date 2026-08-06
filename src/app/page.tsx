@@ -22,7 +22,7 @@ import {
   studentApiRequest,
 } from "@/lib/studentApi";
 import { STUDENT_SESSION_READY_EVENT } from "@/components/ClassSync";
-import { warmupChallengeHref, warmupChallengeLabel } from "@/lib/warmupChallenge";
+import { warmupChallengeDestination } from "@/lib/warmupChallenge";
 
 // Long enough that "Warm-up connected" is read as confirmation, short enough
 // that a student is not left wondering whether anything happened.
@@ -166,12 +166,15 @@ export default function StudentLanding() {
         if (data.lesson?.coverUrl) {
           setTodayCover({ url: data.lesson.coverUrl, lessonCode: data.lesson.lessonCode || "" });
         }
-        // Where they go the moment the warm-up is confirmed. An unset or
-        // unrecognised value resolves to "" and leaves them here, which is the
-        // safe direction: a student parked on the home base is visible to the
-        // teacher, a student sent to a route that will not load is not.
-        const href = warmupChallengeHref(data.lesson?.warmupChallenge);
-        setChallenge(href ? { href, label: warmupChallengeLabel(data.lesson?.warmupChallenge) } : null);
+        // Where they go the moment the warm-up is confirmed. An UNSET property
+        // takes the multiplication default, because the common case is a lesson
+        // nobody authored and this has to work every day rather than only on the
+        // days someone remembered. An UNRECOGNISED value still resolves to ""
+        // and leaves them here, which is the safe direction: a student parked on
+        // the home base is visible to the teacher, and an authoring mistake that
+        // silently sent the class somewhere plausible would never be found.
+        const destination = warmupChallengeDestination(data.lesson?.warmupChallenge);
+        setChallenge(destination.href ? destination : null);
       })
       .catch(() => { /* the card simply stays coverless and no challenge is queued */ });
     return () => { cancelled = true; };

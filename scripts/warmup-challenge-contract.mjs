@@ -54,8 +54,13 @@ execFileSync(
   { cwd: root, stdio: "inherit" },
 );
 
-const { WARMUP_CHALLENGE_OPTIONS, warmupChallengeHref, warmupChallengeLabel } =
-  await import(`file://${path.join(outDir, "warmupChallenge.js")}`);
+const {
+  WARMUP_CHALLENGE_OPTIONS,
+  WARMUP_CHALLENGE_DEFAULT_KEY,
+  warmupChallengeHref,
+  warmupChallengeLabel,
+  warmupChallengeDestination,
+} = await import(`file://${path.join(outDir, "warmupChallenge.js")}`);
 const { SKILLS } = await import(`file://${path.join(outDir, "challengeSkills.js")}`);
 
 // 1. Every drill the engine has is offerable, and nothing else is. A Notion
@@ -95,12 +100,64 @@ check("key also accepted", warmupChallengeHref("multiplication") === "/multiplic
 check("punctuation ignored", warmupChallengeHref("GCF & LCM") === warmupChallengeHref("GCF and LCM"));
 check("hyphen ignored", warmupChallengeHref("gcf-lcm") === warmupChallengeHref("GCF and LCM"));
 
-// 5. Anything unrecognised resolves to "" so the caller keeps the student on
-//    the home base. A student parked where the teacher can see them beats a
-//    student sent to a route that will not load.
+// 5. The RESOLVER stays pure: anything it cannot match is "". Callers that want
+//    a fallback ask for one (check 5b) rather than getting it silently here.
 for (const bad of ["", "   ", "Some prose about factors", "???", null, undefined, 42]) {
   check(`unrecognised (${JSON.stringify(bad)}) yields no route`, warmupChallengeHref(bad) === "");
   check(`unrecognised (${JSON.stringify(bad)}) yields no label`, warmupChallengeLabel(bad) === "");
+}
+
+// 5b. The DESTINATION is what the landing calls, and it splits two cases the
+//     resolver deliberately does not. UNSET means nobody picked - the common
+//     case, and the whole reason the handoff sat dead while the Notion property
+//     did not exist - so it takes the default. AUTHORED-BUT-UNRESOLVED means
+//     somebody picked and it did not take, which is an authoring mistake;
+//     defaulting that one would land the class somewhere plausible with nothing
+//     anywhere saying the pick was ignored. Collapsing these is the regression.
+check(
+  "default key names a real option",
+  WARMUP_CHALLENGE_OPTIONS.some((option) => option.key === WARMUP_CHALLENGE_DEFAULT_KEY),
+  WARMUP_CHALLENGE_DEFAULT_KEY,
+);
+for (const unset of ["", "   ", null, undefined, 42]) {
+  const destination = warmupChallengeDestination(unset);
+  check(
+    `unset (${JSON.stringify(unset)}) takes the default route`,
+    destination.href === "/multiplication-fluency",
+    destination.href,
+  );
+  check(
+    `unset (${JSON.stringify(unset)}) takes the default label`,
+    destination.label === "Multiplication Facts",
+    destination.label,
+  );
+}
+for (const bad of ["Some prose about factors", "???", "Fraction Practice"]) {
+  check(
+    `authored-but-unresolved (${JSON.stringify(bad)}) still parks the student`,
+    warmupChallengeDestination(bad).href === "",
+    warmupChallengeDestination(bad).href,
+  );
+}
+check(
+  "an authored pick beats the default",
+  warmupChallengeDestination("Divisibility Rules").href === "/practice?skill=divisibility",
+  warmupChallengeDestination("Divisibility Rules").href,
+);
+
+// 5c. Notion REFUSES a comma inside a select option name, and one engine label
+//     ("Fraction, Decimal, Percent") has two. So the option as it exists in
+//     Notion is not character-identical to the label here, and the only reason
+//     that is safe is that normalize() strips punctuation. Pin it: if anyone
+//     makes matching stricter, the Notion option silently stops resolving and
+//     the class lands on the default with nothing saying the pick was dropped.
+for (const option of WARMUP_CHALLENGE_OPTIONS) {
+  const notionSafe = option.label.replace(/,/g, "");
+  check(
+    `${option.label} still resolves without commas (Notion option form)`,
+    warmupChallengeHref(notionSafe) === option.href,
+    `${notionSafe} -> ${warmupChallengeHref(notionSafe)}`,
+  );
 }
 
 // 6. The non-tool options go to /practice with the skill named, and that param

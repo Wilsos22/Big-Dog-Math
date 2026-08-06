@@ -78,10 +78,13 @@ if (!home.includes("Warm-up connected")) {
   throw new Error("The warm-up card must adapt to identity state instead of locking the page.");
 }
 // The handoff itself. It hangs off VERIFICATION (the receipt chain), never off
-// anything the cross-origin iframe could report, and an unresolved Notion pick
-// must leave the student here rather than navigating nowhere.
-if (!home.includes("warmupChallengeHref") || !home.includes("router.push(challenge.href)")) {
-  throw new Error("A confirmed warm-up must hand off to the Notion-picked challenge.");
+// anything the cross-origin iframe could report. It resolves through
+// warmupChallengeDestination, NOT the bare warmupChallengeHref: the destination
+// is what applies the default for a lesson nobody authored, and calling the raw
+// resolver here is exactly the regression that left every student parked on the
+// home base while the property did not yet exist in Notion.
+if (!home.includes("warmupChallengeDestination") || !home.includes("router.push(challenge.href)")) {
+  throw new Error("A confirmed warm-up must hand off through warmupChallengeDestination.");
 }
 const handoff = sliceBetween(home, "if (!identityReady || !challenge) return;", "}, [identityReady, challenge, router]);");
 if (!handoff.includes("setTimeout")) {
