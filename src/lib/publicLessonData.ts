@@ -36,6 +36,9 @@ const PUBLIC_TODAY_LESSON_FIELDS = [
   "requiredDigitalWork",
   "optionalSupport",
   "bigDogChallenge",
+  // Names a drill route, never student data - the landing reads it to know
+  // where to send a student after the warm-up.
+  "warmupChallenge",
   "dueAndTurnIn",
   "helpPath",
   "anchorProblem",

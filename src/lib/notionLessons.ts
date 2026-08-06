@@ -117,6 +117,10 @@ export interface LessonData {
   requiredDigitalWork: string;
   optionalSupport: string;
   bigDogChallenge: string;
+  // The drill a student drops into the moment their warm-up is confirmed.
+  // Resolved through src/lib/warmupChallenge.ts; free text or an unknown value
+  // leaves the student on the home base rather than navigating nowhere.
+  warmupChallenge: string;
   dueAndTurnIn: string;
   helpPath: string;
   anchorProblem: string; // real-world problem shown at warm-up, answerable by lesson end
@@ -715,6 +719,10 @@ async function mapPage(
     requiredDigitalWork: extractText(p["Required Digital Work"]),
     optionalSupport: extractText(p["Optional Support"]),
     bigDogChallenge: extractText(p["Big Dog Challenge"]),
+    // propByName, not p["Warm-Up Challenge"]: an exact-string property lookup
+    // fails SILENTLY, and the hyphen in this name is exactly the kind of thing
+    // that differs between what was agreed and what got typed in Notion.
+    warmupChallenge: extractText(propByName(p, ["Warm-Up Challenge", "Warm Up Challenge", "Warmup Challenge"])),
     dueAndTurnIn: extractText(p["Due and Turn In"]),
     helpPath: extractText(p["Help Path"]),
     anchorProblem: extractText(p["Anchor Problem"]),

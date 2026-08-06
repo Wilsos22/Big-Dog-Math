@@ -230,7 +230,12 @@ export function reportToolResult(r: ToolResult): void {
           // What the student actually did, not just whether it worked.
           detail: r.detail,
         }),
-      }).catch(() => undefined);
+        // A rejected post used to vanish here, so a 403 from
+        // requireOpenJoinedSession or a 428 warmup_verification_required threw
+        // the student's work away with no symptom on either screen. Buffer it
+        // and let flushPendingToolResults retry - the server upserts on
+        // dedupe_key, so a retry that races a success cannot double-write.
+      }).catch(() => bufferPending(session.sessionId, r));
       return;
     }
 

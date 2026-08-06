@@ -4,6 +4,7 @@ import { closeOtherOpenSessions, sweepStaleSessions } from "@/lib/sessionLifecyc
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { broadcastLiveFlowChange } from "@/lib/liveFlowBroadcast";
 import { liveFlowScreensChanged } from "@/lib/liveFlowScreens";
+import { promotePollEvidenceForSession } from "@/lib/pollEvidencePromotion";
 import type { LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
 
 export const dynamic = "force-dynamic";
@@ -551,11 +552,22 @@ export async function POST(request: Request) {
   if (body.action === "close") {
     const sessionId = text(body.sessionId, 80);
     if (!sessionId) return Response.json({ error: "Session is required." }, { status: 400 });
+    // Bridge the day's graded answers into `responses` BEFORE anything about
+    // the session changes, so the evidence is durable no matter what the close
+    // does next. Non-fatal: a failure logs and the session still closes. This
+    // branch does not go through closeSessions, so it makes the call itself -
+    // the other two close paths get it from sessionLifecycle.
+    await promotePollEvidenceForSession(db, sessionId);
     const now = new Date().toISOString();
     const [pollResult, sessionResult] = await Promise.all([
       db.from("polls").update({ status: "closed" }).eq("session_id", sessionId).eq("status", "open"),
+      // live_flow IS DELIBERATELY RETAINED - same reason as closeSessions in
+      // sessionLifecycle.ts. It is the only record of the questions the class
+      // was asked, and readinessEvidence reads the question set out of it after
+      // the bell; nulling it made every closed session report zero readiness
+      // questions, which ranked every student as needing a teacher visit.
       db.from("sessions")
-        .update({ status: "closed", ended_at: now, broadcast: null, live_flow: null, remote_command: null })
+        .update({ status: "closed", ended_at: now, broadcast: null, remote_command: null })
         .eq("id", sessionId)
         .select("id")
         .maybeSingle(),

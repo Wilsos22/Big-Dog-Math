@@ -33,6 +33,7 @@ import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { studioPreviewSession, useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { parseSlideOverlay } from "@/lib/slideOverlay";
 import SlideFrameScene from "@/components/SlideFrameScene";
+import { slideVideoCommandFrom } from "@/lib/slideVideo";
 import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 
 interface StageSession {
@@ -307,6 +308,16 @@ function WarmupLearningSteps({ direction }: { direction?: string }) {
 export default function ClassroomStagePage() {
   const [session, setSession] = useState<StageSession | null>(null);
   const reloadRef = useRef<(() => void) | null>(null);
+  // A 1s heartbeat so the big clock re-renders every second, independent of the
+  // 1-1.5s session poll. timerSeconds is derived from the timer's deadline in
+  // the render body, so without a tick of its own the projector clock only
+  // moves when a fetch returns - a second takes about 1.5s and then a whole
+  // second is skipped.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setClockTick((t) => (t + 1) % 3600), 1000);
+    return () => window.clearInterval(id);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [sessionMessage, setSessionMessage] = useState("Connecting to the confirmed class session.");
   const [pollAnswers, setPollAnswers] = useState<PollAnswer[]>([]);
@@ -565,6 +576,9 @@ export default function ClassroomStagePage() {
   // "contain" letterboxes and never crops, which is what a 16:9 deck and anything with words near
   // the edges needs. Only an explicit "cover" from the studio inspector changes it.
   const slideFrameFit = activeSequenceStep?.slideFit === "cover" ? "cover" : "contain";
+  // Play/pause/restart taps ride the ordinary remote_command pass-through, so they arrive on the
+  // session row this page already polls - no new endpoint, and nothing published into live_flow.
+  const slideVideoCommand = slideVideoCommandFrom(session?.remote_command);
   const lessonVisual = flow ? resolveLessonVisual({
     lessonCode: lesson?.code || activeSequenceStep?.lessonCode,
     stateId: theme.id,
@@ -1265,7 +1279,7 @@ export default function ClassroomStagePage() {
           ) : liveToolUrl ? (
             <iframe className="stage-tool" src={liveToolUrl} title={flow.tool?.label || "Lesson tool"} />
           ) : slideFrameUrl ? (
-            <SlideFrameScene url={slideFrameUrl} fit={slideFrameFit} />
+            <SlideFrameScene url={slideFrameUrl} fit={slideFrameFit} videoCommand={slideVideoCommand} />
           ) : presentation?.mode === "board" ? (
             <div className="stage-board-scene">
               <div className="stage-board-wrap">

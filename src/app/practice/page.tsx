@@ -14,6 +14,18 @@ type View = "pick" | "playing" | "done";
 
 const ROUND_SECONDS = 90;
 
+// ?skill=<key> preselects a game. Read once at mount from the URL rather than
+// through useSearchParams, which would force this page into a Suspense boundary
+// for a value that never changes after load. An unknown key falls through to
+// the normal picker instead of erroring - a bad link should still be a usable
+// page, because the warm-up handoff sends students here unattended.
+function skillFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const wanted = new URLSearchParams(window.location.search).get("skill");
+  if (!wanted) return null;
+  return SKILLS.some((skill) => skill.key === wanted) ? wanted : null;
+}
+
 function scorePoints(isCorrect: boolean, timeMs: number): number {
   if (!isCorrect) return 0;
   const speed = Math.max(0, Math.min(5, Math.round((3000 - timeMs) / 600)));
@@ -40,6 +52,14 @@ export default function PracticePage() {
   const lockedRef = useRef(false);
   const startRef = useRef(0);
   const endRef = useRef(0);
+
+  // Preselect from ?skill=, but do NOT auto-start: the round is a 90-second
+  // clock, and starting it while a student is still reading the screen spends
+  // their time for them. They still choose level and timed/untimed.
+  useEffect(() => {
+    const preset = skillFromUrl();
+    if (preset) setSkillKey(preset);
+  }, []);
 
   const skill = getSkill(skillKey) || SKILLS[0];
 

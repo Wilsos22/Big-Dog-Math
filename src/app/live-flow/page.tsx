@@ -585,8 +585,21 @@ export default function LiveFlowPage() {
   // the state's stored color.
   const stageThemeId = classroomStageTheme(flow?.state?.id, flow?.state?.label).id;
   const accent = WARM_ACCENTS[stageThemeId] ?? flow?.state?.color ?? "#50A3A4";
+  // The relayed `phase.secondsLeft` is only true as of the moment /control
+  // published it, and the screen-ping projection deliberately ignores it - a
+  // round counting down once a second must not wake thirty Chromebooks a second
+  // (liveFlowScreens.ts). So the beat's clock comes off its deadline, through
+  // the same helper the lesson clock uses, and the 1s heartbeat above re-renders
+  // it. `liveTimerSeconds` falls back to the banked number when there is no
+  // deadline, which is exactly what a paused or finished round should show.
   const activeTimerSeconds = phase?.timed && typeof phase.secondsLeft === "number"
-    ? phase.secondsLeft
+    ? liveTimerSeconds({
+        totalSeconds: phase.totalSeconds ?? phase.secondsLeft,
+        secondsLeft: phase.secondsLeft,
+        running: phase.running,
+        finished: phase.finished,
+        endsAt: phase.endsAt ?? null,
+      })
     : liveTimerSeconds(timer);
   // On a self-running discussion timeline, students work against the CURRENT
   // beat's clock (think 30, write 90, ...), not the whole-state total - so the

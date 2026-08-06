@@ -6,7 +6,7 @@
 // Framework-free on purpose: lessonScreenModel and the studio both import it, and neither may pull
 // React or the DOM into the server bundle.
 
-export type SlideSourceKind = "image" | "embed" | "site" | "none";
+export type SlideSourceKind = "image" | "video" | "embed" | "site" | "none";
 
 export interface SlideSource {
   kind: SlideSourceKind;
@@ -21,6 +21,12 @@ export interface SlideSource {
 }
 
 const IMAGE_EXTENSIONS = /\.(png|jpe?g|gif|webp|avif|svg)(?:$|[?#])/i;
+
+// Deliberately narrow. `.mp4` (H.264 + AAC) is what every classroom browser plays without a codec
+// argument; `.webm` rides along because it costs nothing. A `.mov` straight off a phone is NOT here
+// on purpose - Safari plays it, the projector's Chrome may not, and a format that works on the desk
+// and fails on the wall is the worst kind. Same reasoning as the sound bank's "it must be .mp3".
+const VIDEO_EXTENSIONS = /\.(mp4|webm)(?:$|[?#])/i;
 
 // Hosts permitted inside an iframe on a classroom projector. Keep this in sync with `frame-src`
 // in the CSP. An off-list host renders the "cannot embed" card rather than a blank frame, because
@@ -72,15 +78,23 @@ function hostAllowed(host: string, list: readonly string[]): boolean {
 // THE SECOND SLASH MAY BE A BACKSLASH. `//evil.com/x.png` is the obvious protocol-relative escape,
 // but the URL spec treats `\` as `/` for http(s), so `/\evil.com/x.png` resolves to
 // https://evil.com/x.png just the same. Checking only for `//` let that through.
-function sameOriginImage(raw: string): SlideSource | null {
+//
+// A VIDEO IS THE SAME ARGUMENT, ONLY MORE SO. A 2MB mp4 committed to `public/lesson-videos/` is one
+// CDN request against the origin that just served the page; a hosted video is a third party, a
+// player, an ad-consent frame and a bandwidth negotiation, any of which can put a spinner on the
+// wall while thirty kids watch. Same-origin is the supported path - see public/lesson-videos/README.
+function sameOriginAsset(raw: string): SlideSource | null {
   if (!raw.startsWith("/") || /^\/[/\\]/.test(raw)) return null;
   const path = raw.split(/[?#]/)[0];
+  if (VIDEO_EXTENSIONS.test(path)) {
+    return { kind: "video", url: raw, host: "", reason: "", warning: "" };
+  }
   if (!IMAGE_EXTENSIONS.test(path)) {
     return {
       kind: "none",
       url: "",
       host: "",
-      reason: "A path on this site works for an image file only - use a full https:// link otherwise",
+      reason: "A path on this site works for an image or video file only - use a full https:// link otherwise",
       warning: "",
     };
   }
@@ -157,7 +171,7 @@ function rewriteGoogle(url: URL): URL | null {
  * show the teacher.
  */
 export function resolveSlideSource(raw: string): SlideSource {
-  const sameOrigin = sameOriginImage(String(raw || "").trim());
+  const sameOrigin = sameOriginAsset(String(raw || "").trim());
   if (sameOrigin) return sameOrigin;
 
   const url = parse(raw);
@@ -178,6 +192,22 @@ export function resolveSlideSource(raw: string): SlideSource {
     return hostAllowed(host, IMAGE_HOST_ALLOWLIST)
       ? { kind: "image", url: url.toString(), host, reason: "", warning: "" }
       : { kind: "none", url: "", host, reason: `Images are not allowed from ${host}`, warning: "" };
+  }
+
+  // A remote video file must be caught HERE, above the website branch. Without this it fell through
+  // to `kind: "site"` and the projector loaded an mp4 inside a sandboxed iframe - the browser's bare
+  // video shell, racing a 4-second "page did not load" card. It rendered something, so nothing ever
+  // reported it. Same allowlist as images: a video is a media file, not a page.
+  if (VIDEO_EXTENSIONS.test(url.pathname)) {
+    return hostAllowed(host, IMAGE_HOST_ALLOWLIST)
+      ? { kind: "video", url: url.toString(), host, reason: "", warning: "" }
+      : {
+          kind: "none",
+          url: "",
+          host,
+          reason: `Videos are not allowed from ${host} - commit it to public/lesson-videos/ instead`,
+          warning: "",
+        };
   }
 
   // Any other https page is offered as a plain website embed. No allowlist here on purpose - the
@@ -214,6 +244,7 @@ export function slideSourceLabel(source: SlideSource): string {
   // Naming the same-origin case is worth a branch: it is the one source that cannot fail on
   // school wifi, and a teacher checking the inspector should be able to see which one they got.
   if (source.kind === "image") return source.host ? "Image" : "Image on this site";
+  if (source.kind === "video") return source.host ? "Video" : "Video on this site";
   if (source.kind === "site") return "Website";
   if (source.kind !== "embed") return "";
   if (source.host.includes("lucid")) return "Lucid board";
