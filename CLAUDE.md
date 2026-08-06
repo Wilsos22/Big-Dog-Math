@@ -316,8 +316,34 @@ bars and live misconception grouping).
    Note fist-to-five stays on-site even though an agent argued it was the weakest case for
    staying (a temperature read rarely acted on within the period); Steele kept it, and that call
    is the one that stands.
-   BUILT: the warm-up, already. NOT BUILT: the exit ticket half - see the paragraph below for
-   what it actually costs.
+   **THE EXIT TICKET IS FURTHER ALONG THAN ANYONE IN THAT CONVERSATION THOUGHT, INCLUDING STEELE**
+   (measured 2026-08-06 against the live Notion database, after he said "the forms i thought were
+   there are not"). SEVEN lessons already have COMPLETE exit-ticket Google Forms - CC.1, CC.2,
+   CC.3, CC.4, M1.T1.L1-D1, M1.T1.L2-D2, M1.T1.L3 - each carrying `Exit Ticket Link` (a published
+   form URL ALREADY holding the `BDM_AUTH_USER_ID` prefill), `Exit Ticket Edit Link`, and an
+   `Exit Ticket Response Sheet` that is the SAME spreadsheet for all seven, plus authored
+   `Exit Ticket Prompt` / `Answer` / `Choices`. **AND THE SITE ALREADY USES THEM**: `/control`
+   (page.tsx ~2400) and `/teacher/studio/edit` set the exit step's RESOURCE URL to
+   `lesson.exitTicketLink`, exactly as the warm-up state does, so exit-ticket-as-a-Form is the
+   existing architecture rather than something to design. He could not find them because he was
+   looking in the Drive `Week N` folders, which hold ONLY warm-ups.
+   WHAT IS ACTUALLY MISSING is narrower: **no `.gs` file mentions "Exit Ticket" at all** (a grep
+   of all thirteen returns one unrelated comment), so every one of those seven forms was built BY
+   HAND. That is the real gap and the reason for his "make both forms at once" ask.
+   AUTHORING GAPS AS OF 2026-08-06: M1.T1.L2-D3 (8/18) has prompt and answer authored but no
+   form; M1.T1.L5-D1 (8/25, PUBLISHED), L5-D2, L5-D3 and L5-P1 have NO anchor problem and NO exit
+   prompt at all, so nothing can be generated for them from either source.
+   **DO NOT MAKE A GENERATOR THAT ALWAYS REBUILDS THE EXIT FROM THE ANCHOR.** Steele's stated
+   rule is "the exit ticket should be a restate of the hook", verbatim and same numbers, and most
+   of his own exits follow it (M1.T1.L1-D1 and M1.T1.L2-D2 restate their anchors exactly). But
+   M1.T1.L3 deliberately does NOT: its anchor is carnations (12 and 18) and its exit is buses
+   (6 and 10) - a transfer problem, not a restate. A generator keyed only on the anchor would
+   overwrite that. Build only when `Exit Ticket Link` is empty, and prefer an authored
+   `Exit Ticket Prompt` over the anchor.
+   KNOWN TRADEOFF HE ACCEPTED when choosing verbatim-same-numbers: a student who memorised the
+   worked answer during the I Do can pass without understanding, and it measures the practised
+   task rather than transfer. He chose it for the growth story ("you could not do this 45 minutes
+   ago"). Do not quietly switch it to a parallel problem.
    THREE THINGS TO GET RIGHT BEFORE ANYONE ACTS ON IT. (1) **This does NOT "eliminate FERPA."**
    FERPA follows the education record, not the server; a fist-to-five answer is an education
    record in Workspace exactly as it is in Supabase. What it removes is the third-party VENDOR
