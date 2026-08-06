@@ -2079,24 +2079,43 @@ the invariants they protect are easy to break again.
   optimisation on top of polling, so a dropped ping costs one tick and nothing else; never delete an
   interval because "the ping handles it". (2) **The ping must stay RARE.** `/control` republishes
   about once a second while a timer runs, so both writers gate on
-  `liveFlowScreensChanged` (`src/lib/liveFlowScreens.ts`), which ignores `updatedAt`,
-  `timer.secondsLeft` and the Remote's `transition` claim marker. Ping every write and thirty
+  `liveFlowScreensChanged` (`src/lib/liveFlowScreens.ts`), which ignores `updatedAt`, the Remote's
+  `transition` claim marker, and the `secondsLeft` of every key in `TICKING_SECONDS_KEYS`
+  (`timer` and `phase`). Ping every write and thirty
   Chromebooks re-fetch every second - the storm, arrived by another road, and it would present as
   "the sync broke".
-  **IT DOES NOT STAY RARE DURING A DISCUSSION STATE, AND THAT IS AN OPEN BUG** (measured
-  2026-08-05). The strip is keyed on the literal top-level key `"timer"`, but Control publishes the
-  discussion overlay's `phase` as its OWN top-level key alongside it (`/control` page.tsx, the
+  **IT DID NOT STAY RARE DURING A DISCUSSION STATE. MEASURED AND FIXED 2026-08-05.** The strip was
+  keyed on the literal top-level key `"timer"`, but Control publishes the discussion overlay's
+  `phase` as its OWN top-level key alongside it (`/control` page.tsx, the
   `version: 2, state, phase, timer, ...` snapshot), and `phase.secondsLeft` counts down once a
-  second exactly like `timer.secondsLeft` does. Nothing strips it. Verified by driving the compiled
-  module: two snapshots differing ONLY in `phase.secondsLeft`, with an identical `endsAt`, still
-  return `true` from `liveFlowScreensChanged` - so for the whole of a two-minute discussion round
-  every republish is scored a real change and pings every student device once a second. This is
-  pre-existing and not caused by the deadline work; it is simply what nobody had measured. The fix
-  is to strip `phase.secondsLeft` the same way `timer.secondsLeft` is stripped, which is only SAFE
-  now that the phase carries an `endsAt` for surfaces to derive from - do it as its own change with
-  a contract assertion, not as a drive-by.
+  second exactly like `timer.secondsLeft` does. Nothing stripped it, so for the whole of a
+  two-minute round every republish scored as a real change and pinged every device holding the
+  session once a second - about 120 pings a round, roughly 3,600 student re-reads, on school wifi,
+  while the class was talking. It was pre-existing and not caused by the deadline work; it was
+  simply what nobody had measured. `liveFlowScreens.ts` now projects a NAMED SET,
+  `TICKING_SECONDS_KEYS` (`timer`, `phase`), instead of one hardcoded special case, and
+  `npm run test:live-flow-push` pins both directions: a round ticking is not a screen change, while
+  its round id, round number, running/paused state, `endsAt`, chosen sharer and stems all still are.
+  **THE HALF THAT WOULD HAVE BEEN WORSE THAN THE BUG: `/live-flow` WAS RENDERING THE RELAYED
+  COUNT.** Once the tick is stripped, the number a surface shows can only come from the deadline -
+  and `/live-flow` read `phase.secondsLeft` straight out of the snapshot, so the strip on its own
+  would have frozen the round clock on thirty Chromebooks for a whole discussion, which is a worse
+  classroom failure than the storm it removes. It derives through `liveTimerSeconds` off
+  `phase.endsAt` now, with the banked count as the paused/finished fallback, on the 1s heartbeat
+  `580e395` gave it. `/teacher/present`, `/teacher/pace` and `/teacher/remote` were already safe:
+  Control mirrors the round's clock into `timer` (same `endsAt`), and all three read it through
+  `liveTimerSeconds`. `/control` and `DiscussionProtocol` own that clock locally and are the
+  PUBLISHER, not consumers of it. The contract pins the `/live-flow` derivation as well, because a
+  frozen clock on a classroom screen is both a live-class failure and a silent one.
+  KNOWN, DELIBERATE, AND IDENTICAL TO THE LESSON TIMER'S EXISTING BEHAVIOUR: adjusting a PAUSED
+  round by -15s changes only `secondsLeft`, so it does not ping and the room picks it up on the next
+  poll (about 1.5s to 3s). Nothing is ticking while paused, so this can never storm. Stripping only
+  when the entry carries a live `endsAt` would close it, and was left alone rather than change the
+  lesson timer's behaviour as a drive-by.
   ANY NEW TOP-LEVEL SNAPSHOT KEY CARRYING A PER-SECOND COUNTDOWN HAS THIS BUG BY DEFAULT. The
-  projection is an allowlist of one special case, so the protection does not generalise on its own.
+  projection is a named set now rather than one special case, but it is still a list somebody has to
+  remember to add to - and the paired question is always which surface RENDERS that count, because
+  the strip and the deriving consumer have to land together.
   (3) **The student surfaces must call `invalidateSharedSessionState` BEFORE
   re-reading**, or the shared cache serves a value up to 2.8s old and the ping looks like it did
   nothing. (4) **The payload carries nothing.** It says "something changed"; each surface then
