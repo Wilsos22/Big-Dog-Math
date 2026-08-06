@@ -274,6 +274,34 @@ bars and live misconception grouping).
    identity posts carry a raw email and the site REFUSES them by design - do them before the first
    class day. The old hold on new student-data plumbing is LIFTED; build against the pseudonymous
    model.
+   **THE CUTOVER IS DONE. STEELE RAN A FULL STUDENT FLOW END TO END 2026-08-05**
+   ("i ran a student flow all the way though ... warm up, 5, learning checks"), and
+   it is the first time any student write has succeeded in the life of the project.
+   Measured on the live database immediately after: `auth_user_id` is no longer 0 -
+   a real district account completed the warm-up and claimed its roster row - and
+   `session_joins` carries 3 rows with a `student_id`, `poll_answers` has 5 rows
+   against a lifetime 0, and `student_signals` has 1. So step 6 is complete, and the
+   whole "every student write returns 428 by design" blocker - which this file and
+   ROADMAP both called the single biggest thing in the project - IS CLEARED. The one
+   query that used to prove the opposite now proves it:
+   `select count(*) from students where auth_user_id is not null;` returns non-zero.
+   **WHAT IT DID NOT DO: `mastery` IS STILL 0 ROWS.** The five answers include three
+   the bridge can grade (one `multiple-choice`, two `structured-numeric`, all on the
+   seeded standard `6.NS.B.4`, all carrying an answer key); the two `fist-to-five`
+   are correctly ungradable. Nothing moved a bar because NOTHING CALLS
+   `/api/teacher/poll-evidence` AUTOMATICALLY - it is a route you POST, and `GET` is
+   a dry run. That is now the top open item on the spine, and for the first time
+   there is real evidence sitting there to bridge.
+   **EXIT TICKETS ARE GOOGLE FORMS AS OF 2026-08-05** (Steele: "we also decided exit
+   tickets are google forms"). This REVERSES the 2026-07-28 decision recorded below
+   that moved the exit ticket on-site for data retention and mid-lesson deployment.
+   Consequences that are NOT yet worked through and need his direction rather than a
+   guess: the on-site `/exit-ticket` route, the `exit_tickets` table and
+   `launchExitTicket`, the `exit` state's Response Mode requirement, and the
+   poll-evidence bridge's scope all assume an on-site exit. A Forms exit arrives
+   through the warm-up-style evidence path instead, which is a different ingest with
+   different grading. Do not rebuild any of it until he says what the exit step
+   should DO on the projector and the student screen.
    **THE NOTION HALF (step 8) RAN 2026-08-05 AND IT WAS TWICE THE SIZE OF THE LIST.** Ten live
    databases went to the trash, including the `Rosters` / All Contact Information source of truth
    (174 rows, 157 real `@nv.ccsd.net` emails, 168 student numbers, guardian emails and phones in
@@ -441,7 +469,16 @@ Codex and cloud sessions need them too (rule 9).
   (3) The ROSTER spreadsheet ("26-27 Rosters"), holding `warmup-roster-push.gs` and
   `warmup-student-profile.gs`.
   Projects (1) and (3) both need `BDM_ROSTER_HMAC_KEY` set to the IDENTICAL value - a mismatch is
-  invisible until a real warm-up returns "not on roster". Note both `warmup-sidebar-functions.gs`
+  invisible until a real warm-up returns "not on roster". CONFIRMED MATCHING 2026-08-05: a real
+  student flow completed and wrote `auth_user_id`, which cannot happen unless the two keys agree.
+  **THE REPO'S `.gs` FILES ARE NOT THE LIVE APPS SCRIPT PROJECT, AND READING THEM ALONE WILL GIVE
+  YOU A CONFIDENTLY WRONG ANSWER** (2026-08-05). `warmup-sidebar-functions.gs` here has no
+  week-builder menu entry; the live Big Dog Math menu has had one "for weeks" (Steele). A menu item
+  was added on the strength of the file and reverted within the hour, because pasting it would have
+  either duplicated a working button or overwritten it. The repo is a copy that drifts in BOTH
+  directions - the live project can carry functions, menu items and triggers the repo has never
+  seen, and can lag edits the repo has. Never report an Apps Script capability as missing, or as
+  outstanding work, without it being checked in the editor; the file is evidence about the FILE. Note both `warmup-sidebar-functions.gs`
   and `warmup-student-profile.gs` define `onOpen()`, which is only safe because they live in
   different projects.
   **THE CRON SECRET LIVES IN THREE PLACES AND ALL THREE MUST MATCH EXACTLY** (2026-08-04): Vercel

@@ -1007,19 +1007,20 @@ NARROWED 2026-08-05: steps 1, 5 and 8 are done, so what is left is
   `buildWeekFromNotionLessons` at warmup-week-builder.gs:31); waiting on Steele's
   Apps Script paste-in. Builds the week from published Notion lessons: pool-backed
   Q4/Q5 (verified tags), AI openers only.
-  **THERE WAS NO SIDEBAR BUTTON; ONE WAS BUILT 2026-08-05.** This entry claimed
-  one for weeks. `generateWeekAuto` routes to `generateWeekFormsFromEngine_`
-  (warmup-engine.gs) and never calls `buildWeekFromNotionLessons`, so after the
-  paste-in there would still have been nothing to press. Fixed: a
-  `Build Week from Notion Lessons` item now sits under the Big Dog Math menu
-  (`warmup-sidebar-functions.gs`, `promptBuildWeekFromNotion`). A menu item takes
-  no arguments and the builder needs a `{number, startDate}`, which is why it is a
-  prompting wrapper rather than a bare entry; it builds all five days in one press
-  and deliberately does NOT stop at the first failure, so a Wednesday with no
-  published lesson cannot cost you Thursday and Friday. Parses clean;
-  `npm run test:warmup-apps-script` green. **Still waiting on Steele's paste-in of
-  `warmup-week-builder.gs` + `warmup-pools-data.gs` + this file** - and NOT yet
-  run against a real week, so the first press is the test.
+  **NOT ACTUALLY OUTSTANDING - CORRECTED 2026-08-05 BY STEELE.** "the week
+  builder button is already in sheets ... its been there for weeks. there is a
+  big dog section of the tool bar with all that. but more than that the warm ups
+  are built from the notion lesson." The live Big Dog Math menu has carried it
+  for weeks, and building from the Notion lesson is already how warm-ups work -
+  `generateWeekAuto` goes to `generateWeekFormsFromEngine_`, which resolves each
+  day's topic from the Notion calendar by date.
+  **THE MISTAKE IS THE THING TO KEEP: the repo's `.gs` files are NOT the live
+  Apps Script project.** Reading `warmup-sidebar-functions.gs` here shows no
+  week-builder menu entry, and that reading is correct about the FILE and wrong
+  about the WORLD. A menu item was briefly added on the strength of it and then
+  reverted, because pasting it would either have duplicated a working button or
+  overwritten one. Never conclude a menu, a function, or a trigger is missing
+  from the repo alone - it has to be checked in the Apps Script editor.
 ## Planned
 - **The laptop as the participation and edge-case view** (Steele, 2026-07-29,
   refining "the laptop shows student data"): a general state of participation that
@@ -1230,7 +1231,21 @@ work that no longer exists, and one of them would have broken teacher auth.
 6. ~~Run `supabase/grudge.sql`~~ **ALREADY RUN - verified 2026-08-05.** Five
    `grudge_*` tables exist, including `grudge_games`. What Grudge Ball is
    actually waiting on is a LIVE RUN with a class, not a migration.
-7. The FERPA cutover's Workspace half - **NARROWED 2026-08-04, steps 1 and 5 are
+7. The FERPA cutover's Workspace half - **DONE 2026-08-05. THIS IS NO LONGER A
+   BLOCKER.** Steele ran a full student flow end to end ("warm up, 5, learning
+   checks") and it wrote through: `auth_user_id` is non-zero for the first time
+   in the project's life, `session_joins` has 3 rows carrying a `student_id`,
+   `poll_answers` has 5 against a lifetime 0, and `student_signals` has 1. Step 6
+   was the last real gate and it is cleared, which also proves the warm-up and
+   roster projects' `BDM_ROSTER_HMAC_KEY` values match (step 2) - that could not
+   have succeeded otherwise. Everything below is history.
+   **THE NEW TOP ITEM ON THE SPINE IS THAT `mastery` IS STILL 0 ROWS.** Three of
+   those five answers are gradable (one multiple-choice, two structured-numeric,
+   all on the seeded standard `6.NS.B.4`, all with an answer key); the two
+   fist-to-five correctly are not. They moved no bar because nothing calls
+   `/api/teacher/poll-evidence` automatically - it is a route you POST, `GET` is
+   a dry run. For the first time there is real evidence waiting to be bridged.
+   HISTORY: **NARROWED 2026-08-04, steps 1 and 5 are
    DONE.** All 156 students in Periods 1-5 carry an `alias` AND an `email_hmac`,
    created 2026-08-01; the site cannot compute an HMAC, so the key exists and
    `pushRosterToSite()` has run. A re-run that day reported
@@ -1254,14 +1269,12 @@ work that no longer exists, and one of them would have broken teacher auth.
    verified-student gate and present as dead buttons. Re-measured 8/4:
    `select count(*) from students where auth_user_id is not null` returns 0.
    This is still the single biggest blocker in the file.
-8. Paste `warmup-week-builder.gs` + `warmup-pools-data.gs` **+ the updated
-   `warmup-sidebar-functions.gs`** into the WARM-UP Apps Script project (code
-   shipped, waiting on the paste-in). **The third file is new to this list as of
-   2026-08-05 and is the one that gives you a button** - it adds
-   `Build Week from Notion Lessons` to the Big Dog Math menu. Paste the first two
-   without it and the week builder is still unreachable, which is the state this
-   item was silently in for weeks. After pasting, reopen the spreadsheet so
-   `onOpen()` re-runs and the menu redraws.
+8. ~~Paste `warmup-week-builder.gs` + `warmup-pools-data.gs` into the WARM-UP
+   Apps Script project~~ **LIKELY ALREADY DONE - Steele, 2026-08-05: "the week
+   builder button is already in sheets ... its been there for weeks", and the
+   warm-ups already build from the Notion lesson.** Treat this item as closed
+   unless a week build actually fails. The live project is the authority here,
+   not the repo's copy of the `.gs` files.
 9. Add `Misconception Plans` text property to the Lessons DB; author
    `tag :: move` lines. The code side reads it already
    (`src/lib/notionLessons.ts:724`, consumed by `/teacher/rightnow` at
