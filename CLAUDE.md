@@ -305,6 +305,50 @@ bars and live misconception grouping).
    does not exist costs nothing and fails safe if one ever returns.
    Pseudonymized is not anonymized - Steele holds the key, and the posture still needs CCSD's
    sign-off; if CCSD requires even pseudonymous records in-district, that is a new project.
+   **WHERE A STUDENT RESPONSE LIVES IS DECIDED BY ONE QUESTION (Steele, 2026-08-05): DOES THIS
+   CHECK CHANGE WHAT I DO IN THE NEXT FIVE MINUTES?** Yes -> on-site, because that is where the
+   visit list and the live misconception grouping earn their keep. No -> a Google Form, so the
+   data never leaves the district Workspace. A better cut than "live vs overnight", and his, not
+   an inference.
+   **SETTLED THE SAME DAY, SO DO NOT RE-DERIVE IT FROM THE PRINCIPLE: WARM-UP AND EXIT TICKET ARE
+   FORMS; FIST-TO-FIVE AND BOTH READY CHECKS STAY ON-SITE.** The line is the BOOKENDS vs THE
+   MIDDLE - everything a student answers mid-lesson stays where the visit list can read it.
+   Note fist-to-five stays on-site even though an agent argued it was the weakest case for
+   staying (a temperature read rarely acted on within the period); Steele kept it, and that call
+   is the one that stands.
+   BUILT: the warm-up, already. NOT BUILT: the exit ticket half - see the paragraph below for
+   what it actually costs.
+   THREE THINGS TO GET RIGHT BEFORE ANYONE ACTS ON IT. (1) **This does NOT "eliminate FERPA."**
+   FERPA follows the education record, not the server; a fist-to-five answer is an education
+   record in Workspace exactly as it is in Supabase. What it removes is the third-party VENDOR
+   question - whether CCSD will accept student records on a host they have not signed a DPA with
+   - which is the actual open risk here. Do not let the shorthand travel; it changes what the
+   work is buying. (2) **The marginal exposure is already small**: the site holds alias +
+   email_hmac and cannot reverse it, so a row reads "Amber Fox answered 3". (3) **The real cost
+   is the VISIT LIST.** A Forms summary says "eleven missed Q3"; the visit list says "these nine
+   share one misconception, that is one stop" with the 40% stop-and-reteach banner. That is built
+   from `poll_answers` and rebuilding it in Sheets is a project, not a port.
+   CORRECTED IN THE SAME CONVERSATION, so nobody re-runs the bad argument: an agent objected that
+   reading Form results on the room's panel would put district emails on the wall. **It would
+   not.** Forms' Responses -> Summary tab is aggregate - per-question charts and common wrong
+   answers, no addresses; only Individual mode shows an email, and you have to switch to it
+   deliberately. Steele ran summary view on the board for a full year. The room-facing exposure
+   objection is dead; the visit-list objection is the one that survives.
+   THE CHEAPEST NEXT MOVE IS NOT ENGINEERING: one email to CCSD asking whether pseudonymous
+   records on a non-district host are acceptable. A yes moots this entire debate and the live
+   loop is kept as-is; a no gives a real requirement to build against instead of a guess.
+   The EXIT TICKET is the piece with a clear path, and it is cheaper than it looks: its content
+   is ALREADY authored in Notion (`Exit Ticket Prompt` / `Exit Ticket Answer`, plus the exit
+   Lesson Step's `Question` / `Correct Answer` / `Response Mode`), so the Apps Script would
+   TRANSCRIBE rather than generate, and `warmup-engine.gs` already reads Notion, builds Forms
+   with `FormApp`, writes a link back to a Notion property and installs the submit trigger. The
+   `Exit Ticket Link` property is already read by `notionLessons.ts`, so the URL has somewhere to
+   land. What is genuinely new: generalizing the warm-up-shaped receipt chain
+   (`student_warmup_sessions`, the `BDM_AUTH_USER_ID` prefill, `warmup_resource_key`) to a second
+   form, and porting the Structured Numeric rule judging into Apps Script. NOTE the warm-up
+   engine is PARAMETRIC, not AI - anyone estimating this off "the AI writes the warm-up" is
+   estimating the wrong thing, and an `warmup-ai-generator.gs` in the file list means they are in
+   the stale second Apps Script project.
 9. KEEP THIS FILE TRUE, IMMEDIATELY. The moment you discover something that would have prevented a bug
    - a stale reference, a silent failure mode, an undocumented constraint - correct this file in the
    same turn you discovered it, as its own small commit, and get that commit onto `main` without
@@ -2584,9 +2628,57 @@ the invariants they protect are easy to break again.
   is now a partial index over OPEN sessions only, so codes are reusable across days. REDESIGNED
   2026-07-26 (Steele's call): after the code is accepted the landing is the HOME BASE, full stop -
   lesson card, warm-up card, and /lesson, /practice, /explore links that are NEVER locked. No
-  gate view, no "keep this page open". The warm-up card shows Open today's warm-up when a form
-  exists (tracked per token in `sessionStorage['bdm-warmup-opened']`, softening to Reopen) and a
-  calm "No warm-up loaded yet" when none does. Three mechanisms replaced the old load-bearing
+  gate view, no "keep this page open".
+  **THE LINK GRID IS GONE AND THE WARM-UP IS EMBEDDED IN THE PAGE (Steele, 2026-08-05: "right now
+  they have access to the tools the lesson and the warm up").** The accepted-code view is now the
+  warm-up and NOTHING else - the /lesson, /practice and /explore cards were deleted, permanently,
+  not hidden behind a state. Where a student goes next is the teacher's call: the Notion pick
+  below, then class-mode sync. `/explore` and `/demo` are untouched on the CODE-ENTRY view, which
+  is a different screen. The `/homework-help` chip SURVIVES the cut - it is a support affordance
+  for a stuck student rather than somewhere to wander, and this file pins it to this view.
+  The form renders in an `<iframe>` (`.st-warmup-frame`, Google's supported `?embedded=true`)
+  instead of opening a tab. `embeddedFormUrl` EXTENDS the personalized URL rather than rebuilding
+  it - the prefill query carries the receipt token (`entry.NNN=<token>`), so dropping the query
+  breaks identity while the form still looks perfectly fine on screen.
+  **THERE IS NO CSP PROBLEM ON `/`, AND THAT IS LUCK, NOT DESIGN.** `next.config.ts` scopes its
+  `frame-src` header to `/:path(teacher|board|ipad|lesson)(.*)`, so the landing has no framing
+  policy at all. Move that header to a global `source` and the warm-up goes blank.
+  **THE ONE REAL RISK, AND IT CANNOT BE DETECTED AHEAD OF TIME:** a browser not already signed in
+  to the district Google account gets Google's sign-in interstitial, which sends
+  `X-Frame-Options: DENY` and renders a BLANK BOX inside the iframe. On a Chromebook already
+  signed in it embeds fine. That is why the "Warm-up not showing up?" new-tab escape is
+  load-bearing rather than polite - do not tidy it away. NOT VERIFIED ON A REAL DISTRICT ACCOUNT:
+  the embed was proven locally, but the sign-in case needs a Chromebook and a live session.
+  **GOOGLE FORMS CANNOT REDIRECT BACK ON SUBMIT. THERE IS NO SUCH FEATURE, AND NO AMOUNT OF
+  IFRAME WORK CHANGES IT** - the iframe is cross-origin and can never report a submission. The
+  site learns of one exactly one way, the way it always has: Apps Script `onFormSubmit` ->
+  `/api/student/warmup-verify` -> `WarmupJoinSync`'s 3s poll on `/api/student/warmup-status` ->
+  `identityReady`. So the handoff hangs off VERIFICATION, never off anything the embed does.
+  Consequence worth stating plainly: **until the Workspace half of the FERPA cutover lands
+  (`supabase/FERPA-CUTOVER.md` steps 2 and 6), nothing writes `completed_at`, so the handoff can
+  never fire and every student sits on the embedded form.** That is not a bug in this feature.
+  **THE CHALLENGE A STUDENT LANDS IN IS PICKED IN NOTION** - a `Warm-Up Challenge` SELECT on the
+  lesson, read by `notionLessons.ts` through `propByName` (never an exact-string lookup; the
+  hyphen in that name is exactly what fails silently), carried to the student on the public
+  `/api/today` payload, and resolved by `src/lib/warmupChallenge.ts`. **THE NOTION PROPERTY DOES
+  NOT EXIST YET AND MUST BE CREATED BY HAND** - the reader shipped first on purpose, per the
+  standing rule about authorable properties the runtime ignores, and a lesson with no property
+  simply leaves the student on the home base. Adding the select through the API would mean
+  re-declaring every option (the DDL has no ADD OPTION), which risks orphaning existing values,
+  so it is a UI click and Steele's call.
+  `WARMUP_CHALLENGE_OPTIONS` is DERIVED from `SKILLS`, so a Notion option can never name a drill
+  the engine does not have. `multiplication` is the one deliberate override, pointing at
+  `/multiplication-fluency` (Steele's first-few-weeks default); every other skill resolves to
+  `/practice?skill=<key>`, which is why `/practice` gained that param - it preselects but
+  deliberately does NOT auto-start, because the round is a 90-second clock and starting it while
+  a student is still reading spends their time for them. An unknown value resolves to "" and the
+  student stays put: a student parked where the teacher can see them beats one sent to a route
+  that will not load. `npm run test:warmup-challenge` pins all of it.
+  The warm-up card shows a
+  calm "No warm-up loaded yet" when no form is connected. `sessionStorage['bdm-warmup-opened']`
+  is still written (a replaced form rotates the token) but no longer drives a render state -
+  the embed means there is no "opened in the other tab" condition left to show.
+  Three mechanisms replaced the old load-bearing
   lock: (1) code entry stores a PROVISIONAL student session (`saveProvisionalStudentSession` in
   liveClassFlow - sessionId with empty studentId) so ClassSync follows the class immediately,
   meaning the teacher advancing past warm-up pushes EVERY device that typed the code, verified
@@ -2768,6 +2860,27 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   testing nothing the room could see. When a string anchor survives a redesign, confirm WHICH
   occurrence is matching before trusting it, and never re-add UI to a classroom surface just to make
   an anchor pass. (Main renders no logo by design; putting it back is Steele's call.)
+  A THIRD WAY A CONTRACT PASSES ON THE WRONG ELEMENT, AND IT IS THE CHEAPEST ONE TO HIT
+  (2026-08-05): **a class name appears in the page's own `<style>` block as well as in the JSX,
+  so `source.includes("st-warmup-frame")` stays green when the element is gone.** Caught by
+  mutation-testing the brand-new assertion: renaming the iframe's className left the contract
+  passing, because the CSS rule alone satisfied it. Every page in this repo styles itself with an
+  inline `<style>` template literal, so EVERY class-name assertion in every contract has this
+  hazard. Anchor on the rendered element instead - slice the tag (`sliceBetween(home, "<iframe",
+  "/>")`) and assert the className and the props inside that slice. Same family as the
+  `/teacher/present` logo anchor and the dropped `.dh-slot.act` rule; the general rule is
+  unchanged and keeps earning its place: WRITE THE MUTATION TEST, because an assertion you have
+  not seen go red is decoration.
+  CONTRACTS THAT COMPILE A LIB IN ISOLATION CANNOT USE `@/` - AND THE FIX IS TO STAGE COPIES, NOT
+  TO CRIPPLE THE SOURCE. `--ignoreConfig` is REQUIRED (tsc refuses to load tsconfig.json when
+  files are named on the command line) and it drops the path aliases, so a compile straight from
+  `src/` dies with "Cannot find module '@/lib/challengeSkills'" - a failure that looks nothing
+  like its cause. `mastery.ts`, `grouping.ts`, `soundBank.ts` and `notionLessonArchive.ts` solve
+  this by having NO local imports at all, which is why this file keeps warning about it.
+  `warmup-challenge-contract.mjs` does it the other way: it copies both files to a temp dir
+  rewriting `@/lib/x` to `./x.js` (the `.js` matters - Node's ESM loader will not resolve an
+  extensionless specifier, and tsc emits the specifier verbatim). Prefer that when the module
+  genuinely belongs in the app's normal import style.
   Dependencies are pinned EXACT in package.json (they were "latest" until 7/27 - never revert
   that; an unreviewed Next/React major landing on a school-morning deploy is the failure mode).
   `scripts/proxy-gate-contract.mjs` asserts every PROTECTED_PREFIX has its `/:path*` matcher
