@@ -285,13 +285,35 @@ bars and live misconception grouping).
    ROADMAP both called the single biggest thing in the project - IS CLEARED. The one
    query that used to prove the opposite now proves it:
    `select count(*) from students where auth_user_id is not null;` returns non-zero.
-   **WHAT IT DID NOT DO: `mastery` IS STILL 0 ROWS.** The five answers include three
-   the bridge can grade (one `multiple-choice`, two `structured-numeric`, all on the
-   seeded standard `6.NS.B.4`, all carrying an answer key); the two `fist-to-five`
-   are correctly ungradable. Nothing moved a bar because NOTHING CALLS
-   `/api/teacher/poll-evidence` AUTOMATICALLY - it is a route you POST, and `GET` is
-   a dry run. That is now the top open item on the spine, and for the first time
-   there is real evidence sitting there to bridge.
+   **AND THEN THE SPINE CLOSED. `mastery` WENT FROM 0 ROWS - EMPTY FOR THE LIFE OF
+   THE PROJECT - TO 141, ON 2026-08-05.** Backfilled with
+   `POST /api/teacher/poll-evidence {"sessionId":"50c2b90e-af3e-41e0-a1b9-b32564c9a75d"}`
+   after a clean `GET` dry run. Result: 3 polls considered, 3 answers, **4 rows
+   written, 0 skipped, 0 unresolved standards**, one period recomputed. Verified
+   after: `mastery` 141 rows across 35 students and 4 domains, `mastery_history`
+   142, and `responses` source `poll` holds exactly 3 rows with a `standard_id`
+   plus 1 with `standard_id` NULL - the documented split of per-question standard
+   rows and one aggregate bar row.
+   **WHY 35 STUDENTS HAVE BARS WHEN ONE STUDENT ANSWERED, AND IT IS NOT A BUG.**
+   The POST's second act is `recomputePeriod`, and NOTHING IN THE CODEBASE HAD EVER
+   CALLED IT. So this run did two things: it bridged the three graded poll answers,
+   and it triggered the first recompute in the project's history, which turned the
+   216 warm-up `responses` already sitting in the table into bars for the whole
+   period. The bars are mostly warm-up and i-Ready evidence; the poll answers are
+   the increment. Do not read 35 as a participation count.
+   **WHY IT NEEDED A BACKFILL AT ALL - A TIMING GAP, NOT A BROKEN BRIDGE.** The
+   run's answers landed 2026-08-05 21:36-21:38 UTC (14:36 PDT);
+   `src/lib/pollEvidencePromotion.ts` - the caller that promotes a closing session's
+   answers, wired into `closeSessions` so all three close paths are covered - was
+   committed at 18:09 PDT, three and a half hours later. That session closed before
+   the code that would have promoted it existed. The automatic path is live for
+   every session from here on; this one needed the manual recovery the module was
+   designed for (every row idempotent by `dedupe_key`, so re-POSTing writes exactly
+   the same rows).
+   THE GENERAL TRAP: when a feature lands mid-day, "the table is empty" is ambiguous
+   between "it does not work" and "it was not wired yet when that data was made".
+   Check the commit time of the caller against the timestamp of the data before
+   concluding anything.
    **EXIT TICKETS ARE GOOGLE FORMS AS OF 2026-08-05** (Steele: "we also decided exit
    tickets are google forms"). This REVERSES the 2026-07-28 decision recorded below
    that moved the exit ticket on-site for data retention and mid-lesson deployment.
