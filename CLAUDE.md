@@ -2719,20 +2719,55 @@ the invariants they protect are easy to break again.
   **THE CHALLENGE A STUDENT LANDS IN IS PICKED IN NOTION** - a `Warm-Up Challenge` SELECT on the
   lesson, read by `notionLessons.ts` through `propByName` (never an exact-string lookup; the
   hyphen in that name is exactly what fails silently), carried to the student on the public
-  `/api/today` payload, and resolved by `src/lib/warmupChallenge.ts`. **THE NOTION PROPERTY DOES
-  NOT EXIST YET AND MUST BE CREATED BY HAND** - the reader shipped first on purpose, per the
-  standing rule about authorable properties the runtime ignores, and a lesson with no property
-  simply leaves the student on the home base. Adding the select through the API would mean
-  re-declaring every option (the DDL has no ADD OPTION), which risks orphaning existing values,
-  so it is a UI click and Steele's call.
+  `/api/today` payload, and resolved by `src/lib/warmupChallenge.ts`.
+  **THE PROPERTY EXISTS AS OF 2026-08-06, AND UNTIL IT DID THE WHOLE HANDOFF WAS DEAD.** This
+  entry used to read "THE NOTION PROPERTY DOES NOT EXIST YET AND MUST BE CREATED BY HAND", and
+  that was the bug: the reader shipped first on purpose, nobody created the property, so
+  `propByName` found nothing, `/api/today` returned `warmupChallenge: ""`, the landing set
+  `challenge` to null and the handoff effect returned on its first line. Steele reported it as
+  "the student entry still does not trigger the practice multiplication skill once the warm up is
+  submitted" - verification was firing correctly the whole time, there was simply nowhere queued
+  to send them. The lesson generalises: an authorable property the runtime ignores and an
+  authorable property that does not exist present IDENTICALLY, and the first thing to check is
+  the data source schema, not the code.
+  **AND ADDING IT THROUGH THE API IS SAFE - THE OLD WARNING HERE WAS WRONG.** This entry claimed
+  "Adding the select through the API would mean re-declaring every option (the DDL has no ADD
+  OPTION), which risks orphaning existing values, so it is a UI click". That hazard is real for
+  ADDING AN OPTION TO AN EXISTING SELECT (see the `Response Mode` drift), and it does not apply to
+  CREATING A NEW PROPERTY: there are no existing values to orphan, and
+  `PATCH /v1/data_sources/<id>` with only the new property in `properties` MERGES - the other 77
+  were untouched, verified by count before and after.
+  **NOTION REFUSES A COMMA INSIDE A SELECT OPTION NAME**, and one engine label
+  ("Fraction, Decimal, Percent") has two - so the option in Notion is `Fraction Decimal Percent`
+  and is NOT character-identical to the label in `challengeSkills.ts`. That only resolves because
+  `normalize()` strips punctuation before matching. `npm run test:warmup-challenge` pins the
+  comma-free form of every label, so making the match stricter fails loudly instead of silently
+  dropping the one option a teacher picked.
+  **TWO PROPERTIES THAT NORMALIZE ALIKE ARE A SILENT COIN-FLIP, AND THERE ARE CURRENTLY TWO.**
+  `propByName` iterates `Object.entries(properties)` and returns the FIRST key whose normalized
+  name matches (`notionLessons.ts:269-271`), so `Warm up Challenge` and `Warm-Up Challenge` both
+  normalize to `warmupchallenge` and which one the site reads depends on Notion's property order -
+  not on the order of the names passed in. A value set on the losing one is ignored with nothing
+  anywhere saying so. `Warm up Challenge` appeared during the 2026-08-06 fix with ZERO options
+  (so no page can carry a value on it) and is Steele's to delete; it is called out here because
+  the same trap will recur the next time anyone hand-creates a property the code already reads.
   `WARMUP_CHALLENGE_OPTIONS` is DERIVED from `SKILLS`, so a Notion option can never name a drill
   the engine does not have. `multiplication` is the one deliberate override, pointing at
   `/multiplication-fluency` (Steele's first-few-weeks default); every other skill resolves to
   `/practice?skill=<key>`, which is why `/practice` gained that param - it preselects but
   deliberately does NOT auto-start, because the round is a 90-second clock and starting it while
-  a student is still reading spends their time for them. An unknown value resolves to "" and the
-  student stays put: a student parked where the teacher can see them beats one sent to a route
-  that will not load. `npm run test:warmup-challenge` pins all of it.
+  a student is still reading spends their time for them.
+  **UNSET AND UNRESOLVED ARE DIFFERENT, AND THE LANDING MUST CALL `warmupChallengeDestination`,
+  NOT `warmupChallengeHref`** (2026-08-06, Steele's call). An UNSET property means nobody picked -
+  the common case, and the one that left the handoff dead - so it takes the multiplication default
+  and the feature works every day rather than only on the days someone remembered. An
+  AUTHORED-BUT-UNRESOLVED value still resolves to "" and parks the student, because that is an
+  authoring mistake and defaulting it would land the class somewhere plausible with nothing saying
+  the pick was dropped: a teacher who typed "Fraction Practice" would never find out. The resolver
+  `warmupChallengeHref` stays pure and still returns "" for both; the split lives in
+  `warmupChallengeDestination`. `npm run test:warmup-challenge` pins both directions and
+  `student-warmup-home-contract.mjs` pins that the landing calls the destination - mutation-tested
+  both ways, since an assertion nobody has seen go red is decoration.
   The warm-up card shows a
   calm "No warm-up loaded yet" when no form is connected. `sessionStorage['bdm-warmup-opened']`
   is still written (a replaced form rotates the token) but no longer drives a render state -
