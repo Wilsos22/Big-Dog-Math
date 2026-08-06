@@ -712,6 +712,15 @@ Codex and cloud sessions need them too (rule 9).
   LIVE route - the warm-up engine endpoint the Apps Script calls - and its `PROTECTED_PREFIXES` /
   `SECURE_ROLLOUT_PREFIXES` entries in `src/proxy.ts` are untouched. `public/screens/warmup.html`
   is the unrelated hand-owned screen kit and also stays.
+  THE TRAP IT COST, and it is the ROUTE version of the "grep the bare name" rule under Repo layout:
+  a route-shaped sweep (`"/warmup"`, `href="/warmup"`, even `app/warmup`) found exactly ONE
+  reference and reported the route unlinked. It missed
+  `scripts/success-criterion-contract.mjs`, which read the page through
+  `path.join(root, "src", "app", "warmup", "page.tsx")` - a path assembled from SEGMENTS, matching
+  no string anyone would grep for. Deleting the page turned that read into an ENOENT crash, and
+  because `npm test` is `&&`-chained the whole 40-suite run aborted at suite 30. BEFORE DELETING A
+  ROUTE, grep `scripts/` for the bare last segment (`warmup`) as well as the path, and expect the
+  answer to be a contract rather than an import.
 - Attention call (2026-07-27, Steele's ask): the Bark pill on /ipad (always visible beside the
   Tools handle, 4s cooldown) sends `{t:"attention"}` on the `ink-<room>__ctrl` channel. /board
   handles it in its EXISTING ctrl handler; /teacher/present mounts `AttentionListener` (its first
