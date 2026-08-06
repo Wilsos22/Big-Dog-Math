@@ -2659,6 +2659,18 @@ the invariants they protect are easy to break again.
   productive. They are NOT a mechanism that acts on students - do NOT wire "promote on Got it"
   (release the Big Dog Challenge, bump a drill level). The `promoted` column exists and the POST
   accepts it, but nothing sends it and nothing should without his word.
+- **IN-LESSON CHECK RESULTS DO NOT RENDER ON THE ROOM SCREENS** (Steele, 2026-08-06: "the results of
+  the fist of 5, and both ready checks do not need to show up on the screens. I should see it on the
+  ipad"). `/teacher/present`, `/teacher/pace` and `/live-flow` show a live poll's QUESTION and a
+  response COUNT, never the answer distribution: the fist-to-five histogram on pace, the
+  `.stage-results` tally + "Class Results" heading swap on present, and any student-facing class view
+  are GONE (structured-numeric was already prompt-only). The teacher reviews the distribution on
+  `/teacher/remote` (Private response data + `VisitListPanel`) - that path is UNTOUCHED. `reveal-results`
+  still flips `poll.stage` to `results`; the projectors keyed their reveal off `poll.stage` + `poll.kind`,
+  so the reveal is removed by RENDERING, not by blocking the action. THE OLDER POLL-RENDERING NOTES IN
+  THIS FILE STILL DESCRIBE THAT HISTOGRAM/TALLY - it no longer draws, and that removal is deliberate;
+  do not "restore" it. Shipped on branch `claude/student-device-screen-sync-86e1e3` (verified in the
+  browser on both projectors + 4 contract suites); lands on `main` when that branch is deployed.
 - **CITY ROUTES IS DELETED** (Steele, 2026-07-28): "moot now that we aren't moving around." Nobody
   moves, so three named work stations with staged movement had no job left, and the visit list
   replaced it. Removed: `src/lib/cityRoutes.ts`, `CityRoutesPanel.tsx`, `CityRouteCard.tsx` (the
