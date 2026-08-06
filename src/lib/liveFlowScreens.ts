@@ -19,7 +19,7 @@
 // while a timer runs, and a ping per write would have thirty Chromebooks
 // re-fetching every second - the storm this is meant to avoid, arrived by
 // another road. Only a change a screen would actually SHOW may ping, so the
-// revision below deliberately ignores the two fields that tick.
+// revision below deliberately ignores every field that ticks.
 
 // Deliberately structural, and deliberately NOT importing LiveClassFlowSnapshot
 // from liveClassFlow: that module resolves its own imports through the "@/"
@@ -38,11 +38,27 @@ export function liveFlowChannelTopic(sessionId: string): string {
 /** The broadcast event name carried on that room. */
 export const LIVE_FLOW_PING_EVENT = "flow";
 
-// `updatedAt` is stamped on every write and `timer.secondsLeft` counts down once
-// a second; every surface already derives its own countdown from `timer.endsAt`,
-// so neither is a reason to wake the room. `transition` is the Remote's claim
-// marker - it is set and cleared around a single action that pings on its own.
+// `updatedAt` is stamped on every write, so it moves on a republish that changed
+// nothing anyone can see. `transition` is the Remote's claim marker - it is set
+// and cleared around a single action that pings on its own.
 const IGNORED_TOP_LEVEL = new Set(["updatedAt", "transition"]);
+
+// Top-level keys carrying a `secondsLeft` that counts down once a second. Every
+// surface derives the number it actually RENDERS from the matching `endsAt`, so
+// the relayed count is never a reason to wake the room - and /control
+// republishes about once a second, so scoring it would ping on every republish
+// for the whole of a timed state.
+//
+// `timer` is the lesson clock. `phase` is the discussion overlay's round, which
+// /control publishes as its OWN top-level key beside the timer and which ticks
+// exactly the same way; leaving it out of this set cost a two-minute discussion
+// round about a hundred and twenty pings - one a second, to every Chromebook and
+// both projectors, while the class was talking.
+//
+// THIS SET IS THE ONLY THING GUARDING IT. A new top-level key with a per-second
+// countdown has the same bug the moment it is added, so it belongs here in the
+// same change that adds it.
+const TICKING_SECONDS_KEYS = new Set(["timer", "phase"]);
 
 function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
@@ -66,7 +82,7 @@ export function liveFlowScreenRevision(flow: ScreenFlow | null | undefined): str
   const projected: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(flow)) {
     if (IGNORED_TOP_LEVEL.has(key)) continue;
-    if (key === "timer" && value && typeof value === "object") {
+    if (TICKING_SECONDS_KEYS.has(key) && value && typeof value === "object" && !Array.isArray(value)) {
       const { secondsLeft: _ticking, ...rest } = value as Record<string, unknown>;
       projected[key] = rest;
       continue;

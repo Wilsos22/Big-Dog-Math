@@ -45,6 +45,27 @@ const baseFlow = () => ({
   lesson: { id: "abc", code: "M1.T1.L1-D1" },
 });
 
+// A running discussion round: /control publishes the overlay's `phase` as its
+// own top-level key AND mirrors its clock into `timer`, so both count down
+// together and both carry the same deadline.
+const discussionFlow = () => ({
+  ...baseFlow(),
+  state: { id: "discussion", label: "Table discussion", color: "#674a40", semantic: "discussion" },
+  timer: { totalSeconds: 120, secondsLeft: 120, running: true, finished: false, endsAt: "2026-07-30T18:02:00.000Z" },
+  phase: {
+    id: "think",
+    label: "Round 1 of 3: Think + Write",
+    timed: true,
+    totalSeconds: 120,
+    secondsLeft: 120,
+    running: true,
+    finished: false,
+    endsAt: "2026-07-30T18:02:00.000Z",
+    roundNumber: 1,
+    roundCount: 3,
+  },
+});
+
 console.log("screen ping contract");
 
 // ── The per-second churn must never ping ────────────────────────────────────
@@ -75,6 +96,28 @@ console.log("screen ping contract");
   const after = JSON.parse(JSON.stringify(before));
   ok("an identical republish is not a screen change", !screens.liveFlowScreensChanged(before, after));
 }
+{
+  // The discussion overlay's round is /control's OWN top-level snapshot key, and
+  // its `secondsLeft` counts down once a second exactly like the lesson timer's.
+  // Scoring it pinged every device in the class once a second for the whole of a
+  // two-minute round - about a hundred and twenty times, while the class talked.
+  // Every surface derives the round's clock from `phase.endsAt` instead, so the
+  // tick shows nowhere.
+  const before = discussionFlow();
+  const after = discussionFlow();
+  after.updatedAt = "2026-07-30T18:00:01.000Z";
+  after.timer.secondsLeft = 119;
+  after.phase.secondsLeft = 119;
+  ok("a discussion round ticking is not a screen change", !screens.liveFlowScreensChanged(before, after));
+}
+{
+  const before = discussionFlow();
+  const after = discussionFlow();
+  after.updatedAt = "2026-07-30T18:01:00.000Z";
+  after.timer.secondsLeft = 60;
+  after.phase.secondsLeft = 60;
+  ok("a full minute of a round ticking is still not a screen change", !screens.liveFlowScreensChanged(before, after));
+}
 
 // ── Everything the room can see must ping ───────────────────────────────────
 const mustPing = [
@@ -90,7 +133,7 @@ const mustPing = [
   ["starting an interlude", (f) => { f.interlude = { stateId: "transition-hustle", endsAt: "2026-07-30T18:01:00.000Z" }; }],
   ["a classroom state override", (f) => { f.behaviorOverride = { voice: "0 silent", atIndex: 3 }; }],
   ["publishing a tool", (f) => { f.tool = { route: "/distributive-area", label: "Area model" }; }],
-  ["a discussion phase", (f) => { f.phase = { id: "think", running: true, totalSeconds: 120 }; }],
+  ["opening a discussion round", (f) => { f.phase = { id: "think", running: true, totalSeconds: 120 }; }],
   ["switching to manual pacing", (f) => { f.sequence.advanceMode = "manual"; }],
 ];
 for (const [label, mutate] of mustPing) {
@@ -100,6 +143,51 @@ for (const [label, mutate] of mustPing) {
   after.timer.secondsLeft = 475; // the tick rides along with every real change
   mutate(after);
   ok(`${label} pings`, screens.liveFlowScreensChanged(before, after));
+}
+
+// Ignoring the round's tick must not make the round itself invisible. Everything
+// the room can SEE change about a discussion beat still has to wake the class.
+const discussionMustPing = [
+  ["moving to the next round", (f) => { f.phase.id = "table"; f.phase.label = "Round 2 of 3: Discuss + Revise"; f.phase.roundNumber = 2; }],
+  ["pausing the round", (f) => { f.phase.running = false; f.phase.endsAt = null; f.timer.running = false; f.timer.endsAt = null; }],
+  ["finishing the round", (f) => { f.phase.finished = true; f.phase.running = false; f.phase.endsAt = null; }],
+  ["adding time to the round (endsAt moves)", (f) => { f.phase.endsAt = "2026-07-30T18:02:15.000Z"; f.timer.endsAt = "2026-07-30T18:02:15.000Z"; }],
+  ["choosing a sharer", (f) => { f.phase.selectedSharer = "Amber Fox"; }],
+  ["publishing sentence stems", (f) => { f.phase.sentenceStems = ["I agree because ..."]; }],
+];
+for (const [label, mutate] of discussionMustPing) {
+  const before = discussionFlow();
+  const after = discussionFlow();
+  after.updatedAt = "2026-07-30T18:00:05.000Z";
+  // The tick rides along with every real change, so each of these has to ping
+  // for its own reason and not because a second went by.
+  after.timer.secondsLeft = 115;
+  after.phase.secondsLeft = 115;
+  mutate(after);
+  ok(`${label} pings`, screens.liveFlowScreensChanged(before, after));
+}
+
+// ── The one consumer that rendered the relayed count had to stop ────────────
+// Stripping the tick means the round's clock can only come from its deadline.
+// /teacher/present, /teacher/pace and /teacher/remote already read the lesson
+// timer through `liveTimerSeconds`, which derives from `timer.endsAt`;
+// /live-flow was reading `phase.secondsLeft` straight out of the snapshot, and
+// left alone it would now show a frozen clock through a whole discussion round -
+// far worse on a Chromebook than the storm this fix removes.
+{
+  const liveFlowSource = fs.readFileSync(path.join(root, "src/app/live-flow/page.tsx"), "utf8");
+  ok(
+    "/live-flow derives the round clock from the deadline, not the relayed count",
+    /endsAt:\s*phase\.endsAt/.test(liveFlowSource),
+  );
+  ok(
+    "/live-flow never renders phase.secondsLeft as the clock",
+    !/\?\s*phase\.secondsLeft\s*$/m.test(liveFlowSource),
+  );
+  ok(
+    "/live-flow keeps a 1s heartbeat, or a derived clock only moves when the poll lands",
+    /setInterval\(\(\) => setClockTick/.test(liveFlowSource),
+  );
 }
 
 // ── Writers build snapshots independently; key order must not matter ────────
