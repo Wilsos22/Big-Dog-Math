@@ -1403,7 +1403,7 @@ export default function LiveFlowPage() {
                 {/* Honest copy either way: a student who never answered must
                     not be told their response was received. */}
                 <h1 className="lf-poll-question">{pollSubmitted ? "Response received" : "Eyes up"}</h1>
-                <p className="lf-poll-help">{pollSubmitted ? "Look at the Pace + Support screen for the class view." : "Your class is reviewing this question on the board."}</p>
+                <p className="lf-poll-help">{pollSubmitted ? "Got it - the teacher has your response. Eyes up." : "Eyes up - the teacher is reviewing responses."}</p>
               </section>
             ) : null}
             {!activePoll && discussion?.directions && (

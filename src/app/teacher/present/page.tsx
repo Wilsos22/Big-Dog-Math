@@ -1251,25 +1251,18 @@ export default function ClassroomStagePage() {
             ) : (
             <div className="stage-poll">
               {showLessonTargets && lesson?.learningIntention ? <p className="stage-learning">{lesson.learningIntention}</p> : null}
-              <h2 className="stage-question">{poll.stage === "results" ? "Class Results" : poll.question}</h2>
-              {poll.stage === "responding" || poll.kind === "short-answer" ? (
-                <p className="stage-response-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received</p>
-              ) : (
-                <div className="stage-results">
-                  {(poll.choices || []).map((choice) => {
-                    const count = pollAnswers.filter((answer) => answer.answer === choice).length;
-                    const percent = pollAnswers.length ? Math.round((count / pollAnswers.length) * 100) : 0;
-                    return (
-                      <div className="stage-result" key={choice}>
-                        <span>{poll.kind === "fist-to-five" ? `${choice} / 5` : choice}</span>
-                        <div className="stage-bar"><div className="stage-fill" style={{ width: `${percent}%` }} /></div>
-                        <span>{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {poll.stage === "results" ? <p className="stage-response-count">{poll.question}</p> : null}
+              {/* In-lesson checks (fist-to-five, multiple choice, short answer)
+                 never reveal a class tally on the projectors (Steele, 2026-08-06:
+                 "the results of the fist of 5, and both ready checks do not need
+                 to show up on the screens. I should see it on the ipad"). The
+                 room sees the question and how many have answered; the teacher
+                 reads the distribution and the visit list on the iPad Remote.
+                 The anonymous "Class Results" histogram that used to draw here at
+                 results stage is gone - the review path (Private response data +
+                 VisitListPanel on /teacher/remote) is untouched. structured-numeric
+                 was already prompt-only in the branch above. */}
+              <h2 className="stage-question">{poll.question}</h2>
+              <p className="stage-response-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received</p>
             </div>
             )
           ) : showResourcePanel && resource ? (

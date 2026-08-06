@@ -635,29 +635,14 @@ export default function PaceSupportPage() {
               ) : (
               <>
               <p className="pw-check-title">Fist to five</p>
-              {poll.stage === "results" ? (
-                <>
-                  <h2 className="pw-check-prompt">Where we are as a class</h2>
-                  <div className="pw-bars" aria-label="Anonymous Fist-to-Five results">
-                    {["0", "1", "2", "3", "4", "5"].map((choice) => {
-                      const count = pollAnswers.filter((answer) => answer.answer === choice).length;
-                      const maxCount = Math.max(1, ...["0", "1", "2", "3", "4", "5"].map((value) => pollAnswers.filter((answer) => answer.answer === value).length));
-                      return (
-                        <div className="pw-bar-column" key={choice}>
-                          <div className="pw-bar-track"><div className="pw-bar-fill" style={{ height: `${Math.max(4, Math.round((count / maxCount) * 100))}%` }} /></div>
-                          <span className="pw-bar-label">{choice}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p className="pw-check-count">Anonymous class results. {pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"}.</p>
-                </>
-              ) : (
-                <>
-                  <h2 className="pw-check-prompt">Answer on your Chromebook</h2>
-                  <p className="pw-check-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received. Names stay private.</p>
-                </>
-              )}
+              {/* No class histogram on the support projector (Steele, 2026-08-06:
+                 the fist-to-five distribution is for the teacher on the iPad, not
+                 the room). The support screen shows the question and the count in
+                 every stage, matching the other kinds above; the anonymous
+                 "Where we are as a class" bars that used to draw at results stage
+                 are gone. The teacher reads the distribution on /teacher/remote. */}
+              <h2 className="pw-check-prompt">Answer on your Chromebook</h2>
+              <p className="pw-check-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received. Names stay private.</p>
               </>
               )}
             </div>
