@@ -132,6 +132,37 @@ if (!classSyncTick.includes("getStoredStudentSessionId()")) {
 if (!classSync.includes("window.addEventListener(STUDENT_SESSION_READY_EVENT")) {
   throw new Error("ClassSync must react immediately when warm-up verification creates the student session.");
 }
+// The teacher-tab guard is CORRECT and must stay - a device that has held a
+// teacher session must not be dragged around by class mode. What it must not do
+// is return in silence: a held student looks exactly like a lesson that has not
+// advanced, and the marker dies on tab close and tab restore. That silence has
+// now cost two debugging sessions (2026-07-22, 2026-08-06).
+const tabGuardStart = classSync.indexOf("if (getStoredTeacherSessionId() && !isStudentTab()) {");
+const tabGuardEnd = classSync.indexOf("setNotFollowing(false);");
+if (tabGuardStart === -1 || tabGuardEnd === -1 || tabGuardEnd < tabGuardStart) {
+  throw new Error("The teacher-tab guard must remain, and must clear the not-following state once it passes.");
+}
+const tabGuard = classSync.slice(tabGuardStart, tabGuardEnd);
+if (!tabGuard.includes("setNotFollowing(")) {
+  throw new Error("The teacher-tab guard must surface that this device is not following, never return in silence.");
+}
+// Projector safety: this guard runs BEFORE the isTeacherRoute check below it, so
+// without an explicit exclusion the notice renders on /control and
+// /teacher/present - which are on the wall in front of the class.
+if (!tabGuard.includes("!isTeacherRoute(currentPath)")) {
+  throw new Error("The not-following notice must never render on a teacher surface - those are on the projector.");
+}
+if (!tabGuard.includes("getStoredStudentSessionId()")) {
+  throw new Error("The not-following notice must only appear when there is a student session being held.");
+}
+// It never heals on its own, so it must not inherit the transient-failure copy
+// that tells the student to sit tight and wait for the screen to catch up.
+if (!classSync.includes("Enter the class code again to reconnect")) {
+  throw new Error("The not-following notice must tell the student how to recover.");
+}
+if (!classSync.includes("if (!reconnecting && !notFollowing) return null;")) {
+  throw new Error("The status chip must render for the not-following case, not just the reconnecting one.");
+}
 if (!control.includes('teacherSession?.broadcast === "free"')
   || !control.includes('item.stateId === "warmup" && Boolean(item.linkUrl)')) {
   throw new Error("Selecting a lesson must stage its warm-up before Begin lesson starts pacing.");
