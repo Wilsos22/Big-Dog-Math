@@ -290,7 +290,7 @@ export default function TeacherAudioLibrary() {
     try {
       await saveClassroomAudio(storageKey, file);
       replaceAsset(storageKey, file);
-      setRowNotice(storageKey, { kind: "saved", message: "Saved. Refresh the host if it is already open." });
+      setRowNotice(storageKey, { kind: "saved", message: "Saved. An open host picks this up on its own." });
     } catch (error) {
       setRowNotice(storageKey, {
         kind: "error",

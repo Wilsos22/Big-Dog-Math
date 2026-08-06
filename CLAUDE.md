@@ -274,6 +274,56 @@ bars and live misconception grouping).
    identity posts carry a raw email and the site REFUSES them by design - do them before the first
    class day. The old hold on new student-data plumbing is LIFTED; build against the pseudonymous
    model.
+   **THE CUTOVER IS DONE. STEELE RAN A FULL STUDENT FLOW END TO END 2026-08-05**
+   ("i ran a student flow all the way though ... warm up, 5, learning checks"), and
+   it is the first time any student write has succeeded in the life of the project.
+   Measured on the live database immediately after: `auth_user_id` is no longer 0 -
+   a real district account completed the warm-up and claimed its roster row - and
+   `session_joins` carries 3 rows with a `student_id`, `poll_answers` has 5 rows
+   against a lifetime 0, and `student_signals` has 1. So step 6 is complete, and the
+   whole "every student write returns 428 by design" blocker - which this file and
+   ROADMAP both called the single biggest thing in the project - IS CLEARED. The one
+   query that used to prove the opposite now proves it:
+   `select count(*) from students where auth_user_id is not null;` returns non-zero.
+   **AND THEN THE SPINE CLOSED. `mastery` WENT FROM 0 ROWS - EMPTY FOR THE LIFE OF
+   THE PROJECT - TO 141, ON 2026-08-05.** Backfilled with
+   `POST /api/teacher/poll-evidence {"sessionId":"50c2b90e-af3e-41e0-a1b9-b32564c9a75d"}`
+   after a clean `GET` dry run. Result: 3 polls considered, 3 answers, **4 rows
+   written, 0 skipped, 0 unresolved standards**, one period recomputed. Verified
+   after: `mastery` 141 rows across 35 students and 4 domains, `mastery_history`
+   142, and `responses` source `poll` holds exactly 3 rows with a `standard_id`
+   plus 1 with `standard_id` NULL - the documented split of per-question standard
+   rows and one aggregate bar row.
+   **WHY 35 STUDENTS HAVE BARS WHEN ONE STUDENT ANSWERED, AND IT IS NOT A BUG.**
+   The POST's second act is `recomputePeriod`, and NOTHING IN THE CODEBASE HAD EVER
+   CALLED IT. So this run did two things: it bridged the three graded poll answers,
+   and it triggered the first recompute in the project's history, which turned the
+   216 warm-up `responses` already sitting in the table into bars for the whole
+   period. The bars are mostly warm-up and i-Ready evidence; the poll answers are
+   the increment. Do not read 35 as a participation count.
+   **WHY IT NEEDED A BACKFILL AT ALL - A TIMING GAP, NOT A BROKEN BRIDGE.** The
+   run's answers landed 2026-08-05 21:36-21:38 UTC (14:36 PDT);
+   `src/lib/pollEvidencePromotion.ts` - the caller that promotes a closing session's
+   answers, wired into `closeSessions` so all three close paths are covered - was
+   committed at 18:09 PDT, three and a half hours later. That session closed before
+   the code that would have promoted it existed. The automatic path is live for
+   every session from here on; this one needed the manual recovery the module was
+   designed for (every row idempotent by `dedupe_key`, so re-POSTing writes exactly
+   the same rows).
+   THE GENERAL TRAP: when a feature lands mid-day, "the table is empty" is ambiguous
+   between "it does not work" and "it was not wired yet when that data was made".
+   Check the commit time of the caller against the timestamp of the data before
+   concluding anything.
+   **EXIT TICKETS ARE GOOGLE FORMS AS OF 2026-08-05** (Steele: "we also decided exit
+   tickets are google forms"). This REVERSES the 2026-07-28 decision recorded below
+   that moved the exit ticket on-site for data retention and mid-lesson deployment.
+   Consequences that are NOT yet worked through and need his direction rather than a
+   guess: the on-site `/exit-ticket` route, the `exit_tickets` table and
+   `launchExitTicket`, the `exit` state's Response Mode requirement, and the
+   poll-evidence bridge's scope all assume an on-site exit. A Forms exit arrives
+   through the warm-up-style evidence path instead, which is a different ingest with
+   different grading. Do not rebuild any of it until he says what the exit step
+   should DO on the projector and the student screen.
    **THE NOTION HALF (step 8) RAN 2026-08-05 AND IT WAS TWICE THE SIZE OF THE LIST.** Ten live
    databases went to the trash, including the `Rosters` / All Contact Information source of truth
    (174 rows, 157 real `@nv.ccsd.net` emails, 168 student numbers, guardian emails and phones in
@@ -467,7 +517,16 @@ Codex and cloud sessions need them too (rule 9).
   (3) The ROSTER spreadsheet ("26-27 Rosters"), holding `warmup-roster-push.gs` and
   `warmup-student-profile.gs`.
   Projects (1) and (3) both need `BDM_ROSTER_HMAC_KEY` set to the IDENTICAL value - a mismatch is
-  invisible until a real warm-up returns "not on roster". Note both `warmup-sidebar-functions.gs`
+  invisible until a real warm-up returns "not on roster". CONFIRMED MATCHING 2026-08-05: a real
+  student flow completed and wrote `auth_user_id`, which cannot happen unless the two keys agree.
+  **THE REPO'S `.gs` FILES ARE NOT THE LIVE APPS SCRIPT PROJECT, AND READING THEM ALONE WILL GIVE
+  YOU A CONFIDENTLY WRONG ANSWER** (2026-08-05). `warmup-sidebar-functions.gs` here has no
+  week-builder menu entry; the live Big Dog Math menu has had one "for weeks" (Steele). A menu item
+  was added on the strength of the file and reverted within the hour, because pasting it would have
+  either duplicated a working button or overwritten it. The repo is a copy that drifts in BOTH
+  directions - the live project can carry functions, menu items and triggers the repo has never
+  seen, and can lag edits the repo has. Never report an Apps Script capability as missing, or as
+  outstanding work, without it being checked in the editor; the file is evidence about the FILE. Note both `warmup-sidebar-functions.gs`
   and `warmup-student-profile.gs` define `onOpen()`, which is only safe because they live in
   different projects.
   **THE CRON SECRET LIVES IN THREE PLACES AND ALL THREE MUST MATCH EXACTLY** (2026-08-04): Vercel
@@ -2686,20 +2745,55 @@ the invariants they protect are easy to break again.
   **THE CHALLENGE A STUDENT LANDS IN IS PICKED IN NOTION** - a `Warm-Up Challenge` SELECT on the
   lesson, read by `notionLessons.ts` through `propByName` (never an exact-string lookup; the
   hyphen in that name is exactly what fails silently), carried to the student on the public
-  `/api/today` payload, and resolved by `src/lib/warmupChallenge.ts`. **THE NOTION PROPERTY DOES
-  NOT EXIST YET AND MUST BE CREATED BY HAND** - the reader shipped first on purpose, per the
-  standing rule about authorable properties the runtime ignores, and a lesson with no property
-  simply leaves the student on the home base. Adding the select through the API would mean
-  re-declaring every option (the DDL has no ADD OPTION), which risks orphaning existing values,
-  so it is a UI click and Steele's call.
+  `/api/today` payload, and resolved by `src/lib/warmupChallenge.ts`.
+  **THE PROPERTY EXISTS AS OF 2026-08-06, AND UNTIL IT DID THE WHOLE HANDOFF WAS DEAD.** This
+  entry used to read "THE NOTION PROPERTY DOES NOT EXIST YET AND MUST BE CREATED BY HAND", and
+  that was the bug: the reader shipped first on purpose, nobody created the property, so
+  `propByName` found nothing, `/api/today` returned `warmupChallenge: ""`, the landing set
+  `challenge` to null and the handoff effect returned on its first line. Steele reported it as
+  "the student entry still does not trigger the practice multiplication skill once the warm up is
+  submitted" - verification was firing correctly the whole time, there was simply nowhere queued
+  to send them. The lesson generalises: an authorable property the runtime ignores and an
+  authorable property that does not exist present IDENTICALLY, and the first thing to check is
+  the data source schema, not the code.
+  **AND ADDING IT THROUGH THE API IS SAFE - THE OLD WARNING HERE WAS WRONG.** This entry claimed
+  "Adding the select through the API would mean re-declaring every option (the DDL has no ADD
+  OPTION), which risks orphaning existing values, so it is a UI click". That hazard is real for
+  ADDING AN OPTION TO AN EXISTING SELECT (see the `Response Mode` drift), and it does not apply to
+  CREATING A NEW PROPERTY: there are no existing values to orphan, and
+  `PATCH /v1/data_sources/<id>` with only the new property in `properties` MERGES - the other 77
+  were untouched, verified by count before and after.
+  **NOTION REFUSES A COMMA INSIDE A SELECT OPTION NAME**, and one engine label
+  ("Fraction, Decimal, Percent") has two - so the option in Notion is `Fraction Decimal Percent`
+  and is NOT character-identical to the label in `challengeSkills.ts`. That only resolves because
+  `normalize()` strips punctuation before matching. `npm run test:warmup-challenge` pins the
+  comma-free form of every label, so making the match stricter fails loudly instead of silently
+  dropping the one option a teacher picked.
+  **TWO PROPERTIES THAT NORMALIZE ALIKE ARE A SILENT COIN-FLIP, AND THERE ARE CURRENTLY TWO.**
+  `propByName` iterates `Object.entries(properties)` and returns the FIRST key whose normalized
+  name matches (`notionLessons.ts:269-271`), so `Warm up Challenge` and `Warm-Up Challenge` both
+  normalize to `warmupchallenge` and which one the site reads depends on Notion's property order -
+  not on the order of the names passed in. A value set on the losing one is ignored with nothing
+  anywhere saying so. `Warm up Challenge` appeared during the 2026-08-06 fix with ZERO options
+  (so no page can carry a value on it) and is Steele's to delete; it is called out here because
+  the same trap will recur the next time anyone hand-creates a property the code already reads.
   `WARMUP_CHALLENGE_OPTIONS` is DERIVED from `SKILLS`, so a Notion option can never name a drill
   the engine does not have. `multiplication` is the one deliberate override, pointing at
   `/multiplication-fluency` (Steele's first-few-weeks default); every other skill resolves to
   `/practice?skill=<key>`, which is why `/practice` gained that param - it preselects but
   deliberately does NOT auto-start, because the round is a 90-second clock and starting it while
-  a student is still reading spends their time for them. An unknown value resolves to "" and the
-  student stays put: a student parked where the teacher can see them beats one sent to a route
-  that will not load. `npm run test:warmup-challenge` pins all of it.
+  a student is still reading spends their time for them.
+  **UNSET AND UNRESOLVED ARE DIFFERENT, AND THE LANDING MUST CALL `warmupChallengeDestination`,
+  NOT `warmupChallengeHref`** (2026-08-06, Steele's call). An UNSET property means nobody picked -
+  the common case, and the one that left the handoff dead - so it takes the multiplication default
+  and the feature works every day rather than only on the days someone remembered. An
+  AUTHORED-BUT-UNRESOLVED value still resolves to "" and parks the student, because that is an
+  authoring mistake and defaulting it would land the class somewhere plausible with nothing saying
+  the pick was dropped: a teacher who typed "Fraction Practice" would never find out. The resolver
+  `warmupChallengeHref` stays pure and still returns "" for both; the split lives in
+  `warmupChallengeDestination`. `npm run test:warmup-challenge` pins both directions and
+  `student-warmup-home-contract.mjs` pins that the landing calls the destination - mutation-tested
+  both ways, since an assertion nobody has seen go red is decoration.
   The warm-up card shows a
   calm "No warm-up loaded yet" when no form is connected. `sessionStorage['bdm-warmup-opened']`
   is still written (a replaced form rotates the token) but no longer drives a render state -

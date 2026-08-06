@@ -10,6 +10,22 @@ export type TimerCueKey = "warn30" | "tick" | "end";
 
 export const TIMER_CUE_KEYS: TimerCueKey[] = ["warn30", "tick", "end"];
 
+// One channel name shared by /teacher/audio and /control. A Control tab reads its blobs once, at
+// mount, so without this a song uploaded mid-period only reached the speakers after a refresh -
+// and "refresh the host" is exactly the step that gets skipped when a class is walking in.
+export const CLASSROOM_AUDIO_CHANNEL = "bdm-classroom-audio";
+
+// Fire and forget. A browser without BroadcastChannel simply keeps the old refresh-the-host
+// behaviour rather than throwing on a save that otherwise succeeded.
+export function announceClassroomAudioChange(key: string): void {
+  if (typeof BroadcastChannel === "undefined") return;
+  try {
+    const channel = new BroadcastChannel(CLASSROOM_AUDIO_CHANNEL);
+    channel.postMessage({ key });
+    channel.close();
+  } catch { /* ignore */ }
+}
+
 export function musicAudioKey(stateId: string): string {
   return `music:${stateId}`;
 }
@@ -74,6 +90,7 @@ export async function saveClassroomAudio(key: string, audio: Blob): Promise<void
     request.onerror = () => reject(storageError("The audio file could not be saved", request.error));
     transaction.oncomplete = () => {
       database.close();
+      announceClassroomAudioChange(key);
       resolve();
     };
     transaction.onerror = () => {
@@ -97,6 +114,7 @@ export async function removeClassroomAudio(key: string): Promise<void> {
     request.onerror = () => reject(storageError("The audio file could not be removed", request.error));
     transaction.oncomplete = () => {
       database.close();
+      announceClassroomAudioChange(key);
       resolve();
     };
     transaction.onerror = () => {

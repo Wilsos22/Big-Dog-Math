@@ -66,3 +66,37 @@ export function warmupChallengeLabel(value: unknown): string {
   );
   return hit?.label ?? "";
 }
+
+// Where an UNAUTHORED lesson sends its students. Steele's first-few-weeks
+// default is the multiplication tool, and the common case is a lesson whose
+// property nobody set - so defaulting is what makes this work every day
+// without per-lesson authoring, rather than only on the days someone
+// remembered. Notion still wins whenever a lesson names a drill.
+export const WARMUP_CHALLENGE_DEFAULT_KEY = "multiplication";
+
+export interface WarmupChallengeDestination {
+  href: string;
+  label: string;
+}
+
+/**
+ * The destination for a lesson's `Warm-Up Challenge` value.
+ *
+ * UNSET falls back to the default above. UNRECOGNISED does NOT, and the
+ * difference is deliberate: a blank property means "nobody picked", while a
+ * value that resolves to nothing means someone picked and it did not take -
+ * an authoring error. Defaulting that one would hide it, and a teacher who
+ * typed "Fraction Practice" would watch the class land on multiplication with
+ * nothing anywhere saying why. So a bad value still parks the student on the
+ * home base, where the teacher can see them.
+ */
+export function warmupChallengeDestination(value: unknown): WarmupChallengeDestination {
+  const authored = typeof value === "string" ? value.trim() : "";
+  if (!authored) {
+    const fallback = WARMUP_CHALLENGE_OPTIONS.find(
+      (option) => option.key === WARMUP_CHALLENGE_DEFAULT_KEY,
+    );
+    return { href: fallback?.href ?? "", label: fallback?.label ?? "" };
+  }
+  return { href: warmupChallengeHref(authored), label: warmupChallengeLabel(authored) };
+}
