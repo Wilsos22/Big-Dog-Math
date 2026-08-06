@@ -152,9 +152,28 @@ bars and live misconception grouping).
    `.env*.local`, `.next`, `.data`, `.tmp-mastery/`, or anything under `aistudio_*`.
 6. REVERSED 2026-07-29 BY STEELE: **the control panel's DURING-SESSION view goes CREAM**, matching the
    rest of the site's wireframes. The old rule ("`/control` stays DARK for projector contrast, do not
-   carry the cream theme onto it") assumed Control might be seen by the room. It is not: Control lives
-   on his laptop, both projectors are separate browser tabs, and the room never sees it. His ask is
+   carry the cream theme onto it") assumed Control might be seen by the room. His ask is
    that the during-session flow controller match the Screen Studio wireframe language.
+   **THE PRIVACY PREMISE THAT ANSWER RESTED ON IS FALSE, CONFIRMED BY STEELE 2026-08-05.** This rule
+   used to say flatly "It is not: Control lives on his laptop, both projectors are separate browser
+   tabs, and the room never sees it." THERE IS NO LAPTOP IN THE ROOM. The room is TWO INTERACTIVE
+   PANELS, each with its own onboard computer running its own browser, not linked to each other -
+   which is correct and not a gap, because present and pace are meant to be independent readers of
+   the same session. The MAIN panel runs `/teacher/present` fullscreen with `/control` in a SECOND
+   TAB of that same browser; the other panel runs `/teacher/pace`. So the room sees Control every
+   time he switches to that tab.
+   HE CHOSE THIS DELIBERATELY on 2026-08-05, having been offered the laptop layout and declined it,
+   for two reasons that outweigh the exposure: Control is the room's AUDIO HOST (see the audio note
+   below), and the panel is where he can triage if something fails mid-period. Do NOT "fix" this by
+   moving Control onto a laptop.
+   WHAT FOLLOWS FROM IT IS SHARPER THAN IT LOOKS. The main panel's browser must hold the teacher NAME
+   KEY for the classroom spinner to show first names (the deliberate room-facing FERPA exception in
+   rule 8), and `/control` resolves aliases through that SAME device-local key
+   (`src/app/control/page.tsx:132-137`, roster fetched at :1101). One browser, one key - so a triage
+   switch to the Control tab puts REAL STUDENT NAMES on the wall, not aliases. Triage from
+   `/teacher/remote` FIRST: it drives the whole flow server-side through `/api/control-remote` and the
+   room never sees it. The panel's Control tab is the last resort, not the first.
+   The CREAM styling decision is unaffected - it is what he asked for and he is not asking for it back.
    The iPad Remote STAYS DARK (Turn 12d) - he holds it in a dim room facing the class, which is where
    the contrast rationale actually applies. So the split is now BY DEVICE, not by privacy: laptop
    surfaces read up close are cream, the handheld is dark.
@@ -176,7 +195,30 @@ bars and live misconception grouping).
    just should not need to GO there during a lesson unless something fails. Because Control publishes
    its snapshot about once a second and Chrome throttles hidden tabs hard after roughly five minutes, it
    has to stay FOREGROUNDED - which is why the during-lesson student-data view belongs INSIDE Control
-   rather than on its own route. The chosen data view is LIVE MISCONCEPTION CLUSTERS (what
+   rather than on its own route.
+   **IN THE REAL ROOM IT IS NOT FOREGROUNDED, AND THAT IS A KNOWN OPEN RISK, NOT AN OVERSIGHT**
+   (2026-08-05). Present is fullscreen on the main panel and Control sits behind it as a hidden tab
+   for the whole period. The lesson still runs - `/api/control-remote` executes everything
+   server-side and needs no Control at all - so this is not an outage. The hazard is the documented
+   one: Control's snapshot is a FULL REPLACE, so a throttled tab waking up and republishing stale
+   local state over server-authored fields is the failure class this file warns about repeatedly.
+   UNMEASURED. The one test that settles it, and it is one period's work: with Control backgrounded
+   for twenty-plus minutes, press a sound-bank button on the iPad and see whether the cue fires on
+   time. That test is load-bearing because of the next paragraph.
+   **CONTROL IS THE ROOM'S AUDIO HOST, AND THAT IS WHY IT LIVES ON THE PANEL.** The iPad deck's
+   `play-<id>` sound-bank commands, the timer warning / countdown / time-up cues, and the per-state
+   music ALL play out of the speakers of whatever machine Control is running on. On the main panel
+   that is the room speakers. Move Control to a laptop and every one of those sounds moves with it -
+   which is the thing that killed the otherwise-cleaner laptop layout on 2026-08-05 (a Bluetooth
+   speaker on the laptop was offered and declined; he prefers the classroom speakers). Anyone
+   proposing to relocate Control has to answer the audio question first.
+   **"ONE CONTROL AT A TIME" APPLIES ACROSS MACHINES, NOT JUST TABS.** The second-Control hazard
+   below is usually read as being about two tabs in one browser. It is not - a fresh Control boots
+   holding the `DEFAULT_STATES` skeleton (`control/page.tsx:699`) and with no stored teacher session
+   adopts whatever session is running via `latestOpen=1` (`:1028`), and it does that from ANY device.
+   So "Control on the laptop, with the panel's tab there if needed" is the same bug wearing different
+   clothes. The emergency fallback is fine SEQUENTIALLY - close one, open the other - and never
+   concurrently. The chosen data view is LIVE MISCONCEPTION CLUSTERS (what
    `/teacher/rightnow` renders from `/api/live/groups`), because it is the highest-value thing not
    already on the iPad and it is what changes the next teacher move.
 7. Verify the build before reporting "done" (`npm run typecheck` at minimum, `npm run build` for
