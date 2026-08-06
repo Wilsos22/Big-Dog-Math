@@ -1523,6 +1523,28 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   student device before believing the follower is fine. Note also that the warm-up handoff to the
   challenge tool is page-local (`router.push` in the landing) and fires whether or not class mode is
   armed, so a working handoff says nothing about ClassSync either.
+  **THE CLIENT FOLLOW PATH IS NOW VERIFIED FOR A CLEAN DEVICE (2026-08-06).** Driven against a dev
+  server with the REAL committed onboarding + `ClassSync` (root layout), faking ONLY the two
+  service-role endpoints a local server cannot run - `warmup-start` and `session-state` - through a
+  throwaway `public/*-sw.js` service worker that the app's OWN code calls, plus the real public
+  Supabase anon keys in a gitignored `.env.local` so anonymous sign-in and secure mode are live.
+  Every step observed on `location.pathname`: a clean device (no `bdm-teacher-session`) onboards to a
+  PROVISIONAL session (`studentId:""`, `markStudentTab` armed, exit marker cleared); HOLDS on `/` and
+  on `/multiplication-fluency` while the state is `warmup`; FOLLOWS to `/live-flow` within ~2s the
+  instant the state flips to a real one - INCLUDING the exact 8/6 "parked on the multiplication tool
+  then advanced" scenario; and HOLDS in place (no bounce to `/`) on a missing/gap state. So the 8/6
+  failure was the TAB GUARD on a teacher-session browser, not the follow logic - which is sound.
+  STILL UNPROVEN, and the only thing that closes it: that the SERVER emits those `session-state`
+  payloads correctly in a live session, and that real district Chromebooks behave the same - one real
+  period, watching `location.pathname` on the device, settles it.
+  **THE TESTING TRAP THIS PROVES OUT, AND IT IS THE 8/6 BUG FROM THE OTHER SIDE:** any browser that
+  has EVER opened a teacher surface (`/teacher`, `/control`, `/session`, `/roster`, `/ipad`, `/board`)
+  carries `bdm-teacher-session` FOREVER in localStorage, so using it as a "student" reproduces the tab
+  guard (the notFollowing chip, or a device that sits still) - NOT a student's experience. To match a
+  real student Chromebook's storage state, test the follow path in an INCOGNITO/private window or a
+  profile that has never held a teacher session. Note that in incognito the follow path works (it uses
+  the provisional session from code entry) but student WRITES still fail the verified-student gate - a
+  teacher Google account is not a roster student.
   Also know:
   ClassSync treats every session-state failure (wrong period, missing session_joins row, expired
   anon auth) as transient and retries silently, so ALL of them present identically as "the student
