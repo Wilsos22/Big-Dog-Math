@@ -944,6 +944,20 @@ export default function ControlPage() {
     };
   }, [autoAdvance]);
 
+  // Chrome suspends an AudioContext when its tab is hidden, and Control spends the whole period
+  // backgrounded behind fullscreen /teacher/present - the room's second tab, not the front one.
+  // Nothing on the hot cue-press path deterministically resumes a suspended context (playSoundCue's
+  // own resume is fire-and-forget and un-awaited, so it can still be suspended when src.start()
+  // fires a moment later). Heal it the instant the teacher taps back to this tab, before any cue
+  // is pressed, rather than leaving the first press of a period to gamble on the race.
+  useEffect(() => {
+    const resumeIfVisible = () => {
+      if (document.visibilityState === "visible") void audioCtxRef.current?.resume().catch(() => { /* stays suspended until a real gesture */ });
+    };
+    document.addEventListener("visibilitychange", resumeIfVisible);
+    return () => document.removeEventListener("visibilitychange", resumeIfVisible);
+  }, []);
+
   // ── Load saved bank minutes + lineup + uploaded sounds ──────────────────
   useEffect(() => {
     try {
@@ -3133,7 +3147,11 @@ export default function ControlPage() {
     // teacher's next move is to press Test and hear whether it is right.
     if (key.startsWith("bank:")) {
       const cueId = key.slice(5);
-      const ok = await installUserClip(cueId, await file.arrayBuffer(), audioCtxRef.current);
+      // Decode on THIS page's one context, same as the restore path (line ~998) - not the raw ref,
+      // which is still null at upload time (genTone/ensureAudioCtx create it lazily on first cue),
+      // so this used to fall through to soundBank's own private context and decode there while
+      // playback always runs on audioCtxRef.current: two different sample rates, a silent cue.
+      const ok = await installUserClip(cueId, await file.arrayBuffer(), ensureAudioCtx());
       setSoundBankError(ok ? null : `${file.name} would not decode. Try an MP3 or WAV.`);
     }
   }

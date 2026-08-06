@@ -2516,6 +2516,29 @@ the invariants they protect are easy to break again.
   This got more urgent when the clips were committed to `public/sounds/`, because `userBuffers`
   WINS over `fileBuffers` - one broken restored buffer would shadow a perfectly good committed file
   and the button would be silent with the right clip sitting right there.
+  **THAT FIX LEFT THE UPLOAD CALL SITE WITH THE IDENTICAL DEFECT, AND IT COST A REAL CLASS PERIOD
+  BEFORE ANYONE CAUGHT IT** (2026-08-06). The 2026-08-03 fix above only touched the RESTORE call
+  site. The UPLOAD call site (`uploadSound` in `/control`, ~line 3136) still passed the raw
+  `audioCtxRef.current` straight into `installUserClip` - and that ref is null at upload time for
+  the exact reason the restore site's was: `genTone`/`ensureAudioCtx` build it lazily on the first
+  CUE, and uploading a clip touches neither. So a clip uploaded before any cue had ever played on
+  that machine decoded on `soundBank.ts`'s own private `sharedContext()` while playback always ran
+  on `/control`'s `audioCtxRef.current` - a mismatch this file already names as the failure mode
+  two paragraphs up, on the other call site. Reported live: cues Steele had uploaded a clip for
+  played silently from the Stream Deck for a full ~50-minute period, while the synthesized
+  built-ins fired fine. Fixed by swapping in `ensureAudioCtx()` there too, mirroring the restore
+  site exactly - the whole change is one identifier. THE LESSON: when a fix names two call sites
+  with the same defect and only shows the diff for one, check the other actually changed too,
+  because "the two call sites disagreed" is not the same claim as "both call sites now agree."
+  A SECOND, STILL-LATENT DEFECT WAS FOUND AND CLOSED THE SAME DAY. Chrome suspends an
+  `AudioContext` when its tab is hidden, and `/control` is backgrounded behind fullscreen
+  `/teacher/present` for the entire period (see the CONTROL IS THE ROOM'S AUDIO HOST bullet under
+  rule 6) - nothing resumed it deterministically. `playSoundCue`'s own `.resume()` is fire-and-forget
+  and un-awaited, so `src.start()` can still fire on a still-suspended clock a moment later, and
+  `armSoundBank` - the one function in `soundBank.ts` that DOES await resume - has zero call sites
+  anywhere in the app. A new `visibilitychange` listener on `/control` now resumes the context the
+  instant the tab is shown again, healing it before the teacher's next tap instead of leaving the
+  first cue of a period to gamble on the race.
 - **STATE MUSIC IS STOP-FIRST, AND CUES DUCK IT RATHER THAN STACK ON IT** (both found live
   2026-08-02, Steele: "a song that plays the whole time and then a sound when the first time alert
   and then another when time is up and they all played on top of eachother and the song continued
