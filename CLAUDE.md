@@ -2497,6 +2497,25 @@ the invariants they protect are easy to break again.
   stamped with the sequence index it was issued at and expires on the next advance with no clearing
   code anywhere. The strip DOES cross `studentSafeLiveFlow` on purpose - "voice 0" is announced to the
   room and painted on two projectors, and a head-down student needs the same read the room gets.
+- **FIXED 2026-08-06: THE STRIP'S TOP OFFSET NOW ANCHORS TO THE CLOCK, NOT TO A BARE `vh` GUESS**
+  (Steele reported the strip crowding the countdown clock, scene-dependent, tightest on the
+  Divisibility Rules tool scene). `ClassroomStateStrip.tsx`'s `.css-strip` used
+  `top:clamp(10px,1.4vh,20px)`, measured from the strip's positioned ancestor with nothing in that
+  clamp ever reading the clock's actual position - same top-right corner, two unrelated numbers.
+  MEASURED, NOT REPRODUCED: every catalog scene at 1280x720 through 1920x1080 on both `/teacher/present`
+  and `/teacher/pace` (via `getBoundingClientRect()` on `/demo/present` and `/demo/pace` in
+  `?studioPreview=1` mode) held a >=23px gap in every one - the old clamp never actually shrank
+  scene to scene. But that margin was a COINCIDENCE of two fixed-pixel budgets (the clock's own
+  centering inside a fixed-height topbar row, plus the clamp), not a designed guarantee, so it would
+  erode silently if either budget ever changed. `.css-strip`'s `top` now reads
+  `var(--css-strip-top, clamp(10px,1.4vh,20px))` - the clamp is still the default for any consumer
+  that never sets the variable - and `/teacher/present`'s `.stage-work` plus `/teacher/pace`'s
+  `.pw-body` (the strip's positioned ancestor on each surface, already starting exactly at the
+  topbar's bottom edge) each set `--css-strip-top:20px`. Real gap to the clock's bottom edge is now a
+  flat, resolution- and scene-independent ~33px on present and ~34px on pace. Extending this pattern
+  to a THIRD consumer means setting the same variable on ITS OWN positioned ancestor with ITS OWN
+  topbar height in mind - never copying the flat `20px` blind, and never touching
+  `ClassroomStateStrip.tsx`'s fallback clamp itself.
 - **FIXED 2026-08-03: A TEACHER-LOADED BANK CLIP WAS DECODED ON ONE AudioContext AND PLAYED ON
   ANOTHER.** Symptom Steele reported: cues he uploaded a clip for made no sound from the Stream
   Deck, while cues with no upload still fired their synthesized version. The two `installUserClip`
