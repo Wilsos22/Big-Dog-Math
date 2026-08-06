@@ -20,6 +20,7 @@ import LessonVisual from "@/components/LessonVisual";
 // dead UI on the live engine. Both files are deleted as of 2026-07-30.
 // The sound bank took the deck's place.
 import { SOUND_CUES, clearUserClip, installUserClip, matchSoundCueFile, playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
+import { CLASSROOM_AUDIO_CHANNEL, announceClassroomAudioChange } from "@/lib/classroomAudio";
 import { joinRealtimeRoom } from "@/lib/realtimeRooms";
 import {
   REMOTE_COMMAND_PING_EVENT,
@@ -788,6 +789,18 @@ export default function ControlPage() {
   const timerStartSecondsRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
+  // The state whose music the speakers are supposed to be carrying right now. Written
+  // synchronously by startMusicFor so a blob that finishes reading late can check whether it is
+  // still wanted - by then the teacher may already be two states on.
+  const wantedMusicStateRef = useRef<string | null>(null);
+  // Mirror of soundUrls for the audio callbacks. Reading through a ref is what keeps
+  // startMusicFor's identity stable, and that matters beyond tidiness: it sits in the
+  // auto-advance effect's dependency list, where a new identity restarts the pending advance.
+  const soundUrlsRef = useRef<Record<string, string>>({});
+  // Chrome will not start audio until the document has been clicked. Control is opened on the
+  // laptop and can restore a running session before anyone touches it, so a refused play has to
+  // be visible and retryable instead of swallowed.
+  const [audioBlocked, setAudioBlocked] = useState(false);
   // ONE AudioContext FOR THIS PAGE. An AudioBuffer only crosses contexts cleanly when their sample
   // rates agree, so a clip decoded on one and played on another can throw on `src.buffer = ...` and
   // the press is simply silent. Constructing here is safe before any gesture - a context starts
@@ -966,7 +979,12 @@ export default function ControlPage() {
           if (blob) next[k] = URL.createObjectURL(blob);
         } catch { /* ignore */ }
       }
-      setSoundUrls(next);
+      // MERGE, do not replace. startMusicFor now reads a missing key straight out of the database
+      // while this loop is still running, and a plain replace here would drop the URL it just
+      // made - the running track would keep playing but the next start would go back to disk.
+      const merged = { ...next, ...soundUrlsRef.current };
+      soundUrlsRef.current = merged;
+      setSoundUrls(merged);
       // Hand the bank its clips. Until this resolves a press still sounds -
       // it just plays the built-in cue, same as a machine with nothing loaded.
       // PASS THIS PAGE'S CONTEXT. The upload path already does; this restore path did not, so a
@@ -1204,7 +1222,16 @@ export default function ControlPage() {
     if (previous === "halftime" && scoreboardStage === "final") playCue("end");
   }, [playCue, scoreboardStage]);
 
+  // Keep the ref honest. Every audio callback reads soundUrlsRef, never soundUrls directly.
+  useEffect(() => {
+    soundUrlsRef.current = soundUrls;
+  }, [soundUrls]);
+
   const stopMusic = useCallback(() => {
+    // Whatever was wanted is no longer wanted. A blob read still in flight checks this before it
+    // attaches, so clearing it here is what stops a late arrival from singing over silence.
+    wantedMusicStateRef.current = null;
+    setAudioBlocked(false);
     if (duckTimerRef.current) {
       clearTimeout(duckTimerRef.current);
       duckTimerRef.current = null;
@@ -1216,6 +1243,23 @@ export default function ControlPage() {
     }
   }, []);
 
+  // Attach a URL to the speakers, but only if the state that asked for it is still the state the
+  // room is in - a blob read can land after the teacher has already moved on.
+  const playMusicUrl = useCallback((url: string, stateId: string) => {
+    if (wantedMusicStateRef.current !== stateId) return;
+    const a = new Audio(url);
+    a.loop = true;
+    a.volume = MUSIC_FULL_VOLUME;
+    musicRef.current = a;
+    a.play()
+      .then(() => setAudioBlocked(false))
+      .catch(() => {
+        // DO NOT SWALLOW THIS. From the front of the room a refused play is indistinguishable from
+        // a missing file, and it is the only one of the two the teacher can fix in a second.
+        if (wantedMusicStateRef.current === stateId) setAudioBlocked(true);
+      });
+  }, []);
+
   const startMusicFor = useCallback((stateId: string) => {
     // STOP FIRST, ALWAYS. This used to return early when the new state had no music of its own,
     // which skipped the stop entirely - so the warm-up song played straight on through the next
@@ -1223,14 +1267,81 @@ export default function ControlPage() {
     // this as "the music for this state is now the only music", so it has to be true even when the
     // answer is silence.
     stopMusic();
-    const url = soundUrls[`music:${stateId}`];
-    if (!url) return;
-    const a = new Audio(url);
-    a.loop = true;
-    a.volume = MUSIC_FULL_VOLUME;
-    a.play().catch(() => { /* ignore */ });
-    musicRef.current = a;
-  }, [soundUrls, stopMusic]);
+    wantedMusicStateRef.current = stateId;
+    const key = `music:${stateId}`;
+    const cached = soundUrlsRef.current[key];
+    if (cached) {
+      playMusicUrl(cached, stateId);
+      return;
+    }
+    // Not prefetched yet - READ IT NOW rather than going quiet. The mount-time prefetch is a
+    // serial loop over every cue and every state, each one opening its own database connection,
+    // and with multi-megabyte songs it can still be running a second or two in. A class started
+    // inside that window used to get silence for that state, permanently, because nothing retried.
+    void (async () => {
+      const blob = await idbGet(key).catch(() => undefined);
+      if (!blob) {
+        // Genuinely no song for this state. Silence is the right answer, so drop any stale blocked
+        // banner rather than leaving it up over a state that was never meant to sing.
+        if (wantedMusicStateRef.current === stateId) setAudioBlocked(false);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const next = { ...soundUrlsRef.current, [key]: url };
+      soundUrlsRef.current = next;
+      setSoundUrls(next);
+      playMusicUrl(url, stateId);
+    })();
+  }, [playMusicUrl, stopMusic]);
+
+  // The first click anywhere on this document is Chrome's permission to make noise. Take it and
+  // start the track that was refused, so the teacher never has to work out why the room is quiet.
+  useEffect(() => {
+    if (!audioBlocked) return;
+    const retry = () => {
+      const stateId = wantedMusicStateRef.current;
+      if (stateId) startMusicFor(stateId);
+      else setAudioBlocked(false);
+    };
+    window.addEventListener("pointerdown", retry);
+    window.addEventListener("keydown", retry);
+    return () => {
+      window.removeEventListener("pointerdown", retry);
+      window.removeEventListener("keydown", retry);
+    };
+  }, [audioBlocked, startMusicFor]);
+
+  // /teacher/audio writes to this same store, but a Control tab already open read its blobs at
+  // mount - which is why that page has to say "refresh the host". Listen instead, so a song
+  // uploaded during a passing period reaches the speakers without a reload.
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    let channel: BroadcastChannel;
+    try {
+      channel = new BroadcastChannel(CLASSROOM_AUDIO_CHANNEL);
+    } catch {
+      return;
+    }
+    channel.onmessage = (event: MessageEvent) => {
+      const key = (event.data as { key?: unknown } | null)?.key;
+      if (typeof key !== "string") return;
+      void (async () => {
+        const blob = await idbGet(key).catch(() => undefined);
+        const previousUrl = soundUrlsRef.current[key];
+        const next = { ...soundUrlsRef.current };
+        if (blob) next[key] = URL.createObjectURL(blob);
+        else delete next[key];
+        soundUrlsRef.current = next;
+        setSoundUrls(next);
+        // If the room is sitting on the state that just changed, swap to the new song now -
+        // restarting from the top is the honest thing to do when the track itself changed.
+        const stateId = wantedMusicStateRef.current;
+        if (stateId && key === `music:${stateId}`) startMusicFor(stateId);
+        if (previousUrl) URL.revokeObjectURL(previousUrl);
+      })();
+    };
+    return () => channel.close();
+  }, [startMusicFor]);
 
   // Ad-hoc "Transition now" interludes (fired from the Remote or /session)
   // arrive through the synced session row. Play the vibe's track while the
@@ -3010,10 +3121,14 @@ export default function ControlPage() {
   async function uploadSound(key: string, file: File | undefined) {
     if (!file) return;
     await idbPut(key, file);
-    setSoundUrls((prev) => {
-      if (prev[key]) URL.revokeObjectURL(prev[key]);
-      return { ...prev, [key]: URL.createObjectURL(file) };
-    });
+    const previousUrl = soundUrlsRef.current[key];
+    const uploaded = { ...soundUrlsRef.current, [key]: URL.createObjectURL(file) };
+    soundUrlsRef.current = uploaded;
+    setSoundUrls(uploaded);
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+    // Tell every other open tab - /teacher/audio, a second Control - so none of them keeps
+    // handing the speakers a file that has been replaced.
+    announceClassroomAudioChange(key);
     // A bank clip has to reach the bank now, not on the next reload - the
     // teacher's next move is to press Test and hear whether it is right.
     if (key.startsWith("bank:")) {
@@ -3044,10 +3159,13 @@ export default function ControlPage() {
 
   async function clearSound(key: string) {
     await idbDel(key);
-    setSoundUrls((prev) => {
-      if (prev[key]) URL.revokeObjectURL(prev[key]);
-      const n = { ...prev }; delete n[key]; return n;
-    });
+    const previousUrl = soundUrlsRef.current[key];
+    const cleared = { ...soundUrlsRef.current };
+    delete cleared[key];
+    soundUrlsRef.current = cleared;
+    setSoundUrls(cleared);
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+    announceClassroomAudioChange(key);
     // Falls back to /sounds/<id>.mp3 if one is deployed, then to the synthesized
     // cue. A button in this bank is never silent.
     if (key.startsWith("bank:")) {
@@ -3192,6 +3310,31 @@ export default function ControlPage() {
 
   return (
     <>
+      {audioBlocked ? (
+        <button
+          type="button"
+          onClick={() => {
+            const stateId = wantedMusicStateRef.current;
+            if (stateId) startMusicFor(stateId);
+            else setAudioBlocked(false);
+          }}
+          style={{
+            position: "fixed",
+            left: 16,
+            bottom: 16,
+            zIndex: 9999,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #fcaf38",
+            background: "#2a1f0c",
+            color: "#fcaf38",
+            font: "700 14px/1.2 var(--bdb-font, inherit)",
+            cursor: "pointer",
+          }}
+        >
+          Browser blocked the sound - click to start the music
+        </button>
+      ) : null}
       <style>{`
         /* Warm Notebook skin for the RUNNING view (rule 6, reversed 2026-07-29):
            Control lives on the laptop, the projectors are separate tabs, and the
