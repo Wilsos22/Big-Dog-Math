@@ -406,6 +406,13 @@ bars and live misconception grouping).
    does not exist costs nothing and fails safe if one ever returns.
    Pseudonymized is not anonymized - Steele holds the key, and the posture still needs CCSD's
    sign-off; if CCSD requires even pseudonymous records in-district, that is a new project.
+   A DATA POINT ON THAT SIGN-OFF, NOT A DECISION (Steele, 2026-08-07): "the tech said even notion
+   data is fine" - unspecified who "the tech" is or what was reviewed, and no written confirmation
+   is on file. He is explicitly NOT acting on it: "im just goin to leave it how it is." So the
+   architecture is UNCHANGED - alias + email_hmac only, nothing identified in Notion - and this is
+   informal signal that a looser posture might be acceptable, not a green light to build toward one.
+   Do not read this as the CCSD sign-off closing out, and do not use it to justify moving anything
+   identified into Notion without him raising it again explicitly.
    **WHERE A STUDENT RESPONSE LIVES IS DECIDED BY ONE QUESTION (Steele, 2026-08-05): DOES THIS
    CHECK CHANGE WHAT I DO IN THE NEXT FIVE MINUTES?** Yes -> on-site, because that is where the
    visit list and the live misconception grouping earn their keep. No -> a Google Form, so the
