@@ -30,6 +30,14 @@ export function musicAudioKey(stateId: string): string {
   return `music:${stateId}`;
 }
 
+// The sound bank's clips share this store with the timer cues and per-state
+// music. `bank:` namespaces them so a cue id can never collide with a music key.
+// /control writes these (its own local `bankClipKey` produces the identical
+// string); /teacher/present reads them through this helper.
+export function bankAudioKey(cueId: string): string {
+  return `bank:${cueId}`;
+}
+
 function storageError(message: string, error?: DOMException | null): Error {
   return new Error(error?.message ? `${message}: ${error.message}` : message);
 }

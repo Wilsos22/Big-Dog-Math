@@ -49,6 +49,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const liveClassFlow = read("src/lib/liveClassFlow.ts");
 const remoteDeck = read("src/lib/remoteDeck.ts");
 const control = read("src/app/control/page.tsx");
+const present = read("src/app/teacher/present/page.tsx");
+const audioHost = read("src/components/ClassroomAudioHost.tsx");
 const remotePage = read("src/app/teacher/remote/page.tsx");
 const soundBankSource = read("src/lib/soundBank.ts");
 const soundLabelsSource = read("src/lib/soundBankLabels.ts");
@@ -222,6 +224,32 @@ check("Control plays the bank through the same remote-command handler as the tim
     /playCueOnce\(\s*command\.action/.test(control),
     "Control no longer feeds the remote command's action to the cue player",
   );
+});
+
+check("the projector is the primary audio host and it plays the bank", () => {
+  // As of 2026-08-07 /teacher/present is the room's audio host: /control runs as a
+  // hidden tab behind it and browsers throttle hidden tabs, which made every cue
+  // late or silent in the real room. If any of this is removed, room sound
+  // silently returns to the throttled tab.
+  assert.ok(present.includes("ClassroomAudioHost"), "/present no longer mounts the audio host");
+  assert.ok(audioHost.includes("soundCueIdForAction("), "the audio host does not resolve sound-bank commands");
+  assert.ok(audioHost.includes("playSoundCue("), "the audio host does not play sound-bank cues");
+  for (const timerAction of TIMER_CUE_ACTIONS) {
+    assert.ok(audioHost.includes(`"${timerAction}"`), `the audio host stopped handling ${timerAction}`);
+  }
+  assert.ok(audioHost.includes("remoteCommandTopic("), "the audio host does not subscribe to the Remote ping");
+  // Control yields to the projector host so a cue never plays twice; the host
+  // announces itself so Control knows to yield.
+  assert.ok(control.includes("watchAudioHost("), "Control no longer yields to the projector audio host");
+  assert.ok(audioHost.includes("claimAudioHost("), "the audio host does not announce itself so Control can yield");
+});
+
+check("both audio hosts synthesize timer cues from the one shared pattern set", () => {
+  // The tones live in src/lib/timerCues.ts so the projector and the backup cannot
+  // drift. Re-inlining a pattern on either surface is the drift this prevents.
+  assert.ok(control.includes("TIMER_TONE_PATTERNS"), "Control no longer uses the shared timer tones");
+  assert.ok(audioHost.includes("TIMER_TONE_PATTERNS"), "the projector host no longer uses the shared timer tones");
+  assert.ok(!/genTone\(\s*\[\s*\{/.test(control), "Control re-inlined a timer tone instead of using the shared set");
 });
 
 

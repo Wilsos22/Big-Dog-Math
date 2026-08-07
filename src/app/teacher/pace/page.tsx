@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useLiveFlowPing } from "@/lib/liveFlowPing";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
+import FullscreenButton from "@/components/FullscreenButton";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
 import SlideFrameScene from "@/components/SlideFrameScene";
 import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
@@ -504,6 +505,7 @@ export default function PaceSupportPage() {
         <span className="pw-textbtns" aria-label="Text size">
           <button className="pw-textbtn" type="button" onClick={() => adjustTextScale(-0.25)} disabled={textScale <= 1} aria-label="Smaller text">A-</button>
           <button className="pw-textbtn" type="button" onClick={() => adjustTextScale(0.25)} disabled={textScale >= 2.5} aria-label="Bigger text">A+</button>
+          <FullscreenButton className="pw-textbtn" />
         </span>
         <span className={`pw-timer${timerFinished ? " finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`} aria-label="Class timer">
           {previewSample ? "5:00" : timer ? formatTime(timerSeconds) : "--:--"}
