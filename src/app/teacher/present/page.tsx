@@ -10,6 +10,7 @@ import InkBoard from "@/components/InkBoard";
 import LessonVisual from "@/components/LessonVisual";
 import AttentionListener from "@/components/AttentionListener";
 import ClassroomAudioHost from "@/components/ClassroomAudioHost";
+import FullscreenButton from "@/components/FullscreenButton";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
 import { joinInkRoom } from "@/lib/inkSync";
 import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
@@ -1069,6 +1070,7 @@ export default function ClassroomStagePage() {
           <span className="stage-textbtns" aria-label="Text size">
             <button className="stage-textbtn" type="button" onClick={() => adjustTextScale(-0.25)} disabled={textScale <= 1} aria-label="Smaller text">A-</button>
             <button className="stage-textbtn" type="button" onClick={() => adjustTextScale(0.25)} disabled={textScale >= 2.5} aria-label="Bigger text">A+</button>
+            <FullscreenButton className="stage-textbtn" />
           </span>
           <div className={`stage-timer ${timerFinished ? "finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`}>{previewSample ? "5:00" : timer ? formatTime(timerSeconds) : "--:--"}</div>
         </div>
