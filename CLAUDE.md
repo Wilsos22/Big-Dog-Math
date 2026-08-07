@@ -251,6 +251,11 @@ bars and live misconception grouping).
    and the overlay on `/teacher/present` ONLY (never a student device) spins to one first name. Fair
    rotation lives in the projector's localStorage (`bdm-speaker-spinner-fair-v1`) and the remaining
    count is deliberately never shown; the alias is what rides the wire, first name only at render.
+   FORMALLY APPROVED, NOT JUST A PRODUCT CALL (Steele, 2026-08-07): he confirmed he now has "the
+   okay" for this specific display - the spinner's first-name reveal (`ClassroomSpinner` and
+   `SpeakerSpinner`, the two paragraphs above). He did not say who approved it or in what form, so
+   none of that is recorded here. This does not extend to any other feature and does not change the
+   still-open CCSD sign-off question for pseudonymous records elsewhere (see below).
    STUDENT DEVICES RENDER NO STUDENT NAME OR ALIAS AT ALL (Steele, 2026-08-01: "they never have
    their names on their device" - a name on a kid's own screen is disruption material, same as on
    the board; an alias doubly so). Identity is NOT anonymous - the alias still rides every join,
