@@ -38,6 +38,11 @@ interface ClassroomSpinnerProps {
 
 const FAIR_ROTATION_KEY = "bdm-classroom-spinner-fair-v1";
 
+// Every reel lands at once, this many ms after the tap; the room unlocks
+// (Next re-enables, receipt flushes) this many ms after that.
+const SPIN_LAND_MS = 700;
+const SPIN_SETTLE_MS = 150;
+
 function randomItem<T>(items: T[]): T | undefined {
   return items[Math.floor(Math.random() * items.length)];
 }
@@ -399,12 +404,18 @@ export default function ClassroomSpinner({
     }, 72);
 
     timeoutsRef.current.forEach(clearTimeout);
-    timeoutsRef.current = picks.map((student, index) => setTimeout(() => {
-      settledNamesRef.current[index] = student.fullName;
-      setDisplayNames((current) => current.map((name, reelIndex) => reelIndex === index ? student.fullName : name));
-      setLanded((current) => current.map((value, reelIndex) => reelIndex === index ? true : value));
-      tone(540 + (index * 160));
-    }, 1_150 + (index * 650)));
+    // All reels land together (not staggered) and the whole spin is short -
+    // Steele's ask 2026-08-07: the old per-reel stagger plus settle buffer
+    // held the Remote's Next locked for ~2.15s after tap, and it read as the
+    // room "sitting there". SPIN_LAND_MS/SPIN_SETTLE_MS below are the only
+    // two numbers that control it.
+    timeoutsRef.current = [setTimeout(() => {
+      const winnerNames = picks.map((student) => student.fullName);
+      settledNamesRef.current = winnerNames;
+      setDisplayNames(winnerNames);
+      setLanded(Array(reelCount).fill(true));
+      picks.forEach((_, index) => tone(540 + (index * 160)));
+    }, SPIN_LAND_MS)];
 
     timeoutsRef.current.push(setTimeout(() => {
       if (cycleRef.current) {
@@ -428,7 +439,7 @@ export default function ClassroomSpinner({
         };
         void flushRemoteReceipt();
       }
-    }, 1_150 + ((reelCount - 1) * 650) + 350));
+    }, SPIN_LAND_MS + SPIN_SETTLE_MS));
     return true;
   }, [flushRemoteReceipt, reelCount, role, storageKey, students, tone]);
 
