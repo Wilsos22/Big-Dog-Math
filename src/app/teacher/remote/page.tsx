@@ -675,6 +675,31 @@ export default function TeacherRemotePage() {
     }
   }, [busy, pendingCommand, session]);
 
+  // Sound-bank and timer-cue keys (play-*) never touch lesson state, Control
+  // plays them straight off the realtime ping (remoteCommandPing.ts) with its
+  // own nonce dedupe, and a duplicated or overlapping cue is harmless by
+  // design there - so routing them through the generic send() and its
+  // pendingCommand lock only bought a several-second "everything greyed out"
+  // window for nothing (Steele, 2026-08-07: cut it, let cues overlap when
+  // pressed back to back). This never sets busy/pendingCommand/
+  // commandInFlightRef, so it cannot block itself, another sound key, or the
+  // lesson-navigation keys guarded by send().
+  const sendCue = useCallback((button: RemoteDeckButton) => {
+    if (!session) return;
+    setStatus(`Sending to classroom: ${button.label}`);
+    void fetch("/api/control-remote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: button.action, sessionId: session.id, ...(button.payload || {}) }),
+    })
+      .then((response) => {
+        setStatus(response.ok
+          ? `Sent to classroom: ${button.label}`
+          : `${button.label} did not reach the classroom. Tap it again.`);
+      })
+      .catch(() => setStatus("Command failed. Check the classroom connection."));
+  }, [session]);
+
   const setWritingMode = useCallback(async (open: boolean) => {
     // LEAVING is never blocked. Closing the work space is how the teacher gets
     // back to the deck, and gating it on `pendingCommand` meant one unreceipted
@@ -1635,7 +1660,7 @@ export default function TeacherRemotePage() {
                           const shown = named
                             ? { ...button, label: named, detail: "Your sound" }
                             : button;
-                          return <DeckKey key={button.action} button={shown} busy={busy} disabled={controlsDisabled} onSend={send} />;
+                          return <DeckKey key={button.action} button={shown} busy={null} disabled={!session} onSend={sendCue} />;
                         })}
                       </div>
                     </section>
@@ -1646,7 +1671,7 @@ export default function TeacherRemotePage() {
                         <p className="deck-section-note">The countdown sounds, uploaded or built in.</p>
                       </div>
                       <div className="deck-grid">
-                        {SOUND_REMOTE_BUTTONS.map((button) => <DeckKey key={button.action} button={button} busy={busy} disabled={controlsDisabled} onSend={send} />)}
+                        {SOUND_REMOTE_BUTTONS.map((button) => <DeckKey key={button.action} button={button} busy={null} disabled={!session} onSend={sendCue} />)}
                       </div>
                     </section>
 
