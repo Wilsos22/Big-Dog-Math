@@ -4,7 +4,15 @@
 // challenge for this session, the screen jumps here (via ClassSync broadcast),
 // counts down, then serves auto-generated problems on the chosen skill. Every
 // answer is scored (accuracy + speed bonus) and saved to Supabase, feeding the
-// live leaderboard and the teacher's formative-data view.
+// teacher's formative-data view.
+//
+// NO PEER COMPARISON RENDERS HERE (Steele, 2026-08-05: "there shouldn't be a
+// leaderboard that shows all the aggregate scores... any wins should come from
+// previous best, not student to student"). The live top-3, the finish-position
+// heading and the final top-5 list are all gone; what a student sees at the end
+// is their own points and how that compares to their own earlier runs. The
+// teacher still gets the whole board on /control, /session and
+// /teacher/challenges - fetchLeaderboard was removed from THIS surface only.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
@@ -14,12 +22,45 @@ import {
   getLatestChallenge,
   recordAttempt,
   scoreAttempt,
-  fetchLeaderboard,
   type ChallengeRow,
-  type LeaderRow,
 } from "@/lib/challenges";
 
 type View = "loading" | "needjoin" | "waiting" | "countdown" | "playing" | "ended";
+
+// A win here is measured against THIS student's own earlier runs, never against
+// a classmate (Steele, 2026-08-05: "any wins should come from previous best...
+// not student to student"). Keyed by skill AND level so the comparison is
+// like-for-like - level 3 multiplication is not the same drill as level 1.
+//
+// Kept in localStorage rather than on the server on purpose: every student
+// write still goes through the verified join the FERPA cutover has not switched
+// on yet, so a server-side history would be dead code today. The cost is real
+// and worth knowing - a best does not follow a student to a different
+// Chromebook, and a wiped profile resets it.
+const BEST_KEY = "bdm-challenge-best-v1";
+type RunHistory = { best: number; last: number };
+
+function runHistory(skill: string, level: number): RunHistory | null {
+  try {
+    const raw = localStorage.getItem(`${BEST_KEY}:${skill}:${level}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<RunHistory>;
+    return typeof parsed.best === "number" && typeof parsed.last === "number"
+      ? { best: parsed.best, last: parsed.last }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveRun(skill: string, level: number, points: number, prior: RunHistory | null): void {
+  try {
+    localStorage.setItem(`${BEST_KEY}:${skill}:${level}`, JSON.stringify({
+      best: Math.max(points, prior?.best ?? points),
+      last: points,
+    } satisfies RunHistory));
+  } catch { /* a locked-down profile just loses the history */ }
+}
 
 export default function ChallengePage() {
   const supabase = getSupabase();
@@ -37,8 +78,13 @@ export default function ChallengePage() {
   const [streak, setStreak] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [count, setCount] = useState(3);
-  const [board, setBoard] = useState<LeaderRow[]>([]);
+  // Set once when a run ends: how this run compares to this device's earlier
+  // ones. Null until then, and null again on the next run.
+  const [growth, setGrowth] = useState<{ prior: RunHistory | null; points: number } | null>(null);
 
+  const priorRunRef = useRef<RunHistory | null>(null);
+  const armedRunRef = useRef<string | null>(null);
+  const scoredRunRef = useRef<string | null>(null);
   const sessionRef = useRef<StoredStudentSession | null>(null);
   const playingIdRef = useRef<string | null>(null);
   const startRef = useRef<number>(0);
@@ -123,18 +169,25 @@ export default function ChallengePage() {
     return () => clearInterval(id);
   }, [view]);
 
-  // live leaderboard while playing / on the results screen
+  // Read the earlier runs ONCE as this run starts, before anything overwrites
+  // them, so the end-of-run comparison has something to compare against.
   useEffect(() => {
-    if (!supabase || !challenge || (view !== "playing" && view !== "ended")) return;
-    let stop = false;
-    const load = async () => {
-      const rows = await fetchLeaderboard(supabase, challenge.id);
-      if (!stop) setBoard(rows);
-    };
-    load();
-    const id = setInterval(load, 3000);
-    return () => { stop = true; clearInterval(id); };
-  }, [supabase, challenge, view]);
+    if (!challenge || view !== "playing" || armedRunRef.current === challenge.id) return;
+    armedRunRef.current = challenge.id;
+    priorRunRef.current = runHistory(challenge.skill, challenge.level);
+    setGrowth(null);
+  }, [challenge, view]);
+
+  // Bank the run when the clock stops. Guarded by the challenge id so the
+  // history cannot be written twice for one run - `score` is final by now, and
+  // re-running this would compare the run against itself.
+  useEffect(() => {
+    if (!challenge || view !== "ended" || scoredRunRef.current === challenge.id) return;
+    scoredRunRef.current = challenge.id;
+    const prior = priorRunRef.current;
+    setGrowth({ prior, points: score });
+    saveRun(challenge.skill, challenge.level, score, prior);
+  }, [challenge, view, score]);
 
   const grade = useCallback(
     (answerStr: string) => {
@@ -199,7 +252,24 @@ export default function ChallengePage() {
   }, [view, problem, entry, pressKey, grade]);
 
   const accuracy = total ? Math.round((correct / total) * 100) : 0;
-  const myRank = session ? board.findIndex((r) => r.key === session.studentId) + 1 : 0;
+  // Growth against their own earlier runs. Never names a number they fell
+  // short by - a lower run points at the best as a target instead, because the
+  // line exists to make the next run worth starting.
+  const growthLine = !growth
+    ? null
+    : !growth.prior
+      ? `First run at this one. ${growth.points} points is your mark to beat.`
+      : growth.points > growth.prior.best
+        ? `New best - ${growth.points - growth.prior.best} points more than your old best of ${growth.prior.best}.`
+        // Matching the best is checked BEFORE beating last time: a student who
+        // ties their record while also topping their last run would otherwise
+        // be told "your best is 88" in the same breath as scoring 88, which
+        // reads as falling short of the number they just hit.
+        : growth.points === growth.prior.best
+          ? `You matched your best of ${growth.prior.best}.`
+          : growth.points > growth.prior.last
+            ? `${growth.points - growth.prior.last} points more than last time. Your best is ${growth.prior.best}.`
+            : `Your best on this one is ${growth.prior.best}. Another run and you can take it.`;
 
   return (
     <main className="cg">
@@ -277,20 +347,6 @@ export default function ChallengePage() {
             )}
           </div>
 
-          <div className="cg-mini">
-            {board.length === 0 ? (
-              <span className="cg-mini-row">Leaderboard appears after the first scored answer.</span>
-            ) : (
-              <>
-                {board.slice(0, 3).map((r, i) => (
-                <span key={r.key} className={`cg-mini-row${session && r.key === session.studentId ? " me" : ""}`}>
-                  <b>{["1st", "2nd", "3rd"][i]}</b> {r.name.split(" ")[0]} · {r.points}
-                </span>
-                ))}
-                {myRank > 3 && <span className="cg-mini-row me">You · #{myRank} · {score}</span>}
-              </>
-            )}
-          </div>
         </div>
       )}
 
@@ -298,23 +354,13 @@ export default function ChallengePage() {
         <div className="cg-mid">
           <div className="cg-card cg-results">
             <div className="cg-emoji"></div>
-            <h1 className="cg-h">{myRank === 1 ? "You won!" : myRank > 0 ? `You finished #${myRank}` : "Time!"}</h1>
+            <h1 className="cg-h">Time!</h1>
             <div className="cg-stats">
               <div><b>{score}</b><span>points</span></div>
               <div><b>{correct}/{total}</b><span>correct</span></div>
               <div><b>{accuracy}%</b><span>accuracy</span></div>
             </div>
-            {board.length > 0 && (
-              <div className="cg-final">
-                {board.slice(0, 5).map((r, i) => (
-                  <div key={r.key} className={`cg-final-row${session && r.key === session.studentId ? " me" : ""}`}>
-                    <span className="cg-final-rank">{["1st", "2nd", "3rd"][i] || `${i + 1}`}</span>
-                    <span className="cg-final-name">{r.name}</span>
-                    <span className="cg-final-pts">{r.points}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            {growthLine && <p className="cg-growth">{growthLine}</p>}
             <p className="cg-soft" style={{ marginTop: 14 }}>Nice work! Waiting for the next round…</p>
             <a className="cg-link" href="/lesson">Back to lesson</a>
           </div>
@@ -384,22 +430,14 @@ const styles = `
   .cg-choice:hover { border-color:var(--bdb-teal); }
   .cg-choice:active { transform:scale(0.98); }
 
-  .cg-mini { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
-  .cg-mini-row { background:var(--bdb-card); border:1px solid var(--bdb-line); border-radius:999px;
-    padding:7px 13px; font-size:0.85rem; font-weight:700; color:var(--bdb-ink-soft); }
-  .cg-mini-row.me { background:var(--bdb-ink); color:#fff; }
-  .cg-mini-row b { font-style:normal; }
-
   .cg-results { text-align:center; }
   .cg-stats { display:flex; justify-content:center; gap:22px; margin:14px 0 4px; }
   .cg-stats div { display:flex; flex-direction:column; }
   .cg-stats b { font-size:1.8rem; font-weight:900; color:var(--bdb-ink); }
   .cg-stats span { font-size:0.74rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--bdb-ink-faint); }
-  .cg-final { margin-top:16px; display:flex; flex-direction:column; gap:6px; text-align:left; }
-  .cg-final-row { display:flex; align-items:center; gap:10px; padding:9px 13px; border-radius:12px;
-    background:var(--bdb-ground); font-weight:700; }
-  .cg-final-row.me { background:color-mix(in srgb, var(--bdb-amber) 22%, white); }
-  .cg-final-rank { width:26px; font-weight:900; }
-  .cg-final-name { flex:1; }
-  .cg-final-pts { font-weight:900; color:var(--bdb-teal); }
+  /* The growth line replaced the top-5 finish list (Steele, 2026-08-05): a win
+     is measured against their own earlier runs, not against a classmate. Deep
+     teal because it sits as text on cream - the bright token fails AA there. */
+  .cg-growth { margin:14px auto 0; max-width:34ch; color:var(--bdb-teal-deep);
+    font-size:1rem; font-weight:800; line-height:1.4; }
 `;
