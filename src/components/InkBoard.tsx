@@ -68,6 +68,22 @@ const TAP_SLOP = 26;
 const DOUBLE_TAP_MS = 450;
 const DOUBLE_TAP_SLOP = 44; // and the second tap lands this close to the first
 const PREDICT_LEAD_MAX = 10; // px the predicted tip may run ahead of the real one
+// A real Pencil can lose contact with the glass for a few ms mid-letter -
+// "tip bounce" - during fast, connected handwriting (crossing a t, dotting
+// an i, the join in "th"). One continuous hand motion, but the browser sees
+// two separate touch sessions: a pointerup, then a fresh pointerdown a beat
+// later at nearly the same spot. Measured live on a 10th-gen iPad + USB-C
+// Pencil (2026-08-07): a run of pointerdown->pointerup pairs with ZERO
+// pointermove between them, each a fresh pointerId, each at the same page
+// position - exactly what a real stroke split in two looks like. A 1-point
+// stroke bakes as a sub-pixel dot, so the split half is invisible: this is
+// "the second stroke doesn't write." BOUNCE_MERGE_MS/RADIUS is how a pen
+// pointerup decides whether to wait a beat before finalizing (bake + record
+// history + send the end segment) in case the very next pointerdown is the
+// same physical stroke resuming, not a new one. Mouse and finger-draw are
+// unaffected - only e.pointerType === "pen" ever defers.
+const BOUNCE_MERGE_MS = 120;
+const BOUNCE_MERGE_RADIUS = 45; // page px between the last point and the resumed one
 const ZOOM_MAX = 5; // pinch zoom ceiling; floor is always 1 (the full page)
 const DOT_PITCH = 26; // Warm Notebook dot spacing at 100%
 const DOT_COLOR = "rgba(165,156,141,0.5)"; // ink-faint dots on the cream ground
@@ -162,6 +178,11 @@ export default function InkBoard({
   const activeRef = useRef<Map<string, ActiveStroke>>(new Map());
   const drawingRef = useRef(false);
   const activeIdRef = useRef<string | null>(null);
+  // A pen stroke that just lifted, held here instead of finalized
+  // immediately in case the very next pointerdown is a tip-bounce
+  // continuation rather than a new stroke. See BOUNCE_MERGE_MS above.
+  const pendingFinalizeRef = useRef<{ id: string; stroke: InkStroke; lastPage: { x: number; y: number } } | null>(null);
+  const bounceTimerRef = useRef<number | null>(null);
   // TEMP DIAGNOSTIC - see onDebugCounts in InkBoardProps above.
   const debugCountsRef = useRef({ down: 0, move: 0, up: 0 });
   const debugLogRef = useRef<string[]>([]);
@@ -613,6 +634,11 @@ export default function InkBoard({
     if (snapTimerRef.current !== null) { window.clearTimeout(snapTimerRef.current); snapTimerRef.current = null; }
     if (sendFrameRef.current !== null) { window.cancelAnimationFrame(sendFrameRef.current); sendFrameRef.current = null; }
     queuedSegmentRef.current = null;
+    // A pen stroke awaiting its bounce-merge window (see BOUNCE_MERGE_MS)
+    // points at a stroke object that strokesRef/byIdRef just dropped - the
+    // timer must never fire and try to bake/record it after this.
+    if (bounceTimerRef.current !== null) { window.clearTimeout(bounceTimerRef.current); bounceTimerRef.current = null; }
+    pendingFinalizeRef.current = null;
     // Clear is deliberate and destructive - history does not survive it.
     historyRef.current = [];
     redoRef.current = [];
@@ -989,6 +1015,26 @@ export default function InkBoard({
 
   useEffect(() => () => flushQueuedSegment(), [flushQueuedSegment]);
 
+  // What a pen pointerup used to do immediately: send the end segment, bake,
+  // record history. Now also reachable from the bounce timer, so a deferred
+  // finalize (see BOUNCE_MERGE_MS) behaves identically to an immediate one.
+  const finalizeStroke = useCallback((id: string, stroke: InkStroke) => {
+    flushQueuedSegment();
+    const endSeg: Extract<InkMessage, { t: "seg" }> = {
+      t: "seg", id, color: stroke.color, erase: stroke.erase,
+      ...(stroke.m === "h" ? { m: "h" as const } : {}),
+      widthFrac: stroke.widthFrac, pts: [], end: true,
+    };
+    applySeg(endSeg);
+    channelRef.current?.send(endSeg);
+    recordOp({ kind: "draw", stroke });
+  }, [applySeg, flushQueuedSegment, recordOp]);
+
+  const cancelPendingFinalize = useCallback(() => {
+    if (bounceTimerRef.current !== null) { window.clearTimeout(bounceTimerRef.current); bounceTimerRef.current = null; }
+    pendingFinalizeRef.current = null;
+  }, []);
+
   // Stroke-eraser hit test: does this point touch any finished stroke? Bounding
   // boxes are cached per stroke (invalidated when the point count changes) so
   // the fine distance test only runs on likely candidates.
@@ -1180,6 +1226,39 @@ export default function InkBoard({
       return;
     }
 
+    // Tip-bounce continuation: a pen touching down again, close to and soon
+    // after where the last pen stroke ended, is very likely that same
+    // stroke resuming rather than a new one - see BOUNCE_MERGE_MS. Reuse
+    // the pending stroke's id instead of starting fresh; its data never
+    // left byIdRef/strokesRef/activeRef, only its finalize was deferred.
+    const pending = pendingFinalizeRef.current;
+    if (pending && e.pointerType === "pen") {
+      const wantErase = t === "pixel";
+      const wantHl = t === "hl";
+      const sameKind = pending.stroke.erase === wantErase && (pending.stroke.m === "h") === wantHl;
+      const pg = toPagePx(e.clientX, e.clientY);
+      const dist = Math.hypot(pg.x - pending.lastPage.x, pg.y - pending.lastPage.y);
+      if (sameKind && dist <= BOUNCE_MERGE_RADIUS) {
+        cancelPendingFinalize();
+        activeIdRef.current = pending.id;
+        snapRef.current = null;
+        frozenShapeRef.current = false;
+        const p = smoothedPressure(e.nativeEvent, e.clientX, e.clientY);
+        const seg: Extract<InkMessage, { t: "seg" }> = {
+          t: "seg", id: pending.id, color: pending.stroke.color, erase: pending.stroke.erase,
+          ...(pending.stroke.m === "h" ? { m: "h" as const } : {}),
+          widthFrac: pending.stroke.widthFrac, pts: [toNorm(e.clientX, e.clientY, p)],
+        };
+        applySeg(seg);
+        channelRef.current?.send(seg);
+        holdAnchorRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
+        armSnapTimer();
+        return;
+      }
+      // A different spot, a different tool, or not a pen: this was never a
+      // bounce candidate for THAT stroke - let its own timer finalize it.
+    }
+
     const id = crypto.randomUUID();
     activeIdRef.current = id;
     snapRef.current = null;
@@ -1201,7 +1280,7 @@ export default function InkBoard({
       holdAnchorRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
       armSnapTimer();
     }
-  }, [applySeg, armSnapTimer, eraseAt, interactive, measure, noteTouchDown, reportDebugCounts, scheduleWet, size, smoothedPressure, toNorm, toPagePx]);
+  }, [applySeg, armSnapTimer, cancelPendingFinalize, eraseAt, interactive, measure, noteTouchDown, reportDebugCounts, scheduleWet, size, smoothedPressure, toNorm, toPagePx]);
 
   const onMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     // TEMP DIAGNOSTIC - ref-only, no callback: onMove can fire many times a
@@ -1352,6 +1431,8 @@ export default function InkBoard({
         if (frozenShapeRef.current) {
           // The stroke snapped to a shape: the display has the raw scribble,
           // so hand it the clean replacement in one message and bake locally.
+          // A snapped shape means the pen already held still - not a bounce
+          // candidate - so this always finalizes immediately.
           frozenShapeRef.current = false;
           snapRef.current = null;
           flushQueuedSegment();
@@ -1360,20 +1441,29 @@ export default function InkBoard({
           bake(stroke);
           scheduleWet();
           channelRef.current?.send({ t: "replace", stroke });
+          recordOp({ kind: "draw", stroke });
+        } else if (e.pointerType === "pen") {
+          // Defer finalize (bake/history/end-segment) in case the very next
+          // pointerdown is this same stroke resuming after a tip bounce -
+          // see BOUNCE_MERGE_MS. The stroke stays in byIdRef/strokesRef/
+          // activeRef exactly as if still active, so it keeps rendering on
+          // the wet layer and onMove/onDown can still find it by id.
+          const active = activeRef.current.get(id);
+          const lastPage = active && active.px.length ? active.px[active.px.length - 1] : toPx(stroke.points[stroke.points.length - 1]);
+          pendingFinalizeRef.current = { id, stroke, lastPage };
+          bounceTimerRef.current = window.setTimeout(() => {
+            bounceTimerRef.current = null;
+            pendingFinalizeRef.current = null;
+            finalizeStroke(id, stroke);
+          }, BOUNCE_MERGE_MS);
         } else {
-          flushQueuedSegment();
-          const endSeg: Extract<InkMessage, { t: "seg" }> = {
-            t: "seg", id, color: stroke.color, erase: stroke.erase,
-            ...(stroke.m === "h" ? { m: "h" as const } : {}),
-            widthFrac: stroke.widthFrac, pts: [], end: true,
-          };
-          applySeg(endSeg);
-          channelRef.current?.send(endSeg);
+          // Mouse or finger-draw: no hardware tip-bounce to guard against,
+          // finalize immediately exactly as before.
+          finalizeStroke(id, stroke);
         }
-        recordOp({ kind: "draw", stroke });
       }
     }
-  }, [applySeg, bake, clearSnapTimer, flushQueuedSegment, interactive, noteTouchUp, recordOp, reportDebugCounts, scheduleWet]);
+  }, [bake, clearSnapTimer, finalizeStroke, flushQueuedSegment, interactive, noteTouchUp, recordOp, reportDebugCounts, scheduleWet, toPx]);
 
   const onLeave = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     hoverRef.current = null;
