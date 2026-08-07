@@ -129,9 +129,19 @@ function parseSentenceStems(rawText: string): string[] {
 }
 function parseVocabulary(rawText: string): string[] {
   return rawText
-    .split(/[\n,]/)
+    .split(/[\n,;]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+/**
+ * Seconds left on a deadline, rounded the SAME way `liveTimerSeconds` rounds
+ * the lesson clock. Math.ceil, deliberately: a surface that floors and a
+ * surface that ceils show numbers a full second apart even when they are
+ * perfectly in sync, which is the exact symptom this deadline exists to end.
+ */
+function secondsUntil(deadlineMs: number, now = Date.now()): number {
+  return Math.max(0, Math.ceil((deadlineMs - now) / 1000));
 }
 
 export default function DiscussionProtocol({
@@ -160,9 +170,28 @@ export default function DiscussionProtocol({
   const normalizedInitialFlow = normalizeDiscussionPhaseSnapshot(initialFlow);
   const initialIndex = normalizedInitialFlow ? discussionRoundIndex(normalizedInitialFlow.id) : 0;
   const initialPhase = DISCUSSION_ROUNDS[initialIndex];
-  const initialSeconds = normalizedInitialFlow?.secondsLeft ?? initialPhase.defaultSeconds;
+  // A round runs against an absolute DEADLINE, not a decrementing counter. The
+  // old engine subtracted one from a ref inside a 1s interval, so a late or
+  // dropped tick was lost for good, the drift compounded across a 2-minute
+  // round, and the published snapshot was a relayed number rather than an
+  // instant every surface could derive from. Re-armed on a phase change, on
+  // resume, and whenever the seconds are reset or adjusted - never on a tick.
+  const initialDeadline = normalizedInitialFlow?.running && normalizedInitialFlow.endsAt
+    ? Date.parse(normalizedInitialFlow.endsAt)
+    : Number.NaN;
+  const hasInitialDeadline = Number.isFinite(initialDeadline);
+  const initialSeconds = hasInitialDeadline
+    ? Math.max(0, Math.min(initialPhase.defaultSeconds, Math.ceil((initialDeadline - Date.now()) / 1000)))
+    : normalizedInitialFlow?.secondsLeft ?? initialPhase.defaultSeconds;
   const [idx, setIdx] = useState(initialIndex);
   const [secondsLeft, setSecondsLeft] = useState(initialSeconds);
+  // The deadline in epoch ms, or null while paused / finished. State rather
+  // than a ref because the published snapshot has to carry it.
+  const [endsAtMs, setEndsAtMs] = useState<number | null>(hasInitialDeadline ? initialDeadline : null);
+  // Bumped to force the timer engine to re-arm its deadline while `running`
+  // stays true - the one case a start/stop flag cannot express, which is the
+  // teacher adding or removing time mid-round.
+  const [armNonce, setArmNonce] = useState(0);
   const [running, setRunning] = useState(Boolean(normalizedInitialFlow?.running));
   const [finished, setFinished] = useState(Boolean(normalizedInitialFlow?.finished));
   const [setup, setSetup] = useState(false);
@@ -176,7 +205,14 @@ export default function DiscussionProtocol({
   const [shareSpinning, setShareSpinning] = useState(false);
   const [shareClass, setShareClass] = useState<string>("");
 
+  // The BANKED seconds: what the round resumes from. The tick keeps it current
+  // off the deadline, so a pause has an accurate number to bank and a resume
+  // has an accurate number to re-arm from.
   const secRef = useRef(initialSeconds);
+  // The countdown beeps once per second at the end of a round. The value is
+  // derived now rather than decremented, so two ticks can land on the same
+  // second when the interval drifts - this keeps that from double-beeping.
+  const lastBeepRef = useRef<number | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
   const musicRef = useRef<HTMLAudioElement | null>(null);
@@ -205,6 +241,10 @@ export default function DiscussionProtocol({
       secondsLeft,
       running,
       finished,
+      // The instant every other surface derives its own countdown from. Null
+      // while paused or finished, so downstream falls back to the frozen
+      // secondsLeft instead of counting through the pause.
+      endsAt: running && endsAtMs !== null ? new Date(endsAtMs).toISOString() : null,
       media: studentMediaUrl ? { url: studentMediaUrl, type: inferStudentMediaType(studentMediaUrl) } : null,
       sentenceStems: parseSentenceStems(currentSupport.sentenceStems),
       keyVocabulary: parseVocabulary(currentSupport.keyVocabulary),
@@ -212,7 +252,7 @@ export default function DiscussionProtocol({
       roundNumber: phase.roundNumber,
       roundCount: DISCUSSION_ROUND_COUNT,
     });
-  }, [currentSupport.keyVocabulary, currentSupport.sentenceStems, finished, onFlowChange, phase.id, phase.label, phase.roundNumber, phase.subtitle, phaseTotalSeconds, running, secondsLeft, selectedSharer, studentMediaUrls]);
+  }, [currentSupport.keyVocabulary, currentSupport.sentenceStems, endsAtMs, finished, onFlowChange, phase.id, phase.label, phase.roundNumber, phase.subtitle, phaseTotalSeconds, running, secondsLeft, selectedSharer, studentMediaUrls]);
 
   useEffect(() => {
     const incomingFlow = normalizeDiscussionPhaseSnapshot(initialFlow);
@@ -282,19 +322,38 @@ export default function DiscussionProtocol({
 
   // timer engine
   useEffect(() => {
-    if (!running) return;
+    // Not running means no deadline: paused and finished rounds must publish a
+    // null endsAt, or every surface would keep counting down through the pause.
+    if (!running) { setEndsAtMs(null); return; }
+    // Arm the deadline ONCE from the banked seconds. Every path that changes
+    // how long is left - goPhase, reset, toggleRun, adjust - banks into secRef
+    // and then either flips `running` or bumps `armNonce`, so this is the only
+    // place a deadline is ever set and a tick can never move it. Holding it
+    // still matters downstream: `endsAt` rides inside the published timer
+    // object, which `liveFlowScreensChanged` does NOT strip the way it strips
+    // `secondsLeft`, so a deadline that moved every tick would wake every
+    // student device once a second.
+    const deadline = Date.now() + secRef.current * 1000;
+    setEndsAtMs(deadline);
+    lastBeepRef.current = null;
     tickRef.current = setInterval(() => {
-      const n = Math.max(0, secRef.current - 1); secRef.current = n; setSecondsLeft(n);
-      if (n <= 5 && n >= 1) tone([660], 0, 0.07);
+      // Derived from the deadline, never decremented, so a late or dropped
+      // tick self-corrects instead of compounding into drift.
+      const n = secondsUntil(deadline);
+      secRef.current = n; setSecondsLeft(n);
+      // Guarded on the value, not on the tick: a drifting interval can land
+      // twice inside one second and would otherwise double-beep.
+      if (n <= 5 && n >= 1 && lastBeepRef.current !== n) { lastBeepRef.current = n; tone([660], 0, 0.07); }
       if (n <= 0) {
         if (tickRef.current) clearInterval(tickRef.current);
+        setEndsAtMs(null);
         setRunning(false); setFinished(true); stopMusic();
         if (videoRef.current) videoRef.current.pause();
         tone([880, 880, 880]);
       }
     }, 1000);
     return () => { if (tickRef.current) clearInterval(tickRef.current); };
-  }, [running, tone, stopMusic]);
+  }, [armNonce, running, tone, stopMusic]);
 
   useEffect(() => {
     if (!finished || !automaticPacing) return;
@@ -322,7 +381,14 @@ export default function DiscussionProtocol({
     else { if (musicRef.current) musicRef.current.pause(); if (videoRef.current) videoRef.current.pause(); }
   }
   function reset() { goPhase(idx, false); }
-  function adjust(d: number) { secRef.current = Math.max(0, secRef.current + d); setSecondsLeft(secRef.current); if (d > 0) setFinished(false); }
+  function adjust(d: number) {
+    secRef.current = Math.max(0, secRef.current + d);
+    setSecondsLeft(secRef.current);
+    if (d > 0) setFinished(false);
+    // Banking alone is not enough while the round is running: the tick reads
+    // the deadline, so an un-armed adjustment would be erased a second later.
+    if (running) setArmNonce((n) => n + 1);
+  }
   function goPhase(n: number, startImmediately = false) {
     if (n < 0 || n >= DISCUSSION_ROUNDS.length) return;
     stopMusic();
@@ -332,6 +398,10 @@ export default function DiscussionProtocol({
     setSecondsLeft(secRef.current);
     setRunning(startImmediately);
     setFinished(false);
+    // Unconditional: navigating between two rounds while the clock is already
+    // running leaves `running` true, so without this the new round would
+    // inherit the previous round's deadline and open part-spent.
+    setArmNonce((v) => v + 1);
     if (startImmediately) void playPhaseMusic(nextPhase.id);
   }
   function goAdjacentPhase(n: number) {

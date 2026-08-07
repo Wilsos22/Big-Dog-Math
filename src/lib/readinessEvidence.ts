@@ -11,7 +11,23 @@
  * client component.
  */
 
+import { LIVE_POLL_KINDS, isChoicePollKind, isLivePollKind } from "./liveFlowContract";
 import { diagnoseStructuredNumeric, parseStructuredNumericSpec } from "./structuredNumeric";
+
+/**
+ * Every kind a `question` step can actually open, straight from
+ * resolveLiveStepPollKind: the authored Response Mode, the legacy Poll Kind,
+ * or the `short-answer` fallback a blank Response Mode lands on. Looking up
+ * only two of them was how a step authored as Multiple Choice + Explain - or
+ * with a blank Response Mode - opened a poll this reader could never find, so
+ * every answer came back null and the whole class ranked as needing a visit.
+ *
+ * fist-to-five is deliberately absent: it is a confidence self-report, never a
+ * readiness question, and it is looked up on its own below.
+ */
+const QUESTION_POLL_KINDS: readonly string[] = LIVE_POLL_KINDS.filter(
+  (kind) => kind !== "fist-to-five",
+);
 
 export interface ReadinessEvidence {
   studentKey: string;
@@ -71,6 +87,47 @@ type AnswerRow = {
   values?: (number | null)[] | null;
 };
 
+/** One `polls` row, narrowed to what finding and grading a step needs. */
+type PollRow = {
+  id: string;
+  question: string | null;
+  kind: string;
+  correct_answer?: string | null;
+  choices?: unknown;
+};
+
+/**
+ * Judge one submitted answer against the POLL ROW, not against the step.
+ *
+ * The poll is the durable copy of the key the class actually saw, and it
+ * outlives the lesson; the step's copy arrives from Notion UNTRIMMED while
+ * every submitted answer is trimmed, so a single trailing space on a Notion
+ * property marked the entire class wrong. Both sides are trimmed here for
+ * exactly that reason.
+ *
+ * Returns null - UNGRADABLE, not wrong - when a choice poll's key appears in
+ * none of its choices. That mirrors `answerKeyIsTappable` in pollEvidence.ts,
+ * which refuses the same rows: nobody could have tapped a key that is not on
+ * screen, so equality would fail everyone, and the mastery bridge and the
+ * visit list must never disagree about one student's answer.
+ */
+function gradeAgainstPoll(
+  poll: PollRow | null,
+  step: ReadinessStepLite,
+  submitted: string,
+): boolean | null {
+  // The step's key is the fallback only, for a poll row that stored none.
+  const key = (poll?.correct_answer ?? "").trim() || (step.correctAnswer ?? "").trim();
+  if (!key) return null;
+  if (poll && isChoicePollKind(poll.kind)) {
+    const choices = Array.isArray(poll.choices)
+      ? poll.choices.filter((choice): choice is string => typeof choice === "string")
+      : [];
+    if (choices.length && !choices.includes(key)) return null;
+  }
+  return submitted.trim() === key;
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type AnyDb = any;
 
@@ -99,27 +156,57 @@ export async function loadReadinessEvidence(db: AnyDb, sessionId: string): Promi
   const fistStep = [...steps].reverse().find((step) => step.pollKind === "fist-to-five" && step.question) || null;
 
   const [{ data: polls }, { data: joins }] = await Promise.all([
-    db.from("polls").select("id,question,kind,created_at").eq("session_id", sessionId)
+    // correct_answer and choices ride along because the POLL ROW is the answer
+    // key now, not the step - see gradeAgainstPoll for why.
+    db.from("polls").select("id,question,kind,correct_answer,choices,created_at").eq("session_id", sessionId)
       .order("created_at", { ascending: true }),
     db.from("session_joins").select("student_id,display_name,joined_at").eq("session_id", sessionId)
       .order("joined_at", { ascending: true }),
   ]);
 
-  // Latest poll per (kind, question) - a re-opened question supersedes.
-  const pollByQuestion = new Map<string, string>();
-  for (const poll of (polls || []) as { id: string; question: string; kind: string }[]) {
-    pollByQuestion.set(`${poll.kind}|${poll.question}`, poll.id);
+  // Every poll per (kind, question), oldest first. A re-opened question still
+  // supersedes for GRADING - the newest row holds the current key - but the
+  // earlier openings keep their ANSWERS. Keeping only the newest poll id meant
+  // a student who answered the first opening and never saw the second read as
+  // unanswered, which visitList scores as tier 2 "Visit" for a right answer.
+  //
+  // The question is trimmed on BOTH sides of this key: a Notion question with
+  // a trailing space otherwise matches no poll at all.
+  const pollsByQuestion = new Map<string, PollRow[]>();
+  for (const poll of (polls || []) as PollRow[]) {
+    const key = `${poll.kind}|${(poll.question || "").trim()}`;
+    const bucket = pollsByQuestion.get(key);
+    if (bucket) bucket.push(poll);
+    else pollsByQuestion.set(key, [poll]);
   }
-  // A readiness question may be authored as either kind. Missing the
-  // structured key means no poll is found and everyone reads as unanswered.
-  const questionPollIds = questionSteps.map(
-    (step) => pollByQuestion.get(`structured-numeric|${step.question}`)
-      || pollByQuestion.get(`multiple-choice|${step.question}`)
-      || null,
-  );
-  const fistPollId = fistStep ? pollByQuestion.get(`fist-to-five|${fistStep.question}`) || null : null;
+  const pollsForStep = (step: ReadinessStepLite): PollRow[] => {
+    const question = (step.question || "").trim();
+    // The snapshot carries the kind the step RESOLVED to, so try that first,
+    // then every other kind a question step can open.
+    const authoredKind = step.pollKind || "";
+    const kinds = isLivePollKind(authoredKind)
+      ? [authoredKind, ...QUESTION_POLL_KINDS]
+      : QUESTION_POLL_KINDS;
+    for (const kind of kinds) {
+      const found = pollsByQuestion.get(`${kind}|${question}`);
+      if (found && found.length) return found;
+    }
+    return [];
+  };
+  const questionPolls = questionSteps.map(pollsForStep);
+  const fistPolls = fistStep
+    ? pollsByQuestion.get(`fist-to-five|${(fistStep.question || "").trim()}`) || []
+    : [];
 
-  const pollIds = [...questionPollIds, fistPollId].filter((id): id is string => Boolean(id));
+  // Answers collapse to a SLOT - one per readiness question, plus the fist -
+  // rather than to a poll id, so duplicate polls for one step merge instead of
+  // the newest empty one hiding answers the class already gave.
+  const slotByPollId = new Map<string, string>();
+  questionPolls.forEach((list, index) => {
+    for (const poll of list) slotByPollId.set(poll.id, `q${index}`);
+  });
+  for (const poll of fistPolls) slotByPollId.set(poll.id, "fist");
+  const pollIds = [...slotByPollId.keys()];
   // Structured boxes live in `values`; fall back to the narrow select so
   // readiness keeps working before poll-structured-numeric.sql is run.
   let answers: AnswerRow[] = [];
@@ -140,7 +227,9 @@ export async function loadReadinessEvidence(db: AnyDb, sessionId: string): Promi
   const latestAnswer = new Map<string, string>();
   const latestValues = new Map<string, (number | null)[]>();
   for (const answer of answers) {
-    const key = `${answer.poll_id}|${studentKeyOf(answer.student_id, answer.display_name)}`;
+    const slot = slotByPollId.get(answer.poll_id);
+    if (!slot) continue;
+    const key = `${slot}|${studentKeyOf(answer.student_id, answer.display_name)}`;
     if (answer.answer != null) latestAnswer.set(key, answer.answer);
     if (Array.isArray(answer.values)) latestValues.set(key, answer.values);
   }
@@ -170,8 +259,13 @@ export async function loadReadinessEvidence(db: AnyDb, sessionId: string): Promi
     toolTotals.set(row.student_id, tally);
   }
 
-  const specs = questionSteps.map((step) => {
-    const parsed = parseStructuredNumericSpec(step.correctAnswer);
+  // Same precedence as gradeAgainstPoll: the durable poll key first, the
+  // step's Notion copy only as a fallback, so both paths judge one answer
+  // against one key.
+  const gradingPolls = questionPolls.map((list) => (list.length ? list[list.length - 1] : null));
+  const specs = questionSteps.map((step, index) => {
+    const key = (gradingPolls[index]?.correct_answer ?? "").trim() || step.correctAnswer;
+    const parsed = parseStructuredNumericSpec(key);
     return parsed.ok ? parsed.spec : null;
   });
 
@@ -181,9 +275,8 @@ export async function loadReadinessEvidence(db: AnyDb, sessionId: string): Promi
     let sawNonArithmeticMiss = false;
     let sawArithmeticMiss = false;
     const correct = questionSteps.map((step, index) => {
-      const pollId = questionPollIds[index];
-      if (!pollId) return null;
-      const answerKey = `${pollId}|${studentKey}`;
+      if (!questionPolls[index].length) return null;
+      const answerKey = `q${index}|${studentKey}`;
       const spec = specs[index];
       if (spec) {
         const values = latestValues.get(answerKey);
@@ -199,11 +292,11 @@ export async function loadReadinessEvidence(db: AnyDb, sessionId: string): Promi
       }
       const answer = latestAnswer.get(answerKey);
       if (answer === undefined) return null;
-      return answer === step.correctAnswer;
+      return gradeAgainstPoll(gradingPolls[index], step, answer);
     });
     if (sawArithmeticMiss && !sawNonArithmeticMiss) arithmeticOnly.add(studentKey);
 
-    const fistRaw = fistPollId ? latestAnswer.get(`${fistPollId}|${studentKey}`) : undefined;
+    const fistRaw = fistPolls.length ? latestAnswer.get(`fist|${studentKey}`) : undefined;
     const fistParsed = fistRaw !== undefined ? Number.parseInt(fistRaw, 10) : Number.NaN;
     const fist = Number.isInteger(fistParsed) && fistParsed >= 0 && fistParsed <= 5 ? fistParsed : null;
     const tally = toolTotals.get(studentKey);
@@ -216,5 +309,5 @@ export async function loadReadinessEvidence(db: AnyDb, sessionId: string): Promi
     };
   });
 
-  return { lessonCode, questionSteps, hasFist: Boolean(fistPollId), evidence, errors, arithmeticOnly };
+  return { lessonCode, questionSteps, hasFist: fistPolls.length > 0, evidence, errors, arithmeticOnly };
 }

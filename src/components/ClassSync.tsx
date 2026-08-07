@@ -130,6 +130,10 @@ export default function ClassSync() {
   const failureCountRef = useRef(0);
   const loggedFailureRef = useRef(false);
   const [reconnecting, setReconnecting] = useState(false);
+  // Distinct from `reconnecting`: that one is a transient read failure and DOES
+  // catch up on its own, so its copy says to keep working. This one never
+  // recovers by itself - the tab has to be re-armed - so it must say what to do.
+  const [notFollowing, setNotFollowing] = useState(false);
 
   useEffect(() => {
     if (!supabase && !SECURE_STUDENT_DATA) return;
@@ -145,11 +149,32 @@ export default function ClassSync() {
       // Re-read browser state on every tick. A Chromebook can become verified
       // after this component mounts, when the warm-up response links it to the
       // roster and the student homepage stores the joined session.
-      if (getStoredTeacherSessionId() && !isStudentTab()) return;
+      const currentPath = pathRef.current || "";
+      // This guard is CORRECT and stays: a device that has ever held a teacher
+      // session must not be dragged around by class mode. What it must not do
+      // is fail in silence. A held device looks exactly like a lesson that has
+      // not advanced - no log, no state, nothing on screen - and the marker
+      // dies on tab close and on tab restore, so a student who was following
+      // ten minutes ago simply stops. That has now cost two debugging sessions
+      // (2026-07-22, 2026-08-06), the second one presenting as "it went to the
+      // multiplication tool but then did not follow the lesson".
+      //
+      // Only speak when there is a stored student session to hold (otherwise a
+      // teacher browsing the site would see it), and NEVER on a teacher surface:
+      // the isTeacherRoute check below runs after this one, and /control and
+      // /teacher/present are on the projector. A notice on the wall is worse
+      // than the silence it replaces.
+      if (getStoredTeacherSessionId() && !isStudentTab()) {
+        const heldWithSession = Boolean(getStoredStudentSessionId())
+          && !isTeacherRoute(currentPath)
+          && !isStudentSwitchRoute(currentPath);
+        setNotFollowing(heldWithSession);
+        return;
+      }
+      setNotFollowing(false);
       if (hasClassModeExitMarker()) return;
       const sessionId = getStoredStudentSessionId();
       if (!sessionId) return;
-      const currentPath = pathRef.current || "";
       if (isStudentSwitchRoute(currentPath)) return;
       if (isTeacherRoute(currentPath)) return;
       let data: StudentSessionState | null = null;
@@ -270,7 +295,7 @@ export default function ClassSync() {
     };
   }, [supabase, router, pathname]);
 
-  if (!reconnecting) return null;
+  if (!reconnecting && !notFollowing) return null;
   return (
     <div
       role="status"
@@ -292,7 +317,12 @@ export default function ClassSync() {
         boxShadow: "0 6px 20px rgba(32,30,26,0.22)",
       }}
     >
-      Not connected to class right now. Keep working - this screen will catch up on its own.
+      {notFollowing
+        // This one never heals by itself, so it must not say "keep working" -
+        // that is the copy for a transient read failure, and telling a student
+        // to sit tight is exactly what turns this into a lost period.
+        ? "This tab is not following class. Enter the class code again to reconnect."
+        : "Not connected to class right now. Keep working - this screen will catch up on its own."}
     </div>
   );
 }

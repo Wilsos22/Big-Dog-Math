@@ -13,68 +13,15 @@ import {
   DISCUSSION_MODE_LABEL,
   type AuthoredDiscussionPhase,
 } from "@/lib/discussionPhases";
+// Moved to src/lib/timerBeeps.ts so the Gallery Walk timeline rings the SAME
+// two cues instead of a third private copy. Behaviour is byte-for-byte the same.
+import { playDing, playTick } from "@/lib/timerBeeps";
 
 function formatDuration(seconds: number): string {
   const whole = Math.max(0, Math.round(seconds));
   const minutes = Math.floor(whole / 60);
   const secs = whole % 60;
   return `${minutes}:${String(secs).padStart(2, "0")}`;
-}
-
-// A short two-note ding, synthesized so it needs no committed asset. Best-effort:
-// if the display has not been armed by a tap yet, the browser blocks it and the
-// visual highlight carries the cue on its own.
-function playDing() {
-  try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    const start = ctx.currentTime;
-    [
-      { freq: 784, at: 0 },
-      { freq: 1047, at: 0.12 },
-    ].forEach(({ freq, at }) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.0001, start + at);
-      gain.gain.exponentialRampToValueAtTime(0.32, start + at + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + at + 0.4);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(start + at);
-      osc.stop(start + at + 0.42);
-    });
-    window.setTimeout(() => { try { void ctx.close(); } catch { /* ignore */ } }, 800);
-  } catch {
-    /* audio unavailable - the highlight is the primary cue */
-  }
-}
-
-// A single short blip for the last-five-seconds countdown. Deliberately lighter
-// and higher than the ding, so a tick never gets mistaken for the beat change.
-function playTick() {
-  try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    const start = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = 1046;
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(0.2, start + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(start);
-    osc.stop(start + 0.14);
-    window.setTimeout(() => { try { void ctx.close(); } catch { /* ignore */ } }, 300);
-  } catch {
-    /* audio unavailable - the highlight is the primary cue */
-  }
 }
 
 export interface DiscussionTimelineProps {

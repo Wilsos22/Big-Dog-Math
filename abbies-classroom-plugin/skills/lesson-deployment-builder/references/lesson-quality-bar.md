@@ -1,6 +1,17 @@
 # The quality bar — what a deployable lesson actually contains
 
-Only three lessons in the database are near deployable: **M1.T1.L1-D1**, **M1.T1.L2-D1**, **M1.T1.L2-D2**. Everything else — including the ~80 pages sharing the 5-tab M1.T2 shape — is a stub or a sketch. **Do not treat a widely-copied shape as a standard just because it's widely copied.** Match these three, and where they disagree with a thinner page, they win.
+> **Two corrections before you read this file (2026-08-06).**
+>
+> **1. "L1-D1" is now named `M1.T1.L1`.** The `-D1` suffix was dropped in Notion. Every `L1-D1` below
+> refers to the page at id `3962eba1de3780ec81eefca62eb1ad3b`, which is still the right page — only the
+> title changed. The observations about it remain accurate.
+>
+> **2. Three is now five.** As of 2026-08-06 the Published M1.T1 lessons are `M1.T1.L1`,
+> `M1.T1.L2-D1`, `M1.T1.L2-D2`, `M1.T1.L3`, and `M1.T1.L5-D1`, with seven more at Ready for Review.
+> This file's *analysis* of the original three is still the quality bar; its *inventory* is historical.
+> L3 and L5-D1 have not been read against this bar yet — do that before treating them as exemplars.
+
+Three lessons in the database were near deployable when this file was written: **M1.T1.L1** (then called L1-D1), **M1.T1.L2-D1**, **M1.T1.L2-D2**. Everything else — including the ~80 pages sharing the 5-tab M1.T2 shape — was a stub or a sketch. **Do not treat a widely-copied shape as a standard just because it's widely copied.** Match these three, and where they disagree with a thinner page, they win.
 
 They do not share a page shape. What they share is a **per-step contract** and an inventory of named commitments. That inventory is the bar.
 

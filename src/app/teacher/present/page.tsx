@@ -9,6 +9,8 @@ import SupplyCheckBoard from "@/components/SupplyCheckBoard";
 import InkBoard from "@/components/InkBoard";
 import LessonVisual from "@/components/LessonVisual";
 import AttentionListener from "@/components/AttentionListener";
+import ClassroomAudioHost from "@/components/ClassroomAudioHost";
+import FullscreenButton from "@/components/FullscreenButton";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
 import { joinInkRoom } from "@/lib/inkSync";
 import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
@@ -20,6 +22,8 @@ import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { resolveLessonVisual } from "@/lib/lessonVisuals";
 import { parseDiscussionPhases } from "@/lib/discussionPhases";
 import DiscussionTimeline from "@/components/DiscussionTimeline";
+import { galleryWalkPhasesFromRoutine } from "@/lib/galleryWalkTimer";
+import GalleryWalkTimeline from "@/components/GalleryWalkTimeline";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { teacherApiRequest } from "@/lib/teacherApi";
 import {
@@ -33,6 +37,7 @@ import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { studioPreviewSession, useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { parseSlideOverlay } from "@/lib/slideOverlay";
 import SlideFrameScene from "@/components/SlideFrameScene";
+import { slideVideoCommandFrom } from "@/lib/slideVideo";
 import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 
 interface StageSession {
@@ -307,6 +312,16 @@ function WarmupLearningSteps({ direction }: { direction?: string }) {
 export default function ClassroomStagePage() {
   const [session, setSession] = useState<StageSession | null>(null);
   const reloadRef = useRef<(() => void) | null>(null);
+  // A 1s heartbeat so the big clock re-renders every second, independent of the
+  // 1-1.5s session poll. timerSeconds is derived from the timer's deadline in
+  // the render body, so without a tick of its own the projector clock only
+  // moves when a fetch returns - a second takes about 1.5s and then a whole
+  // second is skipped.
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setClockTick((t) => (t + 1) % 3600), 1000);
+    return () => window.clearInterval(id);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [sessionMessage, setSessionMessage] = useState("Connecting to the confirmed class session.");
   const [pollAnswers, setPollAnswers] = useState<PollAnswer[]>([]);
@@ -486,6 +501,20 @@ export default function ClassroomStagePage() {
   // directions live inside the board rather than beside it.
   const showSupplyCheck = state?.id === "closeout";
   const routineConfig = presentation?.routineConfig || null;
+  // The Gallery Walk's rotation clock. Stations and station length come from the
+  // step's AUTHORED config (stationCount / rotationMinutes) - never a constant -
+  // and the sequence runs on the state's own shared clock, exactly like the
+  // discussion timeline beside it. Gated on the config actually being authored:
+  // an unauthored gallery-walk step keeps today's static card rather than
+  // running an invented rotation in front of the room.
+  const galleryWalkBuild = routineConfig?.kind === "gallery-walk"
+    ? galleryWalkPhasesFromRoutine(routineConfig)
+    : null;
+  // A timer is required too - with no shared clock there is nothing to count
+  // down, and a frozen bar chart is worse than the directions it replaced.
+  const galleryWalkTimeline = galleryWalkBuild?.ok && (timer?.totalSeconds ?? 0) > 0
+    ? galleryWalkBuild
+    : null;
   const spinnerSyncScope = `${flow?.sequence?.currentIndex ?? -1}:${presentation?.notionStepId || state?.id || "spinner"}`;
   // Same reason: the target belongs to the two reveal states, not to every state
   // that borrows their accent.
@@ -565,6 +594,9 @@ export default function ClassroomStagePage() {
   // "contain" letterboxes and never crops, which is what a 16:9 deck and anything with words near
   // the edges needs. Only an explicit "cover" from the studio inspector changes it.
   const slideFrameFit = activeSequenceStep?.slideFit === "cover" ? "cover" : "contain";
+  // Play/pause/restart taps ride the ordinary remote_command pass-through, so they arrive on the
+  // session row this page already polls - no new endpoint, and nothing published into live_flow.
+  const slideVideoCommand = slideVideoCommandFrom(session?.remote_command);
   const lessonVisual = flow ? resolveLessonVisual({
     lessonCode: lesson?.code || activeSequenceStep?.lessonCode,
     stateId: theme.id,
@@ -771,7 +803,22 @@ export default function ClassroomStagePage() {
         .stage-success { position:absolute; z-index:4; top:14px; right:14px; width:min(34vw,440px); border:1px solid var(--hair); border-top:4px solid var(--acc); border-radius:16px; background:var(--card); padding:13px 16px; box-shadow:0 12px 32px rgba(40,32,20,0.10); }
         .stage-success-label { margin:0; color:var(--acc-deep); font-size:0.66rem; font-weight:900; letter-spacing:0.12em; text-transform:uppercase; }
         .stage-success-text { margin:6px 0 0; color:var(--ink); font-size:clamp(0.8rem,1.25vw,1.02rem); line-height:1.32; font-weight:700; }
-        .stage-work { position:relative; min-height:0; overflow:hidden; }
+        /* --css-strip-top feeds ClassroomStateStrip.tsx's own top offset. The
+           clock (.stage-timer) lives inside .stage-topbar, a fixed 66px row
+           (54px under the 900px breakpoint below); .stage-work starts exactly
+           at that row's bottom edge, so an offset measured from HERE is
+           already measured from a point at-or-below the clock's own bottom
+           edge (the clock is vertically centered in the row, so the row's
+           edge sits below it by the row's own padding). 20px on top of that
+           is a real, non-vh, non-scene-dependent floor - it does not shrink
+           at 1280x720 and does not depend on which scene is on stage, unlike
+           the plain clamp() this replaces (State Strip Icons v3, fixed
+           2026-08-06: reported as the strip crowding the clock on some
+           scenes; measured every catalog scene at 1280/1440/1600/1920 wide
+           and the old clamp already held >=23px in every one - but that
+           margin was a coincidence of two unrelated fixed budgets, not a
+           designed guarantee, so it is replaced with an explicit one). */
+        .stage-work { position:relative; min-height:0; overflow:hidden; --css-strip-top:20px; }
         .stage-override { position:absolute; inset:0; z-index:3; width:100%; height:100%; border:0; background:#F3F0E7; }
         .stage-empty, .stage-directions, .stage-poll, .stage-resource-link { position:absolute; inset:0; display:grid; place-items:center; padding:clamp(34px,6vw,88px); text-align:center; }
         .stage-empty h1 { margin:0; max-width:22ch; color:var(--head); font-size:clamp(2.2rem,5.2vw,5.2rem); line-height:1.02; font-weight:800; letter-spacing:-0.02em; }
@@ -1023,6 +1070,7 @@ export default function ClassroomStagePage() {
           <span className="stage-textbtns" aria-label="Text size">
             <button className="stage-textbtn" type="button" onClick={() => adjustTextScale(-0.25)} disabled={textScale <= 1} aria-label="Smaller text">A-</button>
             <button className="stage-textbtn" type="button" onClick={() => adjustTextScale(0.25)} disabled={textScale >= 2.5} aria-label="Bigger text">A+</button>
+            <FullscreenButton className="stage-textbtn" />
           </span>
           <div className={`stage-timer ${timerFinished ? "finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`}>{previewSample ? "5:00" : timer ? formatTime(timerSeconds) : "--:--"}</div>
         </div>
@@ -1173,6 +1221,47 @@ export default function ClassroomStagePage() {
                 <strong>{selectedCriterion}</strong>
               </div>
             </section>
+          ) : galleryWalkTimeline && routineConfig?.kind === "gallery-walk" ? (
+            /* The rotation, running. Same wrapper and same --dt-* theming as the
+               discussion timeline below, so both timelines read as one idea on
+               the projector. The authored prompts ride along inside it, so the
+               screen still says Notice / Record / Move / Share. */
+            <div
+              className="stage-timeline"
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "grid",
+                alignContent: "safe center",
+                justifyItems: "center",
+                overflowY: "auto",
+                padding: "clamp(34px,6vw,80px)",
+                fontSize: "clamp(1.1rem,1.6vw,1.9rem)",
+                ["--dt-accent" as string]: "var(--acc)",
+                ["--dt-accent-text" as string]: "var(--acc-deep)",
+                ["--dt-ink" as string]: "var(--ink)",
+                ["--dt-line" as string]: "var(--hair)",
+                ["--dt-card" as string]: "var(--card)",
+                ["--dt-soft" as string]: "var(--soft)",
+              }}
+            >
+              <GalleryWalkTimeline
+                phases={galleryWalkTimeline.phases}
+                totalSeconds={timer?.totalSeconds ?? 0}
+                secondsLeft={timerSeconds}
+                endsAt={timer?.endsAt}
+                running={Boolean(timer?.running)}
+                beepWindowSeconds={galleryWalkTimeline.beepWindowSeconds}
+                caption={`Gallery Walk - ${routineConfig.stationCount} station${routineConfig.stationCount === 1 ? "" : "s"} - ${routineConfig.rotationMinutes} min per rotation`}
+                prompts={[
+                  { label: "Notice", body: routineConfig.observationPrompt },
+                  { label: "Record", body: routineConfig.recordPrompt },
+                  { label: "Move", body: routineConfig.movementDirections },
+                  { label: "Share", body: routineConfig.sharePrompt },
+                ]}
+                sound
+              />
+            </div>
           ) : routineConfig?.kind === "gallery-walk" ? (
             <section className="stage-routine" aria-label="Gallery Walk directions">
               <article className="stage-routine-lead">
@@ -1237,25 +1326,18 @@ export default function ClassroomStagePage() {
             ) : (
             <div className="stage-poll">
               {showLessonTargets && lesson?.learningIntention ? <p className="stage-learning">{lesson.learningIntention}</p> : null}
-              <h2 className="stage-question">{poll.stage === "results" ? "Class Results" : poll.question}</h2>
-              {poll.stage === "responding" || poll.kind === "short-answer" ? (
-                <p className="stage-response-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received</p>
-              ) : (
-                <div className="stage-results">
-                  {(poll.choices || []).map((choice) => {
-                    const count = pollAnswers.filter((answer) => answer.answer === choice).length;
-                    const percent = pollAnswers.length ? Math.round((count / pollAnswers.length) * 100) : 0;
-                    return (
-                      <div className="stage-result" key={choice}>
-                        <span>{poll.kind === "fist-to-five" ? `${choice} / 5` : choice}</span>
-                        <div className="stage-bar"><div className="stage-fill" style={{ width: `${percent}%` }} /></div>
-                        <span>{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {poll.stage === "results" ? <p className="stage-response-count">{poll.question}</p> : null}
+              {/* In-lesson checks (fist-to-five, multiple choice, short answer)
+                 never reveal a class tally on the projectors (Steele, 2026-08-06:
+                 "the results of the fist of 5, and both ready checks do not need
+                 to show up on the screens. I should see it on the ipad"). The
+                 room sees the question and how many have answered; the teacher
+                 reads the distribution and the visit list on the iPad Remote.
+                 The anonymous "Class Results" histogram that used to draw here at
+                 results stage is gone - the review path (Private response data +
+                 VisitListPanel on /teacher/remote) is untouched. structured-numeric
+                 was already prompt-only in the branch above. */}
+              <h2 className="stage-question">{poll.question}</h2>
+              <p className="stage-response-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received</p>
             </div>
             )
           ) : showResourcePanel && resource ? (
@@ -1265,7 +1347,7 @@ export default function ClassroomStagePage() {
           ) : liveToolUrl ? (
             <iframe className="stage-tool" src={liveToolUrl} title={flow.tool?.label || "Lesson tool"} />
           ) : slideFrameUrl ? (
-            <SlideFrameScene url={slideFrameUrl} fit={slideFrameFit} />
+            <SlideFrameScene url={slideFrameUrl} fit={slideFrameFit} videoCommand={slideVideoCommand} />
           ) : presentation?.mode === "board" ? (
             <div className="stage-board-scene">
               <div className="stage-board-wrap">
@@ -1471,6 +1553,18 @@ export default function ClassroomStagePage() {
           right, the classroom state strip under it. See CLAUDE.md. */}
       {inkOverlay && !inkOverlay.embed && <ScreenInkOverlay room={inkOverlay.room} />}
       {inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && <AttentionListener room={inkOverlay.room} />}
+      {/* The room's audio host (2026-08-07): timer cues, per-state music, and the
+          iPad sound bank play from THIS foreground projector tab, not /control's
+          hidden one. Real projector only - never the /ipad embed, /demo, or
+          Studio preview. See ClassroomAudioHost + CLAUDE.md rule 6. */}
+      <ClassroomAudioHost
+        active={Boolean(inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && !previewStage)}
+        sessionId={session?.id ?? null}
+        stateId={state?.id ?? null}
+        timer={timer}
+        interludeStateId={flow?.interlude?.stateId ?? null}
+        remoteCommand={session?.remote_command ?? null}
+      />
     </main>
   );
 }

@@ -127,6 +127,16 @@ bars and live misconception grouping).
    when you find your own files already on `origin/main`, diff branch against remote per path
    (`git diff --quiet origin/main <branch> -- <file>`) to find exactly which ones went out stale,
    rather than assuming the whole change did or did not land.
+   AND `git commit` WITH NO PATHS TAKES THE WHOLE INDEX, WHICH IS HOW A `git rm` ENDS UP IN THE
+   WRONG COMMIT (2026-08-05). This rule says stage only the paths you changed, and every example of
+   it is `git add`. But `git rm <file>` ALSO stages - immediately - so a later
+   `git add <other-file> && git commit -m ...` sweeps the deletion in even though you never named
+   it. Landed live that day: a `git rm` of a component was meant for the feature commit and went
+   into the docs commit before it, leaving an intermediate commit that deletes a file whose imports
+   are only removed in the NEXT one - so it neither typechecks nor builds, and a bisect or a
+   cherry-pick lands on it. Pass the paths explicitly (`git commit -- <paths>`) or check
+   `git --no-optional-locks status --short` for a staged `D` before committing. Not worth rewriting
+   history over in a repo with concurrent sessions; worth not doing again.
 3. Verified work ships without waiting for Steele (his standing request, 2026-07-21 - routing
    merges through him twice stranded finished work). A push to `main` is what deploys - Vercel
    auto-builds it. Flow: push the feature branch first (a local-only branch is invisible to
@@ -142,9 +152,28 @@ bars and live misconception grouping).
    `.env*.local`, `.next`, `.data`, `.tmp-mastery/`, or anything under `aistudio_*`.
 6. REVERSED 2026-07-29 BY STEELE: **the control panel's DURING-SESSION view goes CREAM**, matching the
    rest of the site's wireframes. The old rule ("`/control` stays DARK for projector contrast, do not
-   carry the cream theme onto it") assumed Control might be seen by the room. It is not: Control lives
-   on his laptop, both projectors are separate browser tabs, and the room never sees it. His ask is
+   carry the cream theme onto it") assumed Control might be seen by the room. His ask is
    that the during-session flow controller match the Screen Studio wireframe language.
+   **THE PRIVACY PREMISE THAT ANSWER RESTED ON IS FALSE, CONFIRMED BY STEELE 2026-08-05.** This rule
+   used to say flatly "It is not: Control lives on his laptop, both projectors are separate browser
+   tabs, and the room never sees it." THERE IS NO LAPTOP IN THE ROOM. The room is TWO INTERACTIVE
+   PANELS, each with its own onboard computer running its own browser, not linked to each other -
+   which is correct and not a gap, because present and pace are meant to be independent readers of
+   the same session. The MAIN panel runs `/teacher/present` fullscreen with `/control` in a SECOND
+   TAB of that same browser; the other panel runs `/teacher/pace`. So the room sees Control every
+   time he switches to that tab.
+   HE CHOSE THIS DELIBERATELY on 2026-08-05, having been offered the laptop layout and declined it,
+   for two reasons that outweigh the exposure: Control is the room's AUDIO HOST (see the audio note
+   below), and the panel is where he can triage if something fails mid-period. Do NOT "fix" this by
+   moving Control onto a laptop.
+   WHAT FOLLOWS FROM IT IS SHARPER THAN IT LOOKS. The main panel's browser must hold the teacher NAME
+   KEY for the classroom spinner to show first names (the deliberate room-facing FERPA exception in
+   rule 8), and `/control` resolves aliases through that SAME device-local key
+   (`src/app/control/page.tsx:132-137`, roster fetched at :1101). One browser, one key - so a triage
+   switch to the Control tab puts REAL STUDENT NAMES on the wall, not aliases. Triage from
+   `/teacher/remote` FIRST: it drives the whole flow server-side through `/api/control-remote` and the
+   room never sees it. The panel's Control tab is the last resort, not the first.
+   The CREAM styling decision is unaffected - it is what he asked for and he is not asking for it back.
    The iPad Remote STAYS DARK (Turn 12d) - he holds it in a dim room facing the class, which is where
    the contrast rationale actually applies. So the split is now BY DEVICE, not by privacy: laptop
    surfaces read up close are cream, the handheld is dark.
@@ -166,7 +195,58 @@ bars and live misconception grouping).
    just should not need to GO there during a lesson unless something fails. Because Control publishes
    its snapshot about once a second and Chrome throttles hidden tabs hard after roughly five minutes, it
    has to stay FOREGROUNDED - which is why the during-lesson student-data view belongs INSIDE Control
-   rather than on its own route. The chosen data view is LIVE MISCONCEPTION CLUSTERS (what
+   rather than on its own route.
+   **IN THE REAL ROOM IT IS NOT FOREGROUNDED, AND THAT IS A KNOWN OPEN RISK, NOT AN OVERSIGHT**
+   (2026-08-05). Present is fullscreen on the main panel and Control sits behind it as a hidden tab
+   for the whole period. The lesson still runs - `/api/control-remote` executes everything
+   server-side and needs no Control at all - so this is not an outage. The hazard is the documented
+   one: Control's snapshot is a FULL REPLACE, so a throttled tab waking up and republishing stale
+   local state over server-authored fields is the failure class this file warns about repeatedly.
+   UNMEASURED. The one test that settles it, and it is one period's work: with Control backgrounded
+   for twenty-plus minutes, press a sound-bank button on the iPad and see whether the cue fires on
+   time. That test is load-bearing because of the next paragraph.
+   **CONTROL IS THE ROOM'S AUDIO HOST, AND THAT IS WHY IT LIVES ON THE PANEL.** The iPad deck's
+   `play-<id>` sound-bank commands, the timer warning / countdown / time-up cues, and the per-state
+   music ALL play out of the speakers of whatever machine Control is running on. On the main panel
+   that is the room speakers. Move Control to a laptop and every one of those sounds moves with it -
+   which is the thing that killed the otherwise-cleaner laptop layout on 2026-08-05 (a Bluetooth
+   speaker on the laptop was offered and declined; he prefers the classroom speakers). Anyone
+   proposing to relocate Control has to answer the audio question first.
+   **SUPERSEDED 2026-08-07: `/teacher/present` IS NOW THE PRIMARY AUDIO HOST; CONTROL IS THE BACKUP.**
+   Steele ran the "UNMEASURED" test above and it FAILED - with Control the hidden tab behind
+   `/present` fullscreen, the timer cues, per-state music, AND the iPad sound-bank cues all fired
+   late or not at all, because browsers throttle hidden tabs (he confirmed all three dead in a real
+   class, Control hidden). So audio playback moved to the always-foreground projector tab.
+   `src/components/ClassroomAudioHost.tsx` (mounted on `/present`, REAL PROJECTOR ONLY - inert on the
+   `/ipad` embed, `/demo`, Studio preview, and never on `/teacher/pace`) now plays the timer cues,
+   per-state music, and sound bank, subscribing to the same `remote-<sessionId>` ping Control uses.
+   Control KEEPS its whole engine as the BACKUP: three suppression guards (`playCue`, `startMusicFor`,
+   `playCueOnce` all early-return on `audioSuppressedRef`) plus a `watchAudioHost` effect. Election is
+   `src/lib/audioHostChannel.ts` (`claimAudioHost`/`watchAudioHost`) over BroadcastChannel
+   `bdm-audio-host` (same machine: Control is a hidden tab in the panel's browser) AND a realtime room
+   `audio-host-<sessionId>` (the laptop case). Present claims host only when ARMED, so an un-armed
+   present never silences the backup; Control resumes the instant present says un-armed or its claim
+   goes stale (present closed/crashed). Shared tones/duck levels live in `src/lib/timerCues.ts` and the
+   store keys in `src/lib/classroomAudio.ts` (`bankAudioKey`) so the two hosts cannot drift;
+   `npm run test:sound-bank` pins present-is-host. What this MEANS for the panel-vs-laptop question:
+   the room's sound no longer follows CONTROL - it follows whatever runs `/present`, which is the panel
+   on the room speakers, so Control no longer has to be foregrounded for audio. BROWSER AUTOPLAY still
+   requires ONE tap: `/present` shows a big centered "Tap to turn on classroom sound" prompt at class
+   start (any tap on the projector also arms). KNOWN OPERATIONAL COST: `/present` is in `DeployRefresh`,
+   so a mid-class deploy reloads it and needs one re-tap to re-arm sound (Control-as-backup covers the
+   gap, but a hidden Control is itself throttled - so the reliable remedy is the tap). NOT YET PROVEN
+   IN A LIVE CLASS: verified by typecheck + build + all contracts + a second-agent review + a browser
+   check that the prompt renders and arms on the real `/present`; the one-period test is now "with
+   `/present` up and tapped once, does a backgrounded Control stay silent while the cues fire from the
+   projector on time." The rest of this paragraph and the one above are HISTORY of why audio used to
+   live on Control; do not restore Control-as-primary without re-reading this.
+   **"ONE CONTROL AT A TIME" APPLIES ACROSS MACHINES, NOT JUST TABS.** The second-Control hazard
+   below is usually read as being about two tabs in one browser. It is not - a fresh Control boots
+   holding the `DEFAULT_STATES` skeleton (`control/page.tsx:699`) and with no stored teacher session
+   adopts whatever session is running via `latestOpen=1` (`:1028`), and it does that from ANY device.
+   So "Control on the laptop, with the panel's tab there if needed" is the same bug wearing different
+   clothes. The emergency fallback is fine SEQUENTIALLY - close one, open the other - and never
+   concurrently. The chosen data view is LIVE MISCONCEPTION CLUSTERS (what
    `/teacher/rightnow` renders from `/api/live/groups`), because it is the highest-value thing not
    already on the iPad and it is what changes the next teacher move.
 7. Verify the build before reporting "done" (`npm run typecheck` at minimum, `npm run build` for
@@ -199,6 +279,11 @@ bars and live misconception grouping).
    and the overlay on `/teacher/present` ONLY (never a student device) spins to one first name. Fair
    rotation lives in the projector's localStorage (`bdm-speaker-spinner-fair-v1`) and the remaining
    count is deliberately never shown; the alias is what rides the wire, first name only at render.
+   FORMALLY APPROVED, NOT JUST A PRODUCT CALL (Steele, 2026-08-07): he confirmed he now has "the
+   okay" for this specific display - the spinner's first-name reveal (`ClassroomSpinner` and
+   `SpeakerSpinner`, the two paragraphs above). He did not say who approved it or in what form, so
+   none of that is recorded here. This does not extend to any other feature and does not change the
+   still-open CCSD sign-off question for pseudonymous records elsewhere (see below).
    STUDENT DEVICES RENDER NO STUDENT NAME OR ALIAS AT ALL (Steele, 2026-08-01: "they never have
    their names on their device" - a name on a kid's own screen is disruption material, same as on
    the board; an alias doubly so). Identity is NOT anonymous - the alias still rides every join,
@@ -282,6 +367,74 @@ bars and live misconception grouping).
    identity posts carry a raw email and the site REFUSES them by design - do them before the first
    class day. The old hold on new student-data plumbing is LIFTED; build against the pseudonymous
    model.
+   **THE CUTOVER IS DONE. STEELE RAN A FULL STUDENT FLOW END TO END 2026-08-05**
+   ("i ran a student flow all the way though ... warm up, 5, learning checks"), and
+   it is the first time any student write has succeeded in the life of the project.
+   Measured on the live database immediately after: `auth_user_id` is no longer 0 -
+   a real district account completed the warm-up and claimed its roster row - and
+   `session_joins` carries 3 rows with a `student_id`, `poll_answers` has 5 rows
+   against a lifetime 0, and `student_signals` has 1. So step 6 is complete, and the
+   whole "every student write returns 428 by design" blocker - which this file and
+   ROADMAP both called the single biggest thing in the project - IS CLEARED. The one
+   query that used to prove the opposite now proves it:
+   `select count(*) from students where auth_user_id is not null;` returns non-zero.
+   **AND THEN THE SPINE CLOSED. `mastery` WENT FROM 0 ROWS - EMPTY FOR THE LIFE OF
+   THE PROJECT - TO 141, ON 2026-08-05.** Backfilled with
+   `POST /api/teacher/poll-evidence {"sessionId":"50c2b90e-af3e-41e0-a1b9-b32564c9a75d"}`
+   after a clean `GET` dry run. Result: 3 polls considered, 3 answers, **4 rows
+   written, 0 skipped, 0 unresolved standards**, one period recomputed. Verified
+   after: `mastery` 141 rows across 35 students and 4 domains, `mastery_history`
+   142, and `responses` source `poll` holds exactly 3 rows with a `standard_id`
+   plus 1 with `standard_id` NULL - the documented split of per-question standard
+   rows and one aggregate bar row.
+   **WHY 35 STUDENTS HAVE BARS WHEN ONE STUDENT ANSWERED, AND IT IS NOT A BUG.**
+   The POST's second act is `recomputePeriod`, and NOTHING IN THE CODEBASE HAD EVER
+   CALLED IT. So this run did two things: it bridged the three graded poll answers,
+   and it triggered the first recompute in the project's history, which turned the
+   216 warm-up `responses` already sitting in the table into bars for the whole
+   period. The bars are mostly warm-up and i-Ready evidence; the poll answers are
+   the increment. Do not read 35 as a participation count.
+   **WHY IT NEEDED A BACKFILL AT ALL - A TIMING GAP, NOT A BROKEN BRIDGE.** The
+   run's answers landed 2026-08-05 21:36-21:38 UTC (14:36 PDT);
+   `src/lib/pollEvidencePromotion.ts` - the caller that promotes a closing session's
+   answers, wired into `closeSessions` so all three close paths are covered - was
+   committed at 18:09 PDT, three and a half hours later. That session closed before
+   the code that would have promoted it existed. The automatic path is live for
+   every session from here on; this one needed the manual recovery the module was
+   designed for (every row idempotent by `dedupe_key`, so re-POSTing writes exactly
+   the same rows).
+   THE GENERAL TRAP: when a feature lands mid-day, "the table is empty" is ambiguous
+   between "it does not work" and "it was not wired yet when that data was made".
+   Check the commit time of the caller against the timestamp of the data before
+   concluding anything.
+   **AND ON 2026-08-06 IT RAN BY ITSELF. FIRST FULL LESSON END TO END, FIRST
+   AUTOMATIC PROMOTION.** Steele: "this is the first full lesson run all the way
+   through to the final button press". Session `08f0580a-4af5-4d32-ad45-3873fac28b4d`
+   ran 07:09:43 to 07:59:04 UTC - about 49 minutes, a real period - reached
+   `closeout` at step 13 of 14, and closed on his own button press. NO manual
+   `POST /api/teacher/poll-evidence` was involved: `mastery.updated_at` moved to
+   07:59:04.569, **379ms after the session's `ended_at` of 07:59:04.19**, which is
+   `closeSessions` -> `pollEvidencePromotion` -> `recomputePeriod` in `after()`
+   firing on its own. `mastery_history` took 138 new rows.
+   WHAT PROMOTED, AND WHY THE OTHER TWO CORRECTLY DID NOT. Four polls, four answers:
+   both `multiple-choice` checks promoted; the `fist-to-five` did not (a confidence
+   self-report must never score a standard) and the `short-answer` exit ticket did
+   not (bare string equality marks a right answer wrong over a stray space). Those
+   are exactly the two kinds `GRADED_POLL_KINDS` excludes on purpose, so 2 of 4 is
+   the designed behaviour, not a shortfall. `responses` source `poll` gained 3 rows
+   from 2 graded answers - the documented split of per-question standard rows plus
+   one aggregate bar row. **When auditing a run, expect graded < answered and check
+   the KINDS before calling anything dropped.**
+   **EXIT TICKETS ARE GOOGLE FORMS AS OF 2026-08-05** (Steele: "we also decided exit
+   tickets are google forms"). This REVERSES the 2026-07-28 decision recorded below
+   that moved the exit ticket on-site for data retention and mid-lesson deployment.
+   Consequences that are NOT yet worked through and need his direction rather than a
+   guess: the on-site `/exit-ticket` route, the `exit_tickets` table and
+   `launchExitTicket`, the `exit` state's Response Mode requirement, and the
+   poll-evidence bridge's scope all assume an on-site exit. A Forms exit arrives
+   through the warm-up-style evidence path instead, which is a different ingest with
+   different grading. Do not rebuild any of it until he says what the exit step
+   should DO on the projector and the student screen.
    **THE NOTION HALF (step 8) RAN 2026-08-05 AND IT WAS TWICE THE SIZE OF THE LIST.** Ten live
    databases went to the trash, including the `Rosters` / All Contact Information source of truth
    (174 rows, 157 real `@nv.ccsd.net` emails, 168 student numbers, guardian emails and phones in
@@ -313,6 +466,83 @@ bars and live misconception grouping).
    does not exist costs nothing and fails safe if one ever returns.
    Pseudonymized is not anonymized - Steele holds the key, and the posture still needs CCSD's
    sign-off; if CCSD requires even pseudonymous records in-district, that is a new project.
+   A DATA POINT ON THAT SIGN-OFF, NOT A DECISION (Steele, 2026-08-07): "the tech said even notion
+   data is fine" - unspecified who "the tech" is or what was reviewed, and no written confirmation
+   is on file. He is explicitly NOT acting on it: "im just goin to leave it how it is." So the
+   architecture is UNCHANGED - alias + email_hmac only, nothing identified in Notion - and this is
+   informal signal that a looser posture might be acceptable, not a green light to build toward one.
+   Do not read this as the CCSD sign-off closing out, and do not use it to justify moving anything
+   identified into Notion without him raising it again explicitly.
+   **WHERE A STUDENT RESPONSE LIVES IS DECIDED BY ONE QUESTION (Steele, 2026-08-05): DOES THIS
+   CHECK CHANGE WHAT I DO IN THE NEXT FIVE MINUTES?** Yes -> on-site, because that is where the
+   visit list and the live misconception grouping earn their keep. No -> a Google Form, so the
+   data never leaves the district Workspace. A better cut than "live vs overnight", and his, not
+   an inference.
+   **SETTLED THE SAME DAY, SO DO NOT RE-DERIVE IT FROM THE PRINCIPLE: WARM-UP AND EXIT TICKET ARE
+   FORMS; FIST-TO-FIVE AND BOTH READY CHECKS STAY ON-SITE.** The line is the BOOKENDS vs THE
+   MIDDLE - everything a student answers mid-lesson stays where the visit list can read it.
+   Note fist-to-five stays on-site even though an agent argued it was the weakest case for
+   staying (a temperature read rarely acted on within the period); Steele kept it, and that call
+   is the one that stands.
+   **THE EXIT TICKET IS FURTHER ALONG THAN ANYONE IN THAT CONVERSATION THOUGHT, INCLUDING STEELE**
+   (measured 2026-08-06 against the live Notion database, after he said "the forms i thought were
+   there are not"). SEVEN lessons already have COMPLETE exit-ticket Google Forms - CC.1, CC.2,
+   CC.3, CC.4, M1.T1.L1-D1, M1.T1.L2-D2, M1.T1.L3 - each carrying `Exit Ticket Link` (a published
+   form URL ALREADY holding the `BDM_AUTH_USER_ID` prefill), `Exit Ticket Edit Link`, and an
+   `Exit Ticket Response Sheet` that is the SAME spreadsheet for all seven, plus authored
+   `Exit Ticket Prompt` / `Answer` / `Choices`. **AND THE SITE ALREADY USES THEM**: `/control`
+   (page.tsx ~2400) and `/teacher/studio/edit` set the exit step's RESOURCE URL to
+   `lesson.exitTicketLink`, exactly as the warm-up state does, so exit-ticket-as-a-Form is the
+   existing architecture rather than something to design. He could not find them because he was
+   looking in the Drive `Week N` folders, which hold ONLY warm-ups.
+   WHAT IS ACTUALLY MISSING is narrower: **no `.gs` file mentions "Exit Ticket" at all** (a grep
+   of all thirteen returns one unrelated comment), so every one of those seven forms was built BY
+   HAND. That is the real gap and the reason for his "make both forms at once" ask.
+   AUTHORING GAPS AS OF 2026-08-06: M1.T1.L2-D3 (8/18) has prompt and answer authored but no
+   form; M1.T1.L5-D1 (8/25, PUBLISHED), L5-D2, L5-D3 and L5-P1 have NO anchor problem and NO exit
+   prompt at all, so nothing can be generated for them from either source.
+   **DO NOT MAKE A GENERATOR THAT ALWAYS REBUILDS THE EXIT FROM THE ANCHOR.** Steele's stated
+   rule is "the exit ticket should be a restate of the hook", verbatim and same numbers, and most
+   of his own exits follow it (M1.T1.L1-D1 and M1.T1.L2-D2 restate their anchors exactly). But
+   M1.T1.L3 deliberately does NOT: its anchor is carnations (12 and 18) and its exit is buses
+   (6 and 10) - a transfer problem, not a restate. A generator keyed only on the anchor would
+   overwrite that. Build only when `Exit Ticket Link` is empty, and prefer an authored
+   `Exit Ticket Prompt` over the anchor.
+   KNOWN TRADEOFF HE ACCEPTED when choosing verbatim-same-numbers: a student who memorised the
+   worked answer during the I Do can pass without understanding, and it measures the practised
+   task rather than transfer. He chose it for the growth story ("you could not do this 45 minutes
+   ago"). Do not quietly switch it to a parallel problem.
+   THREE THINGS TO GET RIGHT BEFORE ANYONE ACTS ON IT. (1) **This does NOT "eliminate FERPA."**
+   FERPA follows the education record, not the server; a fist-to-five answer is an education
+   record in Workspace exactly as it is in Supabase. What it removes is the third-party VENDOR
+   question - whether CCSD will accept student records on a host they have not signed a DPA with
+   - which is the actual open risk here. Do not let the shorthand travel; it changes what the
+   work is buying. (2) **The marginal exposure is already small**: the site holds alias +
+   email_hmac and cannot reverse it, so a row reads "Amber Fox answered 3". (3) **The real cost
+   is the VISIT LIST.** A Forms summary says "eleven missed Q3"; the visit list says "these nine
+   share one misconception, that is one stop" with the 40% stop-and-reteach banner. That is built
+   from `poll_answers` and rebuilding it in Sheets is a project, not a port.
+   CORRECTED IN THE SAME CONVERSATION, so nobody re-runs the bad argument: an agent objected that
+   reading Form results on the room's panel would put district emails on the wall. **It would
+   not.** Forms' Responses -> Summary tab is aggregate - per-question charts and common wrong
+   answers, no addresses; only Individual mode shows an email, and you have to switch to it
+   deliberately. Steele ran summary view on the board for a full year. The room-facing exposure
+   objection is dead; the visit-list objection is the one that survives.
+   THE CHEAPEST NEXT MOVE IS NOT ENGINEERING: one email to CCSD asking whether pseudonymous
+   records on a non-district host are acceptable. A yes moots this entire debate and the live
+   loop is kept as-is; a no gives a real requirement to build against instead of a guess.
+   The EXIT TICKET is the piece with a clear path, and it is cheaper than it looks: its content
+   is ALREADY authored in Notion (`Exit Ticket Prompt` / `Exit Ticket Answer`, plus the exit
+   Lesson Step's `Question` / `Correct Answer` / `Response Mode`), so the Apps Script would
+   TRANSCRIBE rather than generate, and `warmup-engine.gs` already reads Notion, builds Forms
+   with `FormApp`, writes a link back to a Notion property and installs the submit trigger. The
+   `Exit Ticket Link` property is already read by `notionLessons.ts`, so the URL has somewhere to
+   land. What is genuinely new: generalizing the warm-up-shaped receipt chain
+   (`student_warmup_sessions`, the `BDM_AUTH_USER_ID` prefill, `warmup_resource_key`) to a second
+   form, and porting the Structured Numeric rule judging into Apps Script. NOTE the warm-up
+   engine is PARAMETRIC, not AI - anyone estimating this off "the AI writes the warm-up" is
+   estimating the wrong thing, and an `warmup-ai-generator.gs` in the file list means they are in
+   the stale second Apps Script project.
 9. KEEP THIS FILE TRUE, IMMEDIATELY. The moment you discover something that would have prevented a bug
    - a stale reference, a silent failure mode, an undocumented constraint - correct this file in the
    same turn you discovered it, as its own small commit, and get that commit onto `main` without
@@ -405,7 +635,16 @@ Codex and cloud sessions need them too (rule 9).
   (3) The ROSTER spreadsheet ("26-27 Rosters"), holding `warmup-roster-push.gs` and
   `warmup-student-profile.gs`.
   Projects (1) and (3) both need `BDM_ROSTER_HMAC_KEY` set to the IDENTICAL value - a mismatch is
-  invisible until a real warm-up returns "not on roster". Note both `warmup-sidebar-functions.gs`
+  invisible until a real warm-up returns "not on roster". CONFIRMED MATCHING 2026-08-05: a real
+  student flow completed and wrote `auth_user_id`, which cannot happen unless the two keys agree.
+  **THE REPO'S `.gs` FILES ARE NOT THE LIVE APPS SCRIPT PROJECT, AND READING THEM ALONE WILL GIVE
+  YOU A CONFIDENTLY WRONG ANSWER** (2026-08-05). `warmup-sidebar-functions.gs` here has no
+  week-builder menu entry; the live Big Dog Math menu has had one "for weeks" (Steele). A menu item
+  was added on the strength of the file and reverted within the hour, because pasting it would have
+  either duplicated a working button or overwritten it. The repo is a copy that drifts in BOTH
+  directions - the live project can carry functions, menu items and triggers the repo has never
+  seen, and can lag edits the repo has. Never report an Apps Script capability as missing, or as
+  outstanding work, without it being checked in the editor; the file is evidence about the FILE. Note both `warmup-sidebar-functions.gs`
   and `warmup-student-profile.gs` define `onOpen()`, which is only safe because they live in
   different projects.
   **THE CRON SECRET LIVES IN THREE PLACES AND ALL THREE MUST MATCH EXACTLY** (2026-08-04): Vercel
@@ -482,7 +721,12 @@ Codex and cloud sessions need them too (rule 9).
   Measured that day: `Priority = Now` returns 18 rows and NINE of them are already complete, so
   the wrong filter reports shipped features as outstanding work - the exact failure a status
   read exists to prevent. Correct filter is `Priority = "Now"` AND `Done = "__NO__"`.
-  `.claude/commands/class-audit.md` (curriculum scope) still carries the wrong wording.
+  `.claude/commands/class-audit.md` (curriculum scope) still carries the wrong wording - confirmed
+  still wrong 2026-08-05 at `.claude/commands/class-audit.md:43`.
+  THE TITLE COLUMN IS `Feature`, NOT `Name` (2026-08-05). Nearly every other database here titles
+  its rows `Name`, so the obvious query fails with
+  `no such column: "Name" - should this be a string literal in single-quotes?`, which reads as a
+  quoting problem and is not one. Select `"Feature", "Status", "Area", "Who acts", "Next step"`.
 
 ## Routes (as of this writing)
 
@@ -747,9 +991,25 @@ Codex and cloud sessions need them too (rule 9).
   only names how many cards to move (the smallest set that fixes it, not everything after the first
   mistake). DECIMALS AND PERCENTS ALREADY WORK: the compare-the-forms lesson Steele wants "later"
   needs no code, only a set like `0.75, 1/2, 60%, 1 1/4, 250%`.
-- Room/display surfaces: `/warmup` and `/live-flow` are public; `/board` + `/ipad` (pen-to-board)
+- Room/display surfaces: `/live-flow` is public; `/board` + `/ipad` (pen-to-board)
   are TEACHER-GATED by the proxy (they are in PROTECTED_PREFIXES - an anonymous fetch redirects to
   /teacher-login, so curl probes of them return no page markup).
+  **THE `/warmup` PAGE ROUTE WAS RETIRED 2026-08-05 on Steele's call.** Nothing in `src/` linked to
+  it; it was a standalone drifting decrement clock duplicating the `warmup` class state, which
+  `/teacher/present` and `/teacher/pace` already render off the shared `endsAt` clock, and its
+  defaults had gone stale (8 minutes against the spine's 5). `/api/warmup` is a DIFFERENT and still
+  LIVE route - the warm-up engine endpoint the Apps Script calls - and its `PROTECTED_PREFIXES` /
+  `SECURE_ROLLOUT_PREFIXES` entries in `src/proxy.ts` are untouched. `public/screens/warmup.html`
+  is the unrelated hand-owned screen kit and also stays.
+  THE TRAP IT COST, and it is the ROUTE version of the "grep the bare name" rule under Repo layout:
+  a route-shaped sweep (`"/warmup"`, `href="/warmup"`, even `app/warmup`) found exactly ONE
+  reference and reported the route unlinked. It missed
+  `scripts/success-criterion-contract.mjs`, which read the page through
+  `path.join(root, "src", "app", "warmup", "page.tsx")` - a path assembled from SEGMENTS, matching
+  no string anyone would grep for. Deleting the page turned that read into an ENOENT crash, and
+  because `npm test` is `&&`-chained the whole 40-suite run aborted at suite 30. BEFORE DELETING A
+  ROUTE, grep `scripts/` for the bare last segment (`warmup`) as well as the path, and expect the
+  answer to be a contract rather than an import.
 - Attention call (2026-07-27, Steele's ask): the Bark pill on /ipad (always visible beside the
   Tools handle, 4s cooldown) sends `{t:"attention"}` on the `ink-<room>__ctrl` channel. /board
   handles it in its EXISTING ctrl handler; /teacher/present mounts `AttentionListener` (its first
@@ -1340,7 +1600,52 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   follows if it carries the per-tab student marker (`sessionStorage['bdm-student-tab']`, set when
   the verified join completes, DIES on tab close and on Safari tab restore) - a reopened student
   tab on the teacher's own browser silently stops following forever; re-entering the class code
-  re-arms it. Real student Chromebooks (no teacher session) never hit the guard. Also know:
+  re-arms it. Real student Chromebooks (no teacher session) never hit the guard.
+  **IT NO LONGER FAILS SILENTLY, BECAUSE IT COST A SECOND SESSION ON 2026-08-06.** The guard is
+  correct and stays - a device that has held a teacher session must not be dragged around by class
+  mode - but it used to `return` with no log, no state and nothing on screen, which is
+  indistinguishable from a lesson that has not advanced. ClassSync now sets `notFollowing` and the
+  existing status chip reads "This tab is not following class. Enter the class code again to
+  reconnect." Deliberately DIFFERENT copy from the transient-read-failure chip beneath it: that one
+  does heal on its own and says to keep working, and this one never does, so inheriting its wording
+  is what turns a held tab into a lost period. It speaks ONLY when a student session is actually
+  being held, and NEVER on a teacher surface - the guard runs ABOVE the `isTeacherRoute` check, so
+  without an explicit exclusion the notice renders on `/control` and `/teacher/present`, which are
+  on the wall. `npm run test:student-warmup-home` pins all three conditions, mutation-tested.
+  **THE SYMPTOM DOES NOT LOOK LIKE A NAVIGATION BUG, WHICH IS WHY IT TOOK TWO GOES.** Reported as
+  "it went to the multiplication tool but then didn't follow the lesson", then "the learning checks
+  and the exit ticket popped up just on the lesson home page", then "it wasn't showing the
+  presentation screens but it was accepting information and logging it into the remote". Those read
+  as three faults and are ONE: the device never reached `/live-flow`, so the polls rendered through
+  whatever surface it was parked on, and the answers still posted normally because
+  `/api/student/poll-answer` does not care which surface submitted them. Evidence flowing correctly
+  is therefore NOT evidence that class-mode navigation works - check `location.pathname` on the
+  student device before believing the follower is fine. Note also that the warm-up handoff to the
+  challenge tool is page-local (`router.push` in the landing) and fires whether or not class mode is
+  armed, so a working handoff says nothing about ClassSync either.
+  **THE CLIENT FOLLOW PATH IS NOW VERIFIED FOR A CLEAN DEVICE (2026-08-06).** Driven against a dev
+  server with the REAL committed onboarding + `ClassSync` (root layout), faking ONLY the two
+  service-role endpoints a local server cannot run - `warmup-start` and `session-state` - through a
+  throwaway `public/*-sw.js` service worker that the app's OWN code calls, plus the real public
+  Supabase anon keys in a gitignored `.env.local` so anonymous sign-in and secure mode are live.
+  Every step observed on `location.pathname`: a clean device (no `bdm-teacher-session`) onboards to a
+  PROVISIONAL session (`studentId:""`, `markStudentTab` armed, exit marker cleared); HOLDS on `/` and
+  on `/multiplication-fluency` while the state is `warmup`; FOLLOWS to `/live-flow` within ~2s the
+  instant the state flips to a real one - INCLUDING the exact 8/6 "parked on the multiplication tool
+  then advanced" scenario; and HOLDS in place (no bounce to `/`) on a missing/gap state. So the 8/6
+  failure was the TAB GUARD on a teacher-session browser, not the follow logic - which is sound.
+  STILL UNPROVEN, and the only thing that closes it: that the SERVER emits those `session-state`
+  payloads correctly in a live session, and that real district Chromebooks behave the same - one real
+  period, watching `location.pathname` on the device, settles it.
+  **THE TESTING TRAP THIS PROVES OUT, AND IT IS THE 8/6 BUG FROM THE OTHER SIDE:** any browser that
+  has EVER opened a teacher surface (`/teacher`, `/control`, `/session`, `/roster`, `/ipad`, `/board`)
+  carries `bdm-teacher-session` FOREVER in localStorage, so using it as a "student" reproduces the tab
+  guard (the notFollowing chip, or a device that sits still) - NOT a student's experience. To match a
+  real student Chromebook's storage state, test the follow path in an INCOGNITO/private window or a
+  profile that has never held a teacher session. Note that in incognito the follow path works (it uses
+  the provisional session from code entry) but student WRITES still fail the verified-student gate - a
+  teacher Google account is not a roster student.
+  Also know:
   ClassSync treats every session-state failure (wrong period, missing session_joins row, expired
   anon auth) as transient and retries silently, so ALL of them present identically as "the student
   screen just stays put" - check the class-mode selector on /session and the joins list before
@@ -1453,9 +1758,11 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   now move a bar. What it grades is DELIBERATELY NARROW (Steele, 2026-08-04): `structured-numeric`
   and `multiple-choice` only. NOT `short-answer` (bare string equality marks a right answer wrong
   over a stray space - and note M1.T1.L5-D1's exit ticket is that kind, so that lesson's exit still
-  contributes nothing), NOT `multiple-choice-explain` (readinessEvidence cannot see the kind at
-  all, so bridging it would make the bars and the visit list disagree about one student - fix the
-  reader first), and NOT `fist-to-five` (a confidence self-report must never score a standard).
+  contributes nothing), NOT `multiple-choice-explain` (the reason WAS that readinessEvidence could
+  not see the kind at all, so bridging it would make the bars and the visit list disagree about one
+  student - **that reader was fixed 2026-08-05 and now covers every kind `resolveLiveStepPollKind`
+  can produce, so adding mce to `GRADED_POLL_KINDS` is unblocked; it is a decision, not a
+  blocker**), and NOT `fist-to-five` (a confidence self-report must never score a standard).
   FOUR THINGS THAT WILL BITE WHOEVER TOUCHES IT. (1) **The bar row carries `standard_id: null` and
   that is not a mistake** - `recompute.ts:133` filters bar events to `!standardId`, so attaching
   the resolved standard is exactly the edit that stops the bar moving. There are two row shapes: a
@@ -1472,10 +1779,14 @@ sets the cookie). Unauth: `/api/*` gets JSON 401; pages redirect to `/teacher-lo
   a bare `continue`). (4) **A multiple-choice key that is in none of the choices makes the poll
   ungradable, not the class wrong** - see the `splitList` trap below. `npm run test:poll-evidence`
   pins all four, and each was verified by reverting the fix and watching the suite go red.
-  STILL TRUE and still the gap: `practice_assignment_attempts` and 16 of 23 tools reach nothing,
-  and nothing calls the bridge automatically yet - it is a route you POST, and `GET` on it is a dry
-  run. Also NOT verified end to end, because `poll_answers` has zero rows lifetime until the FERPA
-  Workspace half lands.
+  STILL TRUE and still the gap: `practice_assignment_attempts` and 16 of 23 tools reach nothing.
+  **THE BRIDGE NOW HAS A CALLER (2026-08-05).** `POST /api/teacher/session` end-session calls the
+  lib directly before the close update, wrapped so a failure can never keep a session open, with
+  `recomputePeriod` deferred into `after()` so Close does not block on a rebuild. It is idempotent
+  on `dedupe_key`, so re-running is safe and the route you POST by hand still works as before
+  (`GET` is still a dry run). Until 2026-08-05 `select * from responses where source='poll'`
+  returned zero rows lifetime - every fist-to-five and ready check ever run was invisible to the
+  proficiency spine. Anything before that date is not recoverable.
   **A MULTIPLE-CHOICE ANSWER KEY CAN BE UNTAPPABLE** (found 2026-08-04, PARSER FIXED THE SAME DAY -
   this paragraph used to end "the AUTHORING bug is unfixed", which is no longer true). `splitList`
   splits on `[\n,]`, and `Choices` used to be read through it while `Correct Answer` is read whole,
@@ -1698,6 +2009,22 @@ the invariants they protect are easy to break again.
   justify cards, the latter unchanged from warm-up to closeout. `discussionSupportsForLesson` is now
   discussion-only on both `/teacher/present` and `/teacher/pace`. Empty renders as nothing; wrong
   renders on a classroom screen.
+  **ONLY THE `DEFAULT_DISCUSSION_SUPPORTS` HALF WAS EVER FIXED. THE `DEFAULT_STATES[].desc` HALF IS
+  STILL LIVE ON EVERY SURFACE** (found 2026-08-05; this paragraph read as though both were dealt
+  with, which is exactly the stale line rule 9 exists to stop). BOTH flow builders publish
+  `description: step.studentDirections || state?.desc || "Wait for the teacher's directions."`
+  (`lessonFlowBuild.ts:49`, `controlLineup.ts:168`), so a real `DEFAULT_STATES` entry ALWAYS has a
+  `desc` and the floor string is unreachable - a step with no authored Student Directions publishes
+  the catalog line, and five render sites then print it: `/teacher/pace` 297 and 302,
+  `/teacher/present` 524 and 1162, `/live-flow` 558 and 578. So a Concrete step nobody authored
+  directions for puts "Build the relationship with the assigned concrete model." on the support
+  projector, and an I Do step puts "Watch and take notes. I'll model each step." - the exact string
+  this rule quotes as the thing that must not happen. It is NOT new: the `LessonSlideStage` overlay
+  masked it on pace and present for one day (2026-08-03 to 2026-08-04) and removing the overlay
+  restored the older behaviour rather than causing it. Fixing it is an authoring-vs-code call for
+  Steele - the honest options are to blank the fallback (empty renders as nothing) or to floor it
+  with the neutral "Wait for the teacher's directions." instead of the catalog line - so do not
+  silently pick one.
   CORRECTED 2026-07-29: "discussion-only" was keyed on `theme.id`, which is NOT the same test.
   `inferClassroomStage` maps any step whose title contains "partner" or "group" to the `discussion`
   theme, so those steps still summoned the catalog cards locally even though `/control` deliberately
@@ -1876,6 +2203,28 @@ the invariants they protect are easy to break again.
   symptom is that a shipped fix is not there. `UpdateReadyChip` polls `/api/build-id` and offers a
   tap-to-reload chip. It must NEVER reload on its own. When a fix is reported as not working, check
   what build the iPad is actually running before re-debugging the fix.
+- **"THE IPAD KEEPS SELECT-ALLING AND MOVING AROUND" IS THE PAGE, NOT THE INK** (2026-08-04, Steele).
+  Three separate gaps, none of them in the drawing engine, and no ink library swap touches any of
+  them. (a) `/ipad` sets NO `user-select:none`, NO `-webkit-touch-callout:none` and NO
+  `-webkit-tap-highlight-color` - the palette is a row of text buttons, so a touch that drags a few
+  px on one starts an iOS text selection with the Copy/Look Up callout. (b) The root `viewport` in
+  `layout.tsx` permits user scaling, so Safari's OWN pinch and double-tap zoom the whole document;
+  `touch-action:none` on `.ip-screen-stage` and the wet canvas cannot stop that, because it is the
+  page being zoomed, not the board. (c) Nothing sets `overscroll-behavior`, so the document still
+  rubber-bands under the fixed layers.
+  **AND `toggleFullscreen()` ON `/ipad` IS A NO-OP ON THE ACTUAL DEVICE.** It calls
+  `document.documentElement.requestFullscreen()`, which iPadOS Safari does not implement for page
+  elements (WebKit ships element fullscreen on macOS only; on iOS/iPadOS it is `webkitEnterFullscreen`
+  on `<video>`). The real full-screen path is Add to Home Screen, and there is NO webmanifest in
+  `public/` and no `apple-mobile-web-app-capable` in the layout, so standalone mode has never been
+  available. Standalone also removes the address bar, the swipe-back edge gesture and the bounce -
+  three more sources of "moving around" - at the cost of a separate cookie jar, so the teacher signs
+  in once inside the installed app.
+  **DO NOT REACH FOR A NATIVE APP TO GET PALM REJECTION - INKBOARD ALREADY HAS IT.** `InkBoard.tsx`
+  onDown: `pointerType === "touch"` never marks, it becomes a gesture, so only the Pencil draws. That
+  is `PKCanvasView.drawingPolicy = .pencilOnly` by another road. What PencilKit would genuinely buy
+  is latency (Apple's ~9ms path vs ~30-60ms for Safari canvas) and immunity to the three gaps above -
+  nothing else. Weigh a second codebase against that list, not against a palm problem that is solved.
 - **PEN FEEL: THE GEOMETRY FIXES, AND WHY "JAGGED" WAS FOUR SEPARATE THINGS** (2026-08-03, from
   Steele: "too jagged and doesnt respond well to writing. especially back to back strokes", then
   "a few weeks ago it was running fantastic"). `npm run test:ink-geometry` (35 checks) pins all of
@@ -1901,6 +2250,29 @@ the invariants they protect are easy to break again.
   right angle - and handwriting is almost entirely corners. `strokeOutline` now scales the offset
   by 1/cos(theta/2) with `MITER_LIMIT` 2.5 so a retraced stroke cannot throw a spike. Measured
   nib width kept at the corner: 94% -> 100% (right angle), 80% -> 100% (zig-zag).
+  (2b) **THAT LIMIT CLAMPED THE SPIKE INSTEAD OF BEVELLING IT, AND SHIPPED A BARB ON EVERY HAIRPIN
+  FOR A DAY** (fixed 2026-08-04). `miterLimit` in a real 2D renderer means "past this angle, cut the
+  corner FLAT"; the code did `miter = min(2.5, 1/cos(theta/2))` and still pushed ONE vertex along the
+  bisector, so a near-reversal got a spur 2.5 nib radii long - on the 6px pen, a ~15px barb sticking
+  3.5px clear of the stroke edge. Cursive is a chain of near-reversals, so the top of every l, b and
+  th grew one; Steele photographed it and called the pen "not serviceable". The fix emits TWO points
+  at the plain nib radius, one on each segment's own normal. Measured on the contract's near-retrace,
+  3px nib: **7.50px -> 3.00px**. TWO THINGS TO CARRY FORWARD. `left`/`right` are FLAT arrays and the
+  ring used to walk the right edge by `right[i * 2]` - a bevelled joint contributes two points, so
+  that indexing tears the polygon; walk it back by PAIRS. And the exact-retrace case cannot test any
+  of this: at gap zero the `mlen < 1e-6` branch takes over and is bounded on its own, so a hair off
+  zero is the case that binds (the same trap the file already records one paragraph up).
+  (2c) **ASSERTING A DEFECT IS BOUNDED IS NOT ASSERTING IT IS ABSENT - THIS IS A NEW WAY FOR A GREEN
+  CONTRACT TO MEAN NOTHING.** `ink-geometry-contract.mjs` pinned the barb at `reach <= 2.5 * W / 2`,
+  which is the clamp ceiling itself - so the assertion was satisfied BY the spike it existed to
+  catch, and 35 checks stayed green across the whole 2026-08-03 geometry pass. The bound is
+  `BEVELLED_REACH` (1.25 nib radii) now and loosening it back toward 7.5 un-tests the bevel. The
+  general form, and the third variant of this failure in this file after "a contract can pass on the
+  wrong element" and "an exit code is not evidence": when you write a bound, ask what the BUG
+  measures, not just what the fix measures - if both satisfy it, the check is decoration. Verify the
+  way this repo already demands: revert the fix and watch the suite go red (`.tmp-mastery/` holds the
+  compiled module the contract requires, so swapping that artifact mutation-tests it without
+  touching the shared tree).
   (3) **THERE IS NO SEPARATE DE-JITTER PASS, AND THAT IS MEASURED, NOT AN OVERSIGHT.** One was
   built (a binomial pre-filter over the control points) and then removed, because
   `smoothCenterline`'s midpoint quadratic already averages each pair of samples and that is itself
@@ -2063,10 +2435,44 @@ the invariants they protect are easy to break again.
   optimisation on top of polling, so a dropped ping costs one tick and nothing else; never delete an
   interval because "the ping handles it". (2) **The ping must stay RARE.** `/control` republishes
   about once a second while a timer runs, so both writers gate on
-  `liveFlowScreensChanged` (`src/lib/liveFlowScreens.ts`), which ignores `updatedAt`,
-  `timer.secondsLeft` and the Remote's `transition` claim marker. Ping every write and thirty
+  `liveFlowScreensChanged` (`src/lib/liveFlowScreens.ts`), which ignores `updatedAt`, the Remote's
+  `transition` claim marker, and the `secondsLeft` of every key in `TICKING_SECONDS_KEYS`
+  (`timer` and `phase`). Ping every write and thirty
   Chromebooks re-fetch every second - the storm, arrived by another road, and it would present as
-  "the sync broke". (3) **The student surfaces must call `invalidateSharedSessionState` BEFORE
+  "the sync broke".
+  **IT DID NOT STAY RARE DURING A DISCUSSION STATE. MEASURED AND FIXED 2026-08-05.** The strip was
+  keyed on the literal top-level key `"timer"`, but Control publishes the discussion overlay's
+  `phase` as its OWN top-level key alongside it (`/control` page.tsx, the
+  `version: 2, state, phase, timer, ...` snapshot), and `phase.secondsLeft` counts down once a
+  second exactly like `timer.secondsLeft` does. Nothing stripped it, so for the whole of a
+  two-minute round every republish scored as a real change and pinged every device holding the
+  session once a second - about 120 pings a round, roughly 3,600 student re-reads, on school wifi,
+  while the class was talking. It was pre-existing and not caused by the deadline work; it was
+  simply what nobody had measured. `liveFlowScreens.ts` now projects a NAMED SET,
+  `TICKING_SECONDS_KEYS` (`timer`, `phase`), instead of one hardcoded special case, and
+  `npm run test:live-flow-push` pins both directions: a round ticking is not a screen change, while
+  its round id, round number, running/paused state, `endsAt`, chosen sharer and stems all still are.
+  **THE HALF THAT WOULD HAVE BEEN WORSE THAN THE BUG: `/live-flow` WAS RENDERING THE RELAYED
+  COUNT.** Once the tick is stripped, the number a surface shows can only come from the deadline -
+  and `/live-flow` read `phase.secondsLeft` straight out of the snapshot, so the strip on its own
+  would have frozen the round clock on thirty Chromebooks for a whole discussion, which is a worse
+  classroom failure than the storm it removes. It derives through `liveTimerSeconds` off
+  `phase.endsAt` now, with the banked count as the paused/finished fallback, on the 1s heartbeat
+  `580e395` gave it. `/teacher/present`, `/teacher/pace` and `/teacher/remote` were already safe:
+  Control mirrors the round's clock into `timer` (same `endsAt`), and all three read it through
+  `liveTimerSeconds`. `/control` and `DiscussionProtocol` own that clock locally and are the
+  PUBLISHER, not consumers of it. The contract pins the `/live-flow` derivation as well, because a
+  frozen clock on a classroom screen is both a live-class failure and a silent one.
+  KNOWN, DELIBERATE, AND IDENTICAL TO THE LESSON TIMER'S EXISTING BEHAVIOUR: adjusting a PAUSED
+  round by -15s changes only `secondsLeft`, so it does not ping and the room picks it up on the next
+  poll (about 1.5s to 3s). Nothing is ticking while paused, so this can never storm. Stripping only
+  when the entry carries a live `endsAt` would close it, and was left alone rather than change the
+  lesson timer's behaviour as a drive-by.
+  ANY NEW TOP-LEVEL SNAPSHOT KEY CARRYING A PER-SECOND COUNTDOWN HAS THIS BUG BY DEFAULT. The
+  projection is a named set now rather than one special case, but it is still a list somebody has to
+  remember to add to - and the paired question is always which surface RENDERS that count, because
+  the strip and the deriving consumer have to land together.
+  (3) **The student surfaces must call `invalidateSharedSessionState` BEFORE
   re-reading**, or the shared cache serves a value up to 2.8s old and the ping looks like it did
   nothing. (4) **The payload carries nothing.** It says "something changed"; each surface then
   re-reads through the gated endpoint it already used, so `studentSafeLiveFlow`, the teacher gate and
@@ -2191,6 +2597,25 @@ the invariants they protect are easy to break again.
   stamped with the sequence index it was issued at and expires on the next advance with no clearing
   code anywhere. The strip DOES cross `studentSafeLiveFlow` on purpose - "voice 0" is announced to the
   room and painted on two projectors, and a head-down student needs the same read the room gets.
+- **FIXED 2026-08-06: THE STRIP'S TOP OFFSET NOW ANCHORS TO THE CLOCK, NOT TO A BARE `vh` GUESS**
+  (Steele reported the strip crowding the countdown clock, scene-dependent, tightest on the
+  Divisibility Rules tool scene). `ClassroomStateStrip.tsx`'s `.css-strip` used
+  `top:clamp(10px,1.4vh,20px)`, measured from the strip's positioned ancestor with nothing in that
+  clamp ever reading the clock's actual position - same top-right corner, two unrelated numbers.
+  MEASURED, NOT REPRODUCED: every catalog scene at 1280x720 through 1920x1080 on both `/teacher/present`
+  and `/teacher/pace` (via `getBoundingClientRect()` on `/demo/present` and `/demo/pace` in
+  `?studioPreview=1` mode) held a >=23px gap in every one - the old clamp never actually shrank
+  scene to scene. But that margin was a COINCIDENCE of two fixed-pixel budgets (the clock's own
+  centering inside a fixed-height topbar row, plus the clamp), not a designed guarantee, so it would
+  erode silently if either budget ever changed. `.css-strip`'s `top` now reads
+  `var(--css-strip-top, clamp(10px,1.4vh,20px))` - the clamp is still the default for any consumer
+  that never sets the variable - and `/teacher/present`'s `.stage-work` plus `/teacher/pace`'s
+  `.pw-body` (the strip's positioned ancestor on each surface, already starting exactly at the
+  topbar's bottom edge) each set `--css-strip-top:20px`. Real gap to the clock's bottom edge is now a
+  flat, resolution- and scene-independent ~33px on present and ~34px on pace. Extending this pattern
+  to a THIRD consumer means setting the same variable on ITS OWN positioned ancestor with ITS OWN
+  topbar height in mind - never copying the flat `20px` blind, and never touching
+  `ClassroomStateStrip.tsx`'s fallback clamp itself.
 - **FIXED 2026-08-03: A TEACHER-LOADED BANK CLIP WAS DECODED ON ONE AudioContext AND PLAYED ON
   ANOTHER.** Symptom Steele reported: cues he uploaded a clip for made no sound from the Stream
   Deck, while cues with no upload still fired their synthesized version. The two `installUserClip`
@@ -2210,6 +2635,29 @@ the invariants they protect are easy to break again.
   This got more urgent when the clips were committed to `public/sounds/`, because `userBuffers`
   WINS over `fileBuffers` - one broken restored buffer would shadow a perfectly good committed file
   and the button would be silent with the right clip sitting right there.
+  **THAT FIX LEFT THE UPLOAD CALL SITE WITH THE IDENTICAL DEFECT, AND IT COST A REAL CLASS PERIOD
+  BEFORE ANYONE CAUGHT IT** (2026-08-06). The 2026-08-03 fix above only touched the RESTORE call
+  site. The UPLOAD call site (`uploadSound` in `/control`, ~line 3136) still passed the raw
+  `audioCtxRef.current` straight into `installUserClip` - and that ref is null at upload time for
+  the exact reason the restore site's was: `genTone`/`ensureAudioCtx` build it lazily on the first
+  CUE, and uploading a clip touches neither. So a clip uploaded before any cue had ever played on
+  that machine decoded on `soundBank.ts`'s own private `sharedContext()` while playback always ran
+  on `/control`'s `audioCtxRef.current` - a mismatch this file already names as the failure mode
+  two paragraphs up, on the other call site. Reported live: cues Steele had uploaded a clip for
+  played silently from the Stream Deck for a full ~50-minute period, while the synthesized
+  built-ins fired fine. Fixed by swapping in `ensureAudioCtx()` there too, mirroring the restore
+  site exactly - the whole change is one identifier. THE LESSON: when a fix names two call sites
+  with the same defect and only shows the diff for one, check the other actually changed too,
+  because "the two call sites disagreed" is not the same claim as "both call sites now agree."
+  A SECOND, STILL-LATENT DEFECT WAS FOUND AND CLOSED THE SAME DAY. Chrome suspends an
+  `AudioContext` when its tab is hidden, and `/control` is backgrounded behind fullscreen
+  `/teacher/present` for the entire period (see the CONTROL IS THE ROOM'S AUDIO HOST bullet under
+  rule 6) - nothing resumed it deterministically. `playSoundCue`'s own `.resume()` is fire-and-forget
+  and un-awaited, so `src.start()` can still fire on a still-suspended clock a moment later, and
+  `armSoundBank` - the one function in `soundBank.ts` that DOES await resume - has zero call sites
+  anywhere in the app. A new `visibilitychange` listener on `/control` now resumes the context the
+  instant the tab is shown again, healing it before the teacher's next tap instead of leaving the
+  first cue of a period to gamble on the race.
 - **STATE MUSIC IS STOP-FIRST, AND CUES DUCK IT RATHER THAN STACK ON IT** (both found live
   2026-08-02, Steele: "a song that plays the whole time and then a sound when the first time alert
   and then another when time is up and they all played on top of eachother and the song continued
@@ -2353,6 +2801,18 @@ the invariants they protect are easy to break again.
   productive. They are NOT a mechanism that acts on students - do NOT wire "promote on Got it"
   (release the Big Dog Challenge, bump a drill level). The `promoted` column exists and the POST
   accepts it, but nothing sends it and nothing should without his word.
+- **IN-LESSON CHECK RESULTS DO NOT RENDER ON THE ROOM SCREENS** (Steele, 2026-08-06: "the results of
+  the fist of 5, and both ready checks do not need to show up on the screens. I should see it on the
+  ipad"). `/teacher/present`, `/teacher/pace` and `/live-flow` show a live poll's QUESTION and a
+  response COUNT, never the answer distribution: the fist-to-five histogram on pace, the
+  `.stage-results` tally + "Class Results" heading swap on present, and any student-facing class view
+  are GONE (structured-numeric was already prompt-only). The teacher reviews the distribution on
+  `/teacher/remote` (Private response data + `VisitListPanel`) - that path is UNTOUCHED. `reveal-results`
+  still flips `poll.stage` to `results`; the projectors keyed their reveal off `poll.stage` + `poll.kind`,
+  so the reveal is removed by RENDERING, not by blocking the action. THE OLDER POLL-RENDERING NOTES IN
+  THIS FILE STILL DESCRIBE THAT HISTOGRAM/TALLY - it no longer draws, and that removal is deliberate;
+  do not "restore" it. Shipped on branch `claude/student-device-screen-sync-86e1e3` (verified in the
+  browser on both projectors + 4 contract suites); lands on `main` when that branch is deployed.
 - **CITY ROUTES IS DELETED** (Steele, 2026-07-28): "moot now that we aren't moving around." Nobody
   moves, so three named work stations with staged movement had no job left, and the visit list
   replaced it. Removed: `src/lib/cityRoutes.ts`, `CityRoutesPanel.tsx`, `CityRouteCard.tsx` (the
@@ -2470,9 +2930,96 @@ the invariants they protect are easy to break again.
   is now a partial index over OPEN sessions only, so codes are reusable across days. REDESIGNED
   2026-07-26 (Steele's call): after the code is accepted the landing is the HOME BASE, full stop -
   lesson card, warm-up card, and /lesson, /practice, /explore links that are NEVER locked. No
-  gate view, no "keep this page open". The warm-up card shows Open today's warm-up when a form
-  exists (tracked per token in `sessionStorage['bdm-warmup-opened']`, softening to Reopen) and a
-  calm "No warm-up loaded yet" when none does. Three mechanisms replaced the old load-bearing
+  gate view, no "keep this page open".
+  **THE LINK GRID IS GONE AND THE WARM-UP IS EMBEDDED IN THE PAGE (Steele, 2026-08-05: "right now
+  they have access to the tools the lesson and the warm up").** The accepted-code view is now the
+  warm-up and NOTHING else - the /lesson, /practice and /explore cards were deleted, permanently,
+  not hidden behind a state. Where a student goes next is the teacher's call: the Notion pick
+  below, then class-mode sync. `/explore` and `/demo` are untouched on the CODE-ENTRY view, which
+  is a different screen. The `/homework-help` chip SURVIVES the cut - it is a support affordance
+  for a stuck student rather than somewhere to wander, and this file pins it to this view.
+  The form renders in an `<iframe>` (`.st-warmup-frame`, Google's supported `?embedded=true`)
+  instead of opening a tab. `embeddedFormUrl` EXTENDS the personalized URL rather than rebuilding
+  it - the prefill query carries the receipt token (`entry.NNN=<token>`), so dropping the query
+  breaks identity while the form still looks perfectly fine on screen.
+  **THERE IS NO CSP PROBLEM ON `/`, AND THAT IS LUCK, NOT DESIGN.** `next.config.ts` scopes its
+  `frame-src` header to `/:path(teacher|board|ipad|lesson)(.*)`, so the landing has no framing
+  policy at all. Move that header to a global `source` and the warm-up goes blank.
+  **THE ONE REAL RISK, AND IT CANNOT BE DETECTED AHEAD OF TIME:** a browser not already signed in
+  to the district Google account gets Google's sign-in interstitial, which sends
+  `X-Frame-Options: DENY` and renders a BLANK BOX inside the iframe. On a Chromebook already
+  signed in it embeds fine. That is why the "Warm-up not showing up?" new-tab escape is
+  load-bearing rather than polite - do not tidy it away. NOT VERIFIED ON A REAL DISTRICT ACCOUNT:
+  the embed was proven locally, but the sign-in case needs a Chromebook and a live session.
+  **GOOGLE FORMS CANNOT REDIRECT BACK ON SUBMIT. THERE IS NO SUCH FEATURE, AND NO AMOUNT OF
+  IFRAME WORK CHANGES IT** - the iframe is cross-origin and can never report a submission. The
+  site learns of one exactly one way, the way it always has: Apps Script `onFormSubmit` ->
+  `/api/student/warmup-verify` -> `WarmupJoinSync`'s 3s poll on `/api/student/warmup-status` ->
+  `identityReady`. So the handoff hangs off VERIFICATION, never off anything the embed does.
+  Consequence worth stating plainly: **until the Workspace half of the FERPA cutover lands
+  (`supabase/FERPA-CUTOVER.md` steps 2 and 6), nothing writes `completed_at`, so the handoff can
+  never fire and every student sits on the embedded form.** That is not a bug in this feature.
+  **THE CHALLENGE A STUDENT LANDS IN IS PICKED IN NOTION** - a `Warm-Up Challenge` SELECT on the
+  lesson, read by `notionLessons.ts` through `propByName` (never an exact-string lookup; the
+  hyphen in that name is exactly what fails silently), carried to the student on the public
+  `/api/today` payload, and resolved by `src/lib/warmupChallenge.ts`.
+  **THE PROPERTY EXISTS AS OF 2026-08-06, AND UNTIL IT DID THE WHOLE HANDOFF WAS DEAD.** This
+  entry used to read "THE NOTION PROPERTY DOES NOT EXIST YET AND MUST BE CREATED BY HAND", and
+  that was the bug: the reader shipped first on purpose, nobody created the property, so
+  `propByName` found nothing, `/api/today` returned `warmupChallenge: ""`, the landing set
+  `challenge` to null and the handoff effect returned on its first line. Steele reported it as
+  "the student entry still does not trigger the practice multiplication skill once the warm up is
+  submitted" - verification was firing correctly the whole time, there was simply nowhere queued
+  to send them. The lesson generalises: an authorable property the runtime ignores and an
+  authorable property that does not exist present IDENTICALLY, and the first thing to check is
+  the data source schema, not the code.
+  **AND ADDING IT THROUGH THE API IS SAFE - THE OLD WARNING HERE WAS WRONG.** This entry claimed
+  "Adding the select through the API would mean re-declaring every option (the DDL has no ADD
+  OPTION), which risks orphaning existing values, so it is a UI click". That hazard is real for
+  ADDING AN OPTION TO AN EXISTING SELECT (see the `Response Mode` drift), and it does not apply to
+  CREATING A NEW PROPERTY: there are no existing values to orphan, and
+  `PATCH /v1/data_sources/<id>` with only the new property in `properties` MERGES - the other 77
+  were untouched, verified by count before and after.
+  **NOTION REFUSES A COMMA INSIDE A SELECT OPTION NAME**, and one engine label
+  ("Fraction, Decimal, Percent") has two - so the option in Notion is `Fraction Decimal Percent`
+  and is NOT character-identical to the label in `challengeSkills.ts`. That only resolves because
+  `normalize()` strips punctuation before matching. `npm run test:warmup-challenge` pins the
+  comma-free form of every label, so making the match stricter fails loudly instead of silently
+  dropping the one option a teacher picked.
+  **TWO PROPERTIES THAT NORMALIZE ALIKE ARE A SILENT COIN-FLIP, AND IT HAPPENED THE SAME DAY.**
+  `propByName` iterates `Object.entries(properties)` and returns the FIRST key whose normalized
+  name matches (`notionLessons.ts:269-271`), so `Warm up Challenge` and `Warm-Up Challenge` both
+  normalize to `warmupchallenge` and which one the site reads depends on NOTION'S PROPERTY ORDER -
+  not on the order of the names passed in, which is the natural assumption and is wrong. Both
+  existed for a few minutes on 2026-08-06 (one hand-created in the UI while the other was created
+  through the API), and the EMPTY one sat at position 22 against position 28, so it won: the
+  15-option property was unreachable and any per-lesson pick would have been discarded with the
+  whole class sent to the default instead. Resolved by deleting the empty one, leaving exactly one
+  key that normalizes to `warmupchallenge` - which is the invariant to preserve. Before
+  hand-creating a property the code already reads, check the schema for one that normalizes the
+  same way; the failure is invisible from every surface.
+  `WARMUP_CHALLENGE_OPTIONS` is DERIVED from `SKILLS`, so a Notion option can never name a drill
+  the engine does not have. `multiplication` is the one deliberate override, pointing at
+  `/multiplication-fluency` (Steele's first-few-weeks default); every other skill resolves to
+  `/practice?skill=<key>`, which is why `/practice` gained that param - it preselects but
+  deliberately does NOT auto-start, because the round is a 90-second clock and starting it while
+  a student is still reading spends their time for them.
+  **UNSET AND UNRESOLVED ARE DIFFERENT, AND THE LANDING MUST CALL `warmupChallengeDestination`,
+  NOT `warmupChallengeHref`** (2026-08-06, Steele's call). An UNSET property means nobody picked -
+  the common case, and the one that left the handoff dead - so it takes the multiplication default
+  and the feature works every day rather than only on the days someone remembered. An
+  AUTHORED-BUT-UNRESOLVED value still resolves to "" and parks the student, because that is an
+  authoring mistake and defaulting it would land the class somewhere plausible with nothing saying
+  the pick was dropped: a teacher who typed "Fraction Practice" would never find out. The resolver
+  `warmupChallengeHref` stays pure and still returns "" for both; the split lives in
+  `warmupChallengeDestination`. `npm run test:warmup-challenge` pins both directions and
+  `student-warmup-home-contract.mjs` pins that the landing calls the destination - mutation-tested
+  both ways, since an assertion nobody has seen go red is decoration.
+  The warm-up card shows a
+  calm "No warm-up loaded yet" when no form is connected. `sessionStorage['bdm-warmup-opened']`
+  is still written (a replaced form rotates the token) but no longer drives a render state -
+  the embed means there is no "opened in the other tab" condition left to show.
+  Three mechanisms replaced the old load-bearing
   lock: (1) code entry stores a PROVISIONAL student session (`saveProvisionalStudentSession` in
   liveClassFlow - sessionId with empty studentId) so ClassSync follows the class immediately,
   meaning the teacher advancing past warm-up pushes EVERY device that typed the code, verified
@@ -2495,9 +3042,15 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 - Stage gates per standard: accuracy-only caps at `approaching`; a Tier-2 checkpoint >=80% (produced
   work) reaches `mastered`; two such checkpoints >=3 weeks apart plus the SBAC-modeled item reach
   `complete`; a later <50% regresses.
-- Misconceptions are a FINITE exact-match vocabulary (13 tags, no NLP); clustering keys on exact string
-  match. Unmatched wrong choices map to `other`. Engine: `src/lib/grouping.ts`; archetype-templated next
-  moves, optionally Claude-sharpened via `/api/live/next-move`.
+- Misconceptions are a FINITE exact-match vocabulary (**36 tags** as of 2026-08-06, no NLP); clustering
+  keys on exact string match. Unmatched wrong choices map to `other`. Engine: `src/lib/grouping.ts`;
+  archetype-templated next moves, optionally Claude-sharpened via `/api/live/next-move`.
+  **Do not hardcode the count anywhere.** `src/lib/misconceptions.ts` is the source of truth, is
+  type-enforced at every call site, and `npm run test:misconceptions` asserts parity with the
+  `supabase/proficiency.sql` seed in both directions. This line said 13 until 2026-08-06, and the
+  same stale 13 had propagated into the `lesson-deployment-builder` skill and its references while
+  `classroom-os-context` carried an equally wrong 18 - three documents, three numbers, none correct,
+  because each recorded a count instead of pointing at the file. Count from `misconceptions.ts`.
 
 ## Design system
 
@@ -2577,8 +3130,31 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   interactions live flat on the cream ground, only the flat amber stop-note and the deep Yes button
   keep a fill); the ACTIVE step PULSES (movement reads as "you are here" better than a static
   highlight); and the content FILLS THE SCREEN height and width (`max-width:min(1500px,96vw)`, rows
-  `flex:1 1 0` to a `min-height:calc(100vh-210px)`, compacting once the run is done so a closing stage
+  filling a `min-height:calc(100vh-210px)`, compacting once the run is done so a closing stage
   gets the room). Do not "restore" the 3-column /divisibility.
+  **THE ROWS ARE `flex:1 1 auto`, NOT `flex:1 1 0` - THE ZERO BASIS WAS A BUG** (fixed 2026-08-05;
+  this line SAID `flex:1 1 0` until then, so a future agent "restoring" it would put the bug back).
+  A zero basis hands every row an identical share of the table height REGARDLESS OF CONTENT, and the
+  ACTIVE row is the only one carrying three stacked things - the evidence card, the question, and the
+  Yes/No buttons - against rows showing one line of rule text. Measured on Steele's own 1470x803: the
+  row was 95px, its `.dv-c-res` was 109px, and the buttons hung 25px PAST the row's bottom edge into
+  the next row's band. His report was "the factor column doesnt line up and cuts a row in half, the
+  rest of the row isnt centered".
+  THE SECOND HALF OF THAT REPORT LOOKED LIKE A SEPARATE COMPLAINT AND WAS THE SAME BUG, which is the
+  transferable part. The three columns were ALWAYS centred on one line - rule, number and factor all
+  sit at mid 217, before and after. What had escaped was the SHADED BAND: it was 95px drawn around
+  109px of content, so the rule and the number read as off-centre against a band their own answer had
+  broken out of. Do not go hunting for an alignment bug in a row whose content is overflowing it -
+  fix the overflow and the alignment complaint goes with it.
+  An auto basis measures content first and shares out only the remainder, so the tall row asks for
+  what it needs. `.dv-table.done .dv-trow` overrides the flex outright, so the closing compaction is
+  untouched. Verified by driving a full run at 1470x803, 1366x768 and 1280x720.
+  SEPARATE AND STILL OPEN: the page ALREADY scrolled below the table before this (53px at 1470x803,
+  117px at 1280x720), because `min-height:calc(100vh - 210px)` under-counts the chrome above and
+  below the table - the table's top is at y=153 and there is content beneath it, so 210 is short by
+  about 70px. Letting the active row grow adds ~19px to that. This was deliberately NOT folded into
+  the bug fix; the tool's stated rule is that it fills the screen, so the subtrahend is the thing to
+  revisit, not the row flex.
 - TACTILE DRAG BEATS CLICKING on any manipulative where a piece goes into a slot (Steele, 2026-07-31:
   "students need to see the process of pulling the part, just like they would in person. just clicking
   it doesnt create the same sense of movement and engagement"). `FractionBarsBoard` has the reusable
@@ -2631,6 +3207,27 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   testing nothing the room could see. When a string anchor survives a redesign, confirm WHICH
   occurrence is matching before trusting it, and never re-add UI to a classroom surface just to make
   an anchor pass. (Main renders no logo by design; putting it back is Steele's call.)
+  A THIRD WAY A CONTRACT PASSES ON THE WRONG ELEMENT, AND IT IS THE CHEAPEST ONE TO HIT
+  (2026-08-05): **a class name appears in the page's own `<style>` block as well as in the JSX,
+  so `source.includes("st-warmup-frame")` stays green when the element is gone.** Caught by
+  mutation-testing the brand-new assertion: renaming the iframe's className left the contract
+  passing, because the CSS rule alone satisfied it. Every page in this repo styles itself with an
+  inline `<style>` template literal, so EVERY class-name assertion in every contract has this
+  hazard. Anchor on the rendered element instead - slice the tag (`sliceBetween(home, "<iframe",
+  "/>")`) and assert the className and the props inside that slice. Same family as the
+  `/teacher/present` logo anchor and the dropped `.dh-slot.act` rule; the general rule is
+  unchanged and keeps earning its place: WRITE THE MUTATION TEST, because an assertion you have
+  not seen go red is decoration.
+  CONTRACTS THAT COMPILE A LIB IN ISOLATION CANNOT USE `@/` - AND THE FIX IS TO STAGE COPIES, NOT
+  TO CRIPPLE THE SOURCE. `--ignoreConfig` is REQUIRED (tsc refuses to load tsconfig.json when
+  files are named on the command line) and it drops the path aliases, so a compile straight from
+  `src/` dies with "Cannot find module '@/lib/challengeSkills'" - a failure that looks nothing
+  like its cause. `mastery.ts`, `grouping.ts`, `soundBank.ts` and `notionLessonArchive.ts` solve
+  this by having NO local imports at all, which is why this file keeps warning about it.
+  `warmup-challenge-contract.mjs` does it the other way: it copies both files to a temp dir
+  rewriting `@/lib/x` to `./x.js` (the `.js` matters - Node's ESM loader will not resolve an
+  extensionless specifier, and tsc emits the specifier verbatim). Prefer that when the module
+  genuinely belongs in the app's normal import style.
   Dependencies are pinned EXACT in package.json (they were "latest" until 7/27 - never revert
   that; an unreviewed Next/React major landing on a school-morning deploy is the failure mode).
   `scripts/proxy-gate-contract.mjs` asserts every PROTECTED_PREFIX has its `/:path*` matcher
@@ -2679,7 +3276,7 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   is how "the wall is missing the feature" happens (cost a live confusion 2026-07-22: the
   projector's present tab predated the glass sheet entirely). `DeployRefresh` (root layout) polls
   the public `/api/build-id` on display routes (/board, /teacher/present, /teacher/pace,
-  /live-flow, /warmup, /weekly-display - the pace projector and the all-day TVs joined
+  /live-flow, /weekly-display - the pace projector and the all-day TVs joined
   2026-07-27; they are the longest-open tabs in the building and were silently missing
   deploys - and /teacher/scoreboard joined 2026-08-03 when it became a first-class
   second-screen card on the teacher home; it holds no local state a reload could lose,

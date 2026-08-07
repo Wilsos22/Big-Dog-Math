@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useLiveFlowPing } from "@/lib/liveFlowPing";
 import ClassroomSpinner from "@/components/ClassroomSpinner";
+import FullscreenButton from "@/components/FullscreenButton";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
 import SlideFrameScene from "@/components/SlideFrameScene";
 import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
@@ -12,6 +13,7 @@ import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
 import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { parseDiscussionPhases, discussionStageCountdown, DISCUSSION_MODE_LABEL } from "@/lib/discussionPhases";
+import { galleryWalkPhasesFromRoutine, galleryWalkStageCountdown } from "@/lib/galleryWalkTimer";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { teacherApiRequest } from "@/lib/teacherApi";
 import { LIVE_FLOW_MODE, getStoredTeacherSessionId, liveTimerSeconds, type LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
@@ -236,6 +238,23 @@ export default function PaceSupportPage() {
   const mirroredSlideFit = mirroredSlideStep?.slideFit === "cover" ? "cover" : "contain";
   const spinnerSyncScope = `${flow?.sequence?.currentIndex ?? -1}:${flow?.presentation?.notionStepId || state?.id || "spinner"}`;
   const routineConfig = flow?.presentation?.routineConfig || null;
+  // The Gallery Walk rotation, computed from the SAME authored config and the
+  // SAME state clock the projector uses, so the two screens never disagree about
+  // which station the room is on. Silent here - see the branch below.
+  const galleryWalkBuild = routineConfig?.kind === "gallery-walk"
+    ? galleryWalkPhasesFromRoutine(routineConfig)
+    : null;
+  const galleryWalkTimeline = galleryWalkBuild?.ok && (timer?.totalSeconds ?? 0) > 0
+    ? galleryWalkBuild
+    : null;
+  const galleryWalkStage = galleryWalkTimeline
+    ? galleryWalkStageCountdown(
+        galleryWalkTimeline.phases,
+        timer?.totalSeconds ?? 0,
+        timerSeconds,
+        galleryWalkTimeline.beepWindowSeconds,
+      )
+    : null;
   // The classroom state strip. The authored values come with the step; the
   // override is server-authored and expires on the next advance. Words under the
   // glyphs come off with ?words=off once the room reads the strip cold - the
@@ -423,7 +442,12 @@ export default function PaceSupportPage() {
         .pw-textbtn { min-width:40px; min-height:30px; border:1.2px solid var(--hair); border-radius:8px; background:var(--card); color:var(--head); font:inherit; font-size:0.78rem; font-weight:800; cursor:pointer; }
         .pw-textbtn:hover:not(:disabled) { border-color:var(--acc); }
         .pw-textbtn:disabled { opacity:0.4; cursor:default; }
-        .pw-body { position:relative; min-height:0; overflow:hidden; }
+        /* --css-strip-top: see the matching note on .stage-work in
+           /teacher/present. .pw-body starts exactly at the 64px topbar's
+           bottom edge, itself below the vertically-centered clock, so 20px
+           from here is a real floor under the clock's bottom edge - not the
+           vh clamp ClassroomStateStrip.tsx falls back to when this is unset. */
+        .pw-body { position:relative; min-height:0; overflow:hidden; --css-strip-top:20px; }
         .pw-cols { position:absolute; inset:0; display:grid; grid-template-columns:minmax(0,1.35fr) minmax(280px,0.65fr); gap:clamp(18px,3vw,40px); padding:clamp(24px,3.6vw,52px); }
         .pw-left { min-width:0; display:flex; flex-direction:column; gap:clamp(14px,2.2vh,22px); }
         .pw-action { margin:0; color:var(--head); font-size:clamp(1.8rem,3.4vw,3.3rem); line-height:1.06; font-weight:800; letter-spacing:-0.02em; text-wrap:balance; }
@@ -481,6 +505,7 @@ export default function PaceSupportPage() {
         <span className="pw-textbtns" aria-label="Text size">
           <button className="pw-textbtn" type="button" onClick={() => adjustTextScale(-0.25)} disabled={textScale <= 1} aria-label="Smaller text">A-</button>
           <button className="pw-textbtn" type="button" onClick={() => adjustTextScale(0.25)} disabled={textScale >= 2.5} aria-label="Bigger text">A+</button>
+          <FullscreenButton className="pw-textbtn" />
         </span>
         <span className={`pw-timer${timerFinished ? " finished" : ""} ${timerUrgencyClass(currentTimerUrgency)}`} aria-label="Class timer">
           {previewSample ? "5:00" : timer ? formatTime(timerSeconds) : "--:--"}
@@ -635,31 +660,73 @@ export default function PaceSupportPage() {
               ) : (
               <>
               <p className="pw-check-title">Fist to five</p>
-              {poll.stage === "results" ? (
-                <>
-                  <h2 className="pw-check-prompt">Where we are as a class</h2>
-                  <div className="pw-bars" aria-label="Anonymous Fist-to-Five results">
-                    {["0", "1", "2", "3", "4", "5"].map((choice) => {
-                      const count = pollAnswers.filter((answer) => answer.answer === choice).length;
-                      const maxCount = Math.max(1, ...["0", "1", "2", "3", "4", "5"].map((value) => pollAnswers.filter((answer) => answer.answer === value).length));
-                      return (
-                        <div className="pw-bar-column" key={choice}>
-                          <div className="pw-bar-track"><div className="pw-bar-fill" style={{ height: `${Math.max(4, Math.round((count / maxCount) * 100))}%` }} /></div>
-                          <span className="pw-bar-label">{choice}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p className="pw-check-count">Anonymous class results. {pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"}.</p>
-                </>
-              ) : (
-                <>
-                  <h2 className="pw-check-prompt">Answer on your Chromebook</h2>
-                  <p className="pw-check-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received. Names stay private.</p>
-                </>
-              )}
+              {/* No class histogram on the support projector (Steele, 2026-08-06:
+                 the fist-to-five distribution is for the teacher on the iPad, not
+                 the room). The support screen shows the question and the count in
+                 every stage, matching the other kinds above; the anonymous
+                 "Where we are as a class" bars that used to draw at results stage
+                 are gone. The teacher reads the distribution on /teacher/remote. */}
+              <h2 className="pw-check-prompt">Answer on your Chromebook</h2>
+              <p className="pw-check-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received. Names stay private.</p>
               </>
               )}
+            </div>
+          </div>
+        ) : galleryWalkTimeline && routineConfig?.kind === "gallery-walk" ? (
+          /* Gallery Walk, running. Same division of labour as the discussion
+             timeline: the SEQUENCE of stations lives on the main projector; this
+             screen carries the one number the room is working against - time
+             left AT THIS STATION - and the authored prompts as the language.
+             SILENT ON PURPOSE. This screen has no audio-arming affordance (no
+             AttentionPulse is mounted here), so a beep from it could be blocked
+             with nothing on screen to say so. The red pulsing number inside the
+             beep window is this screen's copy of the cue, and it keys off the
+             same engine flag the projector's beep does. */
+          <div className="pw-cols">
+            <div className="pw-left">
+              <p className="pw-callout-label">
+                Gallery Walk - {routineConfig.stationCount} station{routineConfig.stationCount === 1 ? "" : "s"}
+              </p>
+              <h2 className="pw-action">
+                {galleryWalkStage && !galleryWalkStage.done && galleryWalkStage.phase
+                  ? galleryWalkStage.phase.direction
+                  : routineConfig.recordPrompt}
+              </h2>
+              <div className="pw-callout">
+                <p className="pw-callout-label">Notice</p>
+                <ul className="pw-stems"><li>{routineConfig.observationPrompt}</li></ul>
+                <p className="pw-callout-label">Move</p>
+                <ul className="pw-stems"><li>{routineConfig.movementDirections}</li></ul>
+              </div>
+              {timer ? (
+                <div className="pw-pace">
+                  <span
+                    className={`pw-bigtimer pw-bigtimer-stage${timerFinished ? " finished" : ""} ${timerUrgencyClass(
+                      timerUrgency(
+                        galleryWalkStage && !galleryWalkStage.done ? galleryWalkStage.secondsLeft : timerSeconds,
+                        { running: Boolean(timer?.running), finished: timerFinished },
+                      ),
+                    )}`}
+                  >
+                    {formatTime(galleryWalkStage && !galleryWalkStage.done ? galleryWalkStage.secondsLeft : timerSeconds)}
+                  </span>
+                  <span className="pw-pace-copy">
+                    <b>{galleryWalkStage?.phase?.label || state.label}</b>
+                    <span>
+                      {galleryWalkStage && !galleryWalkStage.done
+                        ? "Left at this station"
+                        : "Shared class clock"}
+                    </span>
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <div className="pw-right">
+              <div className="pw-vocab">
+                <span className="pw-tape" aria-hidden="true" />
+                <div className="pw-term"><span className="pw-term-dot" />Share</div>
+                <p className="pw-def">{routineConfig.sharePrompt}</p>
+              </div>
             </div>
           </div>
         ) : hasDiscussionTimeline ? (

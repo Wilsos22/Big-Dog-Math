@@ -71,6 +71,12 @@ export default function IpadPage() {
   const [boardStatus, setBoardStatus] = useState<InkConnectionStatus>("connecting");
   const [barkCooling, setBarkCooling] = useState(false);
   const [screenAr, setScreenAr] = useState(16 / 9);
+  // TEMP DIAGNOSTIC (2026-08-07): a real pointer-event counter, visible only
+  // behind ?debug=1, chasing a dropped-stroke report a synthetic browser test
+  // could not reproduce. Remove this state, the URL read below, and the
+  // overlay JSX once that's found - it is not classroom UI.
+  const [debug, setDebug] = useState(false);
+  const [debugCounts, setDebugCounts] = useState<{ down: number; move: number; up: number; log: string[] } | null>(null);
   // Mirrored from InkBoard, which owns the zoom, and applied to the SLIDE so
   // the content moves with the writing. The ink needs no CSS transform - it is
   // redrawn vectorially at the new scale, which is what keeps it sharp.
@@ -110,8 +116,10 @@ export default function IpadPage() {
 
   useEffect(() => {
     try {
-      const r = new URLSearchParams(window.location.search).get("room");
+      const params = new URLSearchParams(window.location.search);
+      const r = params.get("room");
       if (r) setRoom(r.trim());
+      if (params.get("debug") === "1") setDebug(true);
       if (localStorage.getItem("bdm-ipad-tools-open") === "0") setToolsOpen(false);
     } catch { /* ignore */ }
   }, []);
@@ -283,7 +291,20 @@ export default function IpadPage() {
   return (
     <main className="ip-page">
       <style>{`
-        .ip-page { position:fixed; inset:0; background:var(--bdb-ground); font-family:var(--bdb-font); }
+        /* A touch that drags a few px on a text button (the palette is a row of
+           them) starts iOS's own text selection with the Copy/Look Up callout -
+           "highlighting the whole screen like select all" is that UI, not the
+           ink engine. user-select alone is not enough: -webkit-touch-callout is
+           the long-press menu, -webkit-tap-highlight-color is the grey flash on
+           tap, and none of the three is inherited reliably enough to skip
+           setting them on every descendant too. overscroll-behavior stops the
+           page rubber-banding under a stray drag near an edge. */
+        .ip-page, .ip-page * {
+          -webkit-user-select:none; user-select:none;
+          -webkit-touch-callout:none;
+          -webkit-tap-highlight-color:transparent;
+        }
+        .ip-page { position:fixed; inset:0; background:var(--bdb-ground); font-family:var(--bdb-font); overscroll-behavior:none; }
         .ip-topbar { position:fixed; top:10px; left:10px; z-index:30; display:flex; gap:8px; }
         .ip-handle { display:inline-flex; align-items:center; gap:8px; min-height:40px; padding:0 15px; border-radius:999px; border:1px solid rgba(32,30,26,0.14); background:rgba(255,255,255,0.72); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); font:inherit; font-weight:800; font-size:0.85rem; color:var(--bdb-ink); cursor:pointer; touch-action:manipulation; box-shadow:0 8px 22px rgba(40,32,20,0.14); }
         .ip-bark { display:inline-flex; align-items:center; min-height:40px; padding:0 16px; border-radius:999px; border:1px solid color-mix(in srgb, var(--bdb-amber) 65%, rgba(32,30,26,0.14)); background:var(--bdb-amber); color:var(--bdb-ink); font:inherit; font-weight:800; font-size:0.85rem; cursor:pointer; touch-action:manipulation; box-shadow:0 8px 22px rgba(252,175,56,0.35); }
@@ -454,6 +475,7 @@ export default function IpadPage() {
               onExport={handleExport}
               onHistoryChange={(undo, redo) => setHistory({ undo, redo })}
               onConnectionChange={setBoardStatus}
+              onDebugCounts={debug ? setDebugCounts : undefined}
             />
           </div>
           <span className="ip-screen-note">
@@ -461,6 +483,23 @@ export default function IpadPage() {
           </span>
         </div>
       </div>
+
+      {/* TEMP DIAGNOSTIC - only behind ?debug=1, never classroom UI. Remove
+          with the state above and onDebugCounts in InkBoard once the
+          dropped-stroke bug is found. */}
+      {debug && debugCounts && (
+        <div style={{
+          position: "fixed", bottom: 10, right: 10, zIndex: 999,
+          background: "rgba(0,0,0,0.85)", color: "#0f0", fontFamily: "monospace",
+          fontSize: "11px", padding: "8px 10px", borderRadius: 8,
+          maxWidth: "min(480px, 92vw)", pointerEvents: "none", lineHeight: 1.5,
+        }}>
+          <div>down={debugCounts.down} move={debugCounts.move} up={debugCounts.up}</div>
+          <div style={{ marginTop: 4, whiteSpace: "pre-wrap", opacity: 0.85 }}>
+            {debugCounts.log.slice(-8).join("\n")}
+          </div>
+        </div>
+      )}
 
       {/* The pen surface never reloads itself - it holds the room's ink - so it
           has to SAY when a new build is waiting, or it silently runs old code

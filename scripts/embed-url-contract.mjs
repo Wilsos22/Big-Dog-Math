@@ -90,6 +90,57 @@ check("the same-origin label is distinguishable from a remote image", () => {
   );
 });
 
+// ---- Video -------------------------------------------------------------------------------------
+
+check("a same-origin mp4 resolves as a video, untouched", () => {
+  const source = resolveSlideSource("/lesson-videos/m1t1l2-d2-takis-arizonas.mp4");
+  assert.equal(source.kind, "video");
+  assert.equal(source.url, "/lesson-videos/m1t1l2-d2-takis-arizonas.mp4");
+  assert.equal(source.host, "");
+});
+
+check("webm rides along; other containers do NOT", () => {
+  assert.equal(resolveSlideSource("/lesson-videos/a.webm").kind, "video");
+  // A .mov plays on the teacher's Mac and may not on the projector's browser. A format that works
+  // at the desk and fails on the wall is the worst kind, so it is refused with a reason instead.
+  for (const bad of ["/lesson-videos/a.mov", "/lesson-videos/a.avi", "/lesson-videos/a.mkv"]) {
+    const source = resolveSlideSource(bad);
+    assert.equal(source.kind, "none", bad);
+    assert.ok(source.reason.length > 0, `${bad} needs a reason the studio can show`);
+  }
+});
+
+check("A REMOTE .mp4 IS NEVER SILENTLY FRAMED", () => {
+  // The bug this pins: before video existed, a remote .mp4 fell past the image branch into the
+  // catch-all website branch and the projector loaded it inside a sandboxed iframe - the browser's
+  // bare video shell racing a 4-second "page did not load" card. It rendered SOMETHING, so nobody
+  // ever reported it. An allowlisted host is a video; anything else is refused, never `site`.
+  const allowed = resolveSlideSource("https://bigdogmath.com/lesson-videos/a.mp4");
+  assert.equal(allowed.kind, "video");
+  const unknown = resolveSlideSource("https://cdn.example.com/a.mp4");
+  assert.equal(unknown.kind, "none", "an off-allowlist video must not become a framed website");
+  assert.notEqual(unknown.kind, "site");
+  assert.ok(unknown.reason.includes("lesson-videos"), "the refusal should point at the supported path");
+});
+
+check("a video is labelled distinguishably from an image", () => {
+  assert.equal(slideSourceLabel(resolveSlideSource("/lesson-videos/a.mp4")), "Video on this site");
+  assert.equal(slideSourceLabel(resolveSlideSource("https://bigdogmath.com/x/a.mp4")), "Video");
+});
+
+check("the same-origin guard covers video too", () => {
+  // Same escape the image path closes: `\` is a `/` to the URL parser for http(s), so
+  // `/\evil.com/a.mp4` resolves to https://evil.com/a.mp4 exactly as `//evil.com/a.mp4` does.
+  for (const bad of ["//evil.com/a.mp4", "/\\evil.com/a.mp4"]) {
+    assert.notEqual(resolveSlideSource(bad).kind, "video", bad);
+  }
+  // A PERCENT-ENCODED backslash is NOT an escape and must not be treated as one. `%5C` is left
+  // encoded by the URL parser, so `/%5Cevil.com/a.mp4` resolves to
+  // https://bigdogmath.com/%5Cevil.com/a.mp4 - our own origin, and a 404. Refusing it would be
+  // cargo-cult hardening, so this pins that it stays accepted.
+  assert.equal(resolveSlideSource("/%5Cevil.com/a.mp4").kind, "video");
+});
+
 // ---- Remote images -----------------------------------------------------------------------------
 
 check("an allowlisted host serves an image; an unknown host does not", () => {

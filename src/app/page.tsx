@@ -22,6 +22,11 @@ import {
   studentApiRequest,
 } from "@/lib/studentApi";
 import { STUDENT_SESSION_READY_EVENT } from "@/components/ClassSync";
+import { warmupChallengeDestination } from "@/lib/warmupChallenge";
+
+// Long enough that "Warm-up connected" is read as confirmation, short enough
+// that a student is not left wondering whether anything happened.
+const HANDOFF_PAUSE_MS = 1600;
 
 type WarmupSessionLesson = { code: string; title: string };
 
@@ -31,14 +36,26 @@ type WarmupSessionLesson = { code: string; title: string };
 // inside the district Workspace), and the site knows students by alias.
 const WARMUP_IDENTITY = process.env.NEXT_PUBLIC_WARMUP_IDENTITY_ENABLED === "true";
 
-// The home-base destinations. Never locked: warm-up verification runs
-// globally (WarmupJoinSync in the root layout), so navigating away no longer
-// strands the receipt chain the way it did when the polling lived only here.
-const HOME_LINKS = [
-  { href: "/lesson", title: "Today's lesson", desc: "The plan, goals, and what you need" },
-  { href: "/practice", title: "Challenge games", desc: "Pick a game and beat your score" },
-  { href: "/explore", title: "Explore the tools", desc: "Every math tool, free to try" },
-];
+// The home base is the WARM-UP AND NOTHING ELSE (Steele, 2026-08-05: "right now
+// they have access to the tools the lesson and the warm up"). The lesson /
+// practice / tools grid that used to sit here is gone: a student who types the
+// code has exactly one thing to do, and where they go after it is the teacher's
+// call - the Notion `Warm-Up Challenge` pick, then class-mode sync. The
+// /homework-help chip stays, because it is a support affordance rather than
+// somewhere to wander, and CLAUDE.md pins it to this view.
+
+// Google's official iframe form. Preserves the prefill query the receipt chain
+// rides on (entry.NNN=<token>) instead of rebuilding the URL - dropping it
+// would silently break identity while the form still looked fine on screen.
+function embeddedFormUrl(href: string): string {
+  try {
+    const url = new URL(href);
+    url.searchParams.set("embedded", "true");
+    return url.toString();
+  } catch {
+    return href;
+  }
+}
 
 export default function StudentLanding() {
   const router = useRouter();
@@ -57,6 +74,8 @@ export default function StudentLanding() {
   const [identityReady, setIdentityReady] = useState(false);
   const [helpRequestCode, setHelpRequestCode] = useState<string | null>(null);
   const [requestingHelp, setRequestingHelp] = useState(false);
+  const [challenge, setChallenge] = useState<{ href: string; label: string } | null>(null);
+  const [embedFailed, setEmbedFailed] = useState(false);
 
   useEffect(() => {
     // No student name of any kind on student devices (Steele, 2026-08-01) -
@@ -138,16 +157,26 @@ export default function StudentLanding() {
   // every load because Notion-hosted covers use short-lived signed URLs -
   // never store this value.
   useEffect(() => {
-    if (!pendingCode) { setTodayCover(null); return; }
+    if (!pendingCode) { setTodayCover(null); setChallenge(null); return; }
     let cancelled = false;
     fetch("/api/today", { cache: "no-store" })
       .then((response) => response.json())
-      .then((data: { lesson: { coverUrl?: string; lessonCode?: string } | null }) => {
-        if (!cancelled && data.lesson?.coverUrl) {
+      .then((data: { lesson: { coverUrl?: string; lessonCode?: string; warmupChallenge?: string } | null }) => {
+        if (cancelled) return;
+        if (data.lesson?.coverUrl) {
           setTodayCover({ url: data.lesson.coverUrl, lessonCode: data.lesson.lessonCode || "" });
         }
+        // Where they go the moment the warm-up is confirmed. An UNSET property
+        // takes the multiplication default, because the common case is a lesson
+        // nobody authored and this has to work every day rather than only on the
+        // days someone remembered. An UNRECOGNISED value still resolves to ""
+        // and leaves them here, which is the safe direction: a student parked on
+        // the home base is visible to the teacher, and an authoring mistake that
+        // silently sent the class somewhere plausible would never be found.
+        const destination = warmupChallengeDestination(data.lesson?.warmupChallenge);
+        setChallenge(destination.href ? destination : null);
       })
-      .catch(() => { /* the card simply stays coverless */ });
+      .catch(() => { /* the card simply stays coverless and no challenge is queued */ });
     return () => { cancelled = true; };
   }, [pendingCode]);
 
@@ -242,6 +271,21 @@ export default function StudentLanding() {
     window.addEventListener(STUDENT_SESSION_READY_EVENT, onReady);
     return () => window.removeEventListener(STUDENT_SESSION_READY_EVENT, onReady);
   }, []);
+
+  // The handoff. Google Forms cannot redirect on submit, so "they submitted" is
+  // never something the iframe tells us - it arrives through the receipt chain
+  // (Apps Script -> /api/student/warmup-verify -> WarmupJoinSync's poll), which
+  // is the same signal that flips identityReady. That is why this hangs off
+  // verification rather than anything the embed does.
+  //
+  // The pause is deliberate: landing on "Warm-up connected" and then moving is
+  // how a student knows the submission registered. Navigating instantly reads
+  // as the form having thrown them out.
+  useEffect(() => {
+    if (!identityReady || !challenge) return;
+    const id = window.setTimeout(() => router.push(challenge.href), HANDOFF_PAUSE_MS);
+    return () => window.clearTimeout(id);
+  }, [identityReady, challenge, router]);
 
   async function requestTeacherHelp() {
     if (!pendingCode || requestingHelp) return;
@@ -338,9 +382,9 @@ export default function StudentLanding() {
 
   const moduleNumber = sessionLesson?.code.match(/^M(\d+)/i)?.[1] || "";
   const topicNumber = sessionLesson?.code.match(/\.T(\d+)/i)?.[1] || "";
-  // Once opened for the current token, the warm-up button softens to
-  // "Reopen" and the status line watches for the submission.
-  const warmupOpened = Boolean(warmupToken && warmupOpenedFor === warmupToken);
+  // warmupOpenedFor is still tracked (markWarmupOpened writes it) because a
+  // replaced form rotates the token, but the embed means there is no longer an
+  // "opened in the other tab" state to render off it.
 
   return (
     <main className="st-page">
@@ -389,14 +433,13 @@ export default function StudentLanding() {
         .st-warmup-action { background:var(--bdb-amber); border-color:var(--bdb-amber); color:#3d2a12; font-weight:900;
           box-shadow:0 14px 28px -18px rgba(252,175,56,0.9); }
         .st-warmup-action:hover { border-color:var(--bdb-amber); color:#3d2a12; filter:brightness(1.03); }
-        .st-home-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-        @media (max-width:560px) { .st-home-grid { grid-template-columns:1fr; } }
-        .st-home-card { display:grid; gap:4px; align-content:start; text-decoration:none; border:1px solid #E3D9C2;
-          border-radius:var(--bdb-r); background:#fff; padding:12px 14px; box-shadow:0 2px 10px rgba(40,32,20,0.05);
-          transition:border-color 120ms; }
-        .st-home-card b { color:var(--bdb-ink); font-weight:800; font-size:0.95rem; }
-        .st-home-card span { color:var(--bdb-ink-soft); font-size:0.8rem; font-weight:600; line-height:1.35; }
-        a.st-home-card:hover { border-color:var(--bdb-teal); }
+        /* The embedded warm-up. Tall on purpose: a Google Form in a short frame
+           gets its OWN inner scrollbar, which on a Chromebook trackpad is how a
+           student misses the last question and submits five of six. 78vh keeps
+           the form scrolling with the page instead. */
+        .st-warmup-frame { width:100%; height:78vh; min-height:460px; border:1px solid #E3D9C2;
+          border-radius:var(--bdb-r); background:#fff; display:block;
+          box-shadow:0 2px 10px rgba(40,32,20,0.05); }
         .st-warmup-tools { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
         .st-link-btn { border:0; background:transparent; color:var(--bdb-ink-soft); padding:4px 0; font:inherit;
           font-size:0.82rem; font-weight:750; text-decoration:underline; cursor:pointer; }
@@ -429,7 +472,7 @@ export default function StudentLanding() {
       <h1 className="st-hello">Welcome!</h1>
       <p className="st-hello-sub">
         {pendingCode
-          ? "This is your home base. Start with the warm-up when it opens."
+          ? "You're in. Start the warm-up below."
           : "Enter your class code to start today's lesson."}
       </p>
 
@@ -458,42 +501,73 @@ export default function StudentLanding() {
               </section>
               <p className="st-warmup-label">Warm-up</p>
               {warmupHref ? (
-                <>
-                  <h2 className="st-join-h">{identityReady ? "Warm-up connected" : warmupOpened ? "Warm-up open in your other tab" : "Start today's warm-up"}</h2>
-                  <p className="st-warmup-copy">
-                    {identityReady
-                      ? "Nice work. Read the lesson or play a challenge while class gets ready."
-                      : warmupOpened
-                        ? "Finish all five questions there and press Submit. Big Dog connects your response on its own."
-                        : "Complete all five Google Form questions, then come back here."}
-                  </p>
-                  <a
-                    className={warmupOpened || identityReady ? "st-link-btn" : "st-explore st-warmup-action"}
-                    href={warmupHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={markWarmupOpened}
-                  >
-                    {warmupOpened || identityReady ? "Reopen the warm-up" : "Open today's warm-up"}
-                  </a>
-                </>
+                identityReady ? (
+                  <>
+                    <h2 className="st-join-h">Warm-up connected</h2>
+                    <p className="st-warmup-copy" role="status" aria-live="polite">
+                      {challenge
+                        ? `Nice work. Starting your challenge: ${challenge.label}.`
+                        : "Nice work. Wait here - your teacher moves the class along from the board."}
+                    </p>
+                    {/* The timed push is the normal path; this is what a student
+                        taps if navigation is blocked or they came back later. */}
+                    {challenge && (
+                      <a className="st-explore st-warmup-action" href={challenge.href}>
+                        Go to {challenge.label}
+                      </a>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <h2 className="st-join-h">Today&apos;s warm-up</h2>
+                    <p className="st-warmup-copy">
+                      Answer all six questions below and press Submit. Stay on this page - Big Dog
+                      picks it up on its own and takes you to what is next.
+                    </p>
+                    {/* Google's supported iframe form. It cannot tell us when it
+                        was submitted (cross-origin), and it does not need to:
+                        the receipt chain does that. */}
+                    <iframe
+                      className="st-warmup-frame"
+                      src={embeddedFormUrl(warmupHref)}
+                      title="Today's warm-up"
+                      onLoad={markWarmupOpened}
+                    />
+                    <p className="st-warmup-wait" role="status" aria-live="polite">
+                      Watching for your warm-up submission.
+                    </p>
+                    {/* The escape hatch, and it is load-bearing rather than
+                        polite: a browser that is not already signed in to the
+                        district account gets Google's sign-in page, which
+                        refuses to render in an iframe and shows a blank box.
+                        A new tab is the only way through that. */}
+                    <button
+                      className="st-link-btn"
+                      type="button"
+                      onClick={() => setEmbedFailed(true)}
+                      hidden={embedFailed}
+                    >
+                      Warm-up not showing up?
+                    </button>
+                    {embedFailed && (
+                      <a
+                        className="st-link-btn"
+                        href={warmupHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={markWarmupOpened}
+                      >
+                        Open the warm-up in a new tab, then come back here
+                      </a>
+                    )}
+                  </>
+                )
               ) : (
                 <>
                   <h2 className="st-join-h">No warm-up loaded yet</h2>
                   <p className="st-warmup-copy">That is fine - it appears here on its own the moment your teacher connects one.</p>
                 </>
               )}
-              {warmupHref && !identityReady && warmupOpened ? (
-                <p className="st-warmup-wait" role="status" aria-live="polite">Watching for your warm-up submission.</p>
-              ) : null}
-              <div className="st-home-grid">
-                {HOME_LINKS.map((link) => (
-                  <a key={link.href} className="st-home-card" href={link.href}>
-                    <b>{link.title}</b>
-                    <span>{link.desc}</span>
-                  </a>
-                ))}
-              </div>
               {/* The Stuck walkthrough lives on the student home base (Steele,
                   2026-08-01: "on the students homepage not on the log in page").
                   It is still the homepage chip CLAUDE.md pins to /homework-help,

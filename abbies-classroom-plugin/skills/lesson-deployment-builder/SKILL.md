@@ -29,9 +29,30 @@ CRA is carried by a **fade** as much as by state IDs — support removed phase b
 
 ---
 
-## Match the first three lessons, nothing else
+## Match the deployable lessons, nothing else
 
-Only **M1.T1.L1-D1**, **M1.T1.L2-D1**, and **M1.T1.L2-D2** are near deployable. Everything else is a stub or a sketch — including the ~80 pages that share the 5-tab M1.T2 shape. **A widely-copied shape is not a standard just because it's widely copied.** Read `references/lesson-quality-bar.md` before authoring anything substantial; it is the bar, and it names which of the three to take what from.
+**Verified against Notion 2026-08-06.** Five M1.T1 lessons are `Published`:
+
+| Lesson | Note |
+|---|---|
+| `M1.T1.L1 Taking Apart Numbers and Shapes` | **Renamed** — the `-D1` suffix is gone. Older docs calling it `M1.T1.L1-D1` are stale. |
+| `M1.T1.L2-D1 Every Way to Make 24` | |
+| `M1.T1.L2-D2 Factor Rainbows and the Greatest Common Factor` | |
+| `M1.T1.L3 The Gallery Walk - Which One Is It Asking For?` | Now Published, no longer Ready for Review. |
+| `M1.T1.L5-D1 Count, Draw, Verify` | |
+
+A further seven sit at `Ready for Review`: `L2-D3`, `L5-D2`, `L5-D3`, `L5-LAUNCH`, `L5-P1`, `A1`, `P1`.
+**There is no L4 in M1.T1** — L1, L2, L3, L5. Confirm that gap is intentional before assuming a
+neighbour exists.
+
+Everything outside that list is a stub or a sketch — including the ~80 pages that share the 5-tab M1.T2
+shape. **A widely-copied shape is not a standard just because it's widely copied.** Read
+`references/lesson-quality-bar.md` before authoring anything substantial; it is the bar. Note that the
+bar file was written when only three lessons were deployable and still names those three — take its
+per-step contract as current and its inventory as historical.
+
+**Re-verify this table before relying on it.** It is a point-in-time read of a database Steele is
+actively building, and it is the single thing in this skill most likely to go stale first.
 
 This overrides the instinct to match a topic's local convention. Consistency with the room's *routines* matters (state words, the discussion rhythm, exit at 46–49). Consistency with a thin page's *depth* does not — if the neighbours are stubs, exceed them and say so.
 
@@ -67,20 +88,31 @@ Full detail, including verbatim prompts and failure guards, in `references/struc
 
 ---
 
-## The hook has to actually be intriguing
+## The hook is a gate — run the `lesson-hook` skill
 
-Both ends of the day. Two tests: approachable enough to **estimate** before instruction, impossible to **prove** without it. If a student can answer it with yesterday's math it's the wrong question; if they can't even guess, it isn't a hook.
+**Do not write a hook here.** The `lesson-hook` skill owns hook authoring and auditing, and it is a
+gate rather than an option: a lesson is not deployment-ready until its hook scores **4/4** on that
+skill's four gates (Curiosity · Stakes · Locked-then-opened · Plausibility). Run it **before** the CRA
+states, because the hook decides what `concrete` has to give them.
 
-Passing both tests still isn't enough — a valid hook can be flat. What makes one land:
+What this skill still owns is **wiring** the hook once `lesson-hook` has written it. Its output maps
+onto four states, and all four get authored or the payoff never lands:
 
-- **A dare in the second sentence.** "40 water balloons, equal buckets, none left over. What are ALL the ways you could split them? *Could you prove you found every single one?*" Most flat hooks are missing that second sentence.
-- **The answer is something you must name before you can compute it.** The parking-lot hook works because 12 could mean sections or spaces, and that ambiguity *is* the day's misconception. "Do not hunt for an operation. First tell me what the answer counts."
-- **Stakes an 11-year-old recognizes.** Skate parks, carnival lights, water balloons, parking lots. Two trains leaving a station is not a hook.
-- **A deferral promise on the screen.** "You do not need to solve this yet. You will be able to answer it by the end of class." The screen makes a contract; the payoff pays it.
+| State | Min | What the hook does there |
+|---|---|---|
+| `warmup` | 0–5 | The question sits on `Main Display` the whole time. Unsolvable now. |
+| `launch` | 5–8 | Approaches only, no solving, no reveal. The skill supplies the two to fish for and the one dead end worth letting live. |
+| `exit` | 46–49 | The **identical wording** returns as the independent written item. A reworded return reads as a different problem and kills the callback. |
+| `closeout` | 49–50 | The payoff, stating how the day's model proves it rather than just revealing the number. |
 
-**Wire it in five places** — warm-up minute 0 unresolved, re-posed as its own `launch` state with READ → PREDICT → JUSTIFY, interpreted back into context the moment the concept is named, one gate item, and the exit plus a payoff state named "You Can Answer It Now" that states how the day's model proves it rather than just revealing the number. Concealment is written as a rule on every earlier step, not hoped for.
+Concealment is written as a rule on every step in between, not hoped for.
 
-The failure to avoid: M1.T1.L1-D1 has a genuinely good `Anchor Problem` that appears in **none** of its fifteen steps. An anchor not wired into a `Main Display` and a payoff state does not exist.
+Recurring storylines live in `lesson-hooks/HOOK-BANK.md` in the repo. Read it before authoring and add
+the row in the same turn — a thread that lives only in a Notion lesson is one the next session cannot
+see.
+
+The failure to avoid: a genuinely good `Anchor Problem` that appears in **none** of a lesson's steps.
+An anchor not wired into a `Main Display` and a payoff state does not exist.
 
 ---
 
@@ -209,7 +241,7 @@ It also cuts the other way: a student reporting 5 who missed both gate items nee
 
 **Confidence never decides routing alone** — "confidence alone never determines the work station." It adjusts a route that correctness has already set, and it is teacher-only data: a student never sees their own or anyone else's number.
 
-M1.T1.L2-D2 has no Fist-to-Five. That is the one clear defect in the best-designed lesson in the database, not a variant to copy.
+As of 2026-07-29, M1.T1.L2-D2 had no Fist-to-Five — the one clear defect in the best-designed lesson in the database, not a variant to copy. **Re-check before repeating it**; it is exactly the kind of thing that gets quietly fixed.
 
 ### Every lesson has student talk
 
@@ -225,16 +257,22 @@ Two acceptable forms, either or both:
    exit. The likely shape is 43-46, taking independent work from 13 down to 10. Run it on the days
    that earn it; M1.T1.L3, the consolidation day, is where Steele wants it piloted.
 
-**The deployable lessons genuinely do not use it.** Verified against the Notion database on
-2026-07-29: `M1.T1.L1-D1` (the only Published lesson), `M1.T1.L2-D1`, and `M1.T1.L2-D2` each have NO
-`discussion` step. That is the gap Steele named, and it is real.
+**The originally deployable lessons genuinely do not use it.** Verified 2026-07-29: `M1.T1.L1`,
+`M1.T1.L2-D1`, and `M1.T1.L2-D2` each have NO `discussion` step. That is the gap Steele named, and it
+is real.
 
-Do not be fooled by the raw count. Thirty-four Lesson Steps carry `State ID: discussion` across the
-database, but they sit in the older stubs and sketches, the CC culture lessons, and the M1.T2/M1.T3
-shapes - none of which run. `M1.T1-P1` (the BRUH deck) and `M1.T1.L3` each have one, but both are
-`Ready for Review`, and `/api/today` serves only `Published` pages dated today. **When auditing this,
-count the deployable lessons, not the whole database** - the database-wide number says the opposite of
-the truth. Before writing a new discussion step, check whether that particular lesson already has one.
+**Partially closed since.** Publish status re-verified 2026-08-06: `M1.T1.L3` is now `Published`, and
+as of the July audit it carried a `discussion` step — so the pilot Steele wanted has most likely
+shipped. `M1.T1.L5-D1` is also newly Published and was never in the July audit at all. **Re-run the
+per-lesson discussion count before claiming the gap is still open**; the sentence above is a July fact
+about a database that has moved.
+
+Do not be fooled by the raw count. Thirty-four Lesson Steps carried `State ID: discussion` across the
+database in July, but they sit in the older stubs and sketches, the CC culture lessons, and the
+M1.T2/M1.T3 shapes — none of which run, and `/api/today` serves only `Published` pages dated today.
+**When auditing this, count the deployable lessons, not the whole database** — the database-wide number
+says the opposite of the truth. Before writing a new discussion step, check whether that particular
+lesson already has one.
 
 The runtime is ready: `discussion` is a full entry in the state catalog (`src/lib/classStates.ts`), so
 both lesson engines give it a real bank entry rather than the empty synthesized one unknown ids get.
@@ -281,11 +319,11 @@ The "we do one together" beat moves **out of `abstract` and into the board block
 ```
 0-5 warmup · 5-9 launch · 9-10 LI/SC · 10-14 review · 14-20 concrete
 20-27 representational · 27-31 abstract (model one) · 31-32 LI/SC + Fist-to-Five
-32-35 learning check · 35-51 whiteboard on the assignment problems
+32-35 learning check · 35-46 whiteboard on the assignment problems
 46-49 exit · 49-50 closeout                                          = 50
 ```
 
-Sixteen minutes is room for two full cycles plus a spinner share-out, or three problems on a lighter cycle. Fill `Required Paper Work` and `Due and Turn In` with the real due time and destination, and keep the `Help Path` — it matters *more* at home, where there is no teacher to ask.
+Eleven minutes is room for one full cycle plus a spinner share-out, or two problems on a lighter cycle. **If the day needs more board time, take it from the front** — start the release earlier by compressing `review` or the learning check. Never take it from the back. Fill `Required Paper Work` and `Due and Turn In` with the real due time and destination, and keep the `Help Path` — it matters *more* at home, where there is no teacher to ask.
 
 #### Shape B — small-group release. The assignment is worked in class, on paper.
 
@@ -294,11 +332,32 @@ Sixteen minutes is room for two full cycles plus a spinner share-out, or three p
 ```
 0-5 warmup · 5-9 launch · 9-10 LI/SC · 10-14 review · 14-20 concrete
 20-27 representational · 27-34 abstract (model one, do one on paper)
-34-35 LI/SC + Fist-to-Five · 35-38 learning check · 38-51 small groups
+34-35 LI/SC + Fist-to-Five · 35-38 learning check · 38-46 small groups
 46-49 exit · 49-50 closeout                                          = 50
 ```
 
 `abstract` needs the full 7 here because writing on paper is slower than writing on a board. Fill `Required Paper Work`, `Due and Turn In`, and the enumerated product strip. Routes differentiate the path; every route completes the identical product.
+
+#### The release block is where minutes come from — and it ends at 46, always
+
+Corrected 2026-08-06. Both blocks above previously ran to **51**, which overlapped the exit ticket and
+overran the period; the same error was in `classroom-os-context` and `references/structures.md`.
+
+**The rule Steele stated:** independent and small-group work is the flexible block, and it is where you
+pull time from when the rest of the lesson needs it. So:
+
+- **The end is pinned at 46.** `exit` 46-49 and `closeout` 49-50 are hard frame. The release hands
+  straight to `exit` and never crosses it.
+- **The start floats.** A day whose `concrete` needs four more minutes takes them from the release,
+  which simply begins later. That is the intended behaviour, not a compromise.
+- **It can shrink a long way, and it can vanish.** Zero is a legitimate value on an instruction-heavy
+  day, with the required work going home as paper or a tool quota. What is not legitimate is padding it
+  to hit a number, cutting a CRA phase to protect it, or letting it run past 46.
+- **Say where the minutes went.** If the release is 6 minutes because `concrete` took 20, write that
+  down. A reader six weeks later cannot tell a deliberate compression from an arithmetic slip.
+
+The one thing that never flexes: the required work still has to land somewhere, and the lesson has to
+say where — in class, paper homework, a tool quota with a receipt, or explicitly nowhere.
 
 #### Neither shape moves anybody
 
@@ -355,9 +414,7 @@ Currently in the middle bucket, all reasonable to design for:
 
 Set `Homework Tool Assignment Created` when a tool goes home. It's read by nothing in the app — it exists for Steele's own tracking against his target of at least two per week.
 
-**When there is no in-class release block, the readiness gate still runs** — it's required evidence and it carries the Fist-to-Five. What changes is what its output does: instead of assigning a same-period route, it becomes a **next-day recommendation** and, where relevant, the homework tier (who gets the shorter round count, who gets a worked reference alongside it). Say which of the two the gate is doing on this lesson, so the routing table isn't written for a release that never happens.
-
-**When there is no in-class release block, the readiness gate still runs** — it's required evidence and it carries the Fist-to-Five. What changes is what its output does: instead of assigning a same-period route, it becomes a **next-day recommendation** and, where relevant, the homework tier (who gets the shorter quota, who gets a worked reference alongside it). Say which of the two the gate is doing on this lesson, so the routing table isn't written for a release that never happens.
+**When there is no in-class release block, the readiness gate still runs** — it's required evidence and it carries the Fist-to-Five. What changes is what its output does: instead of assigning a same-period route, it becomes a **next-day recommendation** and, where relevant, the homework tier (who gets the shorter round count or quota, who gets a worked reference alongside it). Say which of the two the gate is doing on this lesson, so the routing table isn't written for a release that never happens.
 
 ### Step 3 — Research the sequence and the tools, then compare against Carnegie
 
@@ -396,6 +453,8 @@ Write the comparison into the body's defense block as three lines: Carnegie's se
 
 Report the result of each:
 
+- **The hook scored 4/4 on `lesson-hook`**, and is wired into all four of `warmup`, `launch`, `exit`, `closeout` — with the `exit` wording identical to the `warmup` wording. Report the four gate results. A lesson whose hook was never run through that skill is not deployment-ready, however complete the CRA states are.
+- **The `HOOK-BANK.md` row was added or updated** in the same turn the hook was written.
 - Minutes sum to **50**; `Start Minute` contiguous; `exit` at 46, `closeout` at 49.
 - **`abstract` carries a numbered step-by-step** wherever the mathematics allows, derived on the board rather than delivered, with the same numbering on every surface.
 - **Where the required work lands is stated** — in-class, paper homework, tool homework with a quota and a receipt, or explicitly none. Not left blank and ambiguous.
@@ -450,7 +509,26 @@ Abbie is Steele's grown dog and the mascot: deadpan, calls him "dad," roasts *hi
 
 - `references/lesson-quality-bar.md` — what the three good lessons contain: the per-step contract, timing invariants, the fade, and the named commitments. **Read before authoring.**
 - `references/structures.md` — choosing CRA vs error analysis vs gallery walk; the error-analysis protocol, gallery-walk configs, discussion protocol, and hook design, with verbatim prompts.
-- `references/notion-write-contract.md` — IDs, property names, legal select values, the 13 canonical misconception tags, the Lesson Steps query and write contract, tool routes, traps.
+- `references/notion-write-contract.md` — IDs, property names, legal select values, the canonical misconception tags, the Lesson Steps query and write contract, tool routes, traps. **Its tag list is stale — see below.**
+
 - `references/state-catalog.md` — state vocabulary, CRA mapping, what the good lessons do, four surfaces, routine configs, readiness gates.
-- `references/body-template.md` — the M1.T1.L2-D2 body shape, Notion tab/color syntax, escaping.
+- `references/body-template.md` — the M1.T1.L2-D2 body shape, Notion tab/color syntax, escaping. **Its tag count is stale — see below.**
 - `references/carnegie-and-research.md` — reaching and reading a TIG, what to do when you can't, Carnegie's phase model, writing the defense, where to research.
+- `lesson-hook` (separate skill) — authors and audits the hook. A gate, not an option.
+
+### Known-stale corrections to the references
+
+**Misconception tags: 36, not 13.** Counted from the `misconceptions` seed in
+`supabase/proficiency.sql` plus `supabase/poll-evidence-vocabulary.sql` on 2026-08-06. The write
+contract and `references/body-template.md` both still say **13**, and `classroom-os-context` says
+**18** — all three are stale, and following them means flagging ~23 perfectly valid tags as "needs a
+SQL migration" and writing needless build items into Steele's follow-up list. **Read the seed files
+directly and count before flagging any tag as non-canonical.** The rule itself is unchanged: the
+`misconceptions` table is an exact-match vocabulary, clustering keys on the exact string, and adding a
+genuinely new tag is a SQL migration.
+
+**`references/lesson-quality-bar.md` names three deployable lessons.** There are now five Published.
+Its per-step contract, timing invariants, and fade guidance are current; its inventory is historical.
+
+**`references/structures.md` still carries hook design.** Superseded by the `lesson-hook` skill. Use
+its error-analysis, gallery-walk, and discussion material; ignore its hook section.

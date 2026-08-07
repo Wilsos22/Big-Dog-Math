@@ -15,13 +15,25 @@ function newRequestCode(): string {
   return Array.from(bytes, (byte) => REQUEST_CODE_ALPHABET[byte % REQUEST_CODE_ALPHABET.length]).join("");
 }
 
-type PendingJoinRow = {
+type SessionJoinRow = {
   id: string;
-  request_code: string;
+  request_code: string | null;
+  student_id: string | null;
 };
 
 function isMissingAdmissionSchema(code?: string): boolean {
   return code === "42703" || code === "42883" || code === "PGRST202" || code === "PGRST204";
+}
+
+// The teacher already admitted this device: bdm_admit_student_join_request
+// sets student_id and clears request_code, so there is no pending request left
+// to report. Answer success with a null requestCode - the landing simply stops
+// showing a help code while WarmupJoinSync upgrades the stored session.
+function admittedResponse(sessionId: string): Response {
+  return Response.json(
+    { request: { sessionId, requestCode: null, admitted: true } },
+    { status: 200, headers: { "cache-control": "no-store" } },
+  );
 }
 
 export async function POST(request: Request) {
@@ -50,12 +62,15 @@ export async function POST(request: Request) {
     }
     if (!session) throw new StudentIdentityError("That code is not open right now.", 404, "session_not_open");
 
+    // Any row for this device in this session, admitted or not. Restricting
+    // this to student_id is null missed the row the teacher had just admitted,
+    // so the insert below hit the (session_id, auth_user_id) unique index and
+    // every press of Ask for help came back 409.
     const existingResult = await db
       .from("session_joins")
-      .select("id,request_code")
+      .select("id,request_code,student_id")
       .eq("session_id", session.id)
       .eq("auth_user_id", authUserId)
-      .is("student_id", null)
       .maybeSingle();
     if (existingResult.error) {
       if (isMissingAdmissionSchema(existingResult.error.code)) {
@@ -68,7 +83,21 @@ export async function POST(request: Request) {
       throw new StudentIdentityError("The admission request could not be checked.", 500, "request_lookup_failed");
     }
 
-    if (existingResult.data?.request_code) {
+    const existingRow = existingResult.data as SessionJoinRow | null;
+
+    if (existingRow?.student_id) {
+      await recordSecurityEvent({
+        eventType: "student_admission_request",
+        outcome: "allowed",
+        authUserId,
+        sessionId: session.id,
+        studentId: existingRow.student_id,
+        details: { state: "already_admitted" },
+      });
+      return admittedResponse(session.id);
+    }
+
+    if (existingRow?.request_code) {
       await recordSecurityEvent({
         eventType: "student_admission_request",
         outcome: "allowed",
@@ -80,7 +109,7 @@ export async function POST(request: Request) {
         {
           request: {
             sessionId: session.id,
-            requestCode: (existingResult.data as PendingJoinRow).request_code,
+            requestCode: existingRow.request_code,
           },
         },
         { status: 202, headers: { "cache-control": "no-store" } },
@@ -126,14 +155,28 @@ export async function POST(request: Request) {
         throw new StudentIdentityError("The admission request could not be saved.", 500, "request_save_failed");
       }
 
+      // Same widening as the lookup above: the teacher may have admitted this
+      // device in the moment between that read and this insert, and filtering
+      // on a null student_id here would miss the row and 500 instead.
       const raceResult = await db
         .from("session_joins")
-        .select("id,request_code")
+        .select("id,request_code,student_id")
         .eq("session_id", session.id)
         .eq("auth_user_id", authUserId)
-        .is("student_id", null)
         .maybeSingle();
-      if (raceResult.data?.request_code) {
+      const raceRow = raceResult.data as SessionJoinRow | null;
+      if (raceRow?.student_id) {
+        await recordSecurityEvent({
+          eventType: "student_admission_request",
+          outcome: "allowed",
+          authUserId,
+          sessionId: session.id,
+          studentId: raceRow.student_id,
+          details: { state: "already_admitted" },
+        });
+        return admittedResponse(session.id);
+      }
+      if (raceRow?.request_code) {
         await recordSecurityEvent({
           eventType: "student_admission_request",
           outcome: "allowed",
@@ -145,7 +188,7 @@ export async function POST(request: Request) {
           {
             request: {
               sessionId: session.id,
-              requestCode: (raceResult.data as PendingJoinRow).request_code,
+              requestCode: raceRow.request_code,
             },
           },
           { status: 202, headers: { "cache-control": "no-store" } },

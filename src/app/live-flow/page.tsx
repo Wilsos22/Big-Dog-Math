@@ -13,6 +13,7 @@ import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
 import { classroomStageTheme, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { parseDiscussionPhases, discussionStageCountdown, DISCUSSION_MODE_LABEL } from "@/lib/discussionPhases";
+import { galleryWalkPhasesFromRoutine, galleryWalkStageCountdown } from "@/lib/galleryWalkTimer";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { TIMER_URGENCY_CSS, TIMER_URGENT_SECONDS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
 import {
@@ -592,8 +593,21 @@ export default function LiveFlowPage() {
   // the state's stored color.
   const stageThemeId = classroomStageTheme(flow?.state?.id, flow?.state?.label).id;
   const accent = WARM_ACCENTS[stageThemeId] ?? flow?.state?.color ?? "#50A3A4";
+  // The relayed `phase.secondsLeft` is only true as of the moment /control
+  // published it, and the screen-ping projection deliberately ignores it - a
+  // round counting down once a second must not wake thirty Chromebooks a second
+  // (liveFlowScreens.ts). So the beat's clock comes off its deadline, through
+  // the same helper the lesson clock uses, and the 1s heartbeat above re-renders
+  // it. `liveTimerSeconds` falls back to the banked number when there is no
+  // deadline, which is exactly what a paused or finished round should show.
   const activeTimerSeconds = phase?.timed && typeof phase.secondsLeft === "number"
-    ? phase.secondsLeft
+    ? liveTimerSeconds({
+        totalSeconds: phase.totalSeconds ?? phase.secondsLeft,
+        secondsLeft: phase.secondsLeft,
+        running: phase.running,
+        finished: phase.finished,
+        endsAt: phase.endsAt ?? null,
+      })
     : liveTimerSeconds(timer);
   // On a self-running discussion timeline, students work against the CURRENT
   // beat's clock (think 30, write 90, ...), not the whole-state total - so the
@@ -606,7 +620,31 @@ export default function LiveFlowPage() {
   const discussionStage = timelinePhases.length
     ? discussionStageCountdown(timelinePhases, timer?.totalSeconds ?? 0, liveTimerSeconds(timer))
     : null;
-  const displayTimerSeconds = discussionStage && !discussionStage.done ? discussionStage.secondsLeft : activeTimerSeconds;
+  // Same idea for a Gallery Walk: the number a student works against is time
+  // left AT THIS STATION, off the same authored config and the same state clock
+  // the two projectors read. Silent - a Chromebook never beeps.
+  const galleryWalkBuild = routineConfig?.kind === "gallery-walk"
+    ? galleryWalkPhasesFromRoutine(routineConfig)
+    : null;
+  const galleryWalkTimeline = galleryWalkBuild?.ok && (timer?.totalSeconds ?? 0) > 0
+    ? galleryWalkBuild
+    : null;
+  const galleryWalkStage = galleryWalkTimeline
+    ? galleryWalkStageCountdown(
+        galleryWalkTimeline.phases,
+        timer?.totalSeconds ?? 0,
+        liveTimerSeconds(timer),
+        galleryWalkTimeline.beepWindowSeconds,
+      )
+    : null;
+  // Gallery walk first, matching the branch order on present and pace: whichever
+  // beat the student SEES is the number this shows, so the two can never
+  // disagree.
+  const displayTimerSeconds = galleryWalkStage && !galleryWalkStage.done
+    ? galleryWalkStage.secondsLeft
+    : discussionStage && !discussionStage.done
+      ? discussionStage.secondsLeft
+      : activeTimerSeconds;
   // Progress strip: position, what's next, and today's target - so the screen
   // changing reads as "we're in part 3 of 4", not "an adult moved my screen".
   const progressIndex = flow?.sequence?.currentIndex ?? -1;
@@ -1410,7 +1448,7 @@ export default function LiveFlowPage() {
                 {/* Honest copy either way: a student who never answered must
                     not be told their response was received. */}
                 <h1 className="lf-poll-question">{pollSubmitted ? "Response received" : "Eyes up"}</h1>
-                <p className="lf-poll-help">{pollSubmitted ? "Look at the Pace + Support screen for the class view." : "Your class is reviewing this question on the board."}</p>
+                <p className="lf-poll-help">{pollSubmitted ? "Got it - the teacher has your response. Eyes up." : "Eyes up - the teacher is reviewing responses."}</p>
               </section>
             ) : null}
             {!activePoll && discussion?.directions && (
@@ -1418,11 +1456,29 @@ export default function LiveFlowPage() {
                 {discussion.directions.map((direction) => <li className="lf-direction" key={direction}>{direction}</li>)}
               </ul>
             )}
-            {showDiscussionTimeline && discussionStage && !discussionStage.done && discussionStage.phase && (
+            {showDiscussionTimeline && !galleryWalkStage && discussionStage && !discussionStage.done && discussionStage.phase && (
               <div className="lf-beat" aria-label="Time left in this part">
                 <span className="lf-beat-mode">{DISCUSSION_MODE_LABEL[discussionStage.phase.mode]}</span>
                 <span className={`lf-beat-time ${timerUrgencyClass(studentTimerUrgency)}`}>{formatTime(displayTimerSeconds)}</span>
                 <span className="lf-beat-dir">{discussionStage.phase.direction}</span>
+              </div>
+            )}
+            {/* The Gallery Walk's current station, on the student screen: the
+                same "big count of time left IN THIS PART" the discussion beat
+                uses, so a head-down student paces the station the room is on.
+                NO SOUND on a Chromebook - thirty of them beeping is not a cue,
+                it is noise - so the red-at-15 number is the whole cue here.
+                A step could carry BOTH an authored phase list and a gallery-walk
+                config, and two big countdowns disagreeing on one screen is worse
+                than either - so the discussion beat above is gated on there
+                being no gallery walk. Gallery walk wins, which is the precedence
+                present and pace already use for routineConfig, and it is applied
+                to `displayTimerSeconds` the same way. */}
+            {!activePoll && galleryWalkStage && !galleryWalkStage.done && galleryWalkStage.phase && (
+              <div className="lf-beat" aria-label="Time left at this station">
+                <span className="lf-beat-mode">{galleryWalkStage.phase.label}</span>
+                <span className={`lf-beat-time ${timerUrgencyClass(studentTimerUrgency)}`}>{formatTime(displayTimerSeconds)}</span>
+                <span className="lf-beat-dir">{galleryWalkStage.phase.direction}</span>
               </div>
             )}
             {showDiscussionSupports && (

@@ -30,19 +30,65 @@ if (!submitCode || submitCode.includes("/api/student/admission-request")) {
 if (!home.includes("Warm-up not connecting? Ask for help") || !home.includes("Tell your teacher this help code")) {
   throw new Error("A teacher admission request must remain available only as an explicit recovery action.");
 }
-if (!home.includes("background:var(--bdb-amber)") || !home.includes("Open today's warm-up")) {
-  throw new Error("The accepted-code homepage must expose the assigned warm-up as the bright amber action.");
+// 2026-08-05 (Steele): the warm-up is EMBEDDED in the page, not a button that
+// opens a tab. Google Forms cannot redirect on submit, so keeping the student
+// on this page is what makes the handoff to the challenge possible at all.
+// Anchored on the RENDERED iframe, not on the class name: `st-warmup-frame`
+// also appears in the page's <style> block, so a className-only check stays
+// green while nothing is on screen. (This contract shipped that way for one
+// mutation-test cycle - the same trap CLAUDE.md records for the /present logo
+// and the .dh-slot.act rule.)
+const warmupFrame = sliceBetween(home, "<iframe", "/>");
+if (!warmupFrame
+  || !warmupFrame.includes('className="st-warmup-frame"')
+  || !warmupFrame.includes("src={embeddedFormUrl(warmupHref)}")) {
+  throw new Error("The accepted-code homepage must embed the assigned warm-up in the page.");
+}
+// The prefill query carries the receipt token (entry.NNN=<token>). Rebuilding
+// the URL instead of extending it would break identity while the form still
+// looked perfectly fine on screen - a silent failure with no symptom.
+const embedHelper = sliceBetween(home, "function embeddedFormUrl", "export default function");
+if (!embedHelper.includes("new URL(href)") || !embedHelper.includes('searchParams.set("embedded", "true")')) {
+  throw new Error("The embed URL must extend the personalized form URL, never rebuild it.");
+}
+// A browser not already signed in to the district account gets Google's
+// sign-in page, which refuses to render in an iframe and shows a blank box.
+// The new-tab escape is the only way through that, so it is load-bearing.
+if (!home.includes("Warm-up not showing up?") || !home.includes('target="_blank"')) {
+  throw new Error("The embedded warm-up must keep a new-tab escape for the iframe sign-in case.");
 }
 if (!home.includes("Today&apos;s lesson") || !home.includes("Module {moduleNumber}") || !home.includes("Topic {topicNumber}")) {
   throw new Error("The accepted-code homepage must show today's lesson, module, and topic before the warm-up action.");
 }
-// 2026-07-26 home-base redesign: the homepage NEVER locks navigation. The
-// warm-up card adapts its copy to identity state; onward links stay live.
-if (!home.includes('href="/explore"')) {
-  throw new Error("The home base must always link students onward to Explore - links are never locked.");
+// REVERSES the 2026-07-26 "onward links stay live" rule (Steele, 2026-08-05:
+// "right now they have access to the tools the lesson and the warm up"). The
+// accepted-code view is the warm-up and nothing else; where a student goes
+// next is the teacher's call, via the Notion pick and then class-mode sync.
+// /explore and /demo remain on the CODE-ENTRY view, which is a different
+// screen and is deliberately untouched.
+if (home.includes("st-home-card") || home.includes("HOME_LINKS")) {
+  throw new Error("The accepted-code home base must not carry the lesson/practice/tools link grid.");
 }
-if (!home.includes("Warm-up connected") || !home.includes("Open today's warm-up")) {
+// The /homework-help chip survives the cut: it is a support affordance for a
+// stuck student, not somewhere to wander, and CLAUDE.md pins it to this view.
+if (!home.includes('href="/homework-help"')) {
+  throw new Error("The Stuck walkthrough chip must remain on the student home base.");
+}
+if (!home.includes("Warm-up connected")) {
   throw new Error("The warm-up card must adapt to identity state instead of locking the page.");
+}
+// The handoff itself. It hangs off VERIFICATION (the receipt chain), never off
+// anything the cross-origin iframe could report. It resolves through
+// warmupChallengeDestination, NOT the bare warmupChallengeHref: the destination
+// is what applies the default for a lesson nobody authored, and calling the raw
+// resolver here is exactly the regression that left every student parked on the
+// home base while the property did not yet exist in Notion.
+if (!home.includes("warmupChallengeDestination") || !home.includes("router.push(challenge.href)")) {
+  throw new Error("A confirmed warm-up must hand off through warmupChallengeDestination.");
+}
+const handoff = sliceBetween(home, "if (!identityReady || !challenge) return;", "}, [identityReady, challenge, router]);");
+if (!handoff.includes("setTimeout")) {
+  throw new Error("The challenge handoff must pause on the confirmation instead of navigating instantly.");
 }
 // Verification runs GLOBALLY (WarmupJoinSync in the root layout) so it
 // survives the student navigating anywhere in the tab; the homepage only
@@ -85,6 +131,37 @@ if (!classSyncTick.includes("getStoredStudentSessionId()")) {
 }
 if (!classSync.includes("window.addEventListener(STUDENT_SESSION_READY_EVENT")) {
   throw new Error("ClassSync must react immediately when warm-up verification creates the student session.");
+}
+// The teacher-tab guard is CORRECT and must stay - a device that has held a
+// teacher session must not be dragged around by class mode. What it must not do
+// is return in silence: a held student looks exactly like a lesson that has not
+// advanced, and the marker dies on tab close and tab restore. That silence has
+// now cost two debugging sessions (2026-07-22, 2026-08-06).
+const tabGuardStart = classSync.indexOf("if (getStoredTeacherSessionId() && !isStudentTab()) {");
+const tabGuardEnd = classSync.indexOf("setNotFollowing(false);");
+if (tabGuardStart === -1 || tabGuardEnd === -1 || tabGuardEnd < tabGuardStart) {
+  throw new Error("The teacher-tab guard must remain, and must clear the not-following state once it passes.");
+}
+const tabGuard = classSync.slice(tabGuardStart, tabGuardEnd);
+if (!tabGuard.includes("setNotFollowing(")) {
+  throw new Error("The teacher-tab guard must surface that this device is not following, never return in silence.");
+}
+// Projector safety: this guard runs BEFORE the isTeacherRoute check below it, so
+// without an explicit exclusion the notice renders on /control and
+// /teacher/present - which are on the wall in front of the class.
+if (!tabGuard.includes("!isTeacherRoute(currentPath)")) {
+  throw new Error("The not-following notice must never render on a teacher surface - those are on the projector.");
+}
+if (!tabGuard.includes("getStoredStudentSessionId()")) {
+  throw new Error("The not-following notice must only appear when there is a student session being held.");
+}
+// It never heals on its own, so it must not inherit the transient-failure copy
+// that tells the student to sit tight and wait for the screen to catch up.
+if (!classSync.includes("Enter the class code again to reconnect")) {
+  throw new Error("The not-following notice must tell the student how to recover.");
+}
+if (!classSync.includes("if (!reconnecting && !notFollowing) return null;")) {
+  throw new Error("The status chip must render for the not-following case, not just the reconnecting one.");
 }
 if (!control.includes('teacherSession?.broadcast === "free"')
   || !control.includes('item.stateId === "warmup" && Boolean(item.linkUrl)')) {
