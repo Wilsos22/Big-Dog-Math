@@ -283,7 +283,20 @@ export default function IpadPage() {
   return (
     <main className="ip-page">
       <style>{`
-        .ip-page { position:fixed; inset:0; background:var(--bdb-ground); font-family:var(--bdb-font); }
+        /* A touch that drags a few px on a text button (the palette is a row of
+           them) starts iOS's own text selection with the Copy/Look Up callout -
+           "highlighting the whole screen like select all" is that UI, not the
+           ink engine. user-select alone is not enough: -webkit-touch-callout is
+           the long-press menu, -webkit-tap-highlight-color is the grey flash on
+           tap, and none of the three is inherited reliably enough to skip
+           setting them on every descendant too. overscroll-behavior stops the
+           page rubber-banding under a stray drag near an edge. */
+        .ip-page, .ip-page * {
+          -webkit-user-select:none; user-select:none;
+          -webkit-touch-callout:none;
+          -webkit-tap-highlight-color:transparent;
+        }
+        .ip-page { position:fixed; inset:0; background:var(--bdb-ground); font-family:var(--bdb-font); overscroll-behavior:none; }
         .ip-topbar { position:fixed; top:10px; left:10px; z-index:30; display:flex; gap:8px; }
         .ip-handle { display:inline-flex; align-items:center; gap:8px; min-height:40px; padding:0 15px; border-radius:999px; border:1px solid rgba(32,30,26,0.14); background:rgba(255,255,255,0.72); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); font:inherit; font-weight:800; font-size:0.85rem; color:var(--bdb-ink); cursor:pointer; touch-action:manipulation; box-shadow:0 8px 22px rgba(40,32,20,0.14); }
         .ip-bark { display:inline-flex; align-items:center; min-height:40px; padding:0 16px; border-radius:999px; border:1px solid color-mix(in srgb, var(--bdb-amber) 65%, rgba(32,30,26,0.14)); background:var(--bdb-amber); color:var(--bdb-ink); font:inherit; font-weight:800; font-size:0.85rem; cursor:pointer; touch-action:manipulation; box-shadow:0 8px 22px rgba(252,175,56,0.35); }

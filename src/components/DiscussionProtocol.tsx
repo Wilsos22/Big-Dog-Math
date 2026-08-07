@@ -129,7 +129,7 @@ function parseSentenceStems(rawText: string): string[] {
 }
 function parseVocabulary(rawText: string): string[] {
   return rawText
-    .split(/[\n,]/)
+    .split(/[\n,;]+/)
     .map((item) => item.trim())
     .filter(Boolean);
 }

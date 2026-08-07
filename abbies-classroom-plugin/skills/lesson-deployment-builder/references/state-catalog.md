@@ -71,7 +71,7 @@ Projector headline example: `representational` → headline "Make it with tiles"
 
 ## What the three good lessons actually do
 
-The default spine above is the starting frame. The three near-deployable lessons (M1.T1.L1-D1, L2-D1, L2-D2 — see `lesson-quality-bar.md`) all total 50 and agree on these invariants. Follow these over the bank defaults where they differ.
+The default spine above is the starting frame. The three lessons analysed here (**M1.T1.L1** — called `L1-D1` throughout this file, renamed in Notion 2026-08-06 — plus L2-D1 and L2-D2; see `lesson-quality-bar.md`) all total 50 and agree on these invariants. Follow these over the bank defaults where they differ. Two further lessons, `M1.T1.L3` and `M1.T1.L5-D1`, went Published later and have not been checked against these invariants.
 
 **Hard frame:** `warmup` 0–5 · Fist-to-Five present · `exit` **46–49** · `closeout` **49–50**. `Advance` is `Automatic` on every step except `closeout` and any private-release state, which are `Manual`.
 

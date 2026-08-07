@@ -2525,6 +2525,25 @@ the invariants they protect are easy to break again.
   stamped with the sequence index it was issued at and expires on the next advance with no clearing
   code anywhere. The strip DOES cross `studentSafeLiveFlow` on purpose - "voice 0" is announced to the
   room and painted on two projectors, and a head-down student needs the same read the room gets.
+- **FIXED 2026-08-06: THE STRIP'S TOP OFFSET NOW ANCHORS TO THE CLOCK, NOT TO A BARE `vh` GUESS**
+  (Steele reported the strip crowding the countdown clock, scene-dependent, tightest on the
+  Divisibility Rules tool scene). `ClassroomStateStrip.tsx`'s `.css-strip` used
+  `top:clamp(10px,1.4vh,20px)`, measured from the strip's positioned ancestor with nothing in that
+  clamp ever reading the clock's actual position - same top-right corner, two unrelated numbers.
+  MEASURED, NOT REPRODUCED: every catalog scene at 1280x720 through 1920x1080 on both `/teacher/present`
+  and `/teacher/pace` (via `getBoundingClientRect()` on `/demo/present` and `/demo/pace` in
+  `?studioPreview=1` mode) held a >=23px gap in every one - the old clamp never actually shrank
+  scene to scene. But that margin was a COINCIDENCE of two fixed-pixel budgets (the clock's own
+  centering inside a fixed-height topbar row, plus the clamp), not a designed guarantee, so it would
+  erode silently if either budget ever changed. `.css-strip`'s `top` now reads
+  `var(--css-strip-top, clamp(10px,1.4vh,20px))` - the clamp is still the default for any consumer
+  that never sets the variable - and `/teacher/present`'s `.stage-work` plus `/teacher/pace`'s
+  `.pw-body` (the strip's positioned ancestor on each surface, already starting exactly at the
+  topbar's bottom edge) each set `--css-strip-top:20px`. Real gap to the clock's bottom edge is now a
+  flat, resolution- and scene-independent ~33px on present and ~34px on pace. Extending this pattern
+  to a THIRD consumer means setting the same variable on ITS OWN positioned ancestor with ITS OWN
+  topbar height in mind - never copying the flat `20px` blind, and never touching
+  `ClassroomStateStrip.tsx`'s fallback clamp itself.
 - **FIXED 2026-08-03: A TEACHER-LOADED BANK CLIP WAS DECODED ON ONE AudioContext AND PLAYED ON
   ANOTHER.** Symptom Steele reported: cues he uploaded a clip for made no sound from the Stream
   Deck, while cues with no upload still fired their synthesized version. The two `installUserClip`
@@ -2544,6 +2563,29 @@ the invariants they protect are easy to break again.
   This got more urgent when the clips were committed to `public/sounds/`, because `userBuffers`
   WINS over `fileBuffers` - one broken restored buffer would shadow a perfectly good committed file
   and the button would be silent with the right clip sitting right there.
+  **THAT FIX LEFT THE UPLOAD CALL SITE WITH THE IDENTICAL DEFECT, AND IT COST A REAL CLASS PERIOD
+  BEFORE ANYONE CAUGHT IT** (2026-08-06). The 2026-08-03 fix above only touched the RESTORE call
+  site. The UPLOAD call site (`uploadSound` in `/control`, ~line 3136) still passed the raw
+  `audioCtxRef.current` straight into `installUserClip` - and that ref is null at upload time for
+  the exact reason the restore site's was: `genTone`/`ensureAudioCtx` build it lazily on the first
+  CUE, and uploading a clip touches neither. So a clip uploaded before any cue had ever played on
+  that machine decoded on `soundBank.ts`'s own private `sharedContext()` while playback always ran
+  on `/control`'s `audioCtxRef.current` - a mismatch this file already names as the failure mode
+  two paragraphs up, on the other call site. Reported live: cues Steele had uploaded a clip for
+  played silently from the Stream Deck for a full ~50-minute period, while the synthesized
+  built-ins fired fine. Fixed by swapping in `ensureAudioCtx()` there too, mirroring the restore
+  site exactly - the whole change is one identifier. THE LESSON: when a fix names two call sites
+  with the same defect and only shows the diff for one, check the other actually changed too,
+  because "the two call sites disagreed" is not the same claim as "both call sites now agree."
+  A SECOND, STILL-LATENT DEFECT WAS FOUND AND CLOSED THE SAME DAY. Chrome suspends an
+  `AudioContext` when its tab is hidden, and `/control` is backgrounded behind fullscreen
+  `/teacher/present` for the entire period (see the CONTROL IS THE ROOM'S AUDIO HOST bullet under
+  rule 6) - nothing resumed it deterministically. `playSoundCue`'s own `.resume()` is fire-and-forget
+  and un-awaited, so `src.start()` can still fire on a still-suspended clock a moment later, and
+  `armSoundBank` - the one function in `soundBank.ts` that DOES await resume - has zero call sites
+  anywhere in the app. A new `visibilitychange` listener on `/control` now resumes the context the
+  instant the tab is shown again, healing it before the teacher's next tap instead of leaving the
+  first cue of a period to gamble on the race.
 - **STATE MUSIC IS STOP-FIRST, AND CUES DUCK IT RATHER THAN STACK ON IT** (both found live
   2026-08-02, Steele: "a song that plays the whole time and then a sound when the first time alert
   and then another when time is up and they all played on top of eachother and the song continued
@@ -2687,6 +2729,18 @@ the invariants they protect are easy to break again.
   productive. They are NOT a mechanism that acts on students - do NOT wire "promote on Got it"
   (release the Big Dog Challenge, bump a drill level). The `promoted` column exists and the POST
   accepts it, but nothing sends it and nothing should without his word.
+- **IN-LESSON CHECK RESULTS DO NOT RENDER ON THE ROOM SCREENS** (Steele, 2026-08-06: "the results of
+  the fist of 5, and both ready checks do not need to show up on the screens. I should see it on the
+  ipad"). `/teacher/present`, `/teacher/pace` and `/live-flow` show a live poll's QUESTION and a
+  response COUNT, never the answer distribution: the fist-to-five histogram on pace, the
+  `.stage-results` tally + "Class Results" heading swap on present, and any student-facing class view
+  are GONE (structured-numeric was already prompt-only). The teacher reviews the distribution on
+  `/teacher/remote` (Private response data + `VisitListPanel`) - that path is UNTOUCHED. `reveal-results`
+  still flips `poll.stage` to `results`; the projectors keyed their reveal off `poll.stage` + `poll.kind`,
+  so the reveal is removed by RENDERING, not by blocking the action. THE OLDER POLL-RENDERING NOTES IN
+  THIS FILE STILL DESCRIBE THAT HISTOGRAM/TALLY - it no longer draws, and that removal is deliberate;
+  do not "restore" it. Shipped on branch `claude/student-device-screen-sync-86e1e3` (verified in the
+  browser on both projectors + 4 contract suites); lands on `main` when that branch is deployed.
 - **CITY ROUTES IS DELETED** (Steele, 2026-07-28): "moot now that we aren't moving around." Nobody
   moves, so three named work stations with staged movement had no job left, and the visit list
   replaced it. Removed: `src/lib/cityRoutes.ts`, `CityRoutesPanel.tsx`, `CityRouteCard.tsx` (the
@@ -2916,9 +2970,15 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 - Stage gates per standard: accuracy-only caps at `approaching`; a Tier-2 checkpoint >=80% (produced
   work) reaches `mastered`; two such checkpoints >=3 weeks apart plus the SBAC-modeled item reach
   `complete`; a later <50% regresses.
-- Misconceptions are a FINITE exact-match vocabulary (13 tags, no NLP); clustering keys on exact string
-  match. Unmatched wrong choices map to `other`. Engine: `src/lib/grouping.ts`; archetype-templated next
-  moves, optionally Claude-sharpened via `/api/live/next-move`.
+- Misconceptions are a FINITE exact-match vocabulary (**36 tags** as of 2026-08-06, no NLP); clustering
+  keys on exact string match. Unmatched wrong choices map to `other`. Engine: `src/lib/grouping.ts`;
+  archetype-templated next moves, optionally Claude-sharpened via `/api/live/next-move`.
+  **Do not hardcode the count anywhere.** `src/lib/misconceptions.ts` is the source of truth, is
+  type-enforced at every call site, and `npm run test:misconceptions` asserts parity with the
+  `supabase/proficiency.sql` seed in both directions. This line said 13 until 2026-08-06, and the
+  same stale 13 had propagated into the `lesson-deployment-builder` skill and its references while
+  `classroom-os-context` carried an equally wrong 18 - three documents, three numbers, none correct,
+  because each recorded a count instead of pointing at the file. Count from `misconceptions.ts`.
 
 ## Design system
 
