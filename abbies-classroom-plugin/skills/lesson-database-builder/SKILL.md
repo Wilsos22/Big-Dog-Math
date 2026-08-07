@@ -1,6 +1,6 @@
 ---
 name: lesson-database-builder
-description: Build out lessons in the Notion "Math 6 Lessons" database (id e367e541-c0c7-4613-8066-d2e61b6fee64) so the Big Dog Math control panel can select from a premade library. Produces lessons that match the existing Notion schema exactly (Date, Publish Workflow, Module, Topic, Learning Intention, Success Criteria, Agenda lines, Supply:* checkboxes, Tool:* checkboxes, Warm Up Link relation, Exit Ticket Link relation, Assignment) and that fit the control panel's state sequence (Warm Up → Mini-Lesson → Work Time → Exit Ticket). Trigger on: "build out the lesson database", "add lessons to Notion", "finish the lesson plan database", "premake lessons", "fill the lesson library", "build a lesson for {topic}", "add a unit to Notion".
+description: Build out lessons in the Notion "Math 6 Lessons" database (id e367e541-c0c7-4613-8066-d2e61b6fee64) so the Big Dog Math control panel can select from a premade library. Produces lessons that match the existing Notion schema exactly (Date, Publish Workflow, Module, Topic, Learning Intention, Success Criteria, Agenda lines, Supply:* checkboxes, Tool:* checkboxes, Warm Up Link relation, Exit Ticket Link relation, Assignment) and that fit the control panel's 11-state CRA sequence (warmup → launch → learning-target-readers → concrete → representational → abstract → learning-target-readers with Fist-to-Five → question → small-group → exit → closeout). Trigger on: "build out the lesson database", "add lessons to Notion", "finish the lesson plan database", "premake lessons", "fill the lesson library", "build a lesson for {topic}", "add a unit to Notion".
 ---
 
 # Lesson Database Builder
@@ -12,6 +12,22 @@ Assume the `classroom-os-context` skill has loaded — site structure, Notion sc
 ## When to invoke
 
 Steele asks for any of: a single lesson, a multi-day unit, a backfill of past lessons, or a stub for an upcoming topic. Default to **one lesson at a time** unless he says "build the whole unit" — quality over quantity, and lessons are easier to revise individually.
+
+## Two corrections (2026-08-06)
+
+**1. The old four-state sequence is gone.** This file was written against `Warm Up → Mini-Lesson →
+Work Time → Exit Ticket`. The real runtime is the 11-state CRA spine on a fixed 50-minute frame:
+`warmup` 0-5 (hook on the projector) · `launch` 5-8 · `learning-target-readers` 8-9 · `review`
+conditional · `concrete` 9-16 · `representational` 16-22 · `abstract` 22-29 ·
+`learning-target-readers` 29-30 with the Fist-to-Five · `question` 30-33 · `small-group` 33-46 ·
+`exit` 46-49 · `closeout` 49-50. Anything below describing the four-state model is stale — see
+`classroom-os-context` for the spine and `lesson-deployment-builder` for authoring one day to depth.
+
+**2. Every stub needs a hook line.** A stub created without one tends to stay hookless, because the
+day it gets built out nobody remembers there was a decision to make. Run the **`lesson-hook`** skill —
+it is a gate, not an option — or at minimum record the storyline thread the lesson will hang on, and
+add the row to `lesson-hooks/HOOK-BANK.md` in the repo so the next session can see it. A stub with a
+named thread is far cheaper to deepen than a stub with an empty `Anchor Problem`.
 
 ## Required inputs
 
@@ -62,17 +78,28 @@ of them; per-day Agenda/Learning Intention/Success Criteria on each. Why this is
 
 ### Agenda lines — match the control panel state sequence
 
-Write agenda lines in the same order and naming as the control panel states. The lesson page renders them as a numbered journey; the control panel uses the order to drive its timer sequence. Default sequence for a 50-minute period:
+Write agenda lines in the same order and naming as the control panel states. The lesson page renders them as a numbered journey; the control panel uses the order to drive its timer sequence.
 
-1. **Warm Up (8 min)** — students arrive, music on, work the 2 review + 3 current problems
-2. **Spinner / Share Out (3 min)** — student spinner picks 2 + 1 iPad kid to share warm-up thinking; surface the misconception from question 3
-3. **Mini-Lesson (12 min)** — direct instruction, anchor a single big idea, end with "what do you know?"
-4. **Guided Practice (10 min)** — worked example + you-try with the manipulative tool listed under `Tool:`
-5. **Work Time (15 min)** — independent or small group on the assignment; teacher pulls small group
-6. **Exit Ticket (5 min)** — single-problem check tied to today's success criterion
-7. **Pack Up (2 min)** — Abbie-themed cooldown screen
+**Never put a comma in an agenda line.** The site splits on commas as well as newlines, so one comma silently becomes three steps.
 
-If Steele specifies a different duration, scale Warm Up / Mini-Lesson / Work Time proportionally and keep the Spinner, Exit Ticket, and Pack Up fixed.
+The 50-minute new-learning day:
+
+1. **Warm Up (0-5)** — Google Form retrieval on Chromebooks. The hook sits on the projector the whole time: readable now, not solvable until the end.
+2. **Launch (5-8)** — how would you attack it. Approaches only. No solving and no reveal.
+3. **Learning Target (8-9)** — LI and SC go up and get read aloud by whoever the spinner lands on. Do not collect confidence here.
+4. **Review (conditional)** — refresh the prior learning the day depends on *or* skip it and give the minutes to Concrete. Decide on purpose and say which.
+5. **Concrete (9-16)** — structured exploration with explicit instructions. Pairs or table groups by default.
+6. **Representational (16-22)** — normally a website tool. Teacher demonstrates one then students run a stated number of reps.
+7. **Abstract (22-29)** — the assignment appears and the numbered routine gets derived here. Teacher works one then the class works one together.
+8. **Learning Target again (29-30)** — the review not the reveal. Carries the **Fist-to-Five**. Every lesson gets one.
+9. **Question (30-33)** — two problems whose answers set the private routes.
+10. **Small Group / Release (33-46)** — differentiated release. **This is the block that flexes**; it is where minutes come from when the rest of the lesson needs them. It may shrink to zero. It never crosses 46.
+11. **Exit (46-49)** — back at seats. Independent evidence. The hook returns in its original wording.
+12. **Closeout (49-50)** — the payoff and cleanup.
+
+Sums to 50 exactly. `Warm Up` 0-5, the Fist-to-Five before the graded items, `Exit` 46-49 and `Closeout` 49-50 are hard frame. Everything else negotiates with the release block.
+
+**A practice day or a review day does not use this list.** Practice days run error analysis, gallery walks, or the vertical classroom; review days run Bruh or Grudge Ball and need no authoring at all. The fixed frame above still applies to both. See `lesson-deployment-builder` and `classroom-os-context`.
 
 ### Supply: checkboxes — default options
 
