@@ -12,6 +12,7 @@ import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
 import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { parseDiscussionPhases, discussionStageCountdown, DISCUSSION_MODE_LABEL } from "@/lib/discussionPhases";
+import { galleryWalkPhasesFromRoutine, galleryWalkStageCountdown } from "@/lib/galleryWalkTimer";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { teacherApiRequest } from "@/lib/teacherApi";
 import { LIVE_FLOW_MODE, getStoredTeacherSessionId, liveTimerSeconds, type LiveClassFlowSnapshot } from "@/lib/liveClassFlow";
@@ -236,6 +237,23 @@ export default function PaceSupportPage() {
   const mirroredSlideFit = mirroredSlideStep?.slideFit === "cover" ? "cover" : "contain";
   const spinnerSyncScope = `${flow?.sequence?.currentIndex ?? -1}:${flow?.presentation?.notionStepId || state?.id || "spinner"}`;
   const routineConfig = flow?.presentation?.routineConfig || null;
+  // The Gallery Walk rotation, computed from the SAME authored config and the
+  // SAME state clock the projector uses, so the two screens never disagree about
+  // which station the room is on. Silent here - see the branch below.
+  const galleryWalkBuild = routineConfig?.kind === "gallery-walk"
+    ? galleryWalkPhasesFromRoutine(routineConfig)
+    : null;
+  const galleryWalkTimeline = galleryWalkBuild?.ok && (timer?.totalSeconds ?? 0) > 0
+    ? galleryWalkBuild
+    : null;
+  const galleryWalkStage = galleryWalkTimeline
+    ? galleryWalkStageCountdown(
+        galleryWalkTimeline.phases,
+        timer?.totalSeconds ?? 0,
+        timerSeconds,
+        galleryWalkTimeline.beepWindowSeconds,
+      )
+    : null;
   // The classroom state strip. The authored values come with the step; the
   // override is server-authored and expires on the next advance. Words under the
   // glyphs come off with ?words=off once the room reads the strip cold - the
@@ -660,6 +678,63 @@ export default function PaceSupportPage() {
               )}
               </>
               )}
+            </div>
+          </div>
+        ) : galleryWalkTimeline && routineConfig?.kind === "gallery-walk" ? (
+          /* Gallery Walk, running. Same division of labour as the discussion
+             timeline: the SEQUENCE of stations lives on the main projector; this
+             screen carries the one number the room is working against - time
+             left AT THIS STATION - and the authored prompts as the language.
+             SILENT ON PURPOSE. This screen has no audio-arming affordance (no
+             AttentionPulse is mounted here), so a beep from it could be blocked
+             with nothing on screen to say so. The red pulsing number inside the
+             beep window is this screen's copy of the cue, and it keys off the
+             same engine flag the projector's beep does. */
+          <div className="pw-cols">
+            <div className="pw-left">
+              <p className="pw-callout-label">
+                Gallery Walk - {routineConfig.stationCount} station{routineConfig.stationCount === 1 ? "" : "s"}
+              </p>
+              <h2 className="pw-action">
+                {galleryWalkStage && !galleryWalkStage.done && galleryWalkStage.phase
+                  ? galleryWalkStage.phase.direction
+                  : routineConfig.recordPrompt}
+              </h2>
+              <div className="pw-callout">
+                <p className="pw-callout-label">Notice</p>
+                <ul className="pw-stems"><li>{routineConfig.observationPrompt}</li></ul>
+                <p className="pw-callout-label">Move</p>
+                <ul className="pw-stems"><li>{routineConfig.movementDirections}</li></ul>
+              </div>
+              {timer ? (
+                <div className="pw-pace">
+                  <span
+                    className={`pw-bigtimer pw-bigtimer-stage${timerFinished ? " finished" : ""} ${timerUrgencyClass(
+                      timerUrgency(
+                        galleryWalkStage && !galleryWalkStage.done ? galleryWalkStage.secondsLeft : timerSeconds,
+                        { running: Boolean(timer?.running), finished: timerFinished },
+                      ),
+                    )}`}
+                  >
+                    {formatTime(galleryWalkStage && !galleryWalkStage.done ? galleryWalkStage.secondsLeft : timerSeconds)}
+                  </span>
+                  <span className="pw-pace-copy">
+                    <b>{galleryWalkStage?.phase?.label || state.label}</b>
+                    <span>
+                      {galleryWalkStage && !galleryWalkStage.done
+                        ? "Left at this station"
+                        : "Shared class clock"}
+                    </span>
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <div className="pw-right">
+              <div className="pw-vocab">
+                <span className="pw-tape" aria-hidden="true" />
+                <div className="pw-term"><span className="pw-term-dot" />Share</div>
+                <p className="pw-def">{routineConfig.sharePrompt}</p>
+              </div>
             </div>
           </div>
         ) : hasDiscussionTimeline ? (

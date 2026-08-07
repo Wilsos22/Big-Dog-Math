@@ -20,6 +20,8 @@ import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
 import { resolveLessonVisual } from "@/lib/lessonVisuals";
 import { parseDiscussionPhases } from "@/lib/discussionPhases";
 import DiscussionTimeline from "@/components/DiscussionTimeline";
+import { galleryWalkPhasesFromRoutine } from "@/lib/galleryWalkTimer";
+import GalleryWalkTimeline from "@/components/GalleryWalkTimeline";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { teacherApiRequest } from "@/lib/teacherApi";
 import {
@@ -497,6 +499,20 @@ export default function ClassroomStagePage() {
   // directions live inside the board rather than beside it.
   const showSupplyCheck = state?.id === "closeout";
   const routineConfig = presentation?.routineConfig || null;
+  // The Gallery Walk's rotation clock. Stations and station length come from the
+  // step's AUTHORED config (stationCount / rotationMinutes) - never a constant -
+  // and the sequence runs on the state's own shared clock, exactly like the
+  // discussion timeline beside it. Gated on the config actually being authored:
+  // an unauthored gallery-walk step keeps today's static card rather than
+  // running an invented rotation in front of the room.
+  const galleryWalkBuild = routineConfig?.kind === "gallery-walk"
+    ? galleryWalkPhasesFromRoutine(routineConfig)
+    : null;
+  // A timer is required too - with no shared clock there is nothing to count
+  // down, and a frozen bar chart is worse than the directions it replaced.
+  const galleryWalkTimeline = galleryWalkBuild?.ok && (timer?.totalSeconds ?? 0) > 0
+    ? galleryWalkBuild
+    : null;
   const spinnerSyncScope = `${flow?.sequence?.currentIndex ?? -1}:${presentation?.notionStepId || state?.id || "spinner"}`;
   // Same reason: the target belongs to the two reveal states, not to every state
   // that borrows their accent.
@@ -1187,6 +1203,47 @@ export default function ClassroomStagePage() {
                 <strong>{selectedCriterion}</strong>
               </div>
             </section>
+          ) : galleryWalkTimeline && routineConfig?.kind === "gallery-walk" ? (
+            /* The rotation, running. Same wrapper and same --dt-* theming as the
+               discussion timeline below, so both timelines read as one idea on
+               the projector. The authored prompts ride along inside it, so the
+               screen still says Notice / Record / Move / Share. */
+            <div
+              className="stage-timeline"
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "grid",
+                alignContent: "safe center",
+                justifyItems: "center",
+                overflowY: "auto",
+                padding: "clamp(34px,6vw,80px)",
+                fontSize: "clamp(1.1rem,1.6vw,1.9rem)",
+                ["--dt-accent" as string]: "var(--acc)",
+                ["--dt-accent-text" as string]: "var(--acc-deep)",
+                ["--dt-ink" as string]: "var(--ink)",
+                ["--dt-line" as string]: "var(--hair)",
+                ["--dt-card" as string]: "var(--card)",
+                ["--dt-soft" as string]: "var(--soft)",
+              }}
+            >
+              <GalleryWalkTimeline
+                phases={galleryWalkTimeline.phases}
+                totalSeconds={timer?.totalSeconds ?? 0}
+                secondsLeft={timerSeconds}
+                endsAt={timer?.endsAt}
+                running={Boolean(timer?.running)}
+                beepWindowSeconds={galleryWalkTimeline.beepWindowSeconds}
+                caption={`Gallery Walk - ${routineConfig.stationCount} station${routineConfig.stationCount === 1 ? "" : "s"} - ${routineConfig.rotationMinutes} min per rotation`}
+                prompts={[
+                  { label: "Notice", body: routineConfig.observationPrompt },
+                  { label: "Record", body: routineConfig.recordPrompt },
+                  { label: "Move", body: routineConfig.movementDirections },
+                  { label: "Share", body: routineConfig.sharePrompt },
+                ]}
+                sound
+              />
+            </div>
           ) : routineConfig?.kind === "gallery-walk" ? (
             <section className="stage-routine" aria-label="Gallery Walk directions">
               <article className="stage-routine-lead">

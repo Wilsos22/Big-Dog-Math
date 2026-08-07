@@ -53,9 +53,11 @@ const TOOL_ROUTES: Record<string, string> = {
   "decimals": "/decimal-steps", "decimal steps": "/decimal-steps", "decimals step by step": "/decimal-steps",
   "decimal operations": "/decimal-steps",
   "division house": "/division-house", "long division house": "/division-house",
+  "ladder method": "/ladder-method", "ladder": "/ladder-method",
+  "multiplication fluency": "/multiplication-fluency", "multiplication facts": "/multiplication-fluency",
 };
 function lines(text?: string) {
-  return (text || "").split(/[\n,]/).map((s) => s.trim()).filter(Boolean);
+  return (text || "").split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
 }
 function cleanItem(item: string) {
   return item.trim().replace(/^[-*]\s*/, "").replace(/^\d+[.)]\s*/, "").trim();

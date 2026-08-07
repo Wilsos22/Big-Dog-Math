@@ -456,7 +456,7 @@ function extractFirstText(properties: Record<string, NotionProperty>, names: str
 
 function splitList(text: string): string[] {
   return text
-    .split(/[\n,]/)
+    .split(/[\n,;]+/)
     .map((item) => item.trim())
     .filter(Boolean);
 }
@@ -464,11 +464,12 @@ function splitList(text: string): string[] {
 /**
  * Answer choices split on NEWLINES ONLY - never on commas.
  *
- * `splitList` splits on `[\n,]`, which is correct for Supplies and Tools (a
- * teacher really does write "Pencil, Notebook, Ruler" on one line) and
- * destructive for Choices. Measured against the live Lesson Steps data source
- * on 2026-08-04: of the 121 steps carrying authored choices, 14 have a comma
- * INSIDE a choice and ZERO author their choices comma-separated on one line.
+ * `splitList` splits on `[\n,;]+`, which is correct for Supplies and Tools (a
+ * teacher really does write "Pencil, Notebook, Ruler" or "Fraction Bars;
+ * Whiteboard" on one line) and destructive for Choices. Measured against the
+ * live Lesson Steps data source on 2026-08-04: of the 121 steps carrying
+ * authored choices, 14 have a comma INSIDE a choice and ZERO author their
+ * choices comma-separated on one line.
  * So comma splitting has never once done something useful on this property,
  * and has been shredding those 14 since the day it was written.
  *

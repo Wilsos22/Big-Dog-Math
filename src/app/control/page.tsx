@@ -2458,11 +2458,22 @@ export default function ControlPage() {
     setFinished(false);
     stopMusic();
     setShowLessons(false);
+    const noLessonSteps = lessonSteps.length === 0;
     const parts = [
       `Previewed “${lesson.title || "today's lesson"}”`,
       lessonSteps.length ? `${lessonSteps.length} timed steps added` : `${mapped.length} tool${mapped.length === 1 ? "" : "s"} added`,
       "warm-up staged for the open session; instructional and projector screens unchanged until start",
     ];
+    // A lesson with zero authored Lesson Steps must fail LOUDLY here, the same
+    // way a bad answer spec or a part-filled strip does below. Silently handing
+    // a teacher a two-item Warm-Up -> Exit Ticket lineup with only "0 tools
+    // added" for feedback reads as benign - it is not. /api/teacher/rehearse
+    // and /api/control-remote already refuse to run a zero-step lesson at all;
+    // this path keeps the synthesized fallback lineup, but the teacher has to
+    // be told plainly before they run it in front of a class.
+    if (noLessonSteps) {
+      parts.push(`NO LESSON STEPS IN NOTION - "${lesson.title || lesson.lessonCode}" has no Lesson Steps yet, so this is a synthesized Warm-Up -> Exit Ticket lineup, not the authored lesson`);
+    }
     const criterionValidationMessage = selectedSuccessCriterionValidationMessage(lesson.selectedSuccessCriterion);
     if (criterionValidationMessage) parts.push(`start blocked: ${criterionValidationMessage}`);
     if (unmatched.length) parts.push(`couldn't match: ${unmatched.join(", ")}`);
@@ -2473,9 +2484,9 @@ export default function ControlPage() {
     }
     if (stripGaps.length) parts.push(`PART-FILLED STATE STRIP, so no strip shows - ${stripGaps.join("; ")}`);
     setTodayMsg(parts.join(" · "));
-    // A broken answer spec, or a part-filled strip, has to stay on screen long
-    // enough to read and fix.
-    window.setTimeout(() => setTodayMsg(null), structuredNumericProblems.length || stripGaps.length ? 30000 : 8000);
+    // A broken answer spec, a part-filled strip, or a zero-step lesson has to
+    // stay on screen long enough to read and fix.
+    window.setTimeout(() => setTodayMsg(null), structuredNumericProblems.length || stripGaps.length || noLessonSteps ? 30000 : 8000);
     return true;
   }
 
