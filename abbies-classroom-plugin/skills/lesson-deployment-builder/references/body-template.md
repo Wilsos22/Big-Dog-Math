@@ -187,7 +187,7 @@ Teacher Supports and Resources
 {staging list, including any physical rehearsal}
 ## Misconception responses {color="red_bg"}
 - **{canonical tag}:** {prepared move}
-{mark any tag that is not one of the 13 canonical labels as needing a
+{mark any tag absent from `src/lib/misconceptions.ts` (36 labels as of 2026-08-06) as needing a
  misconceptions row before it will render in /teacher/rightnow}
 ## Vocabulary and stems {color="orange_bg"}
 {also attached to the individual steps that need them}

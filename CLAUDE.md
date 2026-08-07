@@ -2942,9 +2942,15 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
 - Stage gates per standard: accuracy-only caps at `approaching`; a Tier-2 checkpoint >=80% (produced
   work) reaches `mastered`; two such checkpoints >=3 weeks apart plus the SBAC-modeled item reach
   `complete`; a later <50% regresses.
-- Misconceptions are a FINITE exact-match vocabulary (13 tags, no NLP); clustering keys on exact string
-  match. Unmatched wrong choices map to `other`. Engine: `src/lib/grouping.ts`; archetype-templated next
-  moves, optionally Claude-sharpened via `/api/live/next-move`.
+- Misconceptions are a FINITE exact-match vocabulary (**36 tags** as of 2026-08-06, no NLP); clustering
+  keys on exact string match. Unmatched wrong choices map to `other`. Engine: `src/lib/grouping.ts`;
+  archetype-templated next moves, optionally Claude-sharpened via `/api/live/next-move`.
+  **Do not hardcode the count anywhere.** `src/lib/misconceptions.ts` is the source of truth, is
+  type-enforced at every call site, and `npm run test:misconceptions` asserts parity with the
+  `supabase/proficiency.sql` seed in both directions. This line said 13 until 2026-08-06, and the
+  same stale 13 had propagated into the `lesson-deployment-builder` skill and its references while
+  `classroom-os-context` carried an equally wrong 18 - three documents, three numbers, none correct,
+  because each recorded a count instead of pointing at the file. Count from `misconceptions.ts`.
 
 ## Design system
 

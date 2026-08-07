@@ -109,8 +109,10 @@ Not interchangeable, and each has one home:
 
 One coupled decision - the shape decides where the assignment lands.
 
-- **Shape A, whiteboard release.** The class works the assignment's own problems on whiteboards at their desks, no small groups, teacher circulates. The paper assignment goes home rehearsed. `abstract` shrinks to modelling one, because the "we do one together" beat becomes the first board problem; the release runs 35-51.
-- **Shape B, small-group release.** `abstract` runs full - model one, do one together on the actual assignment paper - then straight into small groups 38-51, teacher pulling by route while the rest work the paper. The assignment is finished in class.
+- **Shape A, whiteboard release.** The class works the assignment's own problems on whiteboards at their desks, no small groups, teacher circulates. The paper assignment goes home rehearsed. `abstract` shrinks to modelling one, because the "we do one together" beat becomes the first board problem; the release runs **35-46**.
+- **Shape B, small-group release.** `abstract` runs full - model one, do one together on the actual assignment paper - then straight into small groups **38-46**, teacher pulling by route while the rest work the paper. The assignment is finished in class.
+
+**The release ends at 46 and its start floats** (corrected 2026-08-06; both previously read `-51`, which overlapped the exit ticket and overran the period). Independent and small-group work is the flexible block and **it is where minutes come from when the rest of the lesson needs them** - a `concrete` that needs four more minutes takes them from the release, which simply starts later. Zero is a legitimate value on an instruction-heavy day. What never happens: padding it to hit a number, cutting a CRA phase to protect it, or running past 46 into `exit`. Whatever it shrinks to, the lesson still has to state where the required work lands.
 
 ### Room logistics
 
@@ -155,7 +157,7 @@ Route names that trip people up: `gems` → `/order-of-operations`, `combine lik
 Design is locked. Build it, do not redesign it.
 
 - Per-domain EWMA mastery bars; accuracy alone caps at `approaching`; a Tier-2 checkpoint >=80% with produced work reaches `mastered`.
-- **Misconceptions are a finite exact-match vocabulary** (18 tags in the `misconceptions` table). Clustering keys on the exact string. **Adding a tag is a SQL migration** - a tag typed into Notion never clusters and renders a blank prepared move in `/teacher/rightnow`.
+- **Misconceptions are a finite exact-match vocabulary** - **36 tags**, counted 2026-08-06 from the `misconceptions` seed in `supabase/proficiency.sql` plus the two added in `supabase/poll-evidence-vocabulary.sql`. This file said 18 and `lesson-deployment-builder` said 13; both were stale, and undercounting means flagging valid tags as needing a migration they do not need. Clustering keys on the exact string. **Adding a genuinely new tag is a SQL migration** - a tag typed into Notion never clusters and renders a blank prepared move in `/teacher/rightnow`. Count from the seed files rather than trusting any doc, this one included.
 - `reportToolResult` fires **only** inside a joined live session, and only 7 tools emit. At-home tool play records nothing.
 - Assigned practice (`practice_assignments`, created at `/teacher/assignments`) writes only to `practice_assignment_attempts` and **never** to `responses` - it moves no mastery bar. `formative.sql`'s comments claim otherwise; they describe intent that was never wired.
 
@@ -187,4 +189,12 @@ Warm Notebook, decided 2026-07-20, turn 12 canonical.
 
 Suggest skills, plugins and connectors that would do the job thoroughly, even ones he does not have yet. Reduce token usage where it does not hurt the product.
 
-For building or revising a single lesson to deployment depth, use the **lesson-deployment-builder** skill. For bulk stubs across an unbuilt unit, use **lesson-database-builder**.
+For building or revising a single lesson to deployment depth, use the **lesson-deployment-builder** skill. For bulk stubs across an unbuilt unit, use **lesson-database-builder**. For the hook that opens the day, use **lesson-hook** - it is a gate, not an option, and no lesson counts as done until its hook clears that skill's four checks. For evidence-based sequencing before a unit, use **math-pedagogy-research**.
+
+## Where this file is likely to be stale next
+
+It describes a system Steele is actively building, so treat these as read-on-arrival rather than settled:
+
+- **The lesson inventory.** Five M1.T1 lessons were `Published` on 2026-08-06 - L1, L2-D1, L2-D2, L3, L5-D1 - with seven more at `Ready for Review`. There is no L4. Re-query before claiming what is deployable.
+- **Anything with a count in it.** The misconception tag count was wrong here by 18. Verified accurate on 2026-08-06: 15 skills in `challengeSkills.ts`, 7 tools emitting `reportToolResult`.
+- **The release-block end times**, flagged above and unresolved.

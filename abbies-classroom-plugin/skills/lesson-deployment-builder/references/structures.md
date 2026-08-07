@@ -1,5 +1,19 @@
 # Choosing the day's structure
 
+> **Three corrections before you read this file (2026-08-06).**
+>
+> **1. The hook section here is superseded.** Hook authoring and auditing now live in the `lesson-hook`
+> skill, which is a gate: no lesson is deployment-ready until its hook clears four checks there. Use
+> this file's error-analysis, gallery-walk, and discussion material; do not write a hook from it.
+>
+> **2. The release ends at 46, and its start floats.** Corrected here and in `SKILL.md` and
+> `classroom-os-context`, all of which previously ran it to `51` — overlapping `exit` at 46-49 and
+> overrunning a 50-minute day. Independent work is the flexible block and is **where minutes come from
+> when the rest of the lesson needs them**: a `concrete` that runs long takes them from the release,
+> which simply starts later. It may shrink to zero; it may never cross 46.
+>
+> **3. "L1-D1" means `M1.T1.L1`.** Renamed in Notion; the observations still apply to the same page.
+
 ## First: which kind of day is this
 
 **New-learning day** → the CRA spine. Hook on the projector through the warm-up, LI and SC read from the spinner, concrete exploration in pairs, representational on a website tool, abstract on the assignment, Fist-to-Five, two learning checks, routes, exit.
@@ -93,7 +107,7 @@ Non-negotiables: wrong work never erased (it is the artifact the discussion need
 ```
 0-5 warmup · 5-9 launch · 9-10 LI/SC · 10-14 review · 14-20 concrete
 20-27 representational · 27-31 abstract (model one only) · 31-32 LI/SC + Fist-to-Five
-32-35 learning check · 35-51 whiteboard on the assignment problems
+32-35 learning check · 35-46 whiteboard on the assignment problems
 46-49 exit · 49-50 closeout                                            = 50
 ```
 

@@ -196,9 +196,18 @@ Parsed by `parsePlans()` in `src/app/teacher/rightnow/page.tsx`, which splits on
 
 ### The vocabulary is finite and lives in the database
 
-Per CLAUDE.md: "Misconceptions are a FINITE exact-match vocabulary (13 tags, no NLP); clustering keys on exact string match. Unmatched wrong choices map to `other`."
+Per CLAUDE.md (corrected 2026-08-06): "Misconceptions are a FINITE exact-match vocabulary (**36 tags**, no NLP); clustering keys on exact string match. Unmatched wrong choices map to `other`."
 
-The 13 canonical labels, verbatim from the `misconceptions` table seed in `supabase/proficiency.sql`:
+**There are 36 canonical labels as of 2026-08-06, not 13.** The list below is the original 13 and is
+**incomplete** — it predates the factors/multiples, fraction-division, and divisibility tags added in
+July 2026. Do not use it to decide whether a tag is canonical.
+
+**The source of truth is `src/lib/misconceptions.ts`** — TypeScript, type-enforced at every call site,
+with `npm run test:misconceptions` asserting parity against the `supabase/proficiency.sql` seed in both
+directions. Read that file and match against it. A tag that is genuinely absent needs a SQL migration
+*and* a TS edit; a tag that is merely missing from the stale list below needs neither.
+
+The original 13, kept for reference only: `verbatim from the misconceptions table seed in supabase/proficiency.sql`
 
 | Label | Standard |
 |---|---|
