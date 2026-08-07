@@ -579,6 +579,23 @@ export default function InkBoard({
     predictedRef.current = [];
     laserRef.current.clear();
     eraseSweepRef.current = [];
+    // A stroke in flight when clear fires must not keep claiming to be
+    // active against maps that no longer hold it: every move it makes after
+    // this point would look up its id, find nothing, and silently do
+    // nothing - for as long as that pointer stays down, which reads as ink
+    // that stopped appearing. Ending it here means the very next
+    // pointerdown, even the same physical touch lifted and replaced, starts
+    // clean. Referencing the refs directly (not the clearSnapTimer/
+    // flushQueuedSegment callbacks, which are declared later in this file)
+    // keeps this independent of declaration order.
+    drawingRef.current = false;
+    activeIdRef.current = null;
+    laserIdRef.current = null;
+    holdAnchorRef.current = null;
+    frozenShapeRef.current = false;
+    if (snapTimerRef.current !== null) { window.clearTimeout(snapTimerRef.current); snapTimerRef.current = null; }
+    if (sendFrameRef.current !== null) { window.cancelAnimationFrame(sendFrameRef.current); sendFrameRef.current = null; }
+    queuedSegmentRef.current = null;
     // Clear is deliberate and destructive - history does not survive it.
     historyRef.current = [];
     redoRef.current = [];
@@ -708,7 +725,11 @@ export default function InkBoard({
       window.removeEventListener("resize", resize);
       ro?.disconnect();
       window.clearInterval(tick);
-      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+      // cancelAnimationFrame guarantees the callback that would set frameRef
+      // back to null (in scheduleWet) never runs - so this cleanup has to do
+      // that reset itself, or every later scheduleWet() call sees a stale
+      // non-null guard and returns without ever scheduling a repaint again.
+      if (frameRef.current !== null) { window.cancelAnimationFrame(frameRef.current); frameRef.current = null; }
     };
   }, [resize]);
 
