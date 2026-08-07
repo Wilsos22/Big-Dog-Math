@@ -173,6 +173,13 @@ export default function LiveFlowPage() {
   const [connectionState, setConnectionState] = useState<ConnectionState>("connecting");
   const [pollSaveState, setPollSaveState] = useState<PollSaveState>("idle");
   const loadedDraftKeyRef = useRef<string | null>(null);
+  // The server cannot see localStorage or the query string, so anything in the
+  // RENDER derived from them has to stay at its server value until after the
+  // first client render or React tears the topbar down as a hydration
+  // mismatch. This flips on mount; the reads themselves stay in render (below)
+  // so they keep picking up a join that lands mid-lesson.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   // Student self-signal ("I'm stuck" / "say that again" / "I've got this").
   // Probed per lesson step: the chips stay hidden until the student-signals
   // migration has been run, and hide again when the teacher flips the
@@ -812,8 +819,12 @@ export default function LiveFlowPage() {
     : !activePoll && !resource && publicSurfacesLinked && flow?.state?.id === "ipad-kid"
       ? "ipad"
       : null;
-  const liveSessionId = getStoredStudentSessionId();
-  const spinnerSyncKey = getStoredStudentSession()?.syncKey || null;
+  // One read per render for every stored-session field the render needs (it
+  // used to be three separate localStorage hits). Held at the server's answer
+  // until mounted - see the note by the state declaration.
+  const storedSession = mounted ? getStoredStudentSession() : null;
+  const liveSessionId = storedSession?.sessionId ?? null;
+  const spinnerSyncKey = storedSession?.syncKey || null;
   const spinnerSyncScope = `${flow?.sequence?.currentIndex ?? -1}:${flow?.presentation?.notionStepId || flow?.state?.id || "spinner"}`;
   const independentSupports = liveIndependentSupportItems(flow?.state?.id, flow?.lesson);
   const routineSupports = !publicSurfacesLinked && routineConfig?.kind === "gallery-walk"
@@ -845,8 +856,17 @@ export default function LiveFlowPage() {
   const embeddedResourceUrl = resolvedResourceUrl?.includes("docs.google.com/forms")
     ? `${resolvedResourceUrl}${resolvedResourceUrl.includes("?") ? "&" : "?"}embedded=true`
     : null;
-  const hasStudentSession = isStudioPreviewMode || Boolean(getStoredStudentSessionId());
-  const studentName = isStudioPreviewMode ? "Abbie (demo)" : (getStoredStudentSession()?.name || "Student");
+  // isStudioPreviewMode reads the query string, so it is browser-only too and
+  // is gated on the same flag - otherwise the preview iframes trade one
+  // hydration mismatch for another.
+  const hasStudentSession = mounted && (isStudioPreviewMode || Boolean(liveSessionId));
+  // This is the student's ALIAS, not a name - /api/student/join returns
+  // `name: student.alias`, and the site has no name column to render instead.
+  // Steele's call, 2026-08-05, as a deliberate exception to the no-identity-on-
+  // a-student-device rule: the alias is their handle for the year, they know it
+  // and he knows it. Do NOT "fix" this back to a real first name - that would
+  // mean putting the teacher's roster name key on thirty Chromebooks.
+  const studentName = mounted && isStudioPreviewMode ? "Abbie (demo)" : (storedSession?.name || "Student");
 
   return (
     <main className="lf-page" style={{ "--lf-accent": accent } as CSSProperties}>
