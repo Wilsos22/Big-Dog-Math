@@ -206,7 +206,67 @@ bars and live misconception grouping).
    RENDERS on a student screen. The landing and /lesson greetings are name-free, the landing
    PURGES the dead `bdm-student-name` greeting key on every visit (so /assignment stores its
    at-home attribution alias under `bdm-assignment-alias` instead), and the boundary contract
-   pins all of it. The legacy /join typed-name flow (JoinQuestion + /api/session/responses,
+   pins all of it.
+   **THE ALIAS IS THE ONE THING A STUDENT DEVICE MAY SHOW, AND THAT IS A DECISION, NOT A LEAK**
+   (Steele, 2026-08-05: "keep the display of the alias... thats their alias for the year... they
+   know their alias and i know their alias"). `.lf-who` in the `/live-flow` topbar renders the
+   stored session's `name`, and that field IS the alias - `/api/student/join` returns
+   `name: student.alias` - so a verified Chromebook shows "Amber Fox" beside Leave class. It was
+   raised with him as a rule-8 contradiction and he kept it deliberately. The reasoning is worth
+   holding onto because it draws the real line: an alias is a YEAR-LONG HANDLE both parties already
+   know, so showing a student their OWN handle on their OWN screen discloses nothing to anyone. The
+   sentence above ("no name or alias at all") is therefore about NAMES and about OTHER students -
+   this is the documented exception, alongside the three spinner ones. Do not "fix" it by deleting
+   the span.
+   A REAL FIRST NAME IS NOT THE ALTERNATIVE AND CANNOT BE MADE ONE. He said he would not mind their
+   real name; the site cannot supply it. `students` has NO name column (verified live 2026-08-05:
+   id, period_id, created_at, auth_user_id, auth_claimed_at, alias, email_hmac, table_number), and
+   the only browser holding a name is the TEACHER's own key, which is what the projector spinners
+   resolve through. Rendering a name on a Chromebook means putting the whole roster's key on thirty
+   devices - that is undoing the cutover, not a feature, and it would need CCSD's sign-off.
+   NOTHING HAS EVER ACTUALLY RENDERED YET, and that is worth knowing before anyone "verifies" this:
+   measured live 2026-08-05, `students` 167 rows, **0** with `auth_user_id`, **0** `session_joins`
+   carrying a student id, so no device has reached the verified branch. A PROVISIONAL session stores
+   `name: ""` and falls back to the literal word "Student". The alias appears at cutover steps 2
+   and 6, with no code change.
+   TWO CONTRACTS DISAGREE ABOUT `lf-who` THE MOMENT ANYONE TOUCHES IT.
+   `scripts/classroom-surface-contract.mjs` REQUIRES `className="lf-who"` as proof the Chromebook
+   frame is intact, so removing the span fails that suite with a message about the "warm-cream
+   frame" that says nothing about identity. Both suites currently agree because the span stayed. If
+   this decision ever flips, the surface contract's anchor has to move in the SAME commit -
+   `lf-exit` is the natural replacement. Grep the other contracts for a class name before assuming
+   a surface change is local.
+   **`/challenge` IS THE OPPOSITE CALL, AND THE DIFFERENCE IS WHOSE ALIAS IT IS** (Steele, same
+   day: "there shouldnt be a leader board that shows all the agregate scores. thats not needed...
+   any wins should come from previous best, not student to student"). The topbar shows a student
+   THEIR OWN handle; `/challenge` was showing them EVERYONE's. That second thing is gone: the live
+   top-3 during play, the finish-position heading ("You won!" / "You finished #3") and the final
+   top-5 list are all removed, along with the `fetchLeaderboard` poll on that surface. THE TEACHER
+   STILL GETS THE WHOLE BOARD - `/control`, `/session`, `/teacher/challenges` and
+   `/api/teacher/challenge` are untouched, and `fetchLeaderboard` itself is unchanged. It was
+   removed from ONE consumer, so do not read its remaining call sites as a leak.
+   WHAT REPLACED IT IS GROWTH AGAINST THEMSELVES. The results screen carries one line comparing the
+   run to this device's earlier runs on the SAME skill AND level - "New best - 12 points more than
+   your old best of 76", "8 points more than last time", "You matched your best of 88". Stored in
+   localStorage under `bdm-challenge-best-v1:<skill>:<level>` as `{best, last}`, deliberately NOT
+   server-side: every student write still needs the verified join the cutover has not switched on,
+   so a server-backed history would be dead code today. The cost is real - a best does not follow a
+   student to another Chromebook. Two rules inside the copy, both load-bearing. A run that falls
+   short NEVER names the gap; it points at the best as a target, because the line exists to make the
+   next run worth starting. And MATCHING the best is tested BEFORE beating last time, or a student
+   who ties their record while topping their last run is told "your best is 88" in the same breath
+   as scoring 88 - found by driving every branch, not by reading the code.
+   NOT REMOVED, AND CORRECT UNDER THE TOPBAR DECISION: `/challenge`'s countdown still greets
+   "Get ready, Amber!" from `session.name.split(" ")[0]`. That is the student's own alias on their
+   own screen - the same case Steele approved above, not the peer comparison he removed.
+   `/bruh`'s `t.name` was checked and is a TEAM name, not a student, and `/teacher/scoreboard` -
+   which IS a display route students walk past - ranks BRUH and Grudge Ball TEAMS, not students.
+   STILL UNBUILT, AND HE ASKED FOR IT: "or you got all the 9s this time nice!" - recognising which
+   CONTENT improved, not just the score. `Problem` (challengeSkills.ts) carries no facet to group by
+   (`prompt` is a display string like "9 x 7"), so this needs a tag on the generated problem plus a
+   per-facet history, across 15 skills. Parsing the prompt string instead would be fragile. Not
+   started; the points version above is what shipped.
+   The legacy /join typed-name flow (JoinQuestion + /api/session/responses,
    superseded by live-flow polls) is deliberately left as-is. Mock/test
    identities stay fully fictional AND pseudonymous-shaped (the mock class is Amber Fox and
    friends). Built 2026-07-31; SERVER SIDE CUT OVER 2026-08-01 on Steele's go: schema migration
@@ -2582,6 +2642,28 @@ Design is locked (Steele's "Independent Proficiency System") - build it, do not 
   server sees the new file - so a clean typecheck is not proof here. Put shared helpers in `src/lib/`.
   Same story in reverse: after deleting a route, a stale `.next/dev/types/app/<route>/` makes
   typecheck fail on a file that no longer exists - delete the folder (`.next` is gitignored).
+- **A `"use client"` PAGE IS STILL SERVER-RENDERED, SO READING `localStorage` OR THE QUERY STRING
+  DURING RENDER IS A HYDRATION MISMATCH** (found 2026-08-05 on `/live-flow`, the surface thirty
+  Chromebooks load at once). `getStoredStudentSession()` wraps its `localStorage` read in a
+  try/catch, so on the server it throws `ReferenceError` and returns null - silently. The SSR HTML
+  therefore shipped `Not joined`, the client's first render said `Connecting`, and React discarded
+  and regenerated the whole topbar on every load. `isStudioPreviewMode()` has the identical
+  try/catch shape and the same hazard in the `?studioPreview=1` iframes. The fix is a `mounted`
+  flag set in a `useEffect` that holds the derived value at the SERVER's answer for exactly one
+  render; keep the read itself in render, or a join that lands mid-lesson (WarmupJoinSync upgrades
+  a provisional session at any time) stops being picked up. Reading inside a `useEffect` is the
+  other safe shape and is what `/lesson` and the landing already do - they were checked and are
+  clean; `/live-flow` was the only page reading during render.
+  **FIX THE WHOLE GROUP, NOT THE LINE THE ERROR NAMES.** React reports only the FIRST mismatched
+  text in a subtree and then regenerates it, so the overlay said "1 issue" at the sync pill while
+  `.lf-who` (the alias) was mismatched on the very next line. Repairing only the named line
+  uncovers the next one and reads as "the fix did not work".
+  **THE BROWSER PANE'S CONSOLE READER DOES NOT SURFACE HYDRATION ERRORS** - `read_console_messages`
+  returned nothing while the error was plainly there. Read Next's dev overlay out of the shadow DOM
+  instead: walk `document.querySelectorAll("nextjs-portal")`, skip `STYLE`/`LINK` and any element
+  with children, and collect the leaf text. That prints the message, the file and the line. Confirm
+  the SSR half with `curl` - the HTML the server actually shipped is the only unarguable evidence of
+  what React compared against.
 - Scratch worktrees: `npm run build` (Turbopack) panics if the `node_modules` symlink points outside
   what it takes as the project root - "Symlink [project]/node_modules is invalid". Put worktrees that
   need a BUILD under `.claude/worktrees/` inside the repo; a tmp-dir worktree with the symlink is
