@@ -441,7 +441,12 @@ export default function PaceSupportPage() {
         .pw-textbtn { min-width:40px; min-height:30px; border:1.2px solid var(--hair); border-radius:8px; background:var(--card); color:var(--head); font:inherit; font-size:0.78rem; font-weight:800; cursor:pointer; }
         .pw-textbtn:hover:not(:disabled) { border-color:var(--acc); }
         .pw-textbtn:disabled { opacity:0.4; cursor:default; }
-        .pw-body { position:relative; min-height:0; overflow:hidden; }
+        /* --css-strip-top: see the matching note on .stage-work in
+           /teacher/present. .pw-body starts exactly at the 64px topbar's
+           bottom edge, itself below the vertically-centered clock, so 20px
+           from here is a real floor under the clock's bottom edge - not the
+           vh clamp ClassroomStateStrip.tsx falls back to when this is unset. */
+        .pw-body { position:relative; min-height:0; overflow:hidden; --css-strip-top:20px; }
         .pw-cols { position:absolute; inset:0; display:grid; grid-template-columns:minmax(0,1.35fr) minmax(280px,0.65fr); gap:clamp(18px,3vw,40px); padding:clamp(24px,3.6vw,52px); }
         .pw-left { min-width:0; display:flex; flex-direction:column; gap:clamp(14px,2.2vh,22px); }
         .pw-action { margin:0; color:var(--head); font-size:clamp(1.8rem,3.4vw,3.3rem); line-height:1.06; font-weight:800; letter-spacing:-0.02em; text-wrap:balance; }
@@ -653,29 +658,14 @@ export default function PaceSupportPage() {
               ) : (
               <>
               <p className="pw-check-title">Fist to five</p>
-              {poll.stage === "results" ? (
-                <>
-                  <h2 className="pw-check-prompt">Where we are as a class</h2>
-                  <div className="pw-bars" aria-label="Anonymous Fist-to-Five results">
-                    {["0", "1", "2", "3", "4", "5"].map((choice) => {
-                      const count = pollAnswers.filter((answer) => answer.answer === choice).length;
-                      const maxCount = Math.max(1, ...["0", "1", "2", "3", "4", "5"].map((value) => pollAnswers.filter((answer) => answer.answer === value).length));
-                      return (
-                        <div className="pw-bar-column" key={choice}>
-                          <div className="pw-bar-track"><div className="pw-bar-fill" style={{ height: `${Math.max(4, Math.round((count / maxCount) * 100))}%` }} /></div>
-                          <span className="pw-bar-label">{choice}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <p className="pw-check-count">Anonymous class results. {pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"}.</p>
-                </>
-              ) : (
-                <>
-                  <h2 className="pw-check-prompt">Answer on your Chromebook</h2>
-                  <p className="pw-check-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received. Names stay private.</p>
-                </>
-              )}
+              {/* No class histogram on the support projector (Steele, 2026-08-06:
+                 the fist-to-five distribution is for the teacher on the iPad, not
+                 the room). The support screen shows the question and the count in
+                 every stage, matching the other kinds above; the anonymous
+                 "Where we are as a class" bars that used to draw at results stage
+                 are gone. The teacher reads the distribution on /teacher/remote. */}
+              <h2 className="pw-check-prompt">Answer on your Chromebook</h2>
+              <p className="pw-check-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received. Names stay private.</p>
               </>
               )}
             </div>

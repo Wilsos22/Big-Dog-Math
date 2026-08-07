@@ -801,7 +801,22 @@ export default function ClassroomStagePage() {
         .stage-success { position:absolute; z-index:4; top:14px; right:14px; width:min(34vw,440px); border:1px solid var(--hair); border-top:4px solid var(--acc); border-radius:16px; background:var(--card); padding:13px 16px; box-shadow:0 12px 32px rgba(40,32,20,0.10); }
         .stage-success-label { margin:0; color:var(--acc-deep); font-size:0.66rem; font-weight:900; letter-spacing:0.12em; text-transform:uppercase; }
         .stage-success-text { margin:6px 0 0; color:var(--ink); font-size:clamp(0.8rem,1.25vw,1.02rem); line-height:1.32; font-weight:700; }
-        .stage-work { position:relative; min-height:0; overflow:hidden; }
+        /* --css-strip-top feeds ClassroomStateStrip.tsx's own top offset. The
+           clock (.stage-timer) lives inside .stage-topbar, a fixed 66px row
+           (54px under the 900px breakpoint below); .stage-work starts exactly
+           at that row's bottom edge, so an offset measured from HERE is
+           already measured from a point at-or-below the clock's own bottom
+           edge (the clock is vertically centered in the row, so the row's
+           edge sits below it by the row's own padding). 20px on top of that
+           is a real, non-vh, non-scene-dependent floor - it does not shrink
+           at 1280x720 and does not depend on which scene is on stage, unlike
+           the plain clamp() this replaces (State Strip Icons v3, fixed
+           2026-08-06: reported as the strip crowding the clock on some
+           scenes; measured every catalog scene at 1280/1440/1600/1920 wide
+           and the old clamp already held >=23px in every one - but that
+           margin was a coincidence of two unrelated fixed budgets, not a
+           designed guarantee, so it is replaced with an explicit one). */
+        .stage-work { position:relative; min-height:0; overflow:hidden; --css-strip-top:20px; }
         .stage-override { position:absolute; inset:0; z-index:3; width:100%; height:100%; border:0; background:#F3F0E7; }
         .stage-empty, .stage-directions, .stage-poll, .stage-resource-link { position:absolute; inset:0; display:grid; place-items:center; padding:clamp(34px,6vw,88px); text-align:center; }
         .stage-empty h1 { margin:0; max-width:22ch; color:var(--head); font-size:clamp(2.2rem,5.2vw,5.2rem); line-height:1.02; font-weight:800; letter-spacing:-0.02em; }
@@ -1308,25 +1323,18 @@ export default function ClassroomStagePage() {
             ) : (
             <div className="stage-poll">
               {showLessonTargets && lesson?.learningIntention ? <p className="stage-learning">{lesson.learningIntention}</p> : null}
-              <h2 className="stage-question">{poll.stage === "results" ? "Class Results" : poll.question}</h2>
-              {poll.stage === "responding" || poll.kind === "short-answer" ? (
-                <p className="stage-response-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received</p>
-              ) : (
-                <div className="stage-results">
-                  {(poll.choices || []).map((choice) => {
-                    const count = pollAnswers.filter((answer) => answer.answer === choice).length;
-                    const percent = pollAnswers.length ? Math.round((count / pollAnswers.length) * 100) : 0;
-                    return (
-                      <div className="stage-result" key={choice}>
-                        <span>{poll.kind === "fist-to-five" ? `${choice} / 5` : choice}</span>
-                        <div className="stage-bar"><div className="stage-fill" style={{ width: `${percent}%` }} /></div>
-                        <span>{count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {poll.stage === "results" ? <p className="stage-response-count">{poll.question}</p> : null}
+              {/* In-lesson checks (fist-to-five, multiple choice, short answer)
+                 never reveal a class tally on the projectors (Steele, 2026-08-06:
+                 "the results of the fist of 5, and both ready checks do not need
+                 to show up on the screens. I should see it on the ipad"). The
+                 room sees the question and how many have answered; the teacher
+                 reads the distribution and the visit list on the iPad Remote.
+                 The anonymous "Class Results" histogram that used to draw here at
+                 results stage is gone - the review path (Private response data +
+                 VisitListPanel on /teacher/remote) is untouched. structured-numeric
+                 was already prompt-only in the branch above. */}
+              <h2 className="stage-question">{poll.question}</h2>
+              <p className="stage-response-count">{pollAnswers.length} response{pollAnswers.length === 1 ? "" : "s"} received</p>
             </div>
             )
           ) : showResourcePanel && resource ? (

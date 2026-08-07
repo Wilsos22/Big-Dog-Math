@@ -113,7 +113,14 @@ export function ClassroomStateStrip({
   return (
     <div className={`css-strip${overridden ? " overridden" : ""}${className ? ` ${className}` : ""}`} aria-label="Classroom state">
       <style>{`
-        .css-strip { position:absolute; z-index:14; top:clamp(10px,1.4vh,20px); right:clamp(12px,1.5vw,26px);
+        /* top defaults to the old vh-based clamp so any consumer that never
+           sets --css-strip-top keeps exactly today's behavior. A page that
+           knows its own topbar height (present, pace) sets that variable
+           instead, on the strip's positioned ancestor - see the "state pill
+           top-right icon strip crowds the clock" fix note on those pages for
+           why a vh clamp alone is not enough: it is anchored to the stage,
+           not to the clock, so nothing there actually measures the clock. */
+        .css-strip { position:absolute; z-index:14; top:var(--css-strip-top, clamp(10px,1.4vh,20px)); right:clamp(12px,1.5vw,26px);
           display:grid; gap:clamp(5px,0.7vh,9px); width:max-content; max-width:min(30vw,300px);
           border:1px solid var(--bdb-line); border-radius:14px; background:var(--bdb-ground-2);
           padding:clamp(8px,1vh,13px) clamp(10px,1.1vw,15px); box-shadow:0 2px 12px rgba(40,32,20,0.07); }
