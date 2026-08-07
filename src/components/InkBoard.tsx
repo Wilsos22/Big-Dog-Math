@@ -104,6 +104,13 @@ interface InkBoardProps {
   onExport?: (dataUrl: string) => void; // receives the flattened PNG; if absent, downloads
   onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void;
   onConnectionChange?: (status: InkConnectionStatus) => void;
+  // TEMP DIAGNOSTIC (2026-08-07): reports raw pointer event counts + a short
+  // log, so a real device can show whether a "missing" stroke's pointerdown
+  // ever arrived at all. Reported only from onDown/onUp - never from onMove,
+  // which can fire many times a second and must never drive a React update
+  // (see the notifyHistory comment below for why that already burned once).
+  // Remove this prop and its call sites once the dropped-stroke bug is found.
+  onDebugCounts?: (counts: { down: number; move: number; up: number; log: string[] }) => void;
 }
 
 interface ActiveStroke {
@@ -139,6 +146,7 @@ export default function InkBoard({
   onExport,
   onHistoryChange,
   onConnectionChange,
+  onDebugCounts,
 }: InkBoardProps) {
   const hlRef = useRef<HTMLCanvasElement | null>(null);
   const dryRef = useRef<HTMLCanvasElement | null>(null);
@@ -154,6 +162,15 @@ export default function InkBoard({
   const activeRef = useRef<Map<string, ActiveStroke>>(new Map());
   const drawingRef = useRef(false);
   const activeIdRef = useRef<string | null>(null);
+  // TEMP DIAGNOSTIC - see onDebugCounts in InkBoardProps above.
+  const debugCountsRef = useRef({ down: 0, move: 0, up: 0 });
+  const debugLogRef = useRef<string[]>([]);
+  const onDebugCountsRef = useRef(onDebugCounts);
+  useEffect(() => { onDebugCountsRef.current = onDebugCounts; }, [onDebugCounts]);
+  const reportDebugCounts = useCallback((line: string) => {
+    debugLogRef.current = [...debugLogRef.current, line].slice(-20);
+    onDebugCountsRef.current?.({ ...debugCountsRef.current, log: debugLogRef.current });
+  }, []);
   const rectRef = useRef({ left: 0, top: 0, width: 1, height: 1 });
   const predictedRef = useRef<InkRenderPoint[]>([]);
   const hoverRef = useRef<{ x: number; y: number } | null>(null);
@@ -1126,6 +1143,11 @@ export default function InkBoard({
   }, [performRedo, performUndo]);
 
   const onDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    // TEMP DIAGNOSTIC - counted before any early return, so this proves
+    // whether the handler fired at all, and with what pointerType, for a
+    // stroke that goes missing. Remove with the rest of onDebugCounts.
+    debugCountsRef.current.down += 1;
+    reportDebugCounts(`down type=${e.pointerType} id=${e.pointerId} p=${e.pressure.toFixed(2)} drawingWas=${drawingRef.current}`);
     if (!interactive) return;
     if (e.pointerType === "touch" && !fingerRef.current) { noteTouchDown(e); return; } // palms never mark; fingers become gestures
     measure();
@@ -1179,9 +1201,12 @@ export default function InkBoard({
       holdAnchorRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
       armSnapTimer();
     }
-  }, [applySeg, armSnapTimer, eraseAt, interactive, measure, noteTouchDown, scheduleWet, size, smoothedPressure, toNorm, toPagePx]);
+  }, [applySeg, armSnapTimer, eraseAt, interactive, measure, noteTouchDown, reportDebugCounts, scheduleWet, size, smoothedPressure, toNorm, toPagePx]);
 
   const onMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    // TEMP DIAGNOSTIC - ref-only, no callback: onMove can fire many times a
+    // second and must never drive a React update on every sample.
+    debugCountsRef.current.move += 1;
     if (!interactive) return;
     if (e.pointerType === "touch" && !fingerRef.current) { noteTouchMove(e); return; }
     if (!drawingRef.current) {
@@ -1286,6 +1311,12 @@ export default function InkBoard({
   }, [applySeg, armSnapTimer, eraseAt, interactive, noteTouchMove, queueSegment, scheduleWet, size, smoothedPressure, toNorm, toPagePx]);
 
   const onUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    // TEMP DIAGNOSTIC - counted before any early return, and includes what
+    // this handler believes drawingRef/activeIdRef are AT THIS MOMENT, so a
+    // dropped stroke's up event shows whether the app's own state already
+    // disagreed with reality by the time it lifted.
+    debugCountsRef.current.up += 1;
+    reportDebugCounts(`${e.type} type=${e.pointerType} id=${e.pointerId} drawingRef=${drawingRef.current} activeId=${activeIdRef.current ?? "null"}`);
     if (interactive && e.pointerType === "touch" && !fingerRef.current) {
       if (e.type === "pointercancel") touchTapsRef.current.clear();
       else noteTouchUp(e);
@@ -1342,7 +1373,7 @@ export default function InkBoard({
         recordOp({ kind: "draw", stroke });
       }
     }
-  }, [applySeg, bake, clearSnapTimer, flushQueuedSegment, interactive, noteTouchUp, recordOp, scheduleWet]);
+  }, [applySeg, bake, clearSnapTimer, flushQueuedSegment, interactive, noteTouchUp, recordOp, reportDebugCounts, scheduleWet]);
 
   const onLeave = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     hoverRef.current = null;

@@ -71,6 +71,12 @@ export default function IpadPage() {
   const [boardStatus, setBoardStatus] = useState<InkConnectionStatus>("connecting");
   const [barkCooling, setBarkCooling] = useState(false);
   const [screenAr, setScreenAr] = useState(16 / 9);
+  // TEMP DIAGNOSTIC (2026-08-07): a real pointer-event counter, visible only
+  // behind ?debug=1, chasing a dropped-stroke report a synthetic browser test
+  // could not reproduce. Remove this state, the URL read below, and the
+  // overlay JSX once that's found - it is not classroom UI.
+  const [debug, setDebug] = useState(false);
+  const [debugCounts, setDebugCounts] = useState<{ down: number; move: number; up: number; log: string[] } | null>(null);
   // Mirrored from InkBoard, which owns the zoom, and applied to the SLIDE so
   // the content moves with the writing. The ink needs no CSS transform - it is
   // redrawn vectorially at the new scale, which is what keeps it sharp.
@@ -110,8 +116,10 @@ export default function IpadPage() {
 
   useEffect(() => {
     try {
-      const r = new URLSearchParams(window.location.search).get("room");
+      const params = new URLSearchParams(window.location.search);
+      const r = params.get("room");
       if (r) setRoom(r.trim());
+      if (params.get("debug") === "1") setDebug(true);
       if (localStorage.getItem("bdm-ipad-tools-open") === "0") setToolsOpen(false);
     } catch { /* ignore */ }
   }, []);
@@ -467,6 +475,7 @@ export default function IpadPage() {
               onExport={handleExport}
               onHistoryChange={(undo, redo) => setHistory({ undo, redo })}
               onConnectionChange={setBoardStatus}
+              onDebugCounts={debug ? setDebugCounts : undefined}
             />
           </div>
           <span className="ip-screen-note">
@@ -474,6 +483,23 @@ export default function IpadPage() {
           </span>
         </div>
       </div>
+
+      {/* TEMP DIAGNOSTIC - only behind ?debug=1, never classroom UI. Remove
+          with the state above and onDebugCounts in InkBoard once the
+          dropped-stroke bug is found. */}
+      {debug && debugCounts && (
+        <div style={{
+          position: "fixed", bottom: 10, right: 10, zIndex: 999,
+          background: "rgba(0,0,0,0.85)", color: "#0f0", fontFamily: "monospace",
+          fontSize: "11px", padding: "8px 10px", borderRadius: 8,
+          maxWidth: "min(480px, 92vw)", pointerEvents: "none", lineHeight: 1.5,
+        }}>
+          <div>down={debugCounts.down} move={debugCounts.move} up={debugCounts.up}</div>
+          <div style={{ marginTop: 4, whiteSpace: "pre-wrap", opacity: 0.85 }}>
+            {debugCounts.log.slice(-8).join("\n")}
+          </div>
+        </div>
+      )}
 
       {/* The pen surface never reloads itself - it holds the room's ink - so it
           has to SAY when a new build is waiting, or it silently runs old code
