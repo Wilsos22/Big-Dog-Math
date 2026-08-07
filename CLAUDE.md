@@ -212,6 +212,34 @@ bars and live misconception grouping).
    which is the thing that killed the otherwise-cleaner laptop layout on 2026-08-05 (a Bluetooth
    speaker on the laptop was offered and declined; he prefers the classroom speakers). Anyone
    proposing to relocate Control has to answer the audio question first.
+   **SUPERSEDED 2026-08-07: `/teacher/present` IS NOW THE PRIMARY AUDIO HOST; CONTROL IS THE BACKUP.**
+   Steele ran the "UNMEASURED" test above and it FAILED - with Control the hidden tab behind
+   `/present` fullscreen, the timer cues, per-state music, AND the iPad sound-bank cues all fired
+   late or not at all, because browsers throttle hidden tabs (he confirmed all three dead in a real
+   class, Control hidden). So audio playback moved to the always-foreground projector tab.
+   `src/components/ClassroomAudioHost.tsx` (mounted on `/present`, REAL PROJECTOR ONLY - inert on the
+   `/ipad` embed, `/demo`, Studio preview, and never on `/teacher/pace`) now plays the timer cues,
+   per-state music, and sound bank, subscribing to the same `remote-<sessionId>` ping Control uses.
+   Control KEEPS its whole engine as the BACKUP: three suppression guards (`playCue`, `startMusicFor`,
+   `playCueOnce` all early-return on `audioSuppressedRef`) plus a `watchAudioHost` effect. Election is
+   `src/lib/audioHostChannel.ts` (`claimAudioHost`/`watchAudioHost`) over BroadcastChannel
+   `bdm-audio-host` (same machine: Control is a hidden tab in the panel's browser) AND a realtime room
+   `audio-host-<sessionId>` (the laptop case). Present claims host only when ARMED, so an un-armed
+   present never silences the backup; Control resumes the instant present says un-armed or its claim
+   goes stale (present closed/crashed). Shared tones/duck levels live in `src/lib/timerCues.ts` and the
+   store keys in `src/lib/classroomAudio.ts` (`bankAudioKey`) so the two hosts cannot drift;
+   `npm run test:sound-bank` pins present-is-host. What this MEANS for the panel-vs-laptop question:
+   the room's sound no longer follows CONTROL - it follows whatever runs `/present`, which is the panel
+   on the room speakers, so Control no longer has to be foregrounded for audio. BROWSER AUTOPLAY still
+   requires ONE tap: `/present` shows a big centered "Tap to turn on classroom sound" prompt at class
+   start (any tap on the projector also arms). KNOWN OPERATIONAL COST: `/present` is in `DeployRefresh`,
+   so a mid-class deploy reloads it and needs one re-tap to re-arm sound (Control-as-backup covers the
+   gap, but a hidden Control is itself throttled - so the reliable remedy is the tap). NOT YET PROVEN
+   IN A LIVE CLASS: verified by typecheck + build + all contracts + a second-agent review + a browser
+   check that the prompt renders and arms on the real `/present`; the one-period test is now "with
+   `/present` up and tapped once, does a backgrounded Control stay silent while the cues fire from the
+   projector on time." The rest of this paragraph and the one above are HISTORY of why audio used to
+   live on Control; do not restore Control-as-primary without re-reading this.
    **"ONE CONTROL AT A TIME" APPLIES ACROSS MACHINES, NOT JUST TABS.** The second-Control hazard
    below is usually read as being about two tabs in one browser. It is not - a fresh Control boots
    holding the `DEFAULT_STATES` skeleton (`control/page.tsx:699`) and with no stored teacher session

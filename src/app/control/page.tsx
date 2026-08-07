@@ -21,6 +21,13 @@ import LessonVisual from "@/components/LessonVisual";
 // The sound bank took the deck's place.
 import { SOUND_CUES, clearUserClip, installUserClip, matchSoundCueFile, playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
 import { CLASSROOM_AUDIO_CHANNEL, announceClassroomAudioChange } from "@/lib/classroomAudio";
+import {
+  CUE_DUCK_FALLBACK_SECONDS,
+  MUSIC_DUCK_VOLUME,
+  MUSIC_FULL_VOLUME,
+  TIMER_TONE_PATTERNS,
+} from "@/lib/timerCues";
+import { watchAudioHost } from "@/lib/audioHostChannel";
 import { joinRealtimeRoom } from "@/lib/realtimeRooms";
 import {
   REMOTE_COMMAND_PING_EVENT,
@@ -298,14 +305,9 @@ const DEFAULT_TOOL_SETUP: ToolSetupValues = {
 
 type CueKey = "music" | "warn30" | "tick" | "end";
 
-// State music sits under the cues rather than stopping for them - a song that cuts out every time
-// a tick fires is worse than one that dips. 0.18 is quiet enough that a spoken cue reads clearly
-// over it.
-const MUSIC_FULL_VOLUME = 1;
-const MUSIC_DUCK_VOLUME = 0.18;
-// Used until a clip reports its real duration. Longer than any cue in the bank, short enough that
-// a clip which never loads cannot leave the music quiet for the rest of the period.
-const CUE_DUCK_FALLBACK_SECONDS = 3;
+// MUSIC_FULL_VOLUME / MUSIC_DUCK_VOLUME / CUE_DUCK_FALLBACK_SECONDS and the timer
+// tone patterns moved to src/lib/timerCues.ts so /control (the backup audio host)
+// and /teacher/present (the primary host) sound identical and cannot drift.
 const CUE_LABELS: Record<CueKey, string> = {
   music: "Warm-up music (loops)",
   warn30: "30-second alert",
@@ -823,6 +825,14 @@ export default function ControlPage() {
   // The single cue channel and the duck-restore timer. See playCue.
   const cueRef = useRef<HTMLAudioElement | null>(null);
   const duckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Control is the BACKUP audio host as of 2026-08-07. When /teacher/present (the
+  // foreground projector) is armed and playing, it heartbeats a claim and Control
+  // falls silent so a cue never plays twice. When present is gone, this stays
+  // false and Control plays exactly as before. latestFlowRef lets the un-suppress
+  // path resume the current state's music without waiting for the next advance.
+  const audioSuppressedRef = useRef(false);
+  const latestFlowRef = useRef<LiveClassFlowSnapshot | null>(null);
+  latestFlowRef.current = teacherSession?.live_flow ?? null;
   const previousScoreboardStageRef = useRef<"halftime" | "final" | null>(null);
   const autoOpenedStepRef = useRef<Set<string>>(new Set());
   const openingStepRef = useRef<string | null>(null);
@@ -1185,6 +1195,7 @@ export default function ControlPage() {
   }, []);
 
   const playCue = useCallback((key: CueKey) => {
+    if (audioSuppressedRef.current) return; // /present has the room
     const url = soundUrls[key];
     if (url) {
       // ONE cue channel. A cue is an interruption, so a new one replaces whatever is still
@@ -1211,9 +1222,7 @@ export default function ControlPage() {
       return;
     }
     duckMusic(key === "tick" ? 0.4 : 1);
-    if (key === "tick") genTone([{ f: 660, t: 0, d: 0.07 }]);
-    else if (key === "warn30") genTone([{ f: 880, t: 0, d: 0.18 }, { f: 660, t: 0.22, d: 0.18 }]);
-    else if (key === "end") genTone([{ f: 880, t: 0, d: 0.2 }, { f: 880, t: 0.25, d: 0.2 }, { f: 880, t: 0.5, d: 0.2 }]);
+    if (key !== "music") genTone(TIMER_TONE_PATTERNS[key]);
   }, [soundUrls, genTone, duckMusic]);
 
   useEffect(() => {
@@ -1267,6 +1276,7 @@ export default function ControlPage() {
     // this as "the music for this state is now the only music", so it has to be true even when the
     // answer is silence.
     stopMusic();
+    if (audioSuppressedRef.current) return; // /present has the room
     wantedMusicStateRef.current = stateId;
     const key = `music:${stateId}`;
     const cached = soundUrlsRef.current[key];
@@ -1342,6 +1352,26 @@ export default function ControlPage() {
     };
     return () => channel.close();
   }, [startMusicFor]);
+
+  // Control is the BACKUP audio host (2026-08-07). While /teacher/present (the
+  // foreground projector) is armed and playing, it heartbeats a claim and Control
+  // falls silent so no cue plays twice. When that claim goes stale - present
+  // closed or crashed - Control resumes and restarts the current state's music
+  // so a rush day, or a dead projector tab, is never left silent.
+  useEffect(() => {
+    const sessionId = teacherSession?.id;
+    if (!sessionId) return;
+    return watchAudioHost(sessionId, (suppressed) => {
+      audioSuppressedRef.current = suppressed;
+      if (suppressed) {
+        stopMusic();
+      } else {
+        const flow = latestFlowRef.current;
+        if (flow?.interlude) startMusicFor(flow.interlude.stateId);
+        else if (flow?.timer?.running && flow.state) startMusicFor(flow.state.id);
+      }
+    });
+  }, [teacherSession?.id, startMusicFor, stopMusic]);
 
   // Ad-hoc "Transition now" interludes (fired from the Remote or /session)
   // arrive through the synced session row. Play the vibe's track while the
@@ -3058,6 +3088,7 @@ export default function ControlPage() {
   const playCueOnce = useCallback((action: string, nonce: string) => {
     const cue = soundCueIdForAction(action);
     if (!cue) return false;
+    if (audioSuppressedRef.current) return true; // /present has the room; treat as handled
     const seen = playedCueNoncesRef.current;
     if (seen.has(nonce)) return true;
     seen.add(nonce);

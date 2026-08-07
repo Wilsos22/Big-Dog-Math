@@ -9,6 +9,7 @@ import SupplyCheckBoard from "@/components/SupplyCheckBoard";
 import InkBoard from "@/components/InkBoard";
 import LessonVisual from "@/components/LessonVisual";
 import AttentionListener from "@/components/AttentionListener";
+import ClassroomAudioHost from "@/components/ClassroomAudioHost";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
 import { joinInkRoom } from "@/lib/inkSync";
 import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
@@ -1485,6 +1486,18 @@ export default function ClassroomStagePage() {
           right, the classroom state strip under it. See CLAUDE.md. */}
       {inkOverlay && !inkOverlay.embed && <ScreenInkOverlay room={inkOverlay.room} />}
       {inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && <AttentionListener room={inkOverlay.room} />}
+      {/* The room's audio host (2026-08-07): timer cues, per-state music, and the
+          iPad sound bank play from THIS foreground projector tab, not /control's
+          hidden one. Real projector only - never the /ipad embed, /demo, or
+          Studio preview. See ClassroomAudioHost + CLAUDE.md rule 6. */}
+      <ClassroomAudioHost
+        active={Boolean(inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && !previewStage)}
+        sessionId={session?.id ?? null}
+        stateId={state?.id ?? null}
+        timer={timer}
+        interludeStateId={flow?.interlude?.stateId ?? null}
+        remoteCommand={session?.remote_command ?? null}
+      />
     </main>
   );
 }
