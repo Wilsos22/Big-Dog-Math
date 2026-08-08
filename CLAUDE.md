@@ -1447,6 +1447,21 @@ delete it. `scripts/live-flow-contract.mjs` reads the editor at its new path.
   look on a projector). Reserve live embeds for boards being actively edited (Lucid/Figma). Tradeoff:
   images do not auto-update. (4) A locked "Big Dog Math" Canva BRAND TEMPLATE keeps imported slides
   on-brand - the frame holds the chrome, but the content inside drifts over a year without one.
+- **`/generate-lesson-slides` IS THE CANVA PIPELINE FOR THAT LOCKED TEMPLATE, RUN BY HAND, NOT A
+  SCRIPT** (built 2026-08-08). It assembles one lesson's `slide`-frame deck from 8 reusable Canva
+  designs (Title, Statement, Prompt, Blank Pose, Contrast, Target, Stacked List, Discussion - each
+  tagged with autofill field labels but NOT true Brand Templates), fills them from the Notion Lesson
+  Steps, exports WebP, saves to `public/slides/`, and writes `Slide Url` back. Full mechanism,
+  design IDs, and the Notion field mapping live in `.claude/commands/generate-lesson-slides.md` - do
+  not re-derive any of it from scratch. THIS CANNOT BE MADE UNATTENDED: the Canva account has no
+  Brand Template publishing right (autofill needs it) and there are no stored Canva API credentials
+  in this repo, so every run needs an interactive session with the Canva MCP connector - do not build
+  an Apps Script or background job for this. `merge-designs` strips autofill labels, so filling is
+  positional (`read-design` then `edit-design replace_text` per element), costing roughly two Canva
+  calls per lesson step. Module accent color (replaces the fixed orange in the visual recipe, cycles
+  by the lesson's `Module #`): Class Culture `#674a40`, Module 1 `#c4660a`, Module 2 `#96690a`,
+  Module 3 `#1f6f9c`, Module 4 `#c93818`, Module 5 `#1f7a52`. CC.1's 36-slide deck (`public/slides/
+  cc1-*.webp`) is the shipped precedent this pipeline is modeled on.
 - **PACE + STUDENT MIRROR MAIN UNLESS THEY SERVE A SECOND PURPOSE (Steele, 2026-08-03).** Under the
   direction above the default for `/teacher/pace` and `/live-flow` is to show the SAME thing as the
   main projector; they diverge only for an enumerable set of real second purposes. Today those are:
