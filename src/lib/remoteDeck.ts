@@ -59,8 +59,20 @@ export const END_DISCUSSION_BUTTON: RemoteDeckButton = {
   action: "end-discussion",
   label: "End discussion",
   detail: "Stop early and resume",
-  tone: "slate",
+  // "slate" has no CSS rule on the deck (found 2026-08-08 while adding the
+  // mini-discuss buttons below) - it would have rendered unstyled. Matches
+  // hide-board's tone, the closest existing "put this away" action.
+  tone: "orange",
 };
+
+// Mini-discuss: a quick turn-and-talk, distinct from the full discussion
+// overlay above - one timer, no phases. Reuses transition-now's interlude
+// mechanism exactly like Hustle/Settle (own "talk" vibe in
+// INTERLUDE_VIBES), fired from any state, freely retriggerable.
+export const MINI_DISCUSS_BUTTONS: readonly RemoteDeckButton[] = [
+  { action: "transition-now", label: "Turn and Talk 1 min", detail: "Quick partner talk", tone: "green", payload: { vibe: "talk", seconds: 60 } },
+  { action: "transition-now", label: "Turn and Talk 2 min", detail: "Longer partner talk", tone: "green", payload: { vibe: "talk", seconds: 120 } },
+];
 
 // On-demand cold-call. Persistent on the deck (unlike the readers/iPad-Kid Spin,
 // which only appears on those slides): tap it in any state and the main projector

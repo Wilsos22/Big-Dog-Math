@@ -49,6 +49,10 @@ const INTERLUDE_VIBES: Record<string, { stateId: string; label: string; color: s
   hustle: { stateId: "transition-hustle", label: "Hustle", color: "#f95335", directions: "Move now. Materials away, next spot, eyes up before the music ends." },
   reset: { stateId: "transition-reset", label: "Reset", color: "#fcaf38", directions: "Reset the room: new groups, new materials, new station." },
   settle: { stateId: "transition-settle", label: "Settle", color: "#50a3a4", directions: "Bring it down. Voices off, seats found, breathe." },
+  // Mini-discuss (2026-08-08): a quick turn-and-talk, distinct from the full
+  // discussion overlay - no phases, just one timer, fired from any state,
+  // exactly like Hustle/Settle. Reuses the interlude mechanism as-is.
+  talk: { stateId: "transition-talk", label: "Turn and Talk", color: "#69b17f", directions: "Turn and talk with your partner about what I just asked." },
 };
 
 // Pause the state clock and open a short movement window. The lazy pacing
