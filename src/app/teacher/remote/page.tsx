@@ -350,11 +350,16 @@ export default function TeacherRemotePage() {
   const [soundLabels, setSoundLabels] = useState<SoundLabels>({});
   // Student self-signals ("I'm stuck") - the Remote is the surface in hand
   // while teaching, so the live counts belong here too. null until the
-  // student-signals migration has been run.
+  // student-signals migration has been run. checkinReady/checkinActive/
+  // checkinRound cover the teacher-triggered "ask the class" mini fist-to-
+  // five layered on top of the same three chips (see student-checkin.sql).
   const [signalState, setSignalState] = useState<{
     controls: boolean;
+    checkinReady: boolean;
     signalsOff: boolean;
-    signals: Array<{ student_id: string | null; display_name: string | null; signal: string; step_index: number | null; updated_at: string | null }>;
+    checkinActive: boolean;
+    checkinRound: number;
+    signals: Array<{ student_id: string | null; display_name: string | null; signal: string; step_index: number | null; updated_at: string | null; checkin_round: number | null }>;
   } | null>(null);
   const [signalBusy, setSignalBusy] = useState(false);
   const [pendingCommand, setPendingCommand] = useState<{
@@ -738,10 +743,25 @@ export default function TeacherRemotePage() {
     const load = async () => {
       try {
         const response = await fetch(`/api/live/signals?sessionId=${encodeURIComponent(signalSessionId)}`, { cache: "no-store" });
-        const data = await response.json().catch(() => ({})) as { enabled?: boolean; controls?: boolean; signalsOff?: boolean; signals?: Array<{ student_id: string | null; display_name: string | null; signal: string; step_index: number | null; updated_at: string | null }> };
+        const data = await response.json().catch(() => ({})) as {
+          enabled?: boolean;
+          controls?: boolean;
+          checkinReady?: boolean;
+          signalsOff?: boolean;
+          checkinActive?: boolean;
+          checkinRound?: number;
+          signals?: Array<{ student_id: string | null; display_name: string | null; signal: string; step_index: number | null; updated_at: string | null; checkin_round: number | null }>;
+        };
         if (stopped) return;
         setSignalState(response.ok && data.enabled
-          ? { controls: Boolean(data.controls), signalsOff: Boolean(data.signalsOff), signals: data.signals || [] }
+          ? {
+            controls: Boolean(data.controls),
+            checkinReady: Boolean(data.checkinReady),
+            signalsOff: Boolean(data.signalsOff),
+            checkinActive: Boolean(data.checkinActive),
+            checkinRound: typeof data.checkinRound === "number" ? data.checkinRound : 0,
+            signals: data.signals || [],
+          }
           : null);
       } catch {
         if (!stopped) setSignalState(null);
@@ -767,9 +787,16 @@ export default function TeacherRemotePage() {
 
   // The signals showing RIGHT NOW. Lifted out of the render so the pulse below
   // and the strip itself cannot disagree about which step is current.
+  // While a check-in round is running, the tally is scoped to THAT round
+  // instead of the current step - "ask the class" is a deliberate clean
+  // slate (see student-checkin.sql), so a stale tap from three steps ago
+  // must never inflate a round it was not sent during.
   const signalStepIndex = session?.liveFlow?.sequence?.currentIndex ?? null;
   const currentSignals = useMemo(() => {
     if (!signalState || signalState.signalsOff) return [];
+    if (signalState.checkinActive) {
+      return signalState.signals.filter((s) => s.checkin_round === signalState.checkinRound);
+    }
     const now = Date.now();
     return signalState.signals.filter((s) => (
       signalStepIndex === null
@@ -1063,7 +1090,12 @@ export default function TeacherRemotePage() {
           100% { background:#26211A; border-left-color:#E4694A; }
         }
         .remote-signal-count.stuck { color:#F0876B; }
+        .remote-signal-count.kindofthere { color:#F0C36B; }
         .remote-signal-count.gotit { color:#7FC7A0; }
+        .remote-signals.checkin { border-left-color:#F0C36B; }
+        .remote-signal-label { font-weight:900; letter-spacing:0.02em; text-transform:uppercase; font-size:0.62rem; color:#F0C36B; }
+        .remote-signal-btn.checkin-btn { border-color:#F0C36B; color:#F0C36B; }
+        .remote-signal-btn.checkin-btn:hover:not(:disabled) { border-color:#F5D48A; color:#F5D48A; }
         .remote-signal-name { display:inline-flex; align-items:center; gap:5px; color:#D9D2C2; font-weight:750; }
         .remote-signal-btn { border:1px solid rgba(255,255,255,0.22); border-radius:999px; background:transparent; color:#B8AE99; font:inherit; font-size:0.66rem; font-weight:800; padding:2px 10px; min-height:26px; cursor:pointer; }
         .remote-signal-btn:hover:not(:disabled) { border-color:#E4694A; color:#F0876B; }
@@ -1250,26 +1282,41 @@ export default function TeacherRemotePage() {
               <div className="remote-signals off" role="status">
                 <span>Signals off</span>
                 <button className="remote-signal-btn" disabled={signalBusy} onClick={() => void sendSignalAction("signals-on")}>Turn on</button>
+                {/* A round can still be running underneath the off switch (the
+                    two are independent flags) - without this, ending it needs
+                    "Turn on" first just to reach the End check-in button that
+                    is about to reappear one branch down. */}
+                {signalState.checkinReady && signalState.checkinActive ? (
+                  <button className="remote-signal-btn checkin-btn" disabled={signalBusy} title="Stops the nudge on student screens" onClick={() => void sendSignalAction("checkin-end")}>End check-in</button>
+                ) : null}
               </div>
             );
           }
           const current = currentSignals;
           const stuck = current.filter((s) => s.signal === "stuck");
-          const again = current.filter((s) => s.signal === "again");
+          // Bucket the old "again" value in with "kind-of-there": until every
+          // device has re-probed post-migration a row can still legitimately
+          // carry the old value (student-checkin.sql widens the constraint
+          // rather than migrating existing rows - see that file), and the
+          // teacher never needs to see the raw value, only the bucket.
+          const kindOfThere = current.filter((s) => s.signal === "kind-of-there" || s.signal === "again");
           const gotIt = current.filter((s) => s.signal === "got-it");
           // Keep the strip up at zero whenever the teacher has the controls, the
           // way /session already does. Hiding it on an empty current step made
           // the Remote look like signals were not wired at all: the step scoping
           // below is deliberate, so a tap vanishes the moment you advance, and
           // on the surface in your hand that reads as a dead feature rather than
-          // as "nobody is stuck on this step".
-          if (!current.length && !signalState.controls) return null;
+          // as "nobody is stuck on this step". A running check-in round stays up
+          // at zero too, for the same reason - it just started and nobody has
+          // tapped yet is not the same as "not wired".
+          if (!current.length && !signalState.controls && !signalState.checkinActive) return null;
           return (
-            <div className={`remote-signals${signalPulse ? " pulse" : ""}`} role="status" aria-label="Student self-signals">
+            <div className={`remote-signals${signalPulse ? " pulse" : ""}${signalState.checkinActive ? " checkin" : ""}`} role="status" aria-label="Student self-signals">
+              {signalState.checkinActive ? <span className="remote-signal-label">Check-in</span> : null}
               <span className="remote-signal-count stuck">Stuck {stuck.length}</span>
-              <span className="remote-signal-count">Again {again.length}</span>
+              <span className="remote-signal-count kindofthere">Kind of there {kindOfThere.length}</span>
               <span className="remote-signal-count gotit">Got it {gotIt.length}</span>
-              {[...stuck, ...again].map((s) => (
+              {[...stuck, ...kindOfThere].map((s) => (
                 <span className="remote-signal-name" key={`${s.student_id || s.display_name}:${s.signal}`}>
                   {s.display_name || "Student"}
                   {signalState.controls && s.student_id ? (
@@ -1277,6 +1324,13 @@ export default function TeacherRemotePage() {
                   ) : null}
                 </span>
               ))}
+              {signalState.checkinReady ? (
+                signalState.checkinActive ? (
+                  <button className="remote-signal-btn checkin-btn" disabled={signalBusy} title="Stops the nudge on student screens" onClick={() => void sendSignalAction("checkin-end")}>End check-in</button>
+                ) : (
+                  <button className="remote-signal-btn checkin-btn" disabled={signalBusy} title="Nudges every student to tap where they're at, with a fresh count" onClick={() => void sendSignalAction("checkin-start")}>Ask the class</button>
+                )
+              ) : null}
               {signalState.controls ? (
                 <button className="remote-signal-btn off-btn" disabled={signalBusy} title="Hides the chips for every student at the next step change" onClick={() => void sendSignalAction("signals-off")}>Signals off</button>
               ) : null}
