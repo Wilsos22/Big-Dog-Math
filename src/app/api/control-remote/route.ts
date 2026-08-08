@@ -21,6 +21,7 @@ import {
   TEACHER_REMOTE_ACTIONS,
   canRevealM2T1L1FinalScore,
   isDiscussionRemoteAction,
+  isReadyCheckStep,
   liveStepPollQuestion,
   pickRemoteSharerName,
   resolveLiveStepPollKind,
@@ -258,6 +259,99 @@ async function fullyHydrateFlow(flow: LiveClassFlowSnapshot): Promise<LiveClassF
   };
 }
 
+// Build and insert the poll row for a step's response check. Shared by
+// navigateFlow (in-sequence, via Next/Previous) and openNextReadyCheck
+// (out-of-sequence, via the Remote's ready-check trigger) - extracted
+// 2026-08-08 so the two never drift on the structured-numeric validation or
+// the choices/fist-to-five handling. Returns null when the step has no real
+// response check to open (no question, or no resolvable kind) - callers
+// decide what that means for them.
+async function createPollForStep(
+  db: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  session: RemoteSessionRow,
+  step: LiveFlowSequenceStep,
+): Promise<{ pollId: string; poll: NonNullable<LiveClassFlowSnapshot["poll"]> } | null> {
+  const isDiscussion = usesDiscussionProtocol(step.stateId, step.label);
+  const pollKind = isDiscussion
+    ? null
+    : resolveLiveStepPollKind(step.responseMode, step.pollKind || undefined, step.stateId);
+  // A fist to five opens on its own question - see liveStepPollQuestion. Gating
+  // this on an authored Question left every student screen waiting for a
+  // response box that was never coming.
+  const pollQuestion = liveStepPollQuestion(step.question, pollKind);
+  if (!pollQuestion || !pollKind) return null;
+  const choices = pollKind === "fist-to-five" ? ["0", "1", "2", "3", "4", "5"] : step.choices;
+  // Fail loudly rather than opening a Structured Numeric step with zero
+  // boxes. A student staring at a question with no inputs cannot tell that
+  // from a frozen screen, and the teacher would never learn it happened.
+  if (pollKind === "structured-numeric") {
+    const parsed = parseStructuredNumericSpec(step.correctAnswer);
+    if (!parsed.ok) {
+      throw new Error(`"${step.label}" has a Structured Numeric answer spec that will not parse. ${parsed.errors[0]}`);
+    }
+  }
+  const inserted = await db
+    .from("polls")
+    .insert({
+      session_id: session.id,
+      question: pollQuestion,
+      choices: choices.length ? choices : null,
+      kind: pollKind,
+      status: "open",
+      correct_answer: step.correctAnswer || null,
+      lesson_code: step.lessonCode || null,
+      notion_lesson_id: step.notionLessonId,
+      notion_step_id: step.notionStepId,
+      standard_id: step.standard || null,
+    })
+    .select("id")
+    .single();
+  if (inserted.error || !inserted.data) throw new Error(inserted.error?.message || "The response check could not open.");
+  return {
+    pollId: inserted.data.id,
+    poll: {
+      id: inserted.data.id,
+      kind: pollKind,
+      question: pollQuestion,
+      choices: choices.length ? choices : null,
+      stage: "responding",
+      // boxes for the equation variant, pairs {target,bank} for the pair
+      // builder - whichever the spec resolves to. Never the rule spec itself.
+      ...(pollKind === "structured-numeric" ? structuredNumericPollFields(step.correctAnswer) : {}),
+    },
+  };
+}
+
+// Open the lesson's next authored ready check, in authored order, regardless
+// of where the teacher currently is in the sequence (Steele, 2026-08-08:
+// "ready checks are fired in order"). Deliberately a SEPARATE field from
+// `poll` (never reused) - flow.poll is owned by whatever step is current,
+// and grafting an out-of-sequence question onto it would either get
+// silently deleted by Control's next republish or rendered under the wrong
+// step's title. readinessCheck has no such coupling.
+async function openNextReadyCheck(
+  db: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  session: RemoteSessionRow,
+  flow: LiveClassFlowSnapshot,
+): Promise<{ createdPollId: string | null; liveFlow: LiveClassFlowSnapshot }> {
+  const contract = await hydrateFlowContract(flow);
+  const readySteps = contract.steps.filter(isReadyCheckStep);
+  if (!readySteps.length) throw new Error("This lesson has no ready checks authored.");
+  const index = (flow.readyCheckIndex ?? 0) % readySteps.length;
+  const step = readySteps[index];
+  const created = await createPollForStep(db, session, step);
+  if (!created) throw new Error(`"${step.label}" could not open as a ready check.`);
+  return {
+    createdPollId: created.pollId,
+    liveFlow: {
+      ...flow,
+      updatedAt: new Date().toISOString(),
+      readinessCheck: created.poll,
+      readyCheckIndex: index + 1,
+    },
+  };
+}
+
 async function navigateFlow(
   db: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
   session: RemoteSessionRow,
@@ -272,54 +366,8 @@ async function navigateFlow(
   const step = steps[targetIndex];
   if (!step) throw new Error(action === "next" ? "This is the last lesson state." : "This is the first lesson state.");
 
-  let poll: LiveClassFlowSnapshot["poll"] = null;
-  const isDiscussion = usesDiscussionProtocol(step.stateId, step.label);
-  const pollKind = isDiscussion
-    ? null
-    : resolveLiveStepPollKind(step.responseMode, step.pollKind || undefined, step.stateId);
-  // A fist to five opens on its own question - see liveStepPollQuestion. Gating
-  // this on an authored Question left every student screen waiting for a
-  // response box that was never coming.
-  const pollQuestion = liveStepPollQuestion(step.question, pollKind);
-  if (pollQuestion && pollKind) {
-    const choices = pollKind === "fist-to-five" ? ["0", "1", "2", "3", "4", "5"] : step.choices;
-    // Fail loudly rather than opening a Structured Numeric step with zero
-    // boxes. A student staring at a question with no inputs cannot tell that
-    // from a frozen screen, and the teacher would never learn it happened.
-    if (pollKind === "structured-numeric") {
-      const parsed = parseStructuredNumericSpec(step.correctAnswer);
-      if (!parsed.ok) {
-        throw new Error(`"${step.label}" has a Structured Numeric answer spec that will not parse. ${parsed.errors[0]}`);
-      }
-    }
-    const inserted = await db
-      .from("polls")
-      .insert({
-        session_id: session.id,
-        question: pollQuestion,
-        choices: choices.length ? choices : null,
-        kind: pollKind,
-        status: "open",
-        correct_answer: step.correctAnswer || null,
-        lesson_code: step.lessonCode || null,
-        notion_lesson_id: step.notionLessonId,
-        notion_step_id: step.notionStepId,
-        standard_id: step.standard || null,
-      })
-      .select("id")
-      .single();
-    if (inserted.error || !inserted.data) throw new Error(inserted.error?.message || "The response check could not open.");
-    poll = {
-      id: inserted.data.id,
-      kind: pollKind,
-      question: pollQuestion,
-      choices: choices.length ? choices : null,
-      stage: "responding",
-      // boxes for the equation variant, pairs {target,bank} for the pair
-      // builder - whichever the spec resolves to. Never the rule spec itself.
-      ...(pollKind === "structured-numeric" ? structuredNumericPollFields(step.correctAnswer) : {}),
-    };
-  }
+  const created = await createPollForStep(db, session, step);
+  const poll: LiveClassFlowSnapshot["poll"] = created?.poll ?? null;
 
   const resource = step.resourceUrl
     ? {
@@ -747,15 +795,19 @@ async function releaseRemoteFlowClaim(
 async function closeOpenPolls(
   db: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
   sessionId: string,
-  keepPollId: string | null,
+  keepPollIds: (string | null | undefined)[],
 ): Promise<void> {
+  const keep = keepPollIds.filter((id): id is string => Boolean(id));
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let update = db
       .from("polls")
       .update({ status: "closed" })
       .eq("session_id", sessionId)
       .eq("status", "open");
-    if (keepPollId) update = update.neq("id", keepPollId);
+    // A ready check rides in `readinessCheck`, never `poll` - it must survive
+    // the same Next/Previous cleanup that would otherwise close it, since it
+    // is deliberately independent of the step the teacher is navigating.
+    if (keep.length) update = update.not("id", "in", `(${keep.join(",")})`);
     const { error } = await update;
     if (!error) return;
   }
@@ -895,7 +947,7 @@ async function applyLazyAutomaticTransition(
     }
 
     const persistedFlow = await persistClaimedFlow(db, claimedSession, claimToken, nextFlow, command);
-    await closeOpenPolls(db, session.id, persistedFlow.poll?.id || null);
+    await closeOpenPolls(db, session.id, [persistedFlow.poll?.id, persistedFlow.readinessCheck?.id]);
     return { ...claimedSession, live_flow: persistedFlow, remote_command: command };
   } catch {
     await closePollById(db, createdPollId);
@@ -983,7 +1035,7 @@ async function startLessonFlow(body: { sessionId?: string; lessonCode?: string; 
     if (updateError || !updated) throw new Error(updateError?.message || "The lesson could not start.");
     // Starting a lesson always changes every screen, so this one is unconditional.
     after(() => broadcastLiveFlowChange(sessionId));
-    await closeOpenPolls(db, sessionId, createdPollId);
+    await closeOpenPolls(db, sessionId, [createdPollId]);
     return Response.json({ connected: true, session: serializeSession(updated as RemoteSessionRow) });
   } catch (error) {
     await closePollById(db, createdPollId);
@@ -1149,6 +1201,12 @@ export async function POST(request: Request) {
       if (!liveFlow) throw new Error("Load a lesson before ending a discussion.");
       liveFlow = endDiscussionRun(liveFlow);
       handledDirectly = true;
+    } else if (action === "open-ready-check") {
+      if (!liveFlow) throw new Error("Load a lesson before opening a ready check.");
+      const opened = await openNextReadyCheck(result.db, workingSession, liveFlow);
+      createdPollId = opened.createdPollId;
+      liveFlow = opened.liveFlow;
+      handledDirectly = true;
     } else if (ON_DEMAND_TIMER_ACTIONS.has(action)) {
       if (!liveFlow) throw new Error("Load a lesson before starting a timer.");
       liveFlow = setOnDemandTimer(liveFlow, action === "arm-timer" ? Number(body.seconds) : null);
@@ -1193,7 +1251,7 @@ export async function POST(request: Request) {
       if (claimToken) await releaseRemoteFlowClaim(result.db, workingSession, claimToken, session.live_flow);
       return Response.json({ error: error instanceof Error ? error.message : "The Remote action could not be saved." }, { status: 409 });
     }
-    if (claimToken) await closeOpenPolls(result.db, session.id, liveFlow.poll?.id || null);
+    if (claimToken) await closeOpenPolls(result.db, session.id, [liveFlow.poll?.id, liveFlow.readinessCheck?.id]);
     if (revealedPollId) await closePollById(result.db, revealedPollId);
     return Response.json({ ok: true, command, liveFlow });
   }

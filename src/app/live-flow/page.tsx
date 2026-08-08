@@ -418,10 +418,15 @@ export default function LiveFlowPage() {
     };
   }, [identityConfirmed, supabase]);
 
-  const activePoll = flow?.poll ?? null;
+  // A ready check fired out of sequence (2026-08-08) takes priority: it
+  // represents the teacher's most recent explicit action, same as how
+  // discussionRun/interlude already take overlay priority elsewhere. Every
+  // render/submission path below already keys off activePoll alone, so
+  // pointing it at readinessCheck when present is the whole change.
+  const activePoll = flow?.readinessCheck ?? flow?.poll ?? null;
   const activePollId = activePoll?.id ?? null;
   const activeResponseKey = activePoll
-    ? flow?.presentation?.notionStepId || activePoll.id
+    ? (flow?.readinessCheck ? activePoll.id : flow?.presentation?.notionStepId) || activePoll.id
     : null;
 
   useEffect(() => {

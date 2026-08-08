@@ -1981,6 +1981,12 @@ export default function ControlPage() {
   // end-discussion own this, never Control - hand it back untouched or the
   // discussion overlay vanishes within a second of the teacher starting it.
   const serverDiscussionRun = teacherSession?.live_flow?.discussionRun ?? null;
+  // Same class of field: a ready check fired out of sequence is owned entirely
+  // by /api/control-remote (openNextReadyCheck), never by Control - hand both
+  // back untouched or the check (and the count of how many have run) vanishes
+  // within a second of the teacher firing it.
+  const serverReadinessCheck = teacherSession?.live_flow?.readinessCheck ?? null;
+  const serverReadyCheckIndex = teacherSession?.live_flow?.readyCheckIndex ?? 0;
   // Same class of field: the iPad's live classroom-state override is written by
   // /api/control-remote, so Control must hand it back or the strip snaps to the
   // authored values about a second after the teacher taps Settle.
@@ -2185,9 +2191,11 @@ export default function ControlPage() {
       interlude: serverInterlude,
       transition: serverTransition,
       discussionRun: serverDiscussionRun,
+      readinessCheck: serverReadinessCheck,
+      readyCheckIndex: serverReadyCheckIndex,
       behaviorOverride: serverBehaviorOverride,
     });
-  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, effectiveTotalSeconds, finished, lineup, onDemandSeconds, publishedTool, running, scoreboardStage, secondsLeft, serverBehaviorOverride, serverDiscussionRun, serverInterlude, serverTransition, showDiscussion, stepIsUntimed]);
+  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, effectiveTotalSeconds, finished, lineup, onDemandSeconds, publishedTool, running, scoreboardStage, secondsLeft, serverBehaviorOverride, serverDiscussionRun, serverInterlude, serverReadinessCheck, serverReadyCheckIndex, serverTransition, showDiscussion, stepIsUntimed]);
 
   const flushLiveFlowUpdates = useCallback(async () => {
     if (liveFlowSyncingRef.current) return;

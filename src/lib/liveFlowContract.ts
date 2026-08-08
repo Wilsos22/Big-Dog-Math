@@ -196,6 +196,25 @@ export function liveStepPollQuestion(
   return pollKind === "fist-to-five" ? FIST_TO_FIVE_DEFAULT_QUESTION : "";
 }
 
+/**
+ * A step qualifies as a "ready check" the position-independent trigger can
+ * fire: a real, gradable response kind - never discussion (its own overlay),
+ * never fist-to-five (the separate teacher-triggered check-in rounds cover
+ * that, 2026-08-08). Shared between the server (which builds the fire order)
+ * and the Remote deck (which shows "check N of M" from the same filter) so
+ * the count displayed can never drift from the count that actually fires.
+ */
+export function isReadyCheckStep(step: {
+  stateId?: string | null;
+  label?: string | null;
+  responseMode?: string | null;
+  pollKind?: string | null;
+}): boolean {
+  if (usesDiscussionProtocol(step.stateId, step.label || "")) return false;
+  const kind = resolveLiveStepPollKind(step.responseMode || undefined, step.pollKind || undefined, step.stateId || undefined);
+  return Boolean(kind) && kind !== "fist-to-five";
+}
+
 export type LiveIndependentSupportLesson = {
   selectedSuccessCriterion?: string;
   learningIntention?: string;

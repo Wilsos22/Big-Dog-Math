@@ -15,6 +15,7 @@ export {
   canRevealM2T1L1FinalScore,
   isChoicePollKind,
   isLivePollKind,
+  isReadyCheckStep,
   liveAssignedToolRoute,
   liveIndependentSupportItems,
   liveResponseModePollKind,
@@ -87,6 +88,9 @@ export const TEACHER_REMOTE_ACTIONS = [
   // independent run, never resuming a previous one.
   "start-discussion",
   "end-discussion",
+  // Fires the lesson's next authored ready check, in authored order,
+  // regardless of the teacher's current position (2026-08-08).
+  "open-ready-check",
   // An UNTIMED state (a Lesson Step with a blank or zero Duration) publishes no timer at all, so
   // the room sees a dash instead of a countdown. These arm one on demand, over whatever is on
   // screen, without changing the step - the pattern is a whole slide deck as one state where only
@@ -456,6 +460,25 @@ export interface LiveClassFlowSnapshot {
     totalSeconds: number;
     resumeRunning: boolean;
   } | null;
+  // A ready check fired out of sequence (2026-08-08): a SEPARATE field from
+  // `poll`, deliberately never merged into it. `poll` is owned by whatever
+  // step is current; a ready check can be fired from anywhere, in the
+  // lesson's authored order, independent of the teacher's position. `boxes`/
+  // `pairs` carry the same public-only structured-numeric fields `poll` does
+  // - never the rule spec, which stays server-side on the polls row.
+  readinessCheck?: {
+    id: string;
+    kind: LivePollKind;
+    question: string;
+    choices: string[] | null;
+    stage: "responding" | "results";
+    boxes?: number;
+    pairs?: { target: number; bank: number };
+  } | null;
+  // How many ready checks have been opened this session, so the next press
+  // knows which authored one comes next. Never reset by navigation - only a
+  // fresh lesson start zeroes it.
+  readyCheckIndex?: number;
   paper?: {
     task: string;
   } | null;

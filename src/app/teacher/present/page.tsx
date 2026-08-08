@@ -1138,6 +1138,21 @@ export default function ClassroomStagePage() {
             ) : (
               <div className="stage-empty"><div><h1>Ready for class</h1><p>{sessionMessage}</p></div></div>
             )
+          ) : flow?.readinessCheck ? (
+            // Independent of the current step's theme, same reason discussionRun
+            // and interlude are - a ready check fired out of sequence must not
+            // inherit whatever "learning-check" gating the current slide happens
+            // to have. Question only: results/distribution never reach the room,
+            // same rule as an in-sequence poll (the teacher reviews those on
+            // /teacher/remote).
+            <div className="stage-directions">
+              <div className="stage-directions-inner">
+                <p className="stage-anchor-kicker">Ready check</p>
+                <span className="stage-anchor-rule" aria-hidden="true" />
+                <h2 className="stage-main-prompt">{flow.readinessCheck.question}</h2>
+                <p className="stage-learning">Answer on your device now.</p>
+              </div>
+            </div>
           ) : discussionRun ? (
             <div
               className="stage-timeline"

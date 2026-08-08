@@ -7,6 +7,7 @@ import SupplyCheckBoard from "@/components/SupplyCheckBoard";
 import {
   REMOTE_COMMAND_STALE_MS,
   canRevealM2T1L1FinalScore,
+  isReadyCheckStep,
   liveTimerSeconds,
   resolveRemoteNextBehavior,
   shouldRunFlowNavigationDestination,
@@ -855,6 +856,11 @@ export default function TeacherRemotePage() {
   const timerFinished = Boolean(timer?.finished || (timer?.running && timerSeconds <= 0));
   const sequence = flow?.sequence ?? null;
   const lesson = flow?.lesson ?? null;
+  // Ready checks fired in authored order, independent of position (2026-08-08).
+  // The same filter the server uses to build the fire order, so the count
+  // shown here can never drift from what actually opens next.
+  const readyCheckTotal = sequence?.steps?.filter(isReadyCheckStep).length ?? 0;
+  const readyCheckNext = readyCheckTotal ? ((flow?.readyCheckIndex ?? 0) % readyCheckTotal) + 1 : 0;
   const privateLessonStep = useMemo(() => {
     if (!privateLessonSteps.length) return null;
     const notionStepId = flow?.presentation?.notionStepId || "";
@@ -1465,6 +1471,24 @@ export default function TeacherRemotePage() {
                         <DeckKey key={button.label} button={button} busy={busy} disabled={controlsDisabled} onSend={send} />
                       ))}
                     </div>
+                    {/* Ready checks fired in authored order, independent of position
+                        (2026-08-08) - hidden entirely when the lesson has none
+                        authored, rather than offering a dead "0 of 0" key. */}
+                    {readyCheckTotal > 0 ? (
+                      <div className="deck-grid spinner-control">
+                        <DeckKey
+                          button={{
+                            action: "open-ready-check",
+                            label: "Open ready check",
+                            detail: `Check ${readyCheckNext} of ${readyCheckTotal}`,
+                            tone: "teal",
+                          }}
+                          busy={busy}
+                          disabled={controlsDisabled}
+                          onSend={send}
+                        />
+                      </div>
+                    ) : null}
                     {/* Only on a step whose slide is actually a video. On every other step these
                         would be three dead keys on a deck navigated by muscle memory. */}
                     {showSlideVideoKeys ? (
