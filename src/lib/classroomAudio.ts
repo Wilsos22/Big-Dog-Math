@@ -30,6 +30,34 @@ export function musicAudioKey(stateId: string): string {
   return `music:${stateId}`;
 }
 
+// State music now has the SAME committed-file fallback the sound bank has had
+// since 2026-08-03 (see public/sounds/README.md's "three sources"): an
+// IndexedDB upload on this device wins, then a file committed to the repo,
+// then silence. Steele's own read of the sound bank ("I never downloaded
+// those on this computer, they just play") was the correct mental model for
+// how music should behave too - this brings music in line rather than
+// leaving it as the one thing still stuck per-laptop. Namespaced with a
+// `music-` prefix inside the SAME /sounds folder (not a second folder) so
+// there is one place to look, one README, and one already-private repo the
+// clips can safely live in.
+export function musicFileUrl(stateId: string): string {
+  return `/sounds/music-${stateId}.mp3`;
+}
+
+// HEAD first, exactly like the sound bank's loadCueFile: a plain <audio> src
+// pointed at a 404 fires its error event late and inconsistently across
+// browsers, so checking existence up front is the reliable way to fall
+// through to "no music" instead of stalling on dead air.
+export async function resolveCommittedMusicUrl(stateId: string): Promise<string | null> {
+  const url = musicFileUrl(stateId);
+  try {
+    const head = await fetch(url, { method: "HEAD" });
+    return head.ok ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 // The sound bank's clips share this store with the timer cues and per-state
 // music. `bank:` namespaces them so a cue id can never collide with a music key.
 // /control writes these (its own local `bankClipKey` produces the identical

@@ -20,7 +20,7 @@ import LessonVisual from "@/components/LessonVisual";
 // dead UI on the live engine. Both files are deleted as of 2026-07-30.
 // The sound bank took the deck's place.
 import { SOUND_CUES, clearUserClip, installUserClip, matchSoundCueFile, playSoundCue, soundCueIdForAction } from "@/lib/soundBank";
-import { CLASSROOM_AUDIO_CHANNEL, announceClassroomAudioChange } from "@/lib/classroomAudio";
+import { CLASSROOM_AUDIO_CHANNEL, announceClassroomAudioChange, resolveCommittedMusicUrl } from "@/lib/classroomAudio";
 import {
   CUE_DUCK_FALLBACK_SECONDS,
   MUSIC_DUCK_VOLUME,
@@ -1304,17 +1304,28 @@ export default function ControlPage() {
     // inside that window used to get silence for that state, permanently, because nothing retried.
     void (async () => {
       const blob = await idbGet(key).catch(() => undefined);
-      if (!blob) {
-        // Genuinely no song for this state. Silence is the right answer, so drop any stale blocked
-        // banner rather than leaving it up over a state that was never meant to sing.
-        if (wantedMusicStateRef.current === stateId) setAudioBlocked(false);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const next = { ...soundUrlsRef.current, [key]: url };
+        soundUrlsRef.current = next;
+        setSoundUrls(next);
+        playMusicUrl(url, stateId);
         return;
       }
-      const url = URL.createObjectURL(blob);
-      const next = { ...soundUrlsRef.current, [key]: url };
-      soundUrlsRef.current = next;
-      setSoundUrls(next);
-      playMusicUrl(url, stateId);
+      // No upload on THIS laptop - same fallback ClassroomAudioHost uses:
+      // a file committed to the repo, then genuine silence.
+      const fileUrl = await resolveCommittedMusicUrl(stateId).catch(() => null);
+      if (wantedMusicStateRef.current !== stateId) return;
+      if (fileUrl) {
+        const next = { ...soundUrlsRef.current, [key]: fileUrl };
+        soundUrlsRef.current = next;
+        setSoundUrls(next);
+        playMusicUrl(fileUrl, stateId);
+        return;
+      }
+      // Genuinely no song for this state. Silence is the right answer, so drop any stale blocked
+      // banner rather than leaving it up over a state that was never meant to sing.
+      setAudioBlocked(false);
     })();
   }, [playMusicUrl, stopMusic]);
 

@@ -1117,6 +1117,24 @@ Codex and cloud sessions need them too (rule 9).
   the iPad with no edit there; `npm run test:sound-bank` asserts the three lists (cues, deck, action
   union) cannot drift and that no cue is missing a label or a synth. Adding a cue = one entry in
   `SOUND_CUES` plus one `"play-<id>"` in `TEACHER_REMOTE_ACTIONS`. Nothing else.
+- **STATE MUSIC GOT THE SAME COMMITTED-FILE FALLBACK THE SOUND BANK HAS, 2026-08-07** (Steele, after
+  his Hustle/Settle uploads went silent: "i thought that we were putting the songs in the server. cuz
+  the sound effects i never downloaded on the computer i was playing them from" - correct instinct,
+  and until this fix music was the ONE audio type that had not caught up to it). Before this, a
+  state's music existed ONLY as an IndexedDB blob on whichever laptop it was uploaded from - no
+  server fallback at all, unlike the sound bank's three-source design just above. `musicFileUrl` /
+  `resolveCommittedMusicUrl` in `src/lib/classroomAudio.ts` add the missing middle source: IndexedDB
+  upload on this device wins, then `public/sounds/music-<stateId>.mp3` (same folder as the bank
+  cues, `music-` prefix so it cannot collide with a cue id, HEAD-checked first since a dead `<audio
+  src>` fails late and inconsistently across browsers), then genuine silence - there is no
+  synthesized fallback for music, unlike bank cues. Both `/teacher/present`'s `ClassroomAudioHost`
+  and `/control`'s backup-host `startMusicFor` read through the same two functions, so they cannot
+  drift the way two hand-copied lists would. `stateId` is any `DEFAULT_STATES` id, including the
+  "Transition now" vibes (Hustle/Reset/Settle reuse their planned states' ids, so
+  `music-transition-hustle.mp3` is both). Getting a song onto every laptop with no upload step is
+  now: rename the file to `music-<stateId>.mp3`, commit it to `public/sounds/`, deploy. The
+  per-device `/teacher/audio` upload path still exists for trying a track before committing it, or
+  for a one-off override on a single machine - `/teacher/audio`'s copy now says so.
 - /weekly-display is the FIFTH room surface: two all-day TVs in the back rotating
   learning intention / success criteria / week schedule / bells, fed by public
   /api/weekly-display (params ?screen= pins one view and pauses rotation, ?day=, ?track=acc,

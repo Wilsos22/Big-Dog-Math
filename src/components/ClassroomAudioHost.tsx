@@ -25,6 +25,7 @@ import {
   CLASSROOM_AUDIO_CHANNEL,
   getClassroomAudio,
   musicAudioKey,
+  resolveCommittedMusicUrl,
 } from "@/lib/classroomAudio";
 import { DEFAULT_STATES } from "@/lib/classStates";
 import {
@@ -163,16 +164,27 @@ export default function ClassroomAudioHost({
     }
     void (async () => {
       const blob = await getClassroomAudio(key).catch(() => undefined);
-      if (!blob) {
-        // No song for this state. Silence is correct; drop any stale blocked banner.
-        if (wantedMusicStateRef.current === nextStateId) setBlocked(false);
+      if (blob) {
+        if (wantedMusicStateRef.current !== nextStateId) return;
+        const url = URL.createObjectURL(blob);
+        objectUrlsRef.current.add(url);
+        soundUrlsRef.current = { ...soundUrlsRef.current, [key]: url };
+        playMusicUrl(url, nextStateId);
         return;
       }
+      // Nothing uploaded on this device - try a file committed to the repo
+      // before going quiet, same order as the sound bank (device, then
+      // deploy, then silence).
+      const fileUrl = await resolveCommittedMusicUrl(nextStateId).catch(() => null);
       if (wantedMusicStateRef.current !== nextStateId) return;
-      const url = URL.createObjectURL(blob);
-      objectUrlsRef.current.add(url);
-      soundUrlsRef.current = { ...soundUrlsRef.current, [key]: url };
-      playMusicUrl(url, nextStateId);
+      if (fileUrl) {
+        soundUrlsRef.current = { ...soundUrlsRef.current, [key]: fileUrl };
+        playMusicUrl(fileUrl, nextStateId);
+        return;
+      }
+      // Genuinely no song for this state anywhere. Silence is correct; drop
+      // any stale blocked banner.
+      setBlocked(false);
     })();
   }, [stopMusic, playMusicUrl]);
 
