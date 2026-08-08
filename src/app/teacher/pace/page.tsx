@@ -6,6 +6,7 @@ import ClassroomSpinner from "@/components/ClassroomSpinner";
 import FullscreenButton from "@/components/FullscreenButton";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
 import SlideFrameScene from "@/components/SlideFrameScene";
+import StageControlToolbar from "@/components/StageControlToolbar";
 import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
 import { applyStripOverride, overrideIsLive } from "@/lib/classroomStateStrip";
 import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
@@ -843,6 +844,24 @@ export default function PaceSupportPage() {
           projector could never be annotated - the teacher circled something on
           the iPad and half the room's screen never changed. */}
       {inkOverlay && !inkOverlay.embed ? <ScreenInkOverlay room={inkOverlay.room} /> : null}
+      {/* Reach controls: the teacher can be at this panel with the iPad Remote left
+          elsewhere, and this is one of the two screens they might be standing in
+          front of. See CLAUDE.md rule 6 / "no swipe or press next anywhere on the
+          screen". Real projector only, same gate as present's ClassroomAudioHost. */}
+      <StageControlToolbar
+        sessionId={
+          inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && !previewStage && session?.id
+            ? session.id
+            : null
+        }
+        timerRunning={Boolean(timer?.running)}
+        timerActive={Boolean(timer) || Boolean(flow?.poll?.stage === "results" && flow?.sequence)}
+        canGoBack={Boolean(flow?.sequence && flow.sequence.currentIndex > 0)}
+        canGoForward={Boolean(
+          flow?.sequence
+          && (!flow.sequence.totalSteps || flow.sequence.currentIndex + 1 < flow.sequence.totalSteps),
+        )}
+      />
     </main>
   );
 }

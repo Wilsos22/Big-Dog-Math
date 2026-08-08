@@ -12,6 +12,7 @@ import AttentionListener from "@/components/AttentionListener";
 import ClassroomAudioHost from "@/components/ClassroomAudioHost";
 import FullscreenButton from "@/components/FullscreenButton";
 import ScreenInkOverlay from "@/components/ScreenInkOverlay";
+import StageControlToolbar from "@/components/StageControlToolbar";
 import { joinInkRoom } from "@/lib/inkSync";
 import { ClassroomStateStrip } from "@/components/ClassroomStateStrip";
 import { applyStripOverride, overrideIsLive } from "@/lib/classroomStateStrip";
@@ -1564,6 +1565,24 @@ export default function ClassroomStagePage() {
         timer={timer}
         interludeStateId={flow?.interlude?.stateId ?? null}
         remoteCommand={session?.remote_command ?? null}
+      />
+      {/* Reach controls: the teacher can be at the board with the iPad Remote left
+          elsewhere, and this is the one screen they're standing in front of. See
+          CLAUDE.md rule 6 / "no swipe or press next anywhere on the screen". Real
+          projector only, same gate as ClassroomAudioHost above. */}
+      <StageControlToolbar
+        sessionId={
+          inkOverlay && !inkOverlay.embed && !isStudioPreviewMode && !previewStage && session?.id
+            ? session.id
+            : null
+        }
+        timerRunning={Boolean(timer?.running)}
+        timerActive={Boolean(timer) || Boolean(flow?.poll?.stage === "results" && flow?.sequence)}
+        canGoBack={Boolean(flow?.sequence && flow.sequence.currentIndex > 0)}
+        canGoForward={Boolean(
+          flow?.sequence
+          && (!flow.sequence.totalSteps || flow.sequence.currentIndex + 1 < flow.sequence.totalSteps),
+        )}
       />
     </main>
   );
