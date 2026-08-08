@@ -163,6 +163,10 @@ insert into misconceptions (label, standard_id, description) values
   ('stops at the first shared prime',                  '6.NS.B.4',  'Finds one match and stops searching. GCF(48,72) becomes 2 instead of 24.'),
   ('leaves a composite in the tree',                   '6.NS.B.4',  'Stops a factor tree branch on a leaf that still has more than two factors, so the piece list is not irreducible.'),
   ('answers the group size not the count',             '6.NS.B.4',  'Finds the GCF correctly then reports what is inside each group instead of how many groups. Says 3 or 5 instead of 12.'),
+  -- Prime-card builds (M1.T1.L2-D3, added 2026-08-08).
+  ('card row doesn''t multiply back to the number',    '6.NS.B.4',  'Writes a prime factorization that does not multiply to the original number, e.g. 12 = 2 x 2 x 2. Every downstream GCF/LCM answer is poisoned by the wrong row.'),
+  ('includes unmatched cards in the GCF build',        '6.NS.B.4',  'Builds the GCF from every card on the mat instead of only the matched copies, so the shared build is larger than the true greatest common factor.'),
+  ('doesn''t accept an empty shared build as GCF 1',   '6.NS.B.4',  'When two builds share no prime cards, does not recognize that the empty shared build still names a GCF of 1.'),
   -- Factor-pair builds (the structured-numeric pairs() scorer).
   ('lists a non-factor pair',                          '6.NS.B.4',  'Builds a pair that does not multiply to the target, e.g. 4x4 for 18. The student is generating pairs by pattern rather than checking the product, so the count may even be complete while the list is wrong.'),
   ('stops before all pairs are found',                 '6.NS.B.4',  'Every pair listed is valid, but the list is short - usually stopping at the pairs recalled from a times table rather than testing upward to the square root. Different move from an invented pair: the checking is sound, the search was not exhaustive.'),

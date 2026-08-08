@@ -42,6 +42,12 @@ export const MISCONCEPTION_TAGS = [
   "stops at the first shared prime",
   "leaves a composite in the tree",
   "answers the group size not the count",
+  // Prime-card builds (M1.T1.L2-D3). The GCF tag below is the opposite
+  // failure from multiplies-both-sides-of-each-match above - not counting a
+  // matched prime twice, but pulling in cards that were never matched at all.
+  "card row doesn't multiply back to the number",
+  "includes unmatched cards in the GCF build",
+  "doesn't accept an empty shared build as GCF 1",
   // Factor-pair builds, emitted by the structured-numeric `pairs()` scorer.
   // These two exist because a student who INVENTS a pair and a student who
   // merely STOPS EARLY need different moves, and the pairs scorer deliberately
