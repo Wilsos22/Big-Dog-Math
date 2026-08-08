@@ -52,6 +52,8 @@ type SessionRow = {
   status: string;
   broadcast: string | null;
   live_flow: LiveClassFlowSnapshot | null;
+  checkin_active?: boolean;
+  checkin_round?: number;
 };
 
 type ConnectionState = "connecting" | "connected" | "reconnecting";
@@ -181,11 +183,15 @@ export default function LiveFlowPage() {
   // so they keep picking up a join that lands mid-lesson.
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
-  // Student self-signal ("I'm stuck" / "say that again" / "I've got this").
-  // Probed per lesson step: the chips stay hidden until the student-signals
-  // migration has been run, and hide again when the teacher flips the
-  // session's signals off (the switch bites at the next step advance).
+  // Student self-signal ("I'm stuck" / "I'm kind of there" / "I've got
+  // this"). Probed per lesson step: the chips stay hidden until the
+  // student-signals migration has been run, and hide again when the teacher
+  // flips the session's signals off (the switch bites at the next step
+  // advance).
   const [signalsEnabled, setSignalsEnabled] = useState(false);
+  // False (the original "Say that again" chip) until student-checkin.sql has
+  // been run - see the GET probe comment in api/student/signal/route.ts.
+  const [kindOfThereReady, setKindOfThereReady] = useState(false);
   const [mySignal, setMySignal] = useState<string | null>(null);
   const [signalBusy, setSignalBusy] = useState(false);
   const [signalCooldown, setSignalCooldown] = useState(false);
@@ -193,6 +199,15 @@ export default function LiveFlowPage() {
   // when a tap fails to send.
   const [signalError, setSignalError] = useState<string | null>(null);
   const signalStepRef = useRef<number>(-1);
+  // Teacher-triggered "ask the class where they're at": checkinActive shows
+  // a visible nudge over the chips, checkinRound is a fresh-tally marker -
+  // a stale local `mySignal` from a round that already ended is cleared the
+  // moment the round number changes, so it never LOOKS like it counted
+  // toward a round it was not sent during (the server already stamped it
+  // with the OLD round; this is purely so the chip's own highlight doesn't lie).
+  const [checkinActive, setCheckinActive] = useState(false);
+  const [checkinRound, setCheckinRound] = useState(0);
+  const checkinRoundRef = useRef(0);
   // Answer writes require the verified join. When one fails because this
   // device never verified (a skipped warm-up, a no-form day), surface the
   // admission request RIGHT HERE instead of stranding the student with a
@@ -230,8 +245,11 @@ export default function LiveFlowPage() {
             `/api/student/signal?sessionId=${encodeURIComponent(sessionId)}`,
             { cache: "no-store" },
           );
-          const result = await response.json().catch(() => ({})) as { enabled?: boolean };
-          if (!stopped) setSignalsEnabled(Boolean(result.enabled));
+          const result = await response.json().catch(() => ({})) as { enabled?: boolean; kindOfThereReady?: boolean };
+          if (!stopped) {
+            setSignalsEnabled(Boolean(result.enabled));
+            setKindOfThereReady(Boolean(result.kindOfThereReady));
+          }
           if (result.enabled !== undefined) return;
         } catch { /* fall through to retry */ }
         await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -291,6 +309,17 @@ export default function LiveFlowPage() {
       setHolding(row?.status === "open");
       setFlow(isLiveFlow ? row.live_flow : null);
       setLoading(false);
+      const round = row?.checkin_round ?? 0;
+      setCheckinActive(Boolean(row?.checkin_active));
+      setCheckinRound(round);
+      // A new round starting clears any signal the chips are still showing -
+      // it was sent during the OLD round (the server already stamped it that
+      // way), so leaving it highlighted would read as "already answered" for
+      // a round the student has not responded to yet.
+      if (round !== checkinRoundRef.current) {
+        checkinRoundRef.current = round;
+        setMySignal(null);
+      }
     };
     const readSession = async () => {
       try {
@@ -690,7 +719,7 @@ export default function LiveFlowPage() {
     }
   }, [progressIndex]);
 
-  async function sendSignal(signal: "stuck" | "again" | "got-it") {
+  async function sendSignal(signal: "stuck" | "again" | "kind-of-there" | "got-it") {
     if (!liveSessionId || signalBusy || signalCooldown) return;
     setSignalBusy(true);
     setSignalError(null);
@@ -954,10 +983,15 @@ export default function LiveFlowPage() {
         @media (max-width:640px) { .lf-time-left { display:none; } }
         /* Student self-signals: persistent, low-stakes, bottom of the screen. */
         .lf-signals { position:absolute; z-index:5; left:50%; bottom:14px; transform:translateX(-50%); display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:center; max-width:calc(100% - 24px); }
+        .lf-signals.checkin { padding:10px 14px; border-radius:20px; background:rgba(252,175,56,0.16); box-shadow:0 0 0 2px var(--bdb-amber); animation:lf-checkin-pulse 1.6s ease-in-out infinite; }
+        @keyframes lf-checkin-pulse { 0%, 100% { box-shadow:0 0 0 2px var(--bdb-amber); } 50% { box-shadow:0 0 0 5px var(--bdb-amber); } }
+        @media (prefers-reduced-motion: reduce) { .lf-signals.checkin { animation:none; } }
+        .lf-checkin-nudge { flex-basis:100%; text-align:center; margin:0 0 2px; color:var(--bdb-ink); font-size:0.98rem; font-weight:800; }
         .lf-signal { min-height:44px; padding:8px 18px; border-radius:999px; border:1.5px solid var(--bdb-line); background:rgba(255,255,255,0.92); color:var(--bdb-ink); font:inherit; font-size:0.92rem; font-weight:800; cursor:pointer; box-shadow:var(--bdb-shadow-sm); }
         .lf-signal:hover:not(:disabled) { border-color:var(--bdb-ink-soft); }
         .lf-signal.stuck.on { background:var(--bdb-coral-deep); border-color:var(--bdb-coral-deep); color:#fff; }
         .lf-signal.again.on { background:var(--bdb-ink); border-color:var(--bdb-ink); color:#fff; }
+        .lf-signal.kindofthere.on { background:var(--bdb-amber); border-color:var(--bdb-amber); color:var(--bdb-ink); }
         .lf-signal.gotit.on { background:var(--bdb-green-deep); border-color:var(--bdb-green-deep); color:#fff; }
         .lf-signal:disabled { opacity:0.7; }
         .lf-signal-note { flex-basis:100%; text-align:center; color:var(--bdb-ink-soft); font-size:0.78rem; font-weight:700; }
@@ -1524,7 +1558,10 @@ export default function LiveFlowPage() {
           )}
         </div>
         {signalsEnabled && hasStudentSession && flow?.state ? (
-          <div className="lf-signals" aria-label="Tell your teacher how it is going">
+          <div className={`lf-signals${checkinActive ? " checkin" : ""}`} aria-label="Tell your teacher how it is going">
+            {checkinActive ? (
+              <p className="lf-checkin-nudge" role="status">Where are you at?</p>
+            ) : null}
             <button
               type="button"
               className={`lf-signal stuck${mySignal === "stuck" ? " on" : ""}`}
@@ -1534,15 +1571,27 @@ export default function LiveFlowPage() {
             >
               I&apos;m stuck
             </button>
-            <button
-              type="button"
-              className={`lf-signal again${mySignal === "again" ? " on" : ""}`}
-              aria-pressed={mySignal === "again"}
-              disabled={signalBusy || signalCooldown}
-              onClick={() => void sendSignal("again")}
-            >
-              Say that again
-            </button>
+            {kindOfThereReady ? (
+              <button
+                type="button"
+                className={`lf-signal kindofthere${mySignal === "kind-of-there" ? " on" : ""}`}
+                aria-pressed={mySignal === "kind-of-there"}
+                disabled={signalBusy || signalCooldown}
+                onClick={() => void sendSignal("kind-of-there")}
+              >
+                I&apos;m kind of there
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={`lf-signal again${mySignal === "again" ? " on" : ""}`}
+                aria-pressed={mySignal === "again"}
+                disabled={signalBusy || signalCooldown}
+                onClick={() => void sendSignal("again")}
+              >
+                Say that again
+              </button>
+            )}
             <button
               type="button"
               className={`lf-signal gotit${mySignal === "got-it" ? " on" : ""}`}

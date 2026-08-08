@@ -26,7 +26,7 @@ import {
 
 interface Period { id: string; name: string; }
 interface Join { id: string; student_id: string | null; display_name: string | null; joined_at: string; }
-interface StudentSignal { student_id: string | null; display_name: string | null; signal: "stuck" | "again" | "got-it"; step_index: number | null; updated_at: string; }
+interface StudentSignal { student_id: string | null; display_name: string | null; signal: "stuck" | "again" | "kind-of-there" | "got-it"; step_index: number | null; updated_at: string; }
 interface Answer { id: string; display_name: string | null; answer: string | null; }
 interface RosterStudent {
   id: string;
@@ -668,7 +668,7 @@ export default function SessionPage() {
         .se-count { font-size:1rem; font-weight:800; color:#5a5346; margin-bottom:10px; }
         .se-signals { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 12px; margin-top:10px; padding:9px 12px; border:1px solid var(--bdb-line); border-left:5px solid var(--bdb-coral-deep); border-radius:10px; background:#fff; font-size:0.86rem; font-weight:800; }
         .se-signal-count.stuck { color:var(--bdb-coral-deep); }
-        .se-signal-count.again { color:var(--bdb-ink); }
+        .se-signal-count.kindofthere { color:var(--bdb-brown); }
         .se-signal-count.gotit { color:var(--bdb-green-deep); }
         .se-signal-names { flex-basis:100%; display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; color:var(--bdb-ink-soft); font-weight:700; font-size:0.82rem; }
         .se-signal-name { display:inline-flex; align-items:center; gap:5px; }
@@ -934,9 +934,10 @@ export default function SessionPage() {
                   );
                 }
                 // Scope to the current lesson step when one is running - a
-                // "say again" from three steps ago is not a say again right
-                // now. A stuck is the exception: it stays on the strip until
-                // it ages out, so an auto-advance cannot clear a raised hand.
+                // "kind of there" from three steps ago is not a kind of there
+                // right now. A stuck is the exception: it stays on the strip
+                // until it ages out, so an auto-advance cannot clear a raised
+                // hand.
                 const currentStep = liveFlow?.sequence?.currentIndex ?? null;
                 const signalsNow = Date.now();
                 const current = signalState.signals.filter((s) => (
@@ -945,7 +946,10 @@ export default function SessionPage() {
                   || (s.signal === "stuck" && stuckStillFresh(s.updated_at, signalsNow))
                 ));
                 const stuck = current.filter((s) => s.signal === "stuck");
-                const again = current.filter((s) => s.signal === "again");
+                // Bucket the old "again" value with "kind-of-there" - see the
+                // matching comment on /teacher/remote for why both can exist
+                // side by side without a data migration.
+                const kindOfThere = current.filter((s) => s.signal === "kind-of-there" || s.signal === "again");
                 const gotIt = current.filter((s) => s.signal === "got-it");
                 if (!current.length && !signalState.controls) return null;
                 const nameRow = (label: string, list: StudentSignal[]) => (
@@ -976,7 +980,7 @@ export default function SessionPage() {
                 return (
                   <div className="se-signals" role="status" aria-label="Student self-signals">
                     <span className="se-signal-count stuck">Stuck: {stuck.length}</span>
-                    <span className="se-signal-count again">Say again: {again.length}</span>
+                    <span className="se-signal-count kindofthere">Kind of there: {kindOfThere.length}</span>
                     <span className="se-signal-count gotit">Got it: {gotIt.length}</span>
                     {signalState.controls ? (
                       <button className="se-signal-toggle" disabled={signalActionBusy} onClick={() => void signalAction("signals-off")} title="Hides the signal chips for every student at the next step change">
@@ -984,7 +988,7 @@ export default function SessionPage() {
                       </button>
                     ) : null}
                     {nameRow("Stuck:", stuck)}
-                    {nameRow("Say again:", again)}
+                    {nameRow("Kind of there:", kindOfThere)}
                   </div>
                 );
               })() : null}

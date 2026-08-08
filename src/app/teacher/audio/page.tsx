@@ -434,7 +434,12 @@ export default function TeacherAudioLibrary() {
         <section className="al-local" aria-label="Audio storage location">
           <div>
             <strong>Stored on this classroom laptop</strong>
-            <p>These files stay in this browser. If the Live class host is already open, refresh it after a change.</p>
+            <p>
+              These files stay in this browser only - they will not play from a different laptop. For
+              music that should play everywhere with no upload step (like the sound bank effects
+              already do), ask Claude to commit the file to the repo instead of uploading it here. If
+              the Live class host is already open, refresh it after a change made here.
+            </p>
           </div>
           <span className="al-limit">Audio only, up to 50 MB per file</span>
         </section>

@@ -86,6 +86,12 @@ ok("clearLocal drops any queued-but-unsent network segment rather than flushing 
   && /sendFrameRef\.current\s*!==\s*null/.test(clearLocalBody)
   && /window\.cancelAnimationFrame\(sendFrameRef\.current\)/.test(clearLocalBody));
 
+ok("clearLocal cancels a pending bounce-merge finalize rather than letting it fire against wiped data",
+  /bounceTimerRef\.current\s*!==\s*null/.test(clearLocalBody)
+  && /window\.clearTimeout\(bounceTimerRef\.current\)/.test(clearLocalBody)
+  && /bounceTimerRef\.current\s*=\s*null/.test(clearLocalBody)
+  && /pendingFinalizeRef\.current\s*=\s*null/.test(clearLocalBody));
+
 // clearLocal must not depend on clearSnapTimer/flushQueuedSegment by name -
 // both are declared LATER in this file, so referencing them here (rather than
 // the raw refs) would be a temporal-dead-zone bug the moment this function

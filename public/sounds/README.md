@@ -11,10 +11,19 @@ clap is replaced on the next deploy. Remove it and the synthesized cue comes bac
 **It must be `.mp3`.** A `.wav` or `.m4a` sitting in this folder is a button that stays synthesized
 and gives no clue why. Convert first: `ffmpeg -i clip.m4a applause.mp3`.
 
-Two files here are not bank cues:
+Some files here are not bank cues:
 
 - `attention-call.mp3` — the Bark / eyes-up call (`src/lib/attentionCall.ts`). Absent, it falls back
   to a synthesized bing-bong.
+- `music-<stateId>.mp3` — per-state / per-transition-vibe MUSIC (added 2026-08-07), e.g.
+  `music-transition-hustle.mp3`, `music-transition-settle.mp3`. `stateId` is any id from
+  `DEFAULT_STATES` in `src/lib/classStates.ts` (the ad-hoc "Transition now" vibes reuse the planned
+  transition states' ids, so a Hustle track and a Transition-Hustle track are the same file). Same
+  three-source order as the bank cues below: an IndexedDB upload on that specific laptop wins, then
+  this file, then silence (there is no synthesized fallback for music - silence is the correct
+  answer when nobody has set one). `src/lib/classroomAudio.ts` (`musicFileUrl`,
+  `resolveCommittedMusicUrl`) is the mechanism; `/teacher/present`'s `ClassroomAudioHost` and
+  `/control`'s backup host both read through it.
 - Control's three timer cues (warning / countdown / times-up) are **not** here at all. Those are
   uploaded per-machine and live in IndexedDB by design.
 

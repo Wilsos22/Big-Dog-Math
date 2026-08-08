@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Module 2 — Ratios, Unit Rates, Percents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ground:#faf6ee; --card:#ffffff; --ink:#201e1a; --line:#ece4d4;
+  --amber:#fcaf38; --teal:#50a3a4; --brown:#674a40; --coral:#f95335; --green:#2f9e6f;
+  --teal-deep:#2f7d7e; --coral-deep:#d13a1f; --green-deep:#1f7d55;
+  --muted:#6b6259;
+  --font:"Albert Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:26px 22px 60px}
+header{margin-bottom:20px}
+h1{font-size:26px;font-weight:800;margin:0 0 6px;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:14px;margin:0}
+.evidence-strip{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:5px 11px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--muted)}
+.pill.t1{border-color:var(--teal);color:var(--teal-deep)}
+.pill.t2{border-color:var(--amber);color:var(--brown)}
+.pill.thin{border-color:var(--coral);color:var(--coral-deep)}
+
+nav[role=tablist]{display:flex;flex-wrap:wrap;gap:2px;margin:22px 0 0;border-bottom:1px solid var(--line)}
+button.tab{font-family:var(--font);font-size:14px;font-weight:600;color:var(--muted);background:transparent;border:none;border-bottom:3px solid transparent;padding:11px 15px;cursor:pointer;border-radius:8px 8px 0 0}
+button.tab:hover{color:var(--ink)}
+button.tab[aria-selected=true]{color:var(--ink);background:var(--card);border-bottom-color:var(--coral)}
+section[role=tabpanel]{padding-top:22px}
+section[hidden]{display:none}
+
+h2{font-size:19px;font-weight:700;margin:30px 0 12px;letter-spacing:-.005em}
+h2:first-child{margin-top:0}
+h3{font-size:15.5px;font-weight:700;margin:22px 0 8px}
+p{margin:0 0 12px}
+.lead{font-size:16px}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:14px}
+.card h4{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:700;margin:0 0 10px}
+.topic-tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:5px;margin-right:7px;vertical-align:2px}
+.tag-ratio{background:#e7f2f2;color:var(--teal-deep)}
+.tag-rate{background:#f3ece8;color:var(--brown)}
+.tag-pct{background:#fdefeb;color:var(--coral-deep)}
+
+.lev-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:16px}
+.lev{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:0 14px 14px 0;padding:16px 18px}
+.lev.c2{border-left-color:var(--coral)}
+.lev.c3{border-left-color:var(--brown)}
+.lev .num{font-size:30px;font-weight:800;line-height:1.05;letter-spacing:-.02em;color:var(--teal-deep)}
+.lev.c2 .num{color:var(--coral-deep)}
+.lev.c3 .num{color:var(--brown)}
+.lev .what{font-size:13px;color:var(--muted);margin-top:4px}
+.lev .why{font-size:14px;margin-top:9px}
+
+.callout{border-radius:12px;padding:14px 17px;margin:0 0 14px;font-size:14.5px}
+.co-cost{background:#fdf6ec;border:1px solid var(--amber)}
+.co-first{background:#fdefeb;border:1px solid var(--coral)}
+.co-say{background:#f2f8f5;border-left:4px solid var(--green-deep);border-radius:0 12px 12px 0}
+.callout strong{font-weight:700}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:16px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700;padding:10px 12px;border-bottom:1px solid var(--line);background:#fcfaf6}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;background:#f4efe4;padding:1.5px 5px;border-radius:4px}
+
+ol.seq{list-style:none;counter-reset:s;padding:0;margin:0 0 16px}
+ol.seq li{counter-increment:s;position:relative;padding:9px 0 9px 40px;border-bottom:1px solid var(--line);font-size:14.5px}
+ol.seq li:last-child{border-bottom:none}
+ol.seq li::before{content:counter(s);position:absolute;left:0;top:9px;width:25px;height:25px;border-radius:50%;background:var(--teal-deep);color:#fff;font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center}
+ol.seq .purpose{color:var(--muted);font-size:13.5px;display:block;margin-top:2px}
+
+details{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:10px;overflow:hidden}
+details[open]{border-color:var(--brown)}
+summary{list-style:none;cursor:pointer;padding:15px 18px;display:flex;gap:12px;align-items:flex-start}
+summary::-webkit-details-marker{display:none}
+.chev{flex:0 0 auto;width:14px;height:14px;margin-top:4px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .18s}
+details[open] .chev{transform:rotate(45deg)}
+.sum-body{flex:1}
+.mis-name{font-weight:700;font-size:14.5px;margin-bottom:5px}
+.wrong{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:#fdefeb;color:var(--coral-deep);padding:5px 9px;border-radius:6px;display:inline-block;font-weight:600}
+.mis-body{padding:0 18px 18px;border-top:1px solid var(--line);margin-top:2px;padding-top:14px}
+.mis-body dt{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700;margin-top:13px}
+.mis-body dt:first-child{margin-top:0}
+.mis-body dd{margin:4px 0 0;font-size:14.5px}
+.src{font-size:12.5px;color:var(--muted);font-style:italic}
+
+.wu{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:12px}
+.wu .day{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700}
+.wu .q{font-size:15px;font-weight:600;margin:7px 0}
+.wu .rev{font-size:13.5px;color:var(--muted)}
+.target{display:inline-block;font-size:11.5px;font-weight:700;background:#f4efe4;color:var(--brown);padding:3px 9px;border-radius:5px;margin-top:8px}
+
+footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+footer code{font-size:12px}
+.warn{color:var(--coral-deep);font-weight:600}
+@media(max-width:560px){
+  .wrap{padding:18px 14px 40px}
+  h1{font-size:21px}
+  button.tab{font-size:13px;padding:9px 11px}
+  table{font-size:12.5px}
+  .lev-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Module 2 — Ratios, Unit Rates, Percents</h1>
+  <p class="sub">Grade 6 · Title 1 · grade level to ~2 years behind · CCSS 6.RP.A.1–3 · compiled 2026-08-06</p>
+  <div class="evidence-strip">
+    <span class="pill t1">Strong: how to deliver it</span>
+    <span class="pill t2">Strong: the misconception data</span>
+    <span class="pill thin">Weak: which representation</span>
+  </div>
+</header>
+
+<nav role="tablist" aria-label="Sections">
+  <button class="tab" role="tab" id="t-teach" aria-controls="p-teach" aria-selected="true">Teach tomorrow</button>
+  <button class="tab" role="tab" id="t-mis" aria-controls="p-mis" aria-selected="false">Misconception lookup</button>
+  <button class="tab" role="tab" id="t-wu" aria-controls="p-wu" aria-selected="false">Warm-up targets</button>
+  <button class="tab" role="tab" id="t-behind" aria-controls="p-behind" aria-selected="false">If they're behind</button>
+  <button class="tab" role="tab" id="t-cross" aria-controls="p-cross" aria-selected="false">The cross-multiply question</button>
+</nav>
+
+<!-- ================= TEACH TOMORROW ================= -->
+<section role="tabpanel" id="p-teach" aria-labelledby="t-teach">
+
+<div class="callout co-first">
+  <strong>Before anything else — your module map is off.</strong> In the CCSD Grade 6 Acc clarity guides, Topic 1 is Ratios, Topic 2 is <em>Percents, Unit Rates <strong>and</strong> Conversions</em> together, and Topic 3 is The Statistical Process (6.SP), not percents. Two of your three math topics share one district topic carrying six learning progressions.
+  <p style="margin:10px 0 0"><strong>And here is the arithmetic none of the individual briefs can do.</strong> Their three day-by-day plans total <strong>15 days</strong> (6 ratios, 4 unit rates, 5 percents). The ratios brief separately argues its own topic wants eight to ten, which puts the evidence-supported total nearer <strong>17 to 19</strong>. And all three propose taking the slack from <em>the same conversions strand</em>. It cannot absorb all three. Decide which topic takes the hit before day one, not in week three.</p>
+</div>
+
+<h2>The short version</h2>
+<p class="lead">A sixth grader's default move is to add. Measured on 755 students across grades 4–10, sixth graders used an additive method on <strong>57% of proportional problems and 58.5% of additive problems</strong> — they are not choosing a model, they have one move, and it fires regardless of the situation. The cheapest lever you have against this is <strong>number choice</strong>, and it is not close.</p>
+<p class="lead">The thing most likely to go wrong is subtler than teaching the wrong strategy: it is teaching "ratios are multiplicative, not additive" <em>as a rule</em>. In a small controlled teaching experiment (n = 18 experimental, 17 control) that successfully taught students to stop over-applying proportionality, accuracy on genuinely proportional problems fell from 83.3% to 58.3%. You cannot trade one over-generalization for another. What has to be taught is the <strong>decision</strong>, not the rule.</p>
+
+<h2>The three numbers that should change what you do</h2>
+<div class="lev-grid">
+  <div class="lev">
+    <div class="num">22.5% &rarr; 5.5%</div>
+    <div class="what">Grade 6 proportional-method use, integer vs non-integer ratios</div>
+    <div class="why">Change the numbers so the scale factor is not a whole number and correct reasoning collapses by a factor of four, while additive errors climb 52.5% &rarr; 61.5%. A worksheet built on doubling and halving shows you a class that looks competent and leaves the misconception fully intact.</div>
+  </div>
+  <div class="lev c2">
+    <div class="num">91% vs 51%</div>
+    <div class="what">Same recipe mathematics, easy multiplier within one measure vs between two</div>
+    <div class="why">Finding a unit rate is structurally the 91% move. <em>Applying</em> it is the 51% move. That is why students find the rate and then stall — and why unit rate belongs late in the sequence, not at the front. <span class="warn">The gap is measured; that it is <em>the unit-rate bottleneck</em> is an inference, not a finding — the study is about double number lines, not unit rate.</span></div>
+  </div>
+  <div class="lev c3">
+    <div class="num">0 of 14</div>
+    <div class="what">Students who drew any model on percent scrap paper they were told to use</div>
+    <div class="why">"Arranging the relations between the given data was done in their heads, and often that went wrong." On the same test, 8 of 14 computed a 15% discount on &euro;600 as 600 &divide; 15. The bar has to be a required routine, not an offered option.</div>
+  </div>
+</div>
+
+<h2>Where to spend the time</h2>
+<div class="card">
+  <h4>Highest leverage, in order</h4>
+  <p><span class="topic-tag tag-ratio">Ratios</span><strong>Deciding whether a situation is proportional at all.</strong> The highest-<em>consequence</em> error, and the only sub-skill whose absence guarantees the other two. (The single highest error <em>rate</em> is the 60% absolute-comparison figure on tab 2 &mdash; which sits upstream of this one: a student comparing one column has not formed a ratio yet.) 57.0% (Spain, grade 6) and 56.5% (Australia, Year 5–6) — two instruments, two continents, half a percentage point apart.</p>
+  <p><span class="topic-tag tag-rate">Unit rates</span><strong>Applying a known rate to a new quantity.</strong> The between-measure move is where the cliff is. Most curricula spend their time on finding the rate, which is the easy half.</p>
+  <p><span class="topic-tag tag-pct">Percents</span><strong>Percent as parts of a bar, drawn before anything is computed — and finding the whole.</strong> Find-the-whole is documented as the hardest of the three problem types and it is where a positional template fails, because the unknown sits in the position the rule assumes is known.</p>
+</div>
+
+<div class="callout co-cost">
+  <strong>What gets compressed to pay for it.</strong> The three-notations lesson (colon / "to" / fraction bar) folds into vocabulary — and part-to-part in fraction form should be dropped from grade 6 entirely. The ratio-vs-rate definitional distinction goes: the Standards deliberately collapse it. Fraction–decimal–percent conversion drilling keeps the benchmark subset and drops the exhaustive matching. Coordinate-graph work gets one day as a classifying tool, not a solving tool. Unit conversion rides on ratio tables you have already built.
+</div>
+
+<h2>The sequence across the module</h2>
+<ol class="seq">
+  <li>Composed unit, physically iterated and partitioned <span class="purpose">Until "3 grape to 2 peach" is a single thing that can be doubled and halved, there is nothing for a diagram to represent.</span></li>
+  <li>Qualitative comparison before any computation <span class="purpose">Forces both quantities into view — the 60% absolute-comparison error is upstream of additive-vs-multiplicative and surfaces here on day one.</span></li>
+  <li>Tape diagram for same-unit ratios, double number line for different-unit <span class="purpose">The unit test is the selection rule. A double number line on same-unit quantities makes two different lengths stand for the same amount.</span></li>
+  <li>Ratio table as the bridge from build-up to multiplication <span class="purpose">Scales past what a diagram can physically hold — and you create that pressure by choosing the numbers.</span></li>
+  <li>Partition down to one: "what if I only want one?" <span class="purpose">Unit rate arrives as an answer to a question, as a member of the family, not as a definition at the front.</span></li>
+  <li>Apply the rate to a non-integer target <span class="purpose">The between-measure move, isolated. With whole-number targets students build up instead and you learn nothing.</span></li>
+  <li>Percent as out of 100, on a bar, with benchmark decomposition <span class="purpose">50% / 10% / 5% / 1% computes the answer <em>and</em> leaves a felt sense of its size, which is the only thing that catches a reversed operation.</span></li>
+  <li>Non-integer ratios and non-proportional situations, interleaved throughout <span class="purpose">Not an extension. This is the assessment of everything above.</span></li>
+</ol>
+
+<h2>Three first moves you can run tomorrow</h2>
+<p>Everything else on this page is an argument. These are tasks, with timings and a materials line, one per topic. Full activity sets — with what each one <em>cannot</em> show — are in the briefs.</p>
+<div class="card">
+  <h4>Ratios · about 15 minutes · no materials</h4>
+  <p><strong>The paint comparison.</strong> Abby's paint is 1 cup red to 3 yellow. Zack's is 3 red to 5 yellow. Same shade? Students must answer three ways: make the red the same, make the yellow the same, make the total the same. Surfaces the 60% absolute-comparison error on day one and needs no arithmetic to enter.</p>
+  <p class="src">Deliberately abandon it after a day — it says nothing about non-integer ratios, which is where the real error lives.</p>
+</div>
+<div class="card">
+  <h4>Unit rates · about 15 minutes · no materials</h4>
+  <p><strong>Both ways.</strong> One rate situation. Students compute <em>both</em> unit rates — dollars per balloon and balloons per dollar — then answer two questions, one that each rate answers well. The mathematics is in the choosing, not the dividing, so a student two years behind participates on the actual decision.</p>
+</div>
+<div class="card">
+  <h4>Percents · about 25 minutes · paper strips</h4>
+  <p><strong>Bar-building with benchmarks.</strong> Given a total, students mark 50%, 25%, 10%, 5%, and 1% on a bar, each computed from the last. Then they are asked for 15%, 35%, and 11% and must build them. Establishes the routine that carries the whole topic: <strong>mark 0%, mark 100%, mark what you know, then decide.</strong></p>
+  <p class="src">Free. Paper strips or a printed bar template.</p>
+</div>
+<div class="callout co-cost">
+  <strong>The one that costs nothing and is worth the most:</strong> run any proportional problem twice in the same period — once with an integer scale factor, once without. It teaches nothing on its own; it <em>reveals</em>. Pair it with instruction. About 15 minutes, and it is a number change.
+</div>
+
+<h2>The progression — and why it is not CRA</h2>
+<div class="callout co-first">
+  <strong>The 2025 CRA meta-analysis covers 30 studies, all single-case design, 116 students, researcher-implemented in 73% of cases — and its study table contains zero ratio, proportion, or percent studies.</strong> Not thin evidence. No evidence. What does have cluster RCTs on exactly this content is schema-based instruction. What has expert design support — Illustrative Mathematics sequences discrete diagram &rarr; double number line &rarr; table — is a representational fade, published as design rationale with no efficacy trial behind that sequence. That distinction will matter the first time an evaluator presses on it.
+</div>
+
+<table>
+<thead><tr><th>Stage</th><th>Students do</th><th>Move on when</th></tr></thead>
+<tbody>
+<tr><td><strong>Composed unit</strong></td><td>Build, iterate, and partition a physical batch. Cups, cubes, paper strips, tally columns.</td><td>The student can <em>predict</em> the result of doubling before doing it.</td></tr>
+<tr><td><strong>Diagram</strong></td><td>Draw the structure before computing. Tape for same units, double number line for different units, percent bar for percent.</td><td>The student draws unprompted on a new problem <em>and</em> chooses the right diagram for the unit situation.</td></tr>
+<tr><td><strong>Table</strong></td><td>Scale up and down with explicit &times; and &divide; recorded between rows.</td><td>The student reaches for a table when the numbers outgrow the diagram, and reads rows as multiples out loud.</td></tr>
+<tr><td><strong>Decision</strong> <span class="src">(runs throughout, not at the end)</span></td><td>Sort problems by type before solving. Estimate a ballpark answer before computing.</td><td>The student can say why a non-proportional problem is not proportional <em>without losing accuracy on proportional ones</em>.</td></tr>
+</tbody>
+</table>
+
+<h2>Watch out for</h2>
+<div class="card">
+  <p><strong>Friendly percentages are hiding your problem.</strong> "Problems with 25%, 75% and 20% can easily be solved by finding an equal proportion. That is not possible, however, with percentages like 15% and 35%." Teach the benchmarks as tools; assess with 15%, 35%, 11%.</p>
+  <p><strong>Percent gains wash out.</strong> In the one RCT that measured percent separately, gains for students with mathematics difficulties were significant at posttest and <em>not</em> at nine weeks — while ratio and proportion gains held. Plan the spiral before the unit ends.</p>
+  <p><strong>CCSD success criterion 3.2.b</strong> — "determine equivalent ratios in a table by adding or subtracting two equal ratios" — is mathematically correct and pedagogically loaded. Students read "add" in a ratio table as "add the same number to both." Teach it as adding one whole batch, or not at all in the week you are killing the additive error.</p>
+  <p><strong>CCSD success criterion 3.4.a</strong> — "division of the part by the percent, to determine the whole" — points at the single hardest item in a 677-student study (accepting <code>145 &divide; 0.11</code>). Three of six surveyed textbooks avoided this method entirely to dodge it. Teach it, but put the bar underneath it first.</p>
+  <p><strong>Dose is a real constraint.</strong> The same research group's 9–10 session versions of their intervention produced <em>nothing</em> for students with mathematics difficulties; only the six-week daily version worked. The rational-number meta-analysis puts the significant duration threshold at 20+ hours. Plan against that, or commit to the spiral.</p>
+</div>
+
+</section>
+
+<!-- ================= MISCONCEPTIONS ================= -->
+<section role="tabpanel" id="p-mis" aria-labelledby="t-mis" hidden>
+
+<p class="lead">Built to be searched mid-class, not read start to finish. Each card is collapsed to the name and <strong>the actual wrong answer you will see on paper</strong>.</p>
+
+<details>
+<summary><span class="chev"></span><div class="sum-body">
+  <div class="mis-name"><span class="topic-tag tag-ratio">Ratios</span>The ratio as a difference (additive reasoning)</div>
+  <span class="wrong">3 kg sugar for 6 kg strawberries &rarr; 15 kg sugar for 18 kg strawberries</span>
+</div></summary>
+<div class="mis-body"><dl>
+<dt>Why it makes sense to them</dt>
+<dd>The previously-true rule is <strong>build-up by adding</strong>, which is a genuinely correct proportional strategy. The student is running a legitimate method with the wrong scope. This is why "stop adding" is the wrong correction — adding is half the right method.</dd>
+<dt>How common</dt>
+<dd><strong>57.0%</strong> of grade 6 students on proportional problems (n=755, Spain). Independently, <strong>56.5%</strong> of Year 5–6 students (n=140, Australia). Still <strong>21.2%</strong> in grade 10.</dd>
+<dt>Surface it early with</dt>
+<dd>The paired box-loading task, both versions, same class period. Integer: "started together but Tom loads faster; Peter 40 &rarr; Tom 160; Peter 80 &rarr; ?" Non-integer: "Peter 40 &rarr; Tom 100; Peter 60 &rarr; ?" The second version is where the additive answer appears, because build-up is no longer cheap.</dd>
+<dt>What to say when it shows up</dt>
+<dd>Do not correct the arithmetic. Ask what <em>one batch</em> is, and whether that batch is still the same in their answer. 15-per-18 is not 3-per-6. Put both rows on a table and ask which one describes the grandmother's recipe. Confusion is step one; <em>what do you know</em> is that the recipe did not change.</dd>
+</dl><p class="src">Fernández et al. (2010) [T2]; Hilton et al. (2012) [T3]; Van Dooren, Vamvakoussi &amp; Verschaffel (2018) [T2]</p></div>
+</details>
+
+<details>
+<summary><span class="chev"></span><div class="sum-body">
+  <div class="mis-name"><span class="topic-tag tag-ratio">Ratios</span>Proportional reasoning applied to an additive situation</div>
+  <span class="wrong">"Equally fast, Ellen started later. Ellen 4 &rarr; Kim 8. Ellen 12 &rarr; Kim 24" (correct: 16)</span>
+</div></summary>
+<div class="mis-body"><dl>
+<dt>Why it makes sense to them</dt>
+<dd>The missing-value <em>format</em> is the trigger. Every problem in that shape for three weeks has been proportional, so the student is reading the format, not the situation.</dd>
+<dt>How common</dt>
+<dd><strong>21.4%</strong> applied a multiplicative strategy to an additive situation; <strong>78.6%</strong> missed two-dimensional area scaling. And this error <em>rises</em> monotonically into secondary school while the additive error falls — the error does not get fixed, it flips.</dd>
+<dt>Surface it early with</dt>
+<dd>The same problem stem with one clause changed. "Equally fast but Tom started earlier" versus "started together but Tom loads faster." Identical numbers. The clause is the whole problem.</dd>
+<dt>What to say when it shows up</dt>
+<dd>This is the moment for <em>try something</em>. Run the situation with small numbers. If they started together and Tom is faster, what happened at 1 box? If Tom started earlier, what happened at 1 box? The simulation settles it without you ruling.</dd>
+</dl><p class="src">Hilton et al. (2012) [T3]; Fernández et al. (2010) [T2]. Van Dooren et al. (2018): inappropriate proportional reasoning is "to a large extent, <strong>instruction-induced</strong>."</p></div>
+</details>
+
+<details>
+<summary><span class="chev"></span><div class="sum-body">
+  <div class="mis-name"><span class="topic-tag tag-ratio">Ratios</span> <span class="topic-tag tag-rate">Unit rates</span>Absolute comparison in place of relative comparison</div>
+  <span class="wrong">"Washing powder A costs the least" / "B costs a bit more but you get 10 more loads"</span>
+</div></summary>
+<div class="mis-body"><dl>
+<dt>Why it makes sense to them</dt>
+<dd>For their entire schooling, "which is more?" was answered by looking at one number. Nothing before grade 6 required holding two quantities at once. Both wrong answers are complete sentences that sound like reasoning.</dd>
+<dt>How common</dt>
+<dd><strong>60.0%</strong> — the highest single error rate in the retrieved data. A further 35.0% considered one value without a related value. This is <em>upstream</em> of additive-vs-multiplicative: a student comparing one column has not formed the ratio at all.</dd>
+<dt>Surface it early with</dt>
+<dd>Two products where the cheaper one is the <em>worse</em> buy. Design that deliberately — if the cheap one is also better value, the error produces the right answer and stays hidden.</dd>
+<dt>What to say when it shows up</dt>
+<dd>Do not correct the comparison. Ask a different question: "how much for one load?" That forces both quantities into the same sentence. Then re-ask the original. They know two things about each box and have used one.</dd>
+</dl><p class="src">Hilton et al. (2012) [T3], n=140, two-tier diagnostic. The four answer options are reproduced in the paper and are directly usable.</p></div>
+</details>
+
+<details>
+<summary><span class="chev"></span><div class="sum-body">
+  <div class="mis-name"><span class="topic-tag tag-ratio">Ratios</span>The colon read as a fraction bar</div>
+  <span class="wrong">"Can 10 people be split in a ratio of 1:2?" &rarr; treats 1:2 as one-half</span>
+</div></summary>
+<div class="mis-body"><dl>
+<dt>Why it makes sense to them</dt>
+<dd>Two years of "a number over a number is a fraction," and the colon is being taught as an alternative notation <em>for the same thing</em>. CCSD success criterion 1.3.a ("I can write a ratio as a fraction") states the equivalence without the part-to-part exception.</dd>
+<dt>How common</dt>
+<dd>26.7% success on that item pre-instruction (n=15 — tiny sample; use the taxonomy, not the rate). The WWC panel names it directly: "even though ratios are often expressed as fractions, ratios and fractions are not always the same thing. Students often struggle with this common misconception."</dd>
+<dt>Surface it early with</dt>
+<dd>"2 blue tiles, 3 red tiles. Write the ratio of blue to red as a fraction. Now: what fraction of the tiles are blue?" Both are legitimate questions with different answers. The collision <em>is</em> the lesson.</dd>
+<dt>What to say when it shows up</dt>
+<dd>Do not resolve it by rule. Ask what the 5 is in each case. Part-to-whole has a whole; part-to-part does not. Then drop part-to-part fraction notation from grade 6 — it is not worth the damage.</dd>
+</dl><p class="src">Cheung, Reid O'Connor &amp; Zunica [T3]; WWC fractions practice guide [T1 guide, Rec 4 rated Minimal]</p></div>
+</details>
+
+<details>
+<summary><span class="chev"></span><div class="sum-body">
+  <div class="mis-name"><span class="topic-tag tag-rate">Unit rates</span>Dividing in the wrong direction</div>
+  <span class="wrong">"6 balloons for $24, cost of 5?" &rarr; 24 &divide; 5, or 6 &divide; 24 = "$0.25 per balloon"</span>
+</div></summary>
+<div class="mis-body"><dl>
+<dt>Why it makes sense to them</dt>
+<dd>Two previously-true rules colliding. "Divide the bigger by the smaller" has never failed them. And division has always produced something smaller, and usually whole.</dd>
+<dt>How common</dt>
+<dd><span class="warn">Honest note:</span> I found <strong>no study measuring reversed division in unit-rate problems specifically</strong>. The evidence here is transferred from the percent literature, where 8 of 14 students computed a 15% discount on &euro;600 as 600 &divide; 15. Label it as transfer, not as a unit-rate finding.</dd>
+<dt>Surface it early with</dt>
+<dd>Ask for <em>both</em> unit rates on the same item — "dollars per balloon" and "balloons per dollar" — then ask which one answers the question. Both are legitimate; the choice is the mathematics.</dd>
+<dt>What to say when it shows up</dt>
+<dd>Estimate first. "About how much should one balloon cost — more than a dollar or less?" A student who has said "about $4" cannot then accept $0.25 without noticing it themselves.</dd>
+</dl><p class="src">van Galen &amp; van Eerde (2013) [T2], n=14 — illustrative, not evidential</p></div>
+</details>
+
+<details>
+<summary><span class="chev"></span><div class="sum-body">
+  <div class="mis-name"><span class="topic-tag tag-rate">Unit rates</span>Finds the rate, cannot apply it</div>
+  <span class="wrong">Computes "$4.33 per pound," writes it down, and stops</span>
+</div></summary>
+<div class="mis-body"><dl>
+<dt>Why it makes sense to them</dt>
+<dd>They have completed a <em>within-measure</em> operation, which they are good at. The next move is <em>between-measure</em>, which they are not. From the student's side the problem feels finished — a number has been produced.</dd>
+<dt>How common</dt>
+<dd><strong>91% vs 51%</strong> on identical mathematics, easy multiplier within one measure vs between two. <span class="warn">Note:</span> that study is about double number lines, not unit rate. The mapping onto unit rate is an inference — a sound one that explains a phenomenon you will recognize, but a bridge, not a finding.</dd>
+<dt>Surface it early with</dt>
+<dd>Any rate problem with a non-integer target quantity, so build-up is unavailable. With whole-number targets students bypass the rate entirely and this error is invisible.</dd>
+<dt>What to say when it shows up</dt>
+<dd>Put it on the double number line. The unit rate is the pair at 1; the answer is the pair at 7. Ask what is between them. This is the moment the double number line earns its place — it makes the second move a <em>drawing</em> rather than a decision about which operation to trust.</dd>
+</dl><p class="src">Küchemann, Hodgen &amp; Brown (2014) [T2], ICCAMS project item data</p></div>
+</details>
+
+<details>
+<summary><span class="chev"></span><div class="sum-body">
+  <div class="mis-name"><span class="topic-tag tag-pct">Percents</span>Divide the bigger by the smaller ("percent means divide")</div>
+  <span class="wrong">"&euro;600 bike, 15% off" &rarr; 600 &divide; 15 = 40 &nbsp;&nbsp;|&nbsp;&nbsp; "24 out of 500" &rarr; 500 &divide; 24</span>
+</div></summary>
+<div class="mis-body"><dl>
+<dt>Why it makes sense to them</dt>
+<dd>Sharper than it looks: the student expects a school problem to have a clean computation, sees that 100 does not divide 15 nicely, notices that 600 &divide; 15 does, and takes it. <strong>They are reasoning about the test, not about the mathematics — and they learned to do that from the problem sets.</strong></dd>
+<dt>How common</dt>
+<dd><strong>8 of 14</strong> students on the bike problem; only 4 of 14 correct. The 500 &divide; 24 form is documented separately as "percent means divide."</dd>
+<dt>Surface it early with</dt>
+<dd>15%, 35%, and 11%. Never 25%, 50%, or 75% on an assessment. "Problems with 25%, 75% and 20% can easily be solved by finding an equal proportion. That is not possible, however, with percentages like 15% and 35%."</dd>
+<dt>What to say when it shows up</dt>
+<dd>Do not correct the operation. Ask for 10% first. A student who has said "10% is 60" cannot hold "15% is 40" in the same sentence. The contradiction is theirs to notice.</dd>
+</dl><p class="src">van Galen &amp; van Eerde (2013) [T2]; Ryan &amp; Williams (2007) via Baratta et al. (2010) [T2]</p></div>
+</details>
+
+<details>
+<summary><span class="chev"></span><div class="sum-body">
+  <div class="mis-name"><span class="topic-tag tag-pct">Percents</span>Division makes smaller, so this cannot be right</div>
+  <span class="wrong">Rejects <code>145 &divide; 0.11</code> as a way to find the whole</span>
+</div></summary>
+<div class="mis-body"><dl>
+<dt>Why it makes sense to them</dt>
+<dd>Every division they have done for six years produced something smaller. The rule was true until decimals under 1 arrived.</dd>
+<dt>How common</dt>
+<dd>The <strong>single hardest question</strong> in a 677-student study. Revealingly, <strong>three of six surveyed Year 8 textbooks avoided find-whole-by-division entirely</strong>, apparently to dodge it. By contrast <code>(145 &divide; 11) &times; 100</code> — the unitary method in one calculation — was "relatively very well done."</dd>
+<dt>Surface it early with</dt>
+<dd>Estimation before computation: "11% of a number is 145. Is the number bigger or smaller than 145? How do you know?" The estimate makes the direction a decision the student <em>defends</em>, before any operation is chosen.</dd>
+<dt>What to say when it shows up</dt>
+<dd>Go to the bar. If 11% is 145, then 1% is about 13, so 100% is about 1,300. The bar makes the answer's size obvious and the division becomes a shortcut for something already known. <strong>This is also why the 1% unitary route should be your primary method</strong> — it is the one students can hold.</dd>
+</dl><p class="src">Baratta et al. (2010) [T2], n=677; MMBDMS attributed to Bell, Swan &amp; Taylor (1981)</p></div>
+</details>
+
+<details>
+<summary><span class="chev"></span><div class="sum-body">
+  <div class="mis-name"><span class="topic-tag tag-pct">Percents</span>The percent sign dropped</div>
+  <span class="wrong">"60 books, 20 taken. What percent remains?" &rarr; "20"</span>
+</div></summary>
+<div class="mis-body"><dl>
+<dt>Why it makes sense to them</dt>
+<dd>The percent sign has been treated as notation rather than as a unit. Nothing in their experience makes "20" and "20%" different <em>kinds</em> of answer.</dd>
+<dt>How common</dt>
+<dd>38% of 14-year-olds could compute the percentage remaining; <strong>31% answered "20" rather than "20%."</strong> Described as "common across contexts."</dd>
+<dt>Surface it early with</dt>
+<dd>Problems where a bare count and a percent are both plausible answers to the question as written. Ask what the number counts.</dd>
+<dt>What to say when it shows up</dt>
+<dd>"Twenty what?" One word. It works because the student can answer it.</dd>
+</dl><p class="src">Ryan &amp; Williams (2007) via Baratta et al. (2010) [T2] — primary source not retrieved</p></div>
+</details>
+
+<details>
+<summary><span class="chev"></span><div class="sum-body">
+  <div class="mis-name"><span class="topic-tag tag-pct">Percents</span>The additive error living inside the proportion</div>
+  <span class="wrong">Sets up <code>12/32 = x/8</code> correctly, then reduces the wrong pairs &rarr; <code>32/6 = x/6</code></span>
+</div></summary>
+<div class="mis-body"><dl>
+<dt>Why it makes sense to them</dt>
+<dd>The notation now <em>looks</em> right, which makes the additive reasoning harder to see. A documented variant: the student "thinks that the value of a fraction does not change when the same number is added to its numerator or denominator."</dd>
+<dt>How common</dt>
+<dd>The scale finding is the one to hold: the Spanish curriculum <strong>introduces the rule of three in grades 5 and 6</strong>, and <strong>57.0% of those sixth graders still solved proportional problems additively</strong>. The algorithm did not install the concept.</dd>
+<dt>Surface it early with</dt>
+<dd>A proportion whose numbers make the additive answer visibly absurd — where the additive result is wildly the wrong size.</dd>
+<dt>What to say when it shows up</dt>
+<dd>The bar. Ask them to mark their answer on it. An additive answer lands somewhere that does not match the percent, and the picture says so without you ruling.</dd>
+</dl><p class="src">Çalışıcı (2018) [T3/T4], n=34, weak design — use the error descriptions, not the intervention claim; Fernández et al. (2010) [T2] for the scale</p></div>
+</details>
+
+<details>
+<summary><span class="chev"></span><div class="sum-body">
+  <div class="mis-name"><span class="topic-tag tag-rate">Unit rates</span>Reading a ratio statement as an equation</div>
+  <span class="wrong">Writes "3 m = 2 sec"</span>
+</div></summary>
+<div class="mis-body"><dl>
+<dt>Why it makes sense to them</dt>
+<dd>The equals sign has meant "the answer is" for six years, and it is the only relational symbol they have been issued.</dd>
+<dt>How common</dt>
+<dd>Named directly in the CCSS Progressions as a documented error. No prevalence figure was retrieved.</dd>
+<dt>Surface it early with</dt>
+<dd>Ask students to read their own notation aloud. "Three meters equals two seconds" is a sentence a sixth grader hears as wrong once they say it.</dd>
+<dt>What to say when it shows up</dt>
+<dd>Give them the arrow: <code>3 m &rarr; 2 sec</code>. A one-symbol fix that prevents an expensive grade 7 habit.</dd>
+</dl><p class="src">CCSS Progressions 6–7 Ratios and Proportional Relationships [T3]</p></div>
+</details>
+
+</section>
+
+<!-- ================= WARM-UP TARGETS ================= -->
+<section role="tabpanel" id="p-wu" aria-labelledby="t-wu" hidden>
+
+<p class="lead">Warm-up shape stays <strong>2 review + 3 current</strong>. The two review problems are prerequisite diagnostics — that is the cheapest diagnostic delivery you have. The third current question is engineered to surface one named misconception. That is what the misconception research is <em>for</em>.</p>
+
+<h2>Ratios</h2>
+
+<div class="wu">
+  <div class="day">Ratios · Day 1 — Ratio as a composed unit</div>
+  <div class="q">Q3: Two juice mixes. One is 3 grape to 2 peach, the other is 5 grape to 4 peach. Which is more grapey? No computing.</div>
+  <div class="rev">Review: "One rope is 25 in, another is 10 in. How many times as long is the first?" &nbsp;·&nbsp; "3/4 = ?/12"</div>
+  <span class="target">Targets: absolute vs relative comparison (60%)</span>
+</div>
+
+<div class="wu">
+  <div class="day">Ratios · Day 2 — Equivalent ratios</div>
+  <div class="q">Q3: 2 blue tiles, 3 red tiles. Write the ratio of blue to red as a fraction. Now: what fraction of the tiles are blue?</div>
+  <div class="rev">Review: multiplicative comparison &nbsp;·&nbsp; equivalent fractions</div>
+  <span class="target">Targets: colon read as a fraction bar</span>
+</div>
+
+<div class="wu">
+  <div class="day">Ratios · Day 3 — Tape diagram to double number line</div>
+  <div class="q">Q3: Here are two situations — "3 cups grape to 2 cups peach" and "3 meters in 2 seconds." Which one should get a double number line, and why?</div>
+  <div class="rev">Review: partition a batch &nbsp;·&nbsp; part-part-whole from a tape diagram</div>
+  <span class="target">Targets: which diagram for which units</span>
+</div>
+
+<div class="wu">
+  <div class="day">Ratios · Day 4 — Ratio tables</div>
+  <div class="q">Q3: A student's ratio table goes 3:2, then 6:4, then 9:6, then 12:8, then 15:10 — and then 18:13. What happened in that last row?</div>
+  <div class="rev">Review: scaling by a factor &nbsp;·&nbsp; equivalent fractions</div>
+  <span class="target">Targets: the additive read of a table</span>
+</div>
+
+<div class="wu">
+  <div class="day">Ratios · Day 5 — Non-integer ratios</div>
+  <div class="q">Q3: Peter and Tom load boxes. They started together but Tom loads faster. When Peter has loaded 40, Tom has loaded 100. When Peter has loaded 60, how many has Tom loaded?</div>
+  <div class="rev">Review: multiply by a fraction &nbsp;·&nbsp; scale a ratio table</div>
+  <span class="target">Targets: additive reasoning — this is the day it is supposed to appear</span>
+</div>
+
+<div class="wu">
+  <div class="day">Ratios · Day 6 — Is it even proportional?</div>
+  <div class="q">Q3: Ellen and Kim run equally fast, but Ellen started later. When Ellen has run 4 laps, Kim has run 8. When Ellen has run 12, how many has Kim run?</div>
+  <div class="rev">Review: a proportional situation &nbsp;·&nbsp; a non-proportional one</div>
+  <span class="target">Targets: proportional reasoning applied to an additive situation</span>
+</div>
+
+<h2>Unit rates</h2>
+
+<div class="wu">
+  <div class="day">Unit rates · Day 1 — Partitioning down to one</div>
+  <div class="q">Q3: 12 &divide; 20 = ?</div>
+  <div class="rev">Review: "$12 for 5 notebooks — what does one cost?" &nbsp;·&nbsp; "Which is more, 3 &divide; 4 or 4 &divide; 3?"</div>
+  <span class="target">Targets: belief that division cannot produce a number below 1</span>
+</div>
+
+<div class="wu">
+  <div class="day">Unit rates · Day 2 — Double number line with 1 marked</div>
+  <div class="q">Q3: A student wrote "3 m = 2 sec." Is that right? What would you write instead?</div>
+  <div class="rev">Review: partition a batch to one &nbsp;·&nbsp; place a point on a number line</div>
+  <span class="target">Targets: ratio statement read as an equation</span>
+</div>
+
+<div class="wu">
+  <div class="day">Unit rates · Day 3 — Applying the rate (the hard day)</div>
+  <div class="q">Q3: 6 balloons cost $24. A student wrote 24 &divide; 5 to find the cost of 5 balloons. What were they thinking? What should they have done?</div>
+  <div class="rev">Review: find a unit rate &nbsp;·&nbsp; multiply by a decimal</div>
+  <span class="target">Targets: dividing in the wrong direction</span>
+</div>
+
+<div class="wu">
+  <div class="day">Unit rates · Day 4 — Better buy, both ways</div>
+  <div class="q">Q3: Powder A is 1 kg, $4, 20 loads. Powder B is 1.5 kg, $6.50, 30 loads. Which is the better value, and how do you know?</div>
+  <div class="rev">Review: apply a rate to a non-integer quantity &nbsp;·&nbsp; find both unit rates</div>
+  <span class="target">Targets: absolute vs relative comparison (60%)</span>
+</div>
+
+<h2>Percents</h2>
+
+<div class="wu">
+  <div class="day">Percents · Day 1 — Percent means out of 100</div>
+  <div class="q">Q3: 60 books are on a shelf. 20 are taken. What percent remains?</div>
+  <div class="rev">Review: "29 out of 100 students walk to school — what percent?" &nbsp;·&nbsp; "10% of 340? 1% of 340?"</div>
+  <span class="target">Targets: dropped percent sign (31%)</span>
+</div>
+
+<div class="wu">
+  <div class="day">Percents · Day 2 — Benchmarks and the 1% route</div>
+  <div class="q">Q3: What is 25% of 80? What is 15% of 80? Which was harder, and why?</div>
+  <div class="rev">Review: out of 100 &nbsp;·&nbsp; divide by 10 and by 100</div>
+  <span class="target">Targets: friendly-number dependence — the gap between those two answers is the diagnosis</span>
+</div>
+
+<div class="wu">
+  <div class="day">Percents · Day 3 — Three questions, one picture</div>
+  <div class="q">Q3: 45 out of 150 students ride the bus. Here are three questions. Which is asking for the part, which for the percent, and which for the whole? Do not solve them.</div>
+  <div class="rev">Review: benchmark decomposition &nbsp;·&nbsp; mark a percent bar</div>
+  <span class="target">Targets: problem-type confusion — the setup, not the computation</span>
+</div>
+
+<div class="wu">
+  <div class="day">Percents · Day 4 — Finding the whole (the hard day)</div>
+  <div class="q">Q3: 11% of a number is 145. Is the number bigger or smaller than 145? How do you know? Do not compute it.</div>
+  <div class="rev">Review: 1% of a number &nbsp;·&nbsp; scale up from 1%</div>
+  <span class="target">Targets: division makes smaller (MMBDMS) — the hardest documented item</span>
+</div>
+
+<div class="wu">
+  <div class="day">Percents · Day 5 — Unfriendly percentages</div>
+  <div class="q">Q3: A bike normally costs $600. It is 15% off. What do you pay?</div>
+  <div class="rev">Review: 10% and 5% of a number &nbsp;·&nbsp; find the whole from a part</div>
+  <span class="target">Targets: divide bigger by smaller — 8 of 14 students made this exact error</span>
+</div>
+
+<div class="callout co-say">
+  <strong>The spiral is not optional, and it is the cheapest thing in this brief.</strong> Percent gains washed out at nine weeks for students with mathematics difficulties in the one trial that measured it, while ratio and proportion gains held. Put ratio, rate, and percent problems in the warm-up spiral every week for the rest of the semester, mixed so no two consecutive problems take the same strategy. The interleaving evidence supports this independently — 61% vs 38%, d = 0.83, on an unannounced test a month later. <span class="warn">Read that trial honestly:</span> its interleaved topics were algebra and geometry, not ratio, and the sample was an honors cohort that excluded nearly all students who had failed the state test. So it is a general practice principle transferred to your content and your room, not ratio-specific evidence. It still costs zero instructional days. If you do one thing from this whole brief besides changing your numbers, do the spiral.
+</div>
+
+</section>
+
+<!-- ================= IF THEY'RE BEHIND ================= -->
+<section role="tabpanel" id="p-behind" aria-labelledby="t-behind" hidden>
+
+<h2>Prerequisite diagnostics</h2>
+<p>Each of these is usable as one of your two warm-up review problems. The point is not whether they get it right — it is what each specific wrong answer tells you.</p>
+
+<table>
+<thead><tr><th>Prerequisite</th><th>Diagnostic item</th><th>What each wrong answer tells you</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>Multiplicative comparison</strong><br><span class="src">4.OA.A.1–2</span></td>
+  <td>"One rope is 25 in. Another is 10 in. How many times as long is the first?"</td>
+  <td><code>15</code> &rarr; additive comparison. The whole module is blocked; this is conceptual and cannot be scaffolded around. <code>2.5</code> &rarr; intact. Said aloud but not written &rarr; language gap, not concept gap.</td>
+</tr>
+<tr>
+  <td><strong>Equivalent fractions as multiply-both-parts</strong><br><span class="src">4.NF.A.1</span></td>
+  <td>"3/4 = ?/12"</td>
+  <td><code>11</code> &rarr; the additive error already lives in fractions and will reappear in every ratio table you build. <code>9</code> &rarr; intact.</td>
+</tr>
+<tr>
+  <td><strong>Division as equal sharing, with a decimal quotient</strong><br><span class="src">3.OA.A.2 / 5.NF.B.3</span></td>
+  <td>"$12 for 5 identical notebooks. What does one cost?"</td>
+  <td><code>$2</code> &rarr; rounded to keep it whole; the decimal quotient is the gap. <code>$7</code> &rarr; subtraction default. <code>$2.40</code> &rarr; intact.</td>
+</tr>
+<tr>
+  <td><strong>Division direction</strong><br><span class="src">4–5.NBT</span></td>
+  <td>"Which is more, 3 &divide; 4 or 4 &divide; 3?"</td>
+  <td>"Same" &rarr; the direction confusion that generates every reversed unit rate you will see. Conceptual — needs a re-anchor, not practice.</td>
+</tr>
+<tr>
+  <td><strong>Quotients less than 1</strong><br><span class="src">5.NF.B.3</span></td>
+  <td>"12 &divide; 20 = ?"</td>
+  <td><code>0.6</code> &rarr; intact. "You can't" or <code>1.67</code> &rarr; the student believes division cannot produce a number below 1, which blocks "per dollar" rates entirely.</td>
+</tr>
+<tr>
+  <td><strong>"Out of 100" as a meaning</strong><br><span class="src">4.NF.C.6</span></td>
+  <td>"29 out of 100 students walk to school. What percent walk?"</td>
+  <td>Wrong &rarr; the fundamental definition is absent. Only <strong>62% of Year 9 students</strong> answered this correctly in the retrieved data — do not assume it. Nothing downstream is stable until this is fixed.</td>
+</tr>
+<tr>
+  <td><strong>Multiply and divide by 10 and 100</strong><br><span class="src">5.NBT.A.2</span></td>
+  <td>"What is 10% of 340? What is 1% of 340?"</td>
+  <td>First right, second wrong &rarr; place-value gap, not a percent gap. Both wrong &rarr; every benchmark method is blocked.</td>
+</tr>
+<tr>
+  <td><strong>Multi-digit and decimal division fluency</strong><br><span class="src">6.NS.B.2, 6.NS.B.3 — required grade 6 fluencies</span></td>
+  <td>"336 &divide; 24" &nbsp;·&nbsp; "145 &divide; 0.11"</td>
+  <td>Correct but slow &rarr; fluency bottleneck; give the tool. Wrong &rarr; procedural gap, but do <strong>not</strong> block ratio work on it. Refuses the second because the answer is bigger &rarr; that is MMBDMS, and it is conceptual.</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Three gap types, three different responses</h2>
+
+<div class="card">
+  <h4>Conceptual gap — the model was never built</h4>
+  <p><strong>Which ones:</strong> multiplicative comparison; division direction; "out of 100"; division making bigger.</p>
+  <p><strong>Response:</strong> these cannot be scaffolded around. Give each a five-minute just-in-time re-anchor immediately before the lesson that needs it — not a week of pre-teaching before the unit. The exception is "out of 100": if that diagnostic comes back badly, spend the whole first percent day there, because nothing downstream holds without it.</p>
+</div>
+
+<div class="card">
+  <h4>Procedural gap — the model exists, the routine is unreliable</h4>
+  <p><strong>Which ones:</strong> equivalent fractions; scaling in a table; benchmark conversions.</p>
+  <p><strong>Response:</strong> clean <strong>correct</strong> worked examples, paired with a matched blank. The meta-analysis found correct-only examples outperformed incorrect-only <em>and</em> correct-plus-incorrect — and that <strong>adding self-explanation prompts moderated the effect negatively</strong>. So skip the "explain your thinking" box on the worked example. Save error-finding for extension.</p>
+</div>
+
+<div class="card">
+  <h4>Fluency bottleneck — they can do it, but slowly enough to consume working memory</h4>
+  <p><strong>Which ones:</strong> multi-digit division; decimal division; multi-digit multiplication.</p>
+  <p><strong>Response:</strong> hand out the calculator and the multiplication chart, <strong>consistently, including on the check.</strong> The meta-analysis of 54 studies found problem-solving improved with calculator involvement and that "in all cases, calculator use did not hinder the development of mathematical skills" — with results going mixed specifically <em>when calculators were not part of assessment</em>. Handing the tool out only on hard days is the condition where the benefit disappeared.</p>
+  <p>Frame it to any reviewer as a construct argument, not a lowered expectation: 6.RP assesses proportional reasoning. Long division is a confound. <span class="warn">Honest caveat:</span> I found <strong>no research at all</strong> on multiplication charts as a scaffold — that recommendation is reasoning from cognitive load theory, not a retrieved finding.</p>
+  <p><strong>If a class set of calculators is not available:</strong> every Chromebook has one, and a photocopied multiplication chart plus a 1% / 10% reference strip covers most of what the calculator is doing in this module. This is the one materials assumption in the whole brief that could fail in a Title 1 room — decide which fallback you are using before day one, not mid-lesson.</p>
+</div>
+
+<h2>Differentiation that is one task, not three lessons</h2>
+<div class="card">
+  <p><strong>Number choice inside a single problem set.</strong> Same context, scale factors of 2, 3, and 7/4. Same percentage question at 10%, 15%, 35%. Everyone works the same problem; the ceiling is in the numbers.</p>
+  <p><strong>The two-problem structure.</strong> Pose it with a common factor, then re-pose the same context without one. Everyone gets into (a); (b) is where the range shows up, and you choose which group presents first.</p>
+  <p><strong>Problem-type sorting before solving.</strong> A card sort requiring no computation, so a student two years behind participates on the actual mathematical decision. This has RCT evidence behind it <em>and</em> it is the one move the comparison literature specifically endorses for low-prior-knowledge students — who "learned best from either comparing problem types or studying examples sequentially," because side-by-side method comparison "may be too overwhelming without sufficient prior knowledge."</p>
+  <p><strong>Accept-or-reject tasks for percent.</strong> Students were markedly better at rejecting wrong calculations (54%) than accepting right ones (36%). Evaluation is genuinely more accessible than generation for this population — and it targets the weaker skill directly.</p>
+</div>
+
+<h2>Above grade level too</h2>
+<div class="card">
+  <p>Extend by <strong>reversibility, generalization, and error-finding</strong> — not by racing into grade 7.</p>
+  <p>"What would the second quantity have to be for these two ratios to be equivalent?" · "The unit rate is $2.75 per pound. Write a ratio that produces it." · "Here are two rates from the same situation, per-dollar and per-item. Show they multiply to 1 and explain why." · "Here are three student bars for the same percent problem. Two are wrong. What was each student thinking?"</p>
+  <p>Error-finding is the highest-value extension because it recruits exactly the misconception analysis you want circulating in the room anyway.</p>
+</div>
+
+<div class="callout co-cost">
+  <strong>The honest ceiling.</strong> For the 806 students with mathematics difficulties in the strongest trial available, the effect was 0.32 SD versus 0.46 SD for the full sample — and "growth rates did not vary significantly between students; treatment did not moderate student growth." The intervention raised the level without changing the rate of learning. Separately, effects were significantly larger for grades 3–6 than 7–9, and larger when delivered by research personnel than by school personnel. Both gradients point down for a sixth-grade teacher running this himself. Plan against the pessimistic numbers.
+</div>
+
+</section>
+
+<!-- ================= CROSS MULTIPLY ================= -->
+<section role="tabpanel" id="p-cross" aria-labelledby="t-cross" hidden>
+
+<div class="callout co-first">
+  You named this: teaching percent by setting up <code>___ is ___% of ___</code> as a proportion with positional rules — first blank top left, second top right, third bottom left, percents with percents and numbers with numbers — then cross-multiplying and dividing. Here is what the evidence actually says, including the part that supports you.
+</div>
+
+<h2>The template is not wrong. The setup is where it breaks.</h2>
+<p>It is a real algorithm and it gets a right answer when it is set up correctly. The problem the research identifies is narrower and more specific than "don't use it": <strong>the placement decision is the failure point, and a positional mnemonic is a memory aid holding a decision that should be made by reading the situation.</strong> When the mnemonic is the only thing holding the placement, a slip produces a confidently wrong answer with nothing to catch it.</p>
+
+<h3>The documented setup failures</h3>
+<div class="card">
+  <p><span class="wrong">Writes <code>12/32 = x/8</code> correctly, then reduces the wrong number pairs &rarr; <code>32/6 = x/6</code></span></p>
+  <p class="src">"The students do not understand which number pairs among the four number pairs in the numerator and denominator to reduce." — Çalışıcı (2018), n=34, weak design; use the error description, not the intervention claim.</p>
+  <p style="margin-top:14px"><span class="wrong">Asked for 24 out of 500 &rarr; computes 500 &divide; 24</span></p>
+  <p class="src">The bigger number went where the rule said the bigger number goes. — Ryan &amp; Williams (2007) via Baratta et al. (2010).</p>
+  <p style="margin-top:14px"><span class="wrong">"Thinks the value of a fraction does not change when the same number is added to its numerator or denominator"</span></p>
+  <p class="src">The additive misconception living <em>inside</em> the proportion template, where the notation looks correct. — Çalışıcı (2018).</p>
+</div>
+
+<h2>Position one: delay or omit it in grade 6</h2>
+<p>This is the position of every expert design document retrieved.</p>
+<div class="card">
+  <p><strong>CCSS Progressions:</strong> "Although it is traditional to move students quickly to solving proportions by setting up an equation, <strong>the Standards do not require this method in Grade 6</strong>." And the reason, at grade 7: the constant of proportionality "is obscured by the traditional method of setting up proportions."</p>
+  <p><strong>NCTM research brief:</strong> teachers should promote proportional reasoning by "<strong>delaying the instruction of the cross-multiplication algorithm</strong> until students have already gained experience with forming ratios and understanding proportions as an equivalence of ratios."</p>
+  <p><strong>WWC fractions practice guide</strong> <span class="src">(Recommendation 4 — rated <strong>Minimal Evidence</strong>, the lowest of three levels; say so when you cite it)</span>: develop conceptual understanding of ratio, rate and proportion strategies <em>before</em> cross-multiplication. Two specific warnings from the companion: students "may attempt to apply the procedure <strong>without regard for whether a problem is set up correctly</strong>," and "by using cross-multiplication exclusively, students may fail to recognize more efficient ways to solve a proportion."</p>
+  <p><strong>Van Dooren, Vamvakoussi &amp; Verschaffel</strong> are the most direct. Scrupulously fair first — "All strategies that were described above lead in principle to a correct answer" — then: "research points out that students themselves rarely choose them, and mistakes are very common. One of the main causes seems to be that these algorithms consist of the <strong>blind manipulation of numbers according to formal rules that have no transparent relation whatsoever with the original problem context</strong>."</p>
+  <p><strong>Battista &amp; Van Auken Borrow</strong> (via a practitioner brief, Tier 4): students are "not ready to understand why cross multiplication works until they have studied properties of algebra," which is later than middle school.</p>
+</div>
+
+<h2>Position two: teach it as one strategy on a menu</h2>
+<div class="card">
+  <p>This is what the <strong>strongest experimental evidence actually did.</strong> Jitendra's schema-based instruction — 1,999 students, 82 classrooms, 0.46 SD, the only large RCT base on this content — explicitly had teachers "encourage students to deeply process information about when, how, and why to use a <strong>broad range of methods (e.g., equivalent fractions, unit rate, cross multiplication)</strong> for a given class of problems," with selection based on the numbers.</p>
+  <p>Cross-multiplication was in the room, and the results were the best in the literature. Anyone defending the template can point at this legitimately.</p>
+</div>
+
+<h2>What the disagreement actually hinges on</h2>
+<p class="lead">Whether the algorithm is the <strong>organizing structure of the topic</strong> or an <strong>item on a menu the student chooses from</strong>. Position one objects to the first; Jitendra implemented the second. Read that way, they largely agree.</p>
+
+<h2>The recommendation</h2>
+<div class="callout co-say">
+  <p><strong>Keep the template if you want it. Move it to the end, and strip the positional mnemonic.</strong></p>
+  <p>Replace "first blank goes top left" with <strong>"draw the bar, then write what you see."</strong> The bar is the "first consider how the quantities relate" step, made mandatory. That is the whole change — you are not abandoning a routine that works for you, you are putting one step in front of it.</p>
+</div>
+
+<h3>Two reasons, and the second is the one to defend hardest</h3>
+<div class="card">
+  <p><strong>1. The empirical bridge.</strong> The Spanish curriculum <strong>introduces the rule of three in grades 5 and 6</strong>. Those sixth graders had already been taught the algorithm, and <strong>57.0% still solved proportional problems additively</strong>. The algorithm did not install the concept. It is the closest thing to a direct test available and it points one way. It is also <em>not</em> a controlled comparison — the study did not manipulate whether students got the algorithm.</p>
+  <p><strong>2. The failure is the setup, and the positional rule <em>is</em> the setup.</strong> Every documented error above is a placement error, not a computation error. As one practitioner brief states the mechanism: "Simple 'plugging in' numbers from a context into the a/b = c/d structure will often result in mistakes or uninterpretable calculations <strong>if the student does not first consider how the quantities relate</strong>."</p>
+</div>
+
+<h2>The encouraging part</h2>
+<div class="card">
+  <p><strong>The alternative is already in your district guide.</strong> CCSD Topic 2 progression 3.2 and 3.3 already ask for double number lines to find the part and the whole. Progression 2.1 already asks for benchmark percents — 100%, 50%, 25%, 20%, 10% — and a rule for 1%. That <em>is</em> the research-supported approach, sitting in the clarity guide you already have.</p>
+  <p>The change is one of <strong>order and emphasis</strong>, not of content: lead with the bar, let the proportion arrive on day five.</p>
+</div>
+
+<h2>One thing worth saying plainly</h2>
+<div class="card">
+  <p>There is a real cost to changing this that the research does not weigh: you have a routine that works for <em>you</em>, that you can deliver consistently, and that students can execute. And the pull toward this method is systemic, not personal — the same synthesis reports that "in-service teachers strongly favor the cross-multiplication approach... Often, they did not acknowledge the value of any of the other strategies... and considered them as less sophisticated or even wrong."</p>
+  <p><strong>The lowest-cost change is not abandoning the template. It is putting the bar in front of it and choosing harder percentages.</strong></p>
+</div>
+
+<div class="callout co-cost">
+  <strong>What would flip this recommendation.</strong> Evidence that an explicit positional setup routine reduces setup errors relative to a representation-first routine. I searched for it and found nothing either way — no trial has compared percent-bar-first against proportion-setup-first instruction in a middle-grades classroom. This is a bet on convergent design evidence plus a documented error taxonomy. A well-founded bet, and a bet. If someone challenges it, that is the honest answer to give them.
+</div>
+
+</section>
+
+<footer>
+  <p><strong>Full briefs, with the design/found/used-for triplet on every source:</strong><br>
+  <code>research/2026-08-06-ratios-and-ratio-reasoning.md</code><br>
+  <code>research/2026-08-06-unit-rates.md</code><br>
+  <code>research/2026-08-06-percents.md</code></p>
+  <p>Every number on this page traces to a source consulted on 2026-08-06. Three Tier 1 sources (Rohrer, Barbieri, Ellington) are search-level retrievals and two percent sources (van den Heuvel-Panhuizen, B&uuml;scher) are abstract-level; all five are marked as such in the briefs. Where a claim rests on weak evidence, small samples, or an inference rather than a finding, it says so on the page rather than in a footnote. There is no meta-analysis of proportional reasoning instruction and none of percent instruction — verified directly against ERIC. The one WWC recommendation addressing ratio, rate and proportion is rated Minimal Evidence. The RCT base is a single research program.</p>
+</footer>
+
+</div>
+<script>
+(function(){
+  var tabs=[].slice.call(document.querySelectorAll('button.tab'));
+  function show(id){
+    tabs.forEach(function(t){
+      var on=t.id===id, p=document.getElementById(t.getAttribute('aria-controls'));
+      t.setAttribute('aria-selected',on?'true':'false');
+      if(p) p.hidden=!on;
+    });
+  }
+  tabs.forEach(function(t){ t.addEventListener('click',function(){ show(t.id); }); });
+})();
+</script>
+</body>
+</html>
