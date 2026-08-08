@@ -1966,6 +1966,10 @@ export default function ControlPage() {
   // untouched or it deletes them.
   const serverInterlude = teacherSession?.live_flow?.interlude ?? null;
   const serverTransition = teacherSession?.live_flow?.transition ?? null;
+  // Same class of field as interlude: /api/control-remote's start-discussion/
+  // end-discussion own this, never Control - hand it back untouched or the
+  // discussion overlay vanishes within a second of the teacher starting it.
+  const serverDiscussionRun = teacherSession?.live_flow?.discussionRun ?? null;
   // Same class of field: the iPad's live classroom-state override is written by
   // /api/control-remote, so Control must hand it back or the strip snaps to the
   // authored values about a second after the teacher taps Settle.
@@ -2169,9 +2173,10 @@ export default function ControlPage() {
       version: 2, state, phase, timer, poll, resource, presentation, tool, lesson, sequence, paper,
       interlude: serverInterlude,
       transition: serverTransition,
+      discussionRun: serverDiscussionRun,
       behaviorOverride: serverBehaviorOverride,
     });
-  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, effectiveTotalSeconds, finished, lineup, onDemandSeconds, publishedTool, running, scoreboardStage, secondsLeft, serverBehaviorOverride, serverInterlude, serverTransition, showDiscussion, stepIsUntimed]);
+  }, [activeInteractiveState, activeItem, activeLessonContext, activeMinutes, activeState, activeToolState, autoAdvance, bank, boardOpen, controlPoll, currentIndex, discussionFlow, effectiveTotalSeconds, finished, lineup, onDemandSeconds, publishedTool, running, scoreboardStage, secondsLeft, serverBehaviorOverride, serverDiscussionRun, serverInterlude, serverTransition, showDiscussion, stepIsUntimed]);
 
   const flushLiveFlowUpdates = useCallback(async () => {
     if (liveFlowSyncingRef.current) return;

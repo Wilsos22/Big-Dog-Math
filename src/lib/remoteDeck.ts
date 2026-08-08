@@ -43,6 +43,25 @@ export const TRANSITION_NOW_BUTTONS: readonly RemoteDeckButton[] = [
   { action: "transition-now", label: "Settle 30s", detail: "Bring it down", tone: "teal", payload: { vibe: "settle", seconds: 30 } },
 ];
 
+// Position-independent discussion overlay (2026-08-08): fires from any state, like
+// transition-now - the room does not need to be on a step authored as a discussion
+// state first. No payload: it always runs the generic four-phase default
+// (think/try something/discuss/revise); a lesson-specific override, when one exists,
+// is applied server-side from the step's authored Discussion Phases, not chosen here.
+export const DISCUSSION_RUN_BUTTON: RemoteDeckButton = {
+  action: "start-discussion",
+  label: "Run discussion",
+  detail: "Think, try, discuss, revise",
+  tone: "teal",
+};
+
+export const END_DISCUSSION_BUTTON: RemoteDeckButton = {
+  action: "end-discussion",
+  label: "End discussion",
+  detail: "Stop early and resume",
+  tone: "slate",
+};
+
 // On-demand cold-call. Persistent on the deck (unlike the readers/iPad-Kid Spin,
 // which only appears on those slides): tap it in any state and the main projector
 // spins to one student. Fair rotation and the FERPA first-name lookup live on the

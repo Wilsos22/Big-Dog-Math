@@ -53,7 +53,40 @@ export interface AuthoredDiscussionPhase {
   mode: DiscussionMode;
   seconds: number;
   direction: string;
+  /**
+   * Optional display label overriding DISCUSSION_MODE_LABEL[mode]. The mode
+   * word still drives the strip cue (eyes/voice) - this only changes what the
+   * room reads, for cases like the generic default set where two phases share
+   * a mode ("try something" and "revise" are both silent solo work, "discuss"
+   * and "share out" are both talking) but need distinct names on screen.
+   */
+  label?: string;
 }
+
+/**
+ * The generic four-phase default, used whenever a lesson has not authored its
+ * own Discussion Phases. Steele's standing shape (2026-08-07): think, try
+ * something, discuss, revise - not tied to any specific lesson, so every
+ * direction stays generic enough to apply to whatever is on screen when the
+ * teacher fires it.
+ *
+ * SHARE IS DELIBERATELY NOT A FIFTH PHASE HERE (Steele, 2026-08-07: "if I
+ * want a share then I'll press it and if not we move on" / "let's keep the
+ * spinner separate"). It is not part of this auto-advancing sequence at all -
+ * it is the existing, independent SpeakerSpinner ("Pick a speaker" on the
+ * iPad deck), fired on its own whenever the teacher wants a cold call. Do not
+ * add a share phase back onto this list; wire a share trigger, if one is ever
+ * wanted here, as a call into the spinner instead.
+ *
+ * Durations are a first guess (60s each, 4 min total) pending Steele's call
+ * on whether phases run fixed lengths or get set at trigger time.
+ */
+export const DEFAULT_DISCUSSION_PHASES: AuthoredDiscussionPhase[] = [
+  { mode: "think", seconds: 60, direction: "Think it through on your own first.", label: "Think" },
+  { mode: "write", seconds: 60, direction: "Try something on your paper or board.", label: "Try Something" },
+  { mode: "talk", seconds: 60, direction: "Talk it through with your partner or table.", label: "Discuss" },
+  { mode: "write", seconds: 60, direction: "Revise your answer based on what you heard.", label: "Revise" },
+];
 
 export type DiscussionPhaseParse =
   | { ok: true; phases: AuthoredDiscussionPhase[]; totalSeconds: number }
@@ -236,6 +269,11 @@ export function discussionStageCountdown(
   const phase = phases[progress.index] ?? null;
   const secondsLeft = phase ? Math.max(0, Math.ceil(phase.seconds - progress.phaseElapsed)) : 0;
   return { index: progress.index, phase, secondsLeft, fraction: progress.phaseFraction, done: false };
+}
+
+/** The label shown for a beat: its own override, or the mode's fixed word. */
+export function discussionPhaseLabel(phase: AuthoredDiscussionPhase): string {
+  return phase.label || DISCUSSION_MODE_LABEL[phase.mode];
 }
 
 /** The strip for a beat: the step's authored strip with the mode's cue applied. */

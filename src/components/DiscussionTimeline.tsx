@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   activeDiscussionPhase,
-  DISCUSSION_MODE_LABEL,
+  discussionPhaseLabel,
   type AuthoredDiscussionPhase,
 } from "@/lib/discussionPhases";
 // Moved to src/lib/timerBeeps.ts so the Gallery Walk timeline rings the SAME
@@ -101,7 +101,10 @@ export default function DiscussionTimeline({
       <ol className="dt-list">
         {phases.map((phase, index) => {
           const state = progress.done || index < progress.index ? "done" : index === progress.index ? "active" : "upcoming";
-          const fill = state === "done" ? 1 : state === "active" ? Math.min(1, progress.phaseFraction) : 0;
+          // Drains, not fills (Steele, 2026-08-07): a phase starts full and
+          // runs out as its own clock counts down, so "how much is left" is
+          // what the eye reads, not "how much has passed."
+          const fill = state === "done" ? 0 : state === "active" ? Math.max(0, 1 - progress.phaseFraction) : 1;
           const isActive = state === "active";
           // The ACTIVE beat counts DOWN its own remaining time; every other beat
           // shows its full length. Showing phase.seconds on the active one was
@@ -110,7 +113,7 @@ export default function DiscussionTimeline({
           const urgency = !isActive ? "" : phaseSecondsLeft <= 5 ? " final" : phaseSecondsLeft <= 15 ? " urgent" : "";
           return (
             <li className={`dt-phase ${state}`} key={`${phase.mode}-${index}`}>
-              <span className="dt-label">{DISCUSSION_MODE_LABEL[phase.mode]}</span>
+              <span className="dt-label">{discussionPhaseLabel(phase)}</span>
               <span className="dt-direction">{phase.direction}</span>
               <span className="dt-bar-wrap">
                 <span className="dt-bar" style={{ width: `${Math.round(fill * 100)}%` }} />

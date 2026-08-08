@@ -25,7 +25,7 @@ import {
 import type { LessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import type { LessonStepData } from "@/lib/notionLessons";
-import { BEHAVIOR_OVERRIDE_BUTTONS, CLEAR_ON_DEMAND_TIMER_BUTTON, ON_DEMAND_TIMER_BUTTONS, SLIDE_VIDEO_REMOTE_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, SPEAKER_REMOTE_BUTTON, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
+import { BEHAVIOR_OVERRIDE_BUTTONS, CLEAR_ON_DEMAND_TIMER_BUTTON, DISCUSSION_RUN_BUTTON, END_DISCUSSION_BUTTON, ON_DEMAND_TIMER_BUTTONS, SLIDE_VIDEO_REMOTE_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, SPEAKER_REMOTE_BUTTON, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
 import { resolveSlideSource } from "@/lib/embedUrl";
 import { joinRealtimeRoom } from "@/lib/realtimeRooms";
 import {
@@ -1364,6 +1364,18 @@ export default function TeacherRemotePage() {
                         below. */}
                     <div className="deck-grid spinner-control">
                       <DeckKey button={SPEAKER_REMOTE_BUTTON} busy={busy} disabled={controlsDisabled} onSend={send} />
+                    </div>
+                    {/* Position-independent, like the speaker spinner above: fires from
+                        any state, retriggerable, no step needs to be authored as
+                        discussion first. Toggles to End once a run is live so the same
+                        key never fires two overlapping discussions. */}
+                    <div className="deck-grid spinner-control">
+                      <DeckKey
+                        button={flow?.discussionRun ? END_DISCUSSION_BUTTON : DISCUSSION_RUN_BUTTON}
+                        busy={busy}
+                        disabled={controlsDisabled}
+                        onSend={send}
+                      />
                     </div>
                     {/* Only on a step whose slide is actually a video. On every other step these
                         would be three dead keys on a deck navigated by muscle memory. */}

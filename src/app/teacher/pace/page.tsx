@@ -12,7 +12,7 @@ import { TIMER_URGENCY_CSS, timerUrgency, timerUrgencyClass } from "@/lib/timerU
 import { CLOSEOUT_DIRECTIONS, universalStateTitle } from "@/lib/classStates";
 import { CLASSROOM_STAGE_THEMES, classroomStageTheme, discussionSupportsForLesson, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
-import { parseDiscussionPhases, discussionStageCountdown, DISCUSSION_MODE_LABEL } from "@/lib/discussionPhases";
+import { parseDiscussionPhases, discussionStageCountdown, discussionPhaseLabel } from "@/lib/discussionPhases";
 import { galleryWalkPhasesFromRoutine, galleryWalkStageCountdown } from "@/lib/galleryWalkTimer";
 import { publicSuccessCriterion } from "@/lib/successCriterion";
 import { teacherApiRequest } from "@/lib/teacherApi";
@@ -274,13 +274,26 @@ export default function PaceSupportPage() {
     const parsed = parseDiscussionPhases(flow?.presentation?.discussionPhases);
     return parsed.ok ? parsed.phases : [];
   })();
-  const hasDiscussionTimeline = timelinePhases.length > 0;
+  // Position-independent discussion overlay (2026-08-08): fired from any
+  // state, so it takes priority over a step's own authored timeline when both
+  // happen to be present - it reflects what the teacher just asked for.
+  const discussionRun = flow?.discussionRun || null;
+  const runPhases = discussionRun ? discussionRun.phases : timelinePhases;
+  const hasDiscussionTimeline = runPhases.length > 0;
   // During a self-running timeline, the number the room works against is the
   // CURRENT beat's remaining time (think 30, write 90, ...), not the whole-state
-  // clock - and the red-at-15 warning keys off that beat too.
-  const discussionStage = hasDiscussionTimeline
-    ? discussionStageCountdown(timelinePhases, timer?.totalSeconds ?? 0, timerSeconds)
-    : null;
+  // clock - and the red-at-15 warning keys off that beat too. discussionRun has
+  // its own independent startedAt clock rather than the step's shared timer, so
+  // its "state seconds left" is derived rather than read.
+  const discussionStage = discussionRun
+    ? discussionStageCountdown(
+        discussionRun.phases,
+        discussionRun.totalSeconds,
+        Math.max(0, discussionRun.totalSeconds - Math.round((Date.now() - Date.parse(discussionRun.startedAt)) / 1000)),
+      )
+    : hasDiscussionTimeline
+      ? discussionStageCountdown(timelinePhases, timer?.totalSeconds ?? 0, timerSeconds)
+      : null;
   const stageSeconds = discussionStage && !discussionStage.done ? discussionStage.secondsLeft : timerSeconds;
   const stageUrgency = hasDiscussionTimeline
     ? timerUrgency(stageSeconds, { running: Boolean(timer?.running), finished: timerFinished })
@@ -290,7 +303,7 @@ export default function PaceSupportPage() {
   // inferClassroomStage sends any "partner" or "group" step to the discussion
   // theme, and /control deliberately publishes empty arrays for those - so the
   // theme-gated fallback filled them in locally with catalog copy.
-  const runsDiscussionProtocol = Boolean(phase) || usesDiscussionProtocol(state?.id, state?.label);
+  const runsDiscussionProtocol = Boolean(phase) || Boolean(discussionRun) || usesDiscussionProtocol(state?.id, state?.label);
   const configuredDiscussionSupports = discussionSupportsForLesson(flow?.lesson?.code);
   const discussionStems = flow?.presentation?.discussionStems?.filter(Boolean).length
     ? flow.presentation.discussionStems
@@ -743,7 +756,7 @@ export default function PaceSupportPage() {
                 <div className="pw-pace">
                   <span className={`pw-bigtimer pw-bigtimer-stage${timerFinished ? " finished" : ""} ${timerUrgencyClass(stageUrgency)}`}>{formatTime(stageSeconds)}</span>
                   <span className="pw-pace-copy">
-                    <b>{discussionStage?.phase ? DISCUSSION_MODE_LABEL[discussionStage.phase.mode] : (flow.presentation?.title || state.label)}</b>
+                    <b>{discussionStage?.phase ? discussionPhaseLabel(discussionStage.phase) : (flow.presentation?.title || state.label)}</b>
                     <span>{discussionStage && !discussionStage.done ? "Left in this beat" : "Shared class clock"}</span>
                   </span>
                 </div>

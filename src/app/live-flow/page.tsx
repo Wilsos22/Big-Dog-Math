@@ -12,7 +12,7 @@ import { useStudioPreviewSnapshot } from "@/lib/studioPreviewFlow";
 import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
 import { classroomStageTheme, usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
-import { parseDiscussionPhases, discussionStageCountdown, DISCUSSION_MODE_LABEL } from "@/lib/discussionPhases";
+import { parseDiscussionPhases, discussionStageCountdown, discussionPhaseLabel } from "@/lib/discussionPhases";
 import { galleryWalkPhasesFromRoutine, galleryWalkStageCountdown } from "@/lib/galleryWalkTimer";
 import { WARM_ACCENTS } from "@/lib/warmNotebook";
 import { TIMER_URGENCY_CSS, TIMER_URGENT_SECONDS, timerUrgency, timerUrgencyClass } from "@/lib/timerUrgency";
@@ -617,9 +617,20 @@ export default function LiveFlowPage() {
     const parsed = parseDiscussionPhases(flow?.presentation?.discussionPhases);
     return parsed.ok ? parsed.phases : [];
   })();
-  const discussionStage = timelinePhases.length
-    ? discussionStageCountdown(timelinePhases, timer?.totalSeconds ?? 0, liveTimerSeconds(timer))
-    : null;
+  // Position-independent discussion overlay (2026-08-08): fired from any
+  // state via the Remote, so it takes priority over a step's own authored
+  // timeline when both are present. It has its own independent startedAt
+  // clock rather than the step's shared timer.
+  const discussionRun = flow?.discussionRun || null;
+  const discussionStage = discussionRun
+    ? discussionStageCountdown(
+        discussionRun.phases,
+        discussionRun.totalSeconds,
+        Math.max(0, discussionRun.totalSeconds - Math.round((Date.now() - Date.parse(discussionRun.startedAt)) / 1000)),
+      )
+    : timelinePhases.length
+      ? discussionStageCountdown(timelinePhases, timer?.totalSeconds ?? 0, liveTimerSeconds(timer))
+      : null;
   // Same idea for a Gallery Walk: the number a student works against is time
   // left AT THIS STATION, off the same authored config and the same state clock
   // the two projectors read. Silent - a Chromebook never beeps.
@@ -822,30 +833,38 @@ export default function LiveFlowPage() {
             : pollSaveState === "editing"
               ? "Editing"
               : "Ready";
+  // Position-independent discussion (2026-08-08) is not tied to any authored
+  // step, so its stems are the LESSON's overall ones ("each lesson has overall
+  // sentence stems that should work throughout" - Steele) rather than a
+  // step- or round-specific set.
   const sentenceStems = (flow?.presentation?.discussionStems?.length
     ? flow.presentation.discussionStems
     : phase?.sentenceStems?.length
       ? phase.sentenceStems
-      : discussion?.sentenceStems ?? [])
+      : discussionRun && flow?.lesson?.discussionStems?.length
+        ? flow.lesson.discussionStems
+        : discussion?.sentenceStems ?? [])
     .map((stem) => stem.trim())
     .filter(Boolean);
   const keyVocabulary = (flow?.presentation?.vocabulary?.length
     ? flow.presentation.vocabulary
     : phase?.keyVocabulary?.length
       ? phase.keyVocabulary
-      : discussion?.keyVocabulary ?? [])
+      : discussionRun && flow?.lesson?.discussionVocabulary?.length
+        ? flow.lesson.discussionVocabulary
+        : discussion?.keyVocabulary ?? [])
     .map((word) => word.trim())
     .filter(Boolean);
   // Gated on the step actually running a discussion, not just on having stems
   // to show. /control publishes the lesson-level Discussion Stems on EVERY
   // state deliberately, so an ungated check put the stems-and-vocabulary panel
   // on every Chromebook for every non-poll state from warm-up to closeout.
-  const runsDiscussionProtocol = Boolean(phase) || usesDiscussionProtocol(flow?.state?.id, flow?.state?.label);
+  const runsDiscussionProtocol = Boolean(phase) || Boolean(discussionRun) || usesDiscussionProtocol(flow?.state?.id, flow?.state?.label);
   // The self-running concrete-phase timeline: authored `Discussion Phases`
   // become one screen of bars that walks itself on the step's shared clock.
   const discussionTimelineParse = parseDiscussionPhases(flow?.presentation?.discussionPhases);
   const discussionTimelinePhases = discussionTimelineParse.ok ? discussionTimelineParse.phases : [];
-  const showDiscussionTimeline = !activePoll && discussionTimelinePhases.length > 0;
+  const showDiscussionTimeline = !activePoll && (discussionTimelinePhases.length > 0 || Boolean(discussionRun));
   // A concrete-phase timeline step is a discussion too - it wants the stems and
   // vocabulary beside it, so students have the language for the Talk beats.
   const showDiscussionSupports = !activePoll
@@ -1458,7 +1477,7 @@ export default function LiveFlowPage() {
             )}
             {showDiscussionTimeline && !galleryWalkStage && discussionStage && !discussionStage.done && discussionStage.phase && (
               <div className="lf-beat" aria-label="Time left in this part">
-                <span className="lf-beat-mode">{DISCUSSION_MODE_LABEL[discussionStage.phase.mode]}</span>
+                <span className="lf-beat-mode">{discussionPhaseLabel(discussionStage.phase)}</span>
                 <span className={`lf-beat-time ${timerUrgencyClass(studentTimerUrgency)}`}>{formatTime(displayTimerSeconds)}</span>
                 <span className="lf-beat-dir">{discussionStage.phase.direction}</span>
               </div>

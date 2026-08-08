@@ -6,6 +6,7 @@ import { CLOSEOUT_DIRECTIONS } from "@/lib/classStates";
 import { usesDiscussionProtocol } from "@/lib/classroomPilot";
 import { STATE_STRIP_SLOTS, stripFromStep, type ClassroomStateStripOverride, type StateStripSlot } from "@/lib/classroomStateStrip";
 import { discussionRoundCompletesState, normalizeDiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
+import { DEFAULT_DISCUSSION_PHASES, parseDiscussionPhases, type AuthoredDiscussionPhase } from "@/lib/discussionPhases";
 import { getLessonByCode, getPublishedLessonById, type LessonData } from "@/lib/notionLessons";
 // Shared with /teacher/rehearse so the rehearsal runner builds its sequence
 // with the same code the real start uses. Moved out of this file 2026-08-03.
@@ -94,6 +95,55 @@ function endInterlude(flow: LiveClassFlowSnapshot): LiveClassFlowSnapshot {
       : flow.timer,
   };
 }
+// Position-independent discussion overlay: same pause/resume shape as
+// startInterlude/endInterlude, carrying a phase list instead of a single
+// label. `phasesRaw`, when present, is a lesson-authored override (already
+// parsed by the caller via parseDiscussionPhases) - otherwise the generic
+// DEFAULT_DISCUSSION_PHASES runs. Each call is a fresh, independent run:
+// there is no "resume the last discussion", only start and end.
+function startDiscussionRun(
+  flow: LiveClassFlowSnapshot,
+  phasesRaw: AuthoredDiscussionPhase[] | undefined,
+): LiveClassFlowSnapshot {
+  const phases = phasesRaw && phasesRaw.length ? phasesRaw : DEFAULT_DISCUSSION_PHASES;
+  const totalSeconds = phases.reduce((sum, phase) => sum + phase.seconds, 0);
+  const now = Date.now();
+  const remaining = flow.timer ? liveTimerSeconds(flow.timer, now) : 0;
+  return {
+    ...flow,
+    updatedAt: new Date(now).toISOString(),
+    timer: flow.timer
+      ? { ...flow.timer, secondsLeft: remaining, running: false, endsAt: null }
+      : flow.timer,
+    discussionRun: {
+      phases,
+      startedAt: new Date(now).toISOString(),
+      totalSeconds,
+      resumeRunning: Boolean(flow.timer?.running),
+    },
+  };
+}
+
+// Clear a discussion run (expired or manually ended) and resume the clock it paused.
+function endDiscussionRun(flow: LiveClassFlowSnapshot): LiveClassFlowSnapshot {
+  const run = flow.discussionRun;
+  const now = Date.now();
+  const secondsLeft = flow.timer?.secondsLeft ?? 0;
+  const resumeRunning = Boolean(run?.resumeRunning && flow.timer && secondsLeft > 0);
+  return {
+    ...flow,
+    updatedAt: new Date(now).toISOString(),
+    discussionRun: null,
+    timer: flow.timer
+      ? {
+          ...flow.timer,
+          running: resumeRunning,
+          endsAt: resumeRunning ? new Date(now + secondsLeft * 1000).toISOString() : null,
+        }
+      : flow.timer,
+  };
+}
+
 const DIRECT_BOARD_ACTIONS = new Set<TeacherRemoteAction>(["show-board", "hide-board"]);
 const DIRECT_BEHAVIOR_ACTIONS = new Set<TeacherRemoteAction>(["set-behavior", "clear-behavior"]);
 const CLAIMED_FLOW_ACTIONS = new Set<TeacherRemoteAction>([
@@ -786,6 +836,27 @@ async function applyLazyAutomaticTransition(
       return await reloadRemoteSession(db, session.id) || session;
     }
   }
+  // Same shape for a discussion run: once every phase's time is spent, clear
+  // it and resume the state clock it paused. Nothing auto-advances the
+  // lesson - the teacher decides what happens after a discussion, same as
+  // after an interlude.
+  if (flow.discussionRun) {
+    const endsAt = Date.parse(flow.discussionRun.startedAt) + flow.discussionRun.totalSeconds * 1000;
+    if (endsAt > Date.now()) return session;
+    const resumedFlow = endDiscussionRun(flow);
+    const resumeCommand: TeacherRemoteCommand = {
+      nonce: crypto.randomUUID(),
+      action: "toggle-timer",
+      issuedAt: new Date().toISOString(),
+      receivedAt: new Date().toISOString(),
+    };
+    try {
+      const persisted = await persistDirectFlow(db, session, resumedFlow, resumeCommand);
+      return { ...session, live_flow: persisted, remote_command: resumeCommand };
+    } catch {
+      return await reloadRemoteSession(db, session.id) || session;
+    }
+  }
   const transition = automaticTransitionDue(flow, Date.now());
   if (!transition) return session;
 
@@ -943,6 +1014,11 @@ export async function POST(request: Request) {
     notionLessonId?: string;
     vibe?: string;
     seconds?: number;
+    // Optional lesson-specific override for start-discussion, same authored
+    // format as Notion's Discussion Phases property. Absent or unparseable
+    // falls back to DEFAULT_DISCUSSION_PHASES rather than failing the
+    // request - a bad override should not block the generic version firing.
+    discussionPhasesText?: string;
     expectedStateId?: string;
     expectedSequenceIndex?: number;
     behavior?: Partial<Record<StateStripSlot, string>>;
@@ -1051,6 +1127,23 @@ export async function POST(request: Request) {
     } else if (action === "transition-now") {
       if (!liveFlow) throw new Error("Load a lesson before starting a transition.");
       liveFlow = startInterlude(liveFlow, body.vibe, body.seconds);
+      handledDirectly = true;
+    } else if (action === "start-discussion") {
+      if (!liveFlow) throw new Error("Load a lesson before starting a discussion.");
+      // Prefer the current step's own authored Discussion Phases (a lesson-
+      // specific build, same property Notion already writes) over an explicit
+      // request override, which exists only as a fallback path. Either way, an
+      // unparseable or absent value falls through to DEFAULT_DISCUSSION_PHASES
+      // rather than failing the request - the generic version must always fire.
+      const authoredText = liveFlow.presentation?.discussionPhases || body.discussionPhasesText;
+      const override = typeof authoredText === "string" && authoredText.trim()
+        ? parseDiscussionPhases(authoredText)
+        : null;
+      liveFlow = startDiscussionRun(liveFlow, override?.ok ? override.phases : undefined);
+      handledDirectly = true;
+    } else if (action === "end-discussion") {
+      if (!liveFlow) throw new Error("Load a lesson before ending a discussion.");
+      liveFlow = endDiscussionRun(liveFlow);
       handledDirectly = true;
     } else if (ON_DEMAND_TIMER_ACTIONS.has(action)) {
       if (!liveFlow) throw new Error("Load a lesson before starting a timer.");

@@ -539,6 +539,19 @@ export default function ClassroomStagePage() {
   const interludeSeconds = interlude
     ? Math.max(0, Math.round((Date.parse(interlude.endsAt) - Date.now()) / 1000))
     : 0;
+  // Position-independent discussion overlay (2026-08-08): same trumps-everything
+  // priority as the interlude above, fired from any state via the Remote's
+  // "Run discussion" key rather than tied to a step authored as discussion.
+  // startedAt + totalSeconds derive endsAt once; DiscussionTimeline ticks
+  // itself against that shared deadline exactly as it already does for the
+  // authored-phases timeline below.
+  const discussionRun = flow?.discussionRun || null;
+  const discussionRunEndsAt = discussionRun
+    ? new Date(Date.parse(discussionRun.startedAt) + discussionRun.totalSeconds * 1000).toISOString()
+    : null;
+  const discussionRunSecondsLeft = discussionRunEndsAt
+    ? Math.max(0, Math.round((Date.parse(discussionRunEndsAt) - Date.now()) / 1000))
+    : 0;
   const selectedCriterion = publicSuccessCriterion(lesson?.selectedSuccessCriterion);
   const embeddedResourceUrl = resource?.url.includes("docs.google.com/forms")
     ? `${resource.url}${resource.url.includes("?") ? "&" : "?"}embedded=true`
@@ -1124,6 +1137,35 @@ export default function ClassroomStagePage() {
             ) : (
               <div className="stage-empty"><div><h1>Ready for class</h1><p>{sessionMessage}</p></div></div>
             )
+          ) : discussionRun ? (
+            <div
+              className="stage-timeline"
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "grid",
+                alignContent: "safe center",
+                justifyItems: "center",
+                overflowY: "auto",
+                padding: "clamp(34px,6vw,80px)",
+                fontSize: "clamp(1.2rem,1.9vw,2.2rem)",
+                ["--dt-accent" as string]: "var(--acc)",
+                ["--dt-accent-text" as string]: "var(--acc-deep)",
+                ["--dt-ink" as string]: "var(--ink)",
+                ["--dt-line" as string]: "var(--hair)",
+                ["--dt-card" as string]: "var(--card)",
+                ["--dt-soft" as string]: "var(--soft)",
+              }}
+            >
+              <DiscussionTimeline
+                phases={discussionRun.phases}
+                totalSeconds={discussionRun.totalSeconds}
+                secondsLeft={discussionRunSecondsLeft}
+                endsAt={discussionRunEndsAt}
+                running
+                sound
+              />
+            </div>
           ) : interlude ? (
             <TransitionScene
               vibe={interlude.label}

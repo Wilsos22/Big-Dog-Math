@@ -5,6 +5,7 @@ import type { LivePollKind } from "@/lib/liveFlowContract";
 import type { PublicLessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import type { PublicSurfaceMode } from "@/lib/lessonStepMetadata";
 import type { DiscussionPhaseSnapshot } from "@/lib/discussionProtocol";
+import type { AuthoredDiscussionPhase } from "@/lib/discussionPhases";
 import type { ClassroomStateStrip, ClassroomStateStripOverride } from "@/lib/classroomStateStrip";
 
 export {
@@ -77,6 +78,15 @@ export const TEACHER_REMOTE_ACTIONS = [
   "reveal-results",
   "reveal-final-score",
   "transition-now",
+  // Position-independent discussion overlay (2026-08-07): unlike the fixed
+  // DISCUSSION_REMOTE_ACTIONS above, these fire from ANY current state, the
+  // same way transition-now does - no step needs to be authored as a
+  // discussion state first. start-discussion carries an optional `phases`
+  // override (a lesson-specific authored sequence); with none it runs
+  // DEFAULT_DISCUSSION_PHASES. Retriggerable: each start is a fresh,
+  // independent run, never resuming a previous one.
+  "start-discussion",
+  "end-discussion",
   // An UNTIMED state (a Lesson Step with a blank or zero Duration) publishes no timer at all, so
   // the room sees a dash instead of a countdown. These arm one on demand, over whatever is on
   // screen, without changing the step - the pattern is a whole slide deck as one state where only
@@ -431,6 +441,19 @@ export interface LiveClassFlowSnapshot {
     directions: string;
     totalSeconds: number;
     endsAt: string;
+    resumeRunning: boolean;
+  } | null;
+  // A position-independent discussion overlay: think/try/discuss/revise (or a
+  // lesson-authored override), layered over whatever state is showing.
+  // Modeled on `interlude` - pauses the state clock the same way, cleared by
+  // the lazy pacing check when every phase's time is spent, or by an explicit
+  // end-discussion. Every surface derives the active phase from `startedAt` +
+  // `phases` via discussionPhases.ts's activeDiscussionPhase, so no per-second
+  // server write is needed.
+  discussionRun?: {
+    phases: AuthoredDiscussionPhase[];
+    startedAt: string;
+    totalSeconds: number;
     resumeRunning: boolean;
   } | null;
   paper?: {
