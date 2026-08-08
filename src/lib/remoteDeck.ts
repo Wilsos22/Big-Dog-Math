@@ -74,6 +74,16 @@ export const MINI_DISCUSS_BUTTONS: readonly RemoteDeckButton[] = [
   { action: "transition-now", label: "Turn and Talk 2 min", detail: "Longer partner talk", tone: "green", payload: { vibe: "talk", seconds: 120 } },
 ];
 
+// Explicit dismiss for an open ready check. Next/Previous also clear it as a
+// safety net (see navigateFlow in control-remote/route.ts) - this is the
+// path for closing one without navigating anywhere.
+export const CLOSE_READY_CHECK_BUTTON: RemoteDeckButton = {
+  action: "close-ready-check",
+  label: "Close ready check",
+  detail: "Dismiss without moving on",
+  tone: "orange",
+};
+
 // On-demand cold-call. Persistent on the deck (unlike the readers/iPad-Kid Spin,
 // which only appears on those slides): tap it in any state and the main projector
 // spins to one student. Fair rotation and the FERPA first-name lookup live on the

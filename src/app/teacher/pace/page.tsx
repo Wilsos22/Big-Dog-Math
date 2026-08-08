@@ -574,18 +574,6 @@ export default function PaceSupportPage() {
               </div>
             </div>
           )
-        ) : connected && flow?.readinessCheck ? (
-          // Mirrors present's independent overlay - question only, never a
-          // count or a distribution (the teacher reviews those on
-          // /teacher/remote). Same "pace mirrors main" default this file
-          // otherwise follows.
-          <div className="pw-center">
-            <div className="pw-hook-inner">
-              <p className="pw-hook-kicker">Ready check</p>
-              <h2 className="pw-hook-text">{flow.readinessCheck.question}</h2>
-              <p className="pw-hook-direction">Students are answering on their devices now.</p>
-            </div>
-          </div>
         ) : interlude ? (
           <div className="pw-center">
             <div className="pw-hook-inner">
@@ -593,6 +581,19 @@ export default function PaceSupportPage() {
               <h2 className="pw-hook-text">{interlude.label}</h2>
               <p className="pw-hook-direction">{interlude.directions}</p>
               <span className="pw-interlude-clock">{formatTime(interludeSeconds)}</span>
+            </div>
+          </div>
+        ) : connected && flow?.readinessCheck ? (
+          // Mirrors present's independent overlay - question only, never a
+          // count or a distribution (the teacher reviews those on
+          // /teacher/remote). Checked AFTER interlude, same reason as present:
+          // an explicit Hustle/Settle must win over a ready check the teacher
+          // forgot to close.
+          <div className="pw-center">
+            <div className="pw-hook-inner">
+              <p className="pw-hook-kicker">Ready check</p>
+              <h2 className="pw-hook-text">{flow.readinessCheck.question}</h2>
+              <p className="pw-hook-direction">Students are answering on their devices now.</p>
             </div>
           </div>
         ) : mirroredSlideUrl ? (

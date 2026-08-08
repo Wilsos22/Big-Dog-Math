@@ -26,7 +26,7 @@ import {
 import type { LessonRoutineConfig } from "@/lib/lessonRoutineConfig";
 import { defaultPublicSurfaceModeForState } from "@/lib/lessonStepMetadata";
 import type { LessonStepData } from "@/lib/notionLessons";
-import { BEHAVIOR_OVERRIDE_BUTTONS, CLEAR_ON_DEMAND_TIMER_BUTTON, DISCUSSION_RUN_BUTTON, END_DISCUSSION_BUTTON, MINI_DISCUSS_BUTTONS, ON_DEMAND_TIMER_BUTTONS, SLIDE_VIDEO_REMOTE_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, SPEAKER_REMOTE_BUTTON, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
+import { BEHAVIOR_OVERRIDE_BUTTONS, CLEAR_ON_DEMAND_TIMER_BUTTON, CLOSE_READY_CHECK_BUTTON, DISCUSSION_RUN_BUTTON, END_DISCUSSION_BUTTON, MINI_DISCUSS_BUTTONS, ON_DEMAND_TIMER_BUTTONS, SLIDE_VIDEO_REMOTE_BUTTONS, SOUND_BANK_REMOTE_BUTTONS, SOUND_REMOTE_BUTTONS, SPEAKER_REMOTE_BUTTON, TRANSITION_NOW_BUTTONS, type RemoteDeckButton } from "@/lib/remoteDeck";
 import { resolveSlideSource } from "@/lib/embedUrl";
 import { joinRealtimeRoom } from "@/lib/realtimeRooms";
 import {
@@ -495,7 +495,11 @@ export default function TeacherRemotePage() {
     return () => window.clearTimeout(timeout);
   }, [lastReceipt]);
 
-  const pollId = session?.liveFlow?.poll?.id ?? null;
+  // A ready check fired out of sequence rides a separate field from the
+  // in-sequence poll - without this, the private response panel silently
+  // showed nothing (or a stale unrelated poll) for the one feature it exists
+  // to serve (found in review, 2026-08-08).
+  const pollId = session?.liveFlow?.readinessCheck?.id ?? session?.liveFlow?.poll?.id ?? null;
   useEffect(() => {
     if (!pollId) {
       setPollAnswers([]);
@@ -1473,11 +1477,14 @@ export default function TeacherRemotePage() {
                     </div>
                     {/* Ready checks fired in authored order, independent of position
                         (2026-08-08) - hidden entirely when the lesson has none
-                        authored, rather than offering a dead "0 of 0" key. */}
+                        authored, rather than offering a dead "0 of 0" key. Toggles
+                        to an explicit close once one is open - Next/Previous also
+                        clear it as a safety net, but nothing else did before the
+                        2026-08-08 review found it could freeze every later screen. */}
                     {readyCheckTotal > 0 ? (
                       <div className="deck-grid spinner-control">
                         <DeckKey
-                          button={{
+                          button={flow?.readinessCheck ? CLOSE_READY_CHECK_BUTTON : {
                             action: "open-ready-check",
                             label: "Open ready check",
                             detail: `Check ${readyCheckNext} of ${readyCheckTotal}`,
@@ -1671,9 +1678,9 @@ export default function TeacherRemotePage() {
                   <section className="deck-section compact-private" aria-labelledby="response-title">
                     <div className="deck-section-head">
                       <h2 className="deck-section-title" id="response-title">Private response data</h2>
-                      <p className="deck-section-note">{flow?.poll ? `${pollAnswers.length} response${pollAnswers.length === 1 ? "" : "s"}` : "No live response is open"}</p>
+                      <p className="deck-section-note">{(flow?.readinessCheck || flow?.poll) ? `${pollAnswers.length} response${pollAnswers.length === 1 ? "" : "s"}` : "No live response is open"}</p>
                     </div>
-                    {flow?.poll ? (
+                    {(flow?.readinessCheck || flow?.poll) ? (
                       pollAnswers.length ? (
                         <ul className="response-list">
                           {pollAnswers.map((answer) => (

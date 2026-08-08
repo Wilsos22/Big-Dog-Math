@@ -1138,21 +1138,6 @@ export default function ClassroomStagePage() {
             ) : (
               <div className="stage-empty"><div><h1>Ready for class</h1><p>{sessionMessage}</p></div></div>
             )
-          ) : flow?.readinessCheck ? (
-            // Independent of the current step's theme, same reason discussionRun
-            // and interlude are - a ready check fired out of sequence must not
-            // inherit whatever "learning-check" gating the current slide happens
-            // to have. Question only: results/distribution never reach the room,
-            // same rule as an in-sequence poll (the teacher reviews those on
-            // /teacher/remote).
-            <div className="stage-directions">
-              <div className="stage-directions-inner">
-                <p className="stage-anchor-kicker">Ready check</p>
-                <span className="stage-anchor-rule" aria-hidden="true" />
-                <h2 className="stage-main-prompt">{flow.readinessCheck.question}</h2>
-                <p className="stage-learning">Answer on your device now.</p>
-              </div>
-            </div>
           ) : discussionRun ? (
             <div
               className="stage-timeline"
@@ -1190,6 +1175,26 @@ export default function ClassroomStagePage() {
               total={interlude.totalSeconds}
               next={state.label ? `Back to ${state.label}` : null}
             />
+          ) : flow?.readinessCheck ? (
+            // Independent of the current step's theme, same reason discussionRun
+            // and interlude are - a ready check fired out of sequence must not
+            // inherit whatever "learning-check" gating the current slide happens
+            // to have. Checked AFTER discussionRun/interlude on purpose: an
+            // explicit Hustle/Settle/discussion trigger is the teacher's most
+            // recent action and must visually win even while a ready check the
+            // teacher forgot to close is technically still open - see the
+            // 2026-08-08 review finding that an unclosed readinessCheck froze
+            // every later transition/discussion/poll on this screen. Question
+            // only: results/distribution never reach the room, same rule as an
+            // in-sequence poll (the teacher reviews those on /teacher/remote).
+            <div className="stage-directions">
+              <div className="stage-directions-inner">
+                <p className="stage-anchor-kicker">Ready check</p>
+                <span className="stage-anchor-rule" aria-hidden="true" />
+                <h2 className="stage-main-prompt">{flow.readinessCheck.question}</h2>
+                <p className="stage-learning">Answer on your device now.</p>
+              </div>
+            </div>
           ) : overrideUrl ? (
             <iframe
               className="stage-override"

@@ -91,6 +91,9 @@ export const TEACHER_REMOTE_ACTIONS = [
   // Fires the lesson's next authored ready check, in authored order,
   // regardless of the teacher's current position (2026-08-08).
   "open-ready-check",
+  // Dismiss the active ready check without navigating - the explicit path;
+  // Next/Previous also clear it as a safety net (see navigateFlow).
+  "close-ready-check",
   // An UNTIMED state (a Lesson Step with a blank or zero Duration) publishes no timer at all, so
   // the room sees a dash instead of a countdown. These arm one on demand, over whatever is on
   // screen, without changing the step - the pattern is a whole slide deck as one state where only

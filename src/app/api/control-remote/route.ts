@@ -341,6 +341,12 @@ async function openNextReadyCheck(
   const step = readySteps[index];
   const created = await createPollForStep(db, session, step);
   if (!created) throw new Error(`"${step.label}" could not open as a ready check.`);
+  // Close the PREVIOUS ready check's poll row before opening the next one -
+  // open-ready-check is not a CLAIMED_FLOW_ACTION, so the main handler's
+  // closeOpenPolls cleanup never runs for it (found in review, 2026-08-08).
+  // Without this, every earlier ready check's row is left "open" until the
+  // session closes.
+  if (flow.readinessCheck?.id) await closePollById(db, flow.readinessCheck.id);
   return {
     createdPollId: created.pollId,
     liveFlow: {
@@ -405,6 +411,14 @@ async function navigateFlow(
       ...flow,
       version: 2,
       interlude: null,
+      // A ready check the teacher fired out of sequence is dismissed by
+      // moving on, same as interlude - found in review (2026-08-08) that
+      // nothing ever cleared it otherwise, which froze every later poll,
+      // discussion, and transition on every screen for the rest of the
+      // period. The orphaned poll row is closed by the closeOpenPolls call
+      // every caller of navigateFlow already makes, since its id is no
+      // longer in that call's keep-list once this is null.
+      readinessCheck: null,
       // The strip override belongs to the step it was issued at. Cleared here
       // for the same reason boardOpen is: advancing rebuilds the step's state,
       // and a stale override is how a student ends up holding rods during the
@@ -1206,6 +1220,11 @@ export async function POST(request: Request) {
       const opened = await openNextReadyCheck(result.db, workingSession, liveFlow);
       createdPollId = opened.createdPollId;
       liveFlow = opened.liveFlow;
+      handledDirectly = true;
+    } else if (action === "close-ready-check") {
+      if (!liveFlow) throw new Error("Load a lesson before closing a ready check.");
+      if (liveFlow.readinessCheck?.id) await closePollById(result.db, liveFlow.readinessCheck.id);
+      liveFlow = { ...liveFlow, updatedAt: new Date().toISOString(), readinessCheck: null };
       handledDirectly = true;
     } else if (ON_DEMAND_TIMER_ACTIONS.has(action)) {
       if (!liveFlow) throw new Error("Load a lesson before starting a timer.");
